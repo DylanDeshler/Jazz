@@ -9,7 +9,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from vocos import MelSpectrogramFeatures, ISTFTHead
+# from vocos import MelSpectrogramFeatures, ISTFTHead
 
 @dataclass
 class ModelArgs:
@@ -727,11 +727,23 @@ def mean_std_norm(batch: torch.Tensor, eps: float = 1e-8):
 def inv_mean_std_norm(batch: torch.Tensor, batch_mean: torch.Tensor, batch_std: torch.Tensor, eps: float = 1e-8):
     return batch * (batch_std + eps) + batch_mean
 
+def safe_log(x: torch.Tensor, clip_val: float = 1e-7) -> torch.Tensor:
+    """
+    Computes the element-wise logarithm of the input tensor with clipping to avoid near-zero values.
+
+    Args:
+        x (Tensor): Input tensor.
+        clip_val (float, optional): Minimum value to clip the input tensor. Defaults to 1e-7.
+
+    Returns:
+        Tensor: Element-wise logarithm of the input tensor with clipping applied.
+    """
+    return torch.log(torch.clip(x, min=clip_val))
+
 '''
 https://arxiv.org/pdf/1910.11910
 https://arxiv.org/pdf/2503.16989v1
 '''
-from vocos import safe_log
 class STFT(nn.Module):
     def __init__(self, params):
         super().__init__()

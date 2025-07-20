@@ -411,6 +411,28 @@ class RQTransformer(nn.Module):
 
         return optimizer
 
+    def configure_muon_optimizers(self, weight_decay, learning_rate, betas, device_type):
+        from muon import MuonWithAuxAdam
+
+        hidden_params = []
+        for n, p in self.spatial_layers.named_parameters():
+            hidden_params.append(p)
+        for n, p in self.depth_layers.named_parameters():
+            hidden_params.append(p)
+        hidden_weights = [p for p in hidden_params if p.ndim >= 2]
+        hidden_gains_biases = [p for p in hidden_params if p.ndim < 2]
+        
+        nonhidden_params = [self.spatial_start_token.data, *self.tok_embeddings.parameters(), *self.spatial_pos_emb.parameters(), *self.depth_pos_emb.parameters(), *self.spatial_norm.parameters(), *self.depth_norm.parameters(), *self.output.parameters()]
+
+        param_groups = [
+            dict(params=hidden_weights, use_muon=True,
+                lr=learning_rate, weight_decay=weight_decay),
+            dict(params=hidden_gains_biases+nonhidden_params, use_muon=False,
+                lr=learning_rate, betas=betas, weight_decay=weight_decay),
+        ]
+        optimizer = MuonWithAuxAdam(param_groups)
+        return optimizer
+
     def estimate_mfu(self, fwdbwd_per_iter, dt):
         """ estimate model flops utilization (MFU) in units of A100 bfloat16 peak FLOPS """
         # first estimate the number of flops we do per iteration.

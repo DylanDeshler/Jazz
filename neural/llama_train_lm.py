@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
 from llama_model import ModelArgs, VQTransformer4 as Transformer
-checkpoint = torch.load('/Users/dylan.d/Documents/research/music/tokenizer7/ckpt.pt')
+checkpoint = torch.load('/home/dylan.d/research/music/Jazz/tokenizer_ckpt.pt', map_location='cuda')
 tokenizer_args = ModelArgs(**checkpoint['model_args'])
 tokenizer = Transformer(tokenizer_args)
 tokenizer.load_state_dict(checkpoint['model'])
@@ -51,10 +51,10 @@ import glob
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'rqtransformer'
+out_dir = '/home/dylan.d/research/music/Jazz'
 eval_interval = 1000
-log_interval = 10
-eval_iters = 300
+log_interval = 100
+eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
@@ -64,8 +64,8 @@ wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 1 # used to simulate larger batch sizes
-batch_size = 24# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+gradient_accumulation_steps = 4 # used to simulate larger batch sizes
+batch_size = 32 * 6# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 block_size = 200
 # model
 depth_seq_len = 4
@@ -77,7 +77,7 @@ multiple_of = 128
 dropout = 0.0 # for pretraining 0 is good, for finetuning try 0.1+
 bias = False # do we use bias inside LayerNorm and Linear layers?
 # adamw optimizer
-learning_rate = 2 * 1e-3 # max learning rate
+learning_rate = 1 * 1e-3 # max learning rate
 max_iters = 200000 # total number of training iterations
 weight_decay = 1e-1
 beta1 = 0.9
@@ -91,7 +91,7 @@ min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
-device = 'mps' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
@@ -157,7 +157,7 @@ def fim(x, prob=0.5):
     return x
 
 def get_batch(split='train'):
-    data = np.memmap('/Users/dylan.d/Documents/research/music/jazz.bin', mode='r', dtype=np.uint16, shape=(6534430, 40, 12))
+    data = np.memmap('/home/dylan.d/research/music/Jazz/jazz.bin', mode='r', dtype=np.uint16, shape=(6534430, 40, 12))
     if split == 'train':
         ix = torch.randint(int(len(data) * 0.98) - block_size // 40 - 1, (batch_size,))
         x = torch.stack([torch.from_numpy(np.concatenate(data[i:i+block_size // 40, :, :depth_seq_len], axis=0).astype(np.int64)) for i in ix]).to(device)
@@ -243,7 +243,7 @@ summary(model)
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 
 # optimizer
-optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
+optimizer = model.configure_muon_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
 checkpoint = None # free up memory
@@ -294,18 +294,24 @@ def save_samples(iter_num):
     model.eval()
 
     X, Y = get_batch('val')
-    X = X[:4, :80]
-    X = X.view(X.shape[0], X.shape[1] * X.shape[2])
-    with ctx:
-        samples = model.generate(X, max_seq_len=160).cpu().detach()
-        samples = tokenizer.decode(samples)
+    X = X[:4, :40*2]
+    X = X.flatten(1)
     
-    for i in range(4):
+    with ctx:
+        samples = model.generate(X, max_seq_len=160, filter_thres = 0.7, temperature = 0.3)
+        B, L, D = samples.shape
+        samples = samples.view(B * L // 40, 40, D)
+        scales = [torch.full((samples.shape[0], 1, 1), fill_value=SCALES[0], device=device), torch.full((samples.shape[0], 1, 1), fill_value=SCALES[1], device=device)]
+        samples = tokenizer.decode(samples, scales)
+        samples = samples.view(B, -1, samples.shape[-2], samples.shape[-1])
+    
+    for i in range(min(4, X.shape[0])):
         # sample = librosa.griffinlim(tokenizer.decode(model.generate(X, max_seq_len=160).cpu().detach()).cpu().detach().numpy(), n_iter=1000, hop_length=hop_length, win_length=win_length, n_fft=n_fft, init=None)
         sample = librosa.griffinlim(samples[i].cpu().detach().numpy(), n_iter=1000, hop_length=hop_length, win_length=win_length, n_fft=n_fft, init=None)
+        sample = sample.flatten()
 
         # save .wavs
-        sf.write(os.path.join(out_dir, f'{iter_num}_{i}.wav'), sample, rate)
+        sf.write(os.path.join(out_dir, f'{i}.wav'), sample, rate)
 
         x = librosa.stft(sample, n_fft=n_fft, hop_length=hop_length, win_length=win_length)
 
@@ -378,18 +384,18 @@ while True:
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
     
-    if iter_num == step1 or local_iter_num == 0 and iter_num >= step1:
-        batch_size = 32
-    if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
-        gradient_accumulation_steps *= 2
-        # batch_size *= 4
-    if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
-        gradient_accumulation_steps *= 2
-        # batch_size *= 4
-    if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
-        gradient_accumulation_steps *= 2
-    if iter_num == step5 or local_iter_num == 0 and iter_num >= step5:
-        gradient_accumulation_steps *= 2
+    # if iter_num == step1 or local_iter_num == 0 and iter_num >= step1:
+    #     batch_size = 32
+    # if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
+    #     gradient_accumulation_steps *= 2
+    #     # batch_size *= 4
+    # if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
+    #     gradient_accumulation_steps *= 2
+    #     # batch_size *= 4
+    # if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
+    #     gradient_accumulation_steps *= 2
+    # if iter_num == step5 or local_iter_num == 0 and iter_num >= step5:
+    #     gradient_accumulation_steps *= 2
     
 
     tokens_trained += block_size * batch_size * gradient_accumulation_steps
