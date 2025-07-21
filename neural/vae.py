@@ -599,6 +599,7 @@ class AutoencoderKL(nn.Module):
         z = self.post_quant_conv(z)
         dec = self.decoder(z)
         dec, loss = self.out_stft(dec, targets)
+        print(posterior.kl())
         loss += 1e-6 * posterior.kl()
         return dec, loss
     
