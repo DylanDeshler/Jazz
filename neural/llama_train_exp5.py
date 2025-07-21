@@ -118,7 +118,7 @@ ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torc
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 # poor man's data loader
-paths = glob.glob('/Users/dylan.d/Documents/research/music/jazz_data_16000_full_clean/*.wav')
+paths = glob.glob('./jazz_data_16000_full_clean/*.wav')
 np.random.shuffle(paths)
 
 def get_batch(split='train'):
