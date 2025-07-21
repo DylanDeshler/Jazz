@@ -155,7 +155,7 @@ best_val_loss = 1e9
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
-    model = AutoencoderKL(n_fft, win_length, hop_length, 2, 16, (1, 1, 2, 2, 4, 4), use_variational=True)
+    model = AutoencoderKL(n_fft, win_length, hop_length, 2, 32, (1, 1, 2, 2, 4, 4), use_variational=True)
     tokens_trained = 0
 elif init_from == 'resume':
     print(f"Resuming training from {out_dir}")
@@ -164,7 +164,7 @@ elif init_from == 'resume':
     checkpoint = torch.load(ckpt_path, map_location=device)
     model_args = checkpoint['model_args']
 
-    model = AutoencoderKL(n_fft, win_length, hop_length, 2, 16, (1, 1, 2, 2, 4, 4), use_variational=True)
+    model = AutoencoderKL(n_fft, win_length, hop_length, 2, 32, (1, 1, 2, 2, 4, 4), use_variational=True)
     state_dict = checkpoint['model']
     # fix the keys of the state dictionary :(
     # honestly no idea how checkpoints sometimes get this prefix, have to debug more
