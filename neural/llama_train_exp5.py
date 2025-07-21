@@ -75,7 +75,7 @@ min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
-device = 'mps' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
@@ -155,7 +155,7 @@ best_val_loss = 1e9
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
-    model = AutoencoderKL(n_fft, win_length, hop_length, 2, 16, (1, 1, 2, 2, 4), use_variational=True)
+    model = AutoencoderKL(n_fft, win_length, hop_length, 2, 16, (1, 1, 2, 2, 4, 4), use_variational=True)
     tokens_trained = 0
 elif init_from == 'resume':
     print(f"Resuming training from {out_dir}")
@@ -164,7 +164,7 @@ elif init_from == 'resume':
     checkpoint = torch.load(ckpt_path, map_location=device)
     model_args = checkpoint['model_args']
 
-    model = AutoencoderKL(n_fft, win_length, hop_length, 2, 16, (1, 1, 2, 2, 4), use_variational=True)
+    model = AutoencoderKL(n_fft, win_length, hop_length, 2, 16, (1, 1, 2, 2, 4, 4), use_variational=True)
     state_dict = checkpoint['model']
     # fix the keys of the state dictionary :(
     # honestly no idea how checkpoints sometimes get this prefix, have to debug more
@@ -218,7 +218,7 @@ def estimate_loss():
         for k in tqdm(range(eval_iters)):
             X = get_batch(split)
             with ctx:
-                logits, loss = model.train_step(X)
+                logits, loss = model(X)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -383,7 +383,7 @@ while True:
     if iter_num % eval_interval == 0 and master_process:
         X = get_batch('test')
         with ctx:
-            logits, loss = model.train_step(X)
+            logits, loss = model(X)
         save_samples(X.cpu().detach().numpy(), logits.cpu().detach(), iter_num)
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
@@ -423,7 +423,7 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            logits, loss = model.train_step(X)
+            logits, loss = model(X)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X = get_batch('train')

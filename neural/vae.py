@@ -580,7 +580,7 @@ class AutoencoderKL(nn.Module):
         dec, loss = self.out_stft(dec)
         return dec, loss
     
-    def train_step(self, x, sample_posterior=True):
+    def forward(self, x, sample_posterior=True):
         x = self.in_stft(x)
         targets = x.clone()
         h = self.encoder(x)
