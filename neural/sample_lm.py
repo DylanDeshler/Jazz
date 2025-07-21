@@ -15,7 +15,7 @@ from torch.distributed import init_process_group, destroy_process_group
 device = torch.device('mps')
 
 from llama_model import ModelArgs, VQTransformer4 as Transformer
-checkpoint = torch.load('/Users/dylan.d/Documents/research/music/tokenizer7/ckpt.pt')
+checkpoint = torch.load('/Users/dylan.d/Documents/research/music/tokenizer7/ckpt.pt', map_location='cpu')
 tokenizer_args = ModelArgs(**checkpoint['model_args'])
 tokenizer = Transformer(tokenizer_args).to(device)
 tokenizer.load_state_dict(checkpoint['model'])
@@ -32,19 +32,24 @@ import matplotlib.pyplot as plt
 import soundfile as sf
 import librosa
 
-checkpoint = torch.load('/Users/dylan.d/Documents/research/music/rqtransformer/ckpt.pt')
+checkpoint = torch.load('/Users/dylan.d/Documents/research/music/rqtransformer/ckpt.pt', map_location='cpu')
 args = ModelArgs(**checkpoint['model_args'])
 model = Transformer(args).to(device)
-model.load_state_dict(checkpoint['model'])
+unwanted_prefix = '_orig_mod.'
+state_dict = checkpoint['model']
+for k,v in list(state_dict.items()):
+    if k.startswith(unwanted_prefix):
+        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+model.load_state_dict(state_dict)
 model.eval()
 
-out_dir = 'rqtransformer'
+out_dir = '/Users/dylan.d/Documents/research/music/rqtransformer'
 
 batch_size = 2
 block_size = args.max_seq_len
 
 def get_batch(split='train'):
-    data = np.memmap('/Users/dylan.d/Documents/research/music/jazz.bin', mode='r', dtype=np.uint16, shape=(6534430, 40, 12))
+    data = np.memmap('/Users/dylan.d/Documents/research/music/Jazz/jazz.bin', mode='r', dtype=np.uint16, shape=(6534430, 40, 12))
     if split == 'train':
         ix = torch.randint(int(len(data) * 0.98) - block_size // 40 - 1, (batch_size,))
         x = torch.stack([torch.from_numpy(np.concatenate(data[i:i+block_size // 40, :, :args.depth_seq_len], axis=0).astype(np.int64)) for i in ix]).to(device)
@@ -96,7 +101,7 @@ def save_samples():
     X = X.flatten(1)
     
     # with ctx:
-    samples = model.generate(X, max_seq_len=160, filter_thres = 0.7, temperature = 0.3)
+    samples = model.generate(X, max_seq_len=160, filter_thres = 1, temperature = 0.5)
     B, L, D = samples.shape
     samples = samples.view(B * L // 40, 40, D)
     scales = [torch.full((samples.shape[0], 1, 1), fill_value=SCALES[0], device=device), torch.full((samples.shape[0], 1, 1), fill_value=SCALES[1], device=device)]
@@ -105,7 +110,7 @@ def save_samples():
     
     for i in range(min(4, X.shape[0])):
         # sample = librosa.griffinlim(tokenizer.decode(model.generate(X, max_seq_len=160).cpu().detach()).cpu().detach().numpy(), n_iter=1000, hop_length=hop_length, win_length=win_length, n_fft=n_fft, init=None)
-        sample = librosa.griffinlim(samples[i].cpu().detach().numpy(), n_iter=1000, hop_length=hop_length, win_length=win_length, n_fft=n_fft, init=None)
+        sample = librosa.griffinlim(samples[i].cpu().detach().numpy(), n_iter=1000, hop_length=hop_length, win_length=win_length, n_fft=n_fft)#, init=None)
         sample = sample.flatten()
 
         # save .wavs
