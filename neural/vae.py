@@ -487,6 +487,7 @@ class STFT(nn.Module):
         self.hop_length = hop_length
         self.window = torch.hann_window(win_length)
     
+    @torch.compile.disable
     def forward(self, x):
         x = torch.stft(x, n_fft=self.n_fft, hop_length=self.hop_length, win_length=self.win_length, window=self.window.to(x.device), return_complex=True, center=True)
         mag, phase = torch.abs(x), torch.angle(x)
@@ -507,7 +508,8 @@ class STFTHead(nn.Module):
     def __init__(self):
         super().__init__()
         # self.mel_transform = torchaudio.transforms.MelScale(n_mels=100, sample_rate=16000, n_stft=257)
-        
+    
+    @torch.compile.disable
     def forward(self, x, targets=None):
         mag, phase = x.chunk(2, 1)
 
