@@ -167,7 +167,7 @@ class Encoder(nn.Module):
         out_ch=3,
         ch_mult=(1, 1, 2, 2, 4),
         num_res_blocks=2,
-        attn_resolutions=(16,),
+        attn_resolutions=(16, 8),
         dropout=0.0,
         resamp_with_conv=True,
         in_channels=3,
