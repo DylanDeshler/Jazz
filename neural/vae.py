@@ -543,12 +543,12 @@ class STFTHead(nn.Module):
         return x, loss
 
 class AutoencoderKL(nn.Module):
-    def __init__(self, n_fft, win_length, hop_length, in_ch, embed_dim, ch_mult, use_variational=True, ckpt_path=None):
+    def __init__(self, n_fft, win_length, hop_length, in_ch, ch, embed_dim, ch_mult, use_variational=True, ckpt_path=None):
         super().__init__()
         self.in_stft = STFT(n_fft, win_length, hop_length)
         self.out_stft = STFTHead()
-        self.encoder = Encoder(in_channels=in_ch, ch_mult=ch_mult, z_channels=embed_dim)
-        self.decoder = Decoder(out_ch=in_ch, ch_mult=ch_mult, z_channels=embed_dim)
+        self.encoder = Encoder(ch=ch, in_channels=in_ch, ch_mult=ch_mult, z_channels=embed_dim)
+        self.decoder = Decoder(ch=ch, out_ch=in_ch, ch_mult=ch_mult, z_channels=embed_dim)
         self.use_variational = use_variational
         mult = 2 if self.use_variational else 1
         self.quant_conv = torch.nn.Conv2d(2 * embed_dim, mult * embed_dim, 1)
