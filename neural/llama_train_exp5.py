@@ -53,7 +53,7 @@ wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
-batch_size = 24# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 32# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
 n_samples = int(rate * 1.28)
@@ -119,7 +119,6 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 # poor man's data loader
 paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
-np.random.shuffle(paths)
 
 def get_batch(split='train'):
     if split == 'train':
@@ -352,7 +351,7 @@ if wandb_log and master_process:
 step1 = 8001
 step2 = 15001
 step3 = 30001
-step4 = 38001
+step4 = 50001
 
 X = get_batch('train') # fetch the very first batch
 t0 = time.time()
@@ -374,8 +373,8 @@ while True:
     if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
         gradient_accumulation_steps *= 2
         # batch_size *= 4
-    # if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
-    #     gradient_accumulation_steps *= 2
+    if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
+        gradient_accumulation_steps *= 2
     
     tokens_trained += batch_size * gradient_accumulation_steps
 
