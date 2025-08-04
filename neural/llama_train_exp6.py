@@ -131,7 +131,7 @@ def get_batch(split='train'):
 
             start = np.random.randint(len(x) - n_samples)
             batch.append(x[start:start + n_samples])
-        batch = torch.from_numpy(np.stack(batch, axis=0)).to(device)
+        batch = torch.from_numpy(np.stack(batch, axis=0)).unsqueeze(1).to(device)
         return batch
     
     else:
@@ -144,7 +144,7 @@ def get_batch(split='train'):
 
             start = np.random.randint(len(x) - n_samples)
             batch.append(x[start:start + n_samples])
-        batch = torch.from_numpy(np.stack(batch, axis=0)).to(device)
+        batch = torch.from_numpy(np.stack(batch, axis=0)).unsqueeze(1).to(device)
         return batch
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
