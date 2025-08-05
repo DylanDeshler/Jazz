@@ -244,7 +244,7 @@ if wandb_log and master_process:
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
-step1 = 8001
+step1 = 1001
 step2 = 15001
 step3 = 30001
 step4 = 50001
