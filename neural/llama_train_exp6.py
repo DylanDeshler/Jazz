@@ -58,11 +58,11 @@ batch_size = 16# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro
 rate = 16000
 n_samples = rate
 # adamw optimizer
-learning_rate = 1e-5 # max learning rate
+learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
-beta2 = 0.95
+beta2 = 0.999
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
 decay_lr = False # whether to decay the learning rate
@@ -185,7 +185,7 @@ elif init_from.startswith('gpt2'):
         model_args[k] = getattr(model.config, k)
 
 model.to(device)
-summary(model)
+# summary(model)
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
@@ -277,8 +277,8 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         X = get_batch('test')
-        with ctx:
-            logits, loss = model(X)
+        # with ctx:
+        #     logits, loss = model(X)
         # save_samples(X.cpu().detach().numpy(), logits.cpu().detach(), iter_num)
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
