@@ -56,10 +56,7 @@ gradient_accumulation_steps = 2 # used to simulate larger batch sizes
 batch_size = 16# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
-n_samples = int(rate * 1.28)
-n_fft = 512
-hop_length = int(rate * 10 / 1000)
-win_length = int(rate * 25 / 1000)
+n_samples = rate
 # adamw optimizer
 learning_rate = 1e-5 # max learning rate
 max_iters = 1000000 # total number of training iterations
@@ -119,6 +116,7 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 # poor man's data loader
 paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
+print(len(paths))
 
 def get_batch(split='train'):
     if split == 'train':
@@ -238,110 +236,6 @@ def get_lr(it):
     assert 0 <= decay_ratio <= 1
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
-
-# def estimate_codebook_util(indices: torch.Tensor, num_codebooks: int, num_codes: int):
-#     codebooks = [indices[:, :, i] for i in range(num_codebooks)]
-#     uniques = [codebook.unique().numel() for codebook in codebooks]
-#     mean_unique = torch.tensor(uniques, dtype=torch.float).mean()
-#     return (mean_unique / num_codes * 100).item()
-
-def save_samples(xs, ys, step):
-    batch_dir = os.path.join(out_dir, str(step))
-    os.makedirs(batch_dir, exist_ok=True)
-
-    for i in range(4):
-        x, y = xs[i].squeeze(), ys[i].squeeze()
-
-        # y = torch.istft(y, n_fft=n_fft, hop_length=hop_length, window=torch.hann_window(n_fft), center=True).numpy()
-        y = librosa.griffinlim(y.numpy(), n_iter=1000, hop_length=hop_length, win_length=win_length, n_fft=n_fft, window='hann', init=None)
-
-        # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, rate)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, rate)
-
-        x = librosa.stft(x, n_fft=n_fft, win_length=win_length, hop_length=hop_length)
-        y = librosa.stft(y, n_fft=n_fft, win_length=win_length, hop_length=hop_length)
-
-        # Magnitude
-        plt.figure(figsize=(12, 6))
-        plt.subplot(2, 1, 1)
-        mag, phase = np.abs(x), np.angle(x)
-        img1 = librosa.display.specshow(librosa.amplitude_to_db(mag, ref=np.max),
-                                sr=rate, hop_length=hop_length, y_axis='linear', x_axis='time',
-                                cmap='magma')
-        plt.title('Log-magnitude Spectrogram')
-        plt.colorbar(img1, format="%+2.0f dB")
-
-        plt.subplot(2, 1, 2)
-        mag, phase = np.abs(y), np.angle(y)
-        img1 = librosa.display.specshow(librosa.amplitude_to_db(mag, ref=np.max),
-                                sr=rate, hop_length=hop_length, y_axis='linear', x_axis='time',
-                                cmap='magma')
-        plt.title('Reconstructed Log-magnitude Spectrogram')
-        plt.colorbar(img1, format="%+2.0f dB")
-        plt.savefig(os.path.join(batch_dir, f'{i}_mag.png'))
-        plt.close('all')
-
-        freqs = librosa.fft_frequencies(sr=rate, n_fft=n_fft)
-        times = librosa.times_like(x)
-
-        # Phase
-        plt.figure(figsize=(12, 6))
-        plt.subplot(2, 1, 1)
-        mag, phase = np.abs(x), np.angle(x)
-        unwrapped_phase = np.unwrap(phase, axis=1)
-        unwrapped_phase = np.diff(unwrapped_phase, prepend=0) * np.clip(np.abs(mag) / (np.max(mag) + 1e-10), 0.1, 1)
-        librosa.display.specshow(unwrapped_phase, sr=rate, hop_length=hop_length,
-                                x_axis='time', y_axis='linear', cmap='twilight_shifted')
-        plt.title('Weighted Unwrapped Phase Spectrogram')
-        plt.colorbar(label='Phase (radians)')
-
-        plt.subplot(2, 1, 2)
-        phase = np.angle(y)
-        unwrapped_phase = np.unwrap(phase, axis=1)
-        unwrapped_phase = np.diff(unwrapped_phase, prepend=0) * np.clip(np.abs(mag) / (np.max(mag) + 1e-10), 0.1, 1)
-        librosa.display.specshow(unwrapped_phase, sr=rate, hop_length=hop_length,
-                                x_axis='time', y_axis='linear', cmap='twilight_shifted')
-        plt.title('Weighted Reconstructed Unwrapped Phase Spectrogram')
-        plt.colorbar(label='Phase (radians)')
-        plt.savefig(os.path.join(batch_dir, f'{i}_phase.png'))
-        plt.close('all')
-
-
-        phase_exp = 2*np.pi*np.multiply.outer(freqs,times)
-
-        # Rainbowgram
-        plt.figure(figsize=(12, 6))
-        plt.subplot(2, 1, 1)
-        mag, phase = np.abs(x), np.angle(x)
-        img = librosa.display.specshow(np.diff(np.unwrap(np.angle(phase)-phase_exp, axis=1), axis=1, prepend=0),
-                                cmap='hsv',
-                                alpha=librosa.amplitude_to_db(mag, ref=np.max)/80 + 1,
-                                y_axis='linear',
-                                x_axis='time')
-        # plt.facecolor('#000')
-        cbar = plt.colorbar(img, ticks=[-np.pi, -np.pi/2, 0, np.pi/2, np.pi])
-        cbar.ax.set(yticklabels=['-π', '-π/2', "0", 'π/2', 'π'])
-        plt.title('Rainbowgram')
-        plt.xlabel('Time (s)')
-        plt.ylabel('Frequency (Hz)')
-
-        plt.subplot(2, 1, 2)
-        mag, phase = np.abs(y), np.angle(y)
-        img = librosa.display.specshow(np.diff(np.unwrap(np.angle(phase)-phase_exp, axis=1), axis=1, prepend=0),
-                                cmap='hsv',
-                                alpha=librosa.amplitude_to_db(mag, ref=np.max)/80 + 1,
-                                y_axis='linear',
-                                x_axis='time')
-        # plt.facecolor('#000')
-        cbar = plt.colorbar(img, ticks=[-np.pi, -np.pi/2, 0, np.pi/2, np.pi])
-        cbar.ax.set(yticklabels=['-π', '-π/2', "0", 'π/2', 'π'])
-        plt.title('Reconstructed Rainbowgram')
-        plt.xlabel('Time (s)')
-        plt.ylabel('Frequency (Hz)')
-
-        plt.savefig(os.path.join(batch_dir, f'{i}_rainbowgram.png'))
-        plt.close('all')
 
 
 # logging
