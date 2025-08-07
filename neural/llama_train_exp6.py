@@ -290,7 +290,7 @@ while True:
         X = get_batch('test')
         with ctx:
             logits, loss = model(X)
-        save_samples(X.cpu().detach().numpy(), logits.cpu().detach(), iter_num)
+        save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
