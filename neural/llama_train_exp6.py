@@ -42,7 +42,7 @@ import glob
 out_dir = 'tokenizer9'
 eval_interval = 1000
 log_interval = 10
-eval_iters = 150
+eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
