@@ -33,7 +33,7 @@ class DiToTrainer(nn.Module):
         return y, loss
 
     def sample(self, shape, n_steps=50):
-        self.sampler.sample(self.model, shape, n_steps)
+        return self.sampler.sample(self.model, shape, n_steps)
 
 if __name__ == '__main__':
     model = DiToTrainer()
