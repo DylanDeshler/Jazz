@@ -256,7 +256,7 @@ if wandb_log and master_process:
 
 # training loop
 step1 = 5001
-step2 = 10001
+step2 = 20001
 step3 = 30001
 step4 = 50001
 
