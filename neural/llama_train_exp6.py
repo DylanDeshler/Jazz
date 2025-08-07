@@ -291,7 +291,7 @@ while True:
         X = get_batch('test')
         with ctx:
             logits, loss = model(X)
-            samples = model.sample((batch_size, 1, n_samples), n_steps=50)
+            samples = raw_model.sample((batch_size, 1, n_samples), n_steps=50)
         save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), samples.cpu().detach().float().numpy(), iter_num)
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
