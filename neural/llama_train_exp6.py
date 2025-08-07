@@ -238,16 +238,17 @@ def get_lr(it):
     return min_lr + coeff * (learning_rate - min_lr)
 
 
-def save_samples(xs, ys, step):
+def save_samples(xs, ys, samples, step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
 
     for i in range(8):
-        x, y = xs[i].squeeze(), ys[i].squeeze()
+        x, y, sample = xs[i].squeeze(), ys[i].squeeze(), samples[i].squeeze()
 
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, rate)
         sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, rate)
+        sf.write(os.path.join(batch_dir, f'{i}_sample.wav'), sample, rate)
 
 # logging
 if wandb_log and master_process:
@@ -290,7 +291,8 @@ while True:
         X = get_batch('test')
         with ctx:
             logits, loss = model(X)
-        save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
+            samples = model.sample((batch_size, 1, n_samples), n_steps=50)
+        save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), samples.cpu().detach().float().numpy(), iter_num)
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
