@@ -53,7 +53,7 @@ wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
-batch_size = 16# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 32# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
 n_samples = rate
@@ -244,8 +244,8 @@ if wandb_log and master_process:
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
-step1 = 1001
-step2 = 5001
+step1 = 5001
+step2 = 10001
 step3 = 30001
 step4 = 50001
 
