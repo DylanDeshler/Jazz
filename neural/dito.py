@@ -21,10 +21,11 @@ class DiTo(nn.Module):
         out = self.unet(x=x, t=t, z_dec=z)
         return out
     
-    def encode(self, x):
+    def reconstruct(self, x, x_t, t):
         z = self.encoder(x)
         z = self.z_norm(z.transpose(1, 2)).transpose(1, 2)
-        return z
+        out = self.unet(x_t, t=t, z_dec=z)
+        return out
 
 class DiToTrainer(nn.Module):
     def __init__(self):
@@ -44,9 +45,15 @@ class DiToTrainer(nn.Module):
         return self.sampler.reconstruct(self.model, x, n_steps)
 
 if __name__ == '__main__':
-    model = DiToTrainer()
+    device = torch.device('mps')
+
+    model = DiToTrainer().to(device)
     from torchinfo import summary
     summary(model)
 
-    x = torch.randn((16, 1, 16000))
-    model(x)
+    x = torch.randn((16, 1, 16000)).to(device)
+    out = model(x)
+    print(out.shape)
+
+    y = model.reconstruct(x)
+    print(y.shape)

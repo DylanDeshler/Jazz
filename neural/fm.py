@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 
 class FM:
     
@@ -69,6 +70,25 @@ class FM:
             uncond_pred = net(x_t, t=t * self.timescale, **uncond_net_kwargs)
             pred = uncond_pred + guidance * (pred - uncond_pred)
         return pred
+
+    def get_reconstruction_prediction(
+        self,
+        net,
+        x,
+        x_t,
+        t,
+        net_kwargs=None,
+        uncond_net_kwargs=None,
+        guidance=1.0,
+    ):
+        if net_kwargs is None:
+            net_kwargs = {}
+        pred = net.reconstruct(x, x_t, t=t * self.timescale, **net_kwargs)
+        if guidance != 1.0:
+            assert uncond_net_kwargs is not None
+            uncond_pred = net(x_t, t=t * self.timescale, **uncond_net_kwargs)
+            pred = uncond_pred + guidance * (pred - uncond_pred)
+        return pred
     
     def convert_sample_prediction(self, x_t, t, pred):
         M = torch.tensor([
@@ -116,20 +136,23 @@ class FMEulerSampler:
         self,
         net,
         x,
+        shape,
         n_steps,
         net_kwargs=None,
         uncond_net_kwargs=None,
         guidance=1.0,
+        noise=None,
     ):
         device = next(net.parameters()).device
-        x_t = net.encode(x)
+        x_t = torch.randn(shape, device=device) if noise is None else noise
         t_steps = torch.linspace(1, 0, n_steps + 1, device=device)
 
         with torch.no_grad():
             for i in range(n_steps):
                 t = t_steps[i].repeat(x_t.shape[0])
-                neg_v = self.diffusion.get_prediction(
+                neg_v = self.diffusion.get_reconstruction_prediction(
                     net,
+                    x,
                     x_t,
                     t,
                     net_kwargs=net_kwargs,
