@@ -42,7 +42,7 @@ import glob
 out_dir = 'tokenizer9'
 eval_interval = 2000
 log_interval = 100
-eval_iters = 400
+eval_iters = 100
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
@@ -213,8 +213,8 @@ def estimate_loss():
     out = {}
     model.eval()
     for split in ['train', 'val']:
-        losses = torch.zeros(eval_iters)
-        for k in tqdm(range(eval_iters)):
+        losses = torch.zeros(eval_iters * gradient_accumulation_steps)
+        for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
             X = get_batch(split)
             with ctx:
                 logits, loss = model(X)
