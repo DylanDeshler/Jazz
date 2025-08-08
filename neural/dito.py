@@ -20,6 +20,11 @@ class DiTo(nn.Module):
         z = self.z_norm(z.transpose(1, 2)).transpose(1, 2)
         out = self.unet(x=x, t=t, z_dec=z)
         return out
+    
+    def encode(self, x):
+        z = self.encoder(x)
+        z = self.z_norm(z.transpose(1, 2)).transpose(1, 2)
+        return z
 
 class DiToTrainer(nn.Module):
     def __init__(self):
@@ -34,6 +39,9 @@ class DiToTrainer(nn.Module):
 
     def sample(self, shape, n_steps=50):
         return self.sampler.sample(self.model, shape, n_steps)
+    
+    def reconstruct(self, x, n_steps=50):
+        return self.sampler.reconstruct(self.model, x, n_steps)
 
 if __name__ == '__main__':
     model = DiToTrainer()

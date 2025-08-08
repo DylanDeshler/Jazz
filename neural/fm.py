@@ -111,3 +111,30 @@ class FMEulerSampler:
                 )
                 x_t = x_t + neg_v * (t_steps[i] - t_steps[i + 1])
         return x_t
+    
+    def reconstruct(
+        self,
+        net,
+        x,
+        n_steps,
+        net_kwargs=None,
+        uncond_net_kwargs=None,
+        guidance=1.0,
+    ):
+        device = next(net.parameters()).device
+        x_t = net.encode(x)
+        t_steps = torch.linspace(1, 0, n_steps + 1, device=device)
+
+        with torch.no_grad():
+            for i in range(n_steps):
+                t = t_steps[i].repeat(x_t.shape[0])
+                neg_v = self.diffusion.get_prediction(
+                    net,
+                    x_t,
+                    t,
+                    net_kwargs=net_kwargs,
+                    uncond_net_kwargs=uncond_net_kwargs,
+                    guidance=guidance,
+                )
+                x_t = x_t + neg_v * (t_steps[i] - t_steps[i + 1])
+        return x_t
