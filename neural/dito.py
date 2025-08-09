@@ -31,7 +31,7 @@ class DiToTrainer(nn.Module):
     def __init__(self):
         super().__init__()
         self.model = DiTo()
-        self.diffusion = FM()
+        self.diffusion = FM(timescale=1000.0)
         self.sampler = FMEulerSampler(self.diffusion)
     
     def forward(self, x):

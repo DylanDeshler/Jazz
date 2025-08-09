@@ -619,11 +619,11 @@ class SEANetDecoder(nn.Module):
                     causal=causal, pad_mode=pad_mode)
         ]
 
-        if lstm:
-            model += [SLSTM(mult * n_filters, num_layers=lstm)]
         if transformer:
             model += [StreamingTransformerEncoder(mult * n_filters, num_heads=4, num_layers=transformer)]
-
+        if lstm:
+            model += [SLSTM(mult * n_filters, num_layers=lstm)]
+        
         # Upsample to raw audio scale
         for i, ratio in enumerate(self.ratios):
             # Add upsampling layers
