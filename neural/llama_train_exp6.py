@@ -294,31 +294,31 @@ while True:
             logits = raw_model.reconstruct(X, (batch_size, 1, n_samples), n_steps=50)
             samples = raw_model.sample((batch_size, 1, n_samples), n_steps=50)
         save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), samples.cpu().detach().float().numpy(), iter_num)
-        # losses = estimate_loss()
-        # print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-        # if wandb_log:
-        #     wandb.log({
-        #         "iter": iter_num,
-        #         "train/loss": losses['train'],
-        #         "val/loss": losses['val'],
-        #         "lr": lr,
-        #         "mfu": running_mfu*100, # convert to percentage
-        #         "tokens": tokens_trained,
-        #     })
-        # if losses['val'] < best_val_loss or always_save_checkpoint:
-        #     best_val_loss = losses['val']
-        #     if iter_num > 0:
-        #         checkpoint = {
-        #             'model': raw_model.state_dict(),
-        #             'optimizer': optimizer.state_dict(),
-        #             'model_args': model_args,
-        #             'iter_num': iter_num,
-        #             'best_val_loss': best_val_loss,
-        #             'config': config,
-        #             'tokens': tokens_trained,
-        #         }
-        #         print(f"saving checkpoint to {out_dir}")
-        #         torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+        losses = estimate_loss()
+        print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        if wandb_log:
+            wandb.log({
+                "iter": iter_num,
+                "train/loss": losses['train'],
+                "val/loss": losses['val'],
+                "lr": lr,
+                "mfu": running_mfu*100, # convert to percentage
+                "tokens": tokens_trained,
+            })
+        if losses['val'] < best_val_loss or always_save_checkpoint:
+            best_val_loss = losses['val']
+            if iter_num > 0:
+                checkpoint = {
+                    'model': raw_model.state_dict(),
+                    'optimizer': optimizer.state_dict(),
+                    'model_args': model_args,
+                    'iter_num': iter_num,
+                    'best_val_loss': best_val_loss,
+                    'config': config,
+                    'tokens': tokens_trained,
+                }
+                print(f"saving checkpoint to {out_dir}")
+                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
     if iter_num == 0 and eval_only:
         break
 
