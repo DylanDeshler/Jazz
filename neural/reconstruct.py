@@ -192,8 +192,8 @@ with torch.no_grad():
         logits = model.reconstruct(X, (batch_size, 1, n_samples), n_steps=50)
         samples = model.sample((batch_size, 1, n_samples), n_steps=50)
 
-print('X: ', X.min(), X.mean(), X.std(), X.max())
-print('Reconstruction: ', logits.min(), logits.mean(), logits.std(), logits.max())
-print('Sample: ', samples.min(), samples.mean(), samples.std(), samples.max())
+print('X: ', X.min().item(), X.mean().item(), X.std().item(), X.max().item())
+print('Reconstruction: ', logits.min().item(), logits.mean().item(), logits.std().item(), logits.max().item())
+print('Sample: ', samples.min().item(), samples.mean().item(), samples.std().item(), samples.max().item())
 
 # save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), samples.cpu().detach().float().numpy(), iter_num)
