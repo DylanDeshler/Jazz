@@ -89,7 +89,6 @@ class FM:
                 uncond_net_kwargs = {}
             uncond_pred = net(x_t, t=t * self.timescale, **uncond_net_kwargs)
             pred = uncond_pred + guidance * (pred - uncond_pred)
-            print(t, pred.min(), pred.mean(), pred.std(), pred.max())
         return pred
     
     def convert_sample_prediction(self, x_t, t, pred):
