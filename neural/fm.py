@@ -41,7 +41,7 @@ class FM:
         
         target = self.A(t) * x + self.B(t) * noise # -dxt/dt
         if return_loss_unreduced:
-            loss = ((pred.float() - target.float()) ** 2).mean(dim=[1, 2, 3])
+            loss = ((pred.float() - target.float()) ** 2).mean(dim=[1, 2])
             if return_all:
                 return loss, t, x_t, pred
             else:
@@ -85,7 +85,8 @@ class FM:
             net_kwargs = {}
         pred = net.reconstruct(x, x_t, t=t * self.timescale, **net_kwargs)
         if guidance != 1.0:
-            assert uncond_net_kwargs is not None
+            if uncond_net_kwargs is None:
+                uncond_net_kwargs = {}
             uncond_pred = net(x_t, t=t * self.timescale, **uncond_net_kwargs)
             pred = uncond_pred + guidance * (pred - uncond_pred)
         return pred

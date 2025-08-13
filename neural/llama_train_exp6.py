@@ -289,10 +289,12 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         X = get_batch('test')
+        model.eval()
         with ctx:
             # logits, loss = model(X)
             logits = raw_model.reconstruct(X, (batch_size, 1, n_samples), n_steps=50)
             samples = raw_model.sample((batch_size, 1, n_samples), n_steps=50)
+        model.train()
         save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), samples.cpu().detach().float().numpy(), iter_num)
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
