@@ -187,7 +187,7 @@ def save_samples(xs, ys, samples, step):
 
         time = np.arange(len(x)) / rate
 
-        fig, axs = plt.subplot(3, 1)
+        fig, axs = plt.subplots(3, 1)
         axs[0].plot(time, x)
         axs[1].plot(time, y)
         axs[2].plot(time, sample)
