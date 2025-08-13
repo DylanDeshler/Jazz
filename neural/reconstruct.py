@@ -205,4 +205,4 @@ print('X: ', X.min().item(), X.mean().item(), X.std().item(), X.max().item())
 print('Reconstruction: ', logits.min().item(), logits.mean().item(), logits.std().item(), logits.max().item())
 print('Sample: ', samples.min().item(), samples.mean().item(), samples.std().item(), samples.max().item())
 
-# save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), samples.cpu().detach().float().numpy(), iter_num)
+save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), samples.cpu().detach().float().numpy(), iter_num)
