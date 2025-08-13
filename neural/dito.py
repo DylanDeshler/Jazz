@@ -41,8 +41,8 @@ class DiToTrainer(nn.Module):
     def sample(self, shape, n_steps=50):
         return self.sampler.sample(self.model, shape, n_steps)
     
-    def reconstruct(self, x, shape, n_steps=50):
-        return self.sampler.reconstruct(self.model, x, shape, n_steps, guidance=2)
+    def reconstruct(self, x, shape, n_steps=50, guidance=2):
+        return self.sampler.reconstruct(self.model, x, shape, n_steps, guidance=guidance) / guidance
 
 if __name__ == '__main__':
     device = torch.device('mps')
