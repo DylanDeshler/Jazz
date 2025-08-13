@@ -180,10 +180,19 @@ def save_samples(xs, ys, samples, step):
     for i in range(8):
         x, y, sample = xs[i].squeeze(), ys[i].squeeze(), samples[i].squeeze()
 
-        # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, rate)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, rate)
-        sf.write(os.path.join(batch_dir, f'{i}_sample.wav'), sample, rate)
+        # # save .wavs
+        # sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, rate)
+        # sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, rate)
+        # sf.write(os.path.join(batch_dir, f'{i}_sample.wav'), sample, rate)
+
+        time = np.arange(len(x)) / rate
+
+        fig, axs = plt.subplot(3, 1)
+        axs[0].plot(time, x)
+        axs[1].plot(time, y)
+        axs[2].plot(time, sample)
+
+        plt.show()
 
 X = get_batch('test')
 with torch.no_grad():
