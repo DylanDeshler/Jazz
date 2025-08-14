@@ -195,6 +195,10 @@ def save_samples(xs, ys, samples, step):
         plt.savefig(f'{i}.png')
         plt.close('all')
 
+        print('X: ', x.min().item(), x.mean().item(), x.std().item(), x.max().item())
+        print('Reconstruction: ', y.min().item(), y.mean().item(), y.std().item(), y.max().item())
+        print('Sample: ', sample.min().item(), sample.mean().item(), sample.std().item(), sample.max().item())
+
 X = get_batch('test')
 with torch.no_grad():
     with ctx:
@@ -202,8 +206,5 @@ with torch.no_grad():
         logits = model.reconstruct(X, (batch_size, 1, n_samples), n_steps=50)
         samples = model.sample((batch_size, 1, n_samples), n_steps=50)
 
-print('X: ', X.min().item(), X.mean().item(), X.std().item(), X.max().item())
-print('Reconstruction: ', logits.min().item(), logits.mean().item(), logits.std().item(), logits.max().item())
-print('Sample: ', samples.min().item(), samples.mean().item(), samples.std().item(), samples.max().item())
 
 save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), samples.cpu().detach().float().numpy(), iter_num)
