@@ -192,7 +192,8 @@ def save_samples(xs, ys, samples, step):
         axs[1].plot(time, y)
         axs[2].plot(time, sample)
 
-        plt.show()
+        plt.savefig(f'{i}.png')
+        plt.close('all')
 
 X = get_batch('test')
 with torch.no_grad():
