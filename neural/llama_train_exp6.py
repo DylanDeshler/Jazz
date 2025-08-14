@@ -292,7 +292,7 @@ while True:
         model.eval()
         with ctx:
             # logits, loss = model(X)
-            logits = raw_model.reconstruct(X, (batch_size, 1, n_samples), n_steps=50)
+            logits = raw_model.reconstruct(X, (batch_size, 1, n_samples), n_steps=50, guidance=1)
             samples = raw_model.sample((batch_size, 1, n_samples), n_steps=50)
         model.train()
         save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), samples.cpu().detach().float().numpy(), iter_num)
