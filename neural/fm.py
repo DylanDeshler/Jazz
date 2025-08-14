@@ -146,7 +146,7 @@ class FMEulerSampler:
     ):
         device = next(net.parameters()).device
         # x_t = torch.randn(shape, device=device) if noise is None else noise
-        x_t, noise = self.add_noise(x, t)
+        x_t, noise = self.diffusion.add_noise(x, t)
         t_steps = torch.linspace(1, 0, n_steps + 1, device=device)
 
         with torch.no_grad():
