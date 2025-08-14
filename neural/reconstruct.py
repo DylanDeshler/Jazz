@@ -203,7 +203,7 @@ X = get_batch('test')
 with torch.no_grad():
     with ctx:
         # logits, loss = model(X)
-        logits = model.reconstruct(X, (batch_size, 1, n_samples), n_steps=50)
+        logits = model.reconstruct(X, (batch_size, 1, n_samples), n_steps=50, guidance=1)
         samples = model.sample((batch_size, 1, n_samples), n_steps=50)
 
 
