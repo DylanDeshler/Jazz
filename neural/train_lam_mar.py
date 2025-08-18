@@ -120,13 +120,13 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 # poor man's data loader
 def get_batch(split='train'):
     if split == 'train':
-        data = np.memmap('/home/dylan.d/research/music/Jazz/latents/train.bin', dtype=np.float32, mode='r')
+        data = np.memmap('/home/dylan.d/research/music/Jazz/latents/train.bin', dtype=np.float32, mode='r', shape=(318575607, 128))
         idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
         batch = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).to(device)
         return batch
     
     else:
-        data = np.memmap('/home/dylan.d/research/music/Jazz/latents/val.bin', dtype=np.float32, mode='r')
+        data = np.memmap('/home/dylan.d/research/music/Jazz/latents/val.bin', dtype=np.float32, mode='r', shape=(6501543, 128))
         idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
         batch = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).to(device)
         return batch
@@ -269,7 +269,7 @@ while True:
     # if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
     #     gradient_accumulation_steps *= 2
     
-    tokens_trained += batch_size * gradient_accumulation_steps
+    tokens_trained += batch_size * gradient_accumulation_steps * max_seq_len
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
