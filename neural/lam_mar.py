@@ -221,6 +221,7 @@ class MAR(nn.Module):
         return loss
 
     def forward(self, x):
+        print(x.shape)
         
         # patchify and mask (drop) tokens
         gt_latents = x.clone().detach()
