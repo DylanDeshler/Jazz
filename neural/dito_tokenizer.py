@@ -96,29 +96,29 @@ with torch.no_grad():
                 z = model.encode(batch)
             latents.append(z.cpu().detach().numpy())
 
-        if len(latents) > 1_500:
-            latents = np.concatenate(latents, axis=0).swapaxes(1, 2)
-            B, T, C = latents.shape
-            latents = latents.reshape((B * T, C))
-            print(f'Writing latents batch {save_idx} with shape: {latents.shape}')
+latents = np.concatenate(latents, axis=0).swapaxes(1, 2)
+B, T, C = latents.shape
+latents = latents.reshape((B * T, C))
 
-            filename = os.path.join(out_dir, f'{save_idx}.bin')
-            dtype = np.float32
-            arr = np.memmap(filename, dtype=dtype, mode='w+', shape=latents.shape)
-            arr[:] = latents
-            arr.flush()
+train = latents[:int(len(latents) * 0.98)]
+print('Writing train with shape: ', train.shape)
 
-            save_idx += 1
-            latents = []
+filename = os.path.join(out_dir, f'train.bin')
+arr = np.memmap(filename, dtype=np.float32, mode='w+', shape=train.shape)
 
-if len(latents) > 0:
-    latents = np.concatenate(latents, axis=0).swapaxes(1, 2)
-    B, T, C = latents.shape
-    latents = latents.reshape((B * T, C))
-    print('Writing latents with shape: ', latents.shape)
-
-    filename = os.path.join(out_dir, f'{save_idx}.bin')
-    dtype = np.float32
-    arr = np.memmap(filename, dtype=dtype, mode='w+', shape=latents.shape)
-    arr[:] = latents
+n_batches = 30
+n_samples = len(train) // n_batches
+for i in range(n_batches):
+    arr[i * n_samples : (i + 1) * n_samples] = train[i * n_samples : (i + 1) * n_samples]
     arr.flush()
+
+arr[n_batches * n_samples :] = train[n_batches * n_samples :]
+arr.flush()
+
+val = latents[int(len(latents) * 0.98):]
+print('Writing val with shape: ', val.shape)
+
+filename = os.path.join(out_dir, f'val.bin')
+arr = np.memmap(filename, dtype=np.float32, mode='w+', shape=val.shape)
+arr[:] = val
+arr.flush()
