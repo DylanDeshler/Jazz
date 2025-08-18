@@ -42,7 +42,7 @@ ckpt_path = os.path.join('tokenizer9', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 model_args = checkpoint['model_args']
 
-model = Transformer(**model_args)
+model = Transformer(**model_args).to(device)
 state_dict = checkpoint['model']
 # fix the keys of the state dictionary :(
 # honestly no idea how checkpoints sometimes get this prefix, have to debug more
@@ -50,6 +50,7 @@ unwanted_prefix = '_orig_mod.'
 for k,v in list(state_dict.items()):
     if k.startswith(unwanted_prefix):
         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+# were loading the model directly from the trainer class
 unwanted_prefix = 'model.'
 for k,v in list(state_dict.items()):
     if k.startswith(unwanted_prefix):
