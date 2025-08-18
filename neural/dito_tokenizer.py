@@ -22,7 +22,7 @@ device = 'cuda'
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True
 
-batch_size = 48# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 96# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
 n_samples = rate
