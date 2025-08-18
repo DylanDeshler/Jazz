@@ -120,8 +120,6 @@ class MAR(nn.Module):
 
     def initialize_weights(self):
         # parameters
-        torch.nn.init.normal_(self.class_emb.weight, std=.02)
-        torch.nn.init.normal_(self.fake_latent, std=.02)
         torch.nn.init.normal_(self.mask_token, std=.02)
         torch.nn.init.normal_(self.encoder_pos_embed_learned, std=.02)
         torch.nn.init.normal_(self.decoder_pos_embed_learned, std=.02)
@@ -358,7 +356,6 @@ if __name__ == '__main__':
     model = mar_tiny(vae_embed_dim=128)
     summary(model)
 
-    x = torch.randn((4, 3, 256, 256))
-    labels = torch.ones((4,)).long()
-    y = model(x, labels)
+    x = torch.randn((4, 50 * 5, 128))
+    y = model(x)
     print(x.shape, y.shape)
