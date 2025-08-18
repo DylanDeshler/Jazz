@@ -195,9 +195,7 @@ class MAR(nn.Module):
     def forward_mae_decoder(self, x, tokens, mask):
         x = self.decoder_embed(x)
 
-        print(x.shape, mask.shape, mask.dtype)
         x[mask] = self.mask_token.to(x.dtype)
-        # x[mask.nonzero(as_tuple=True)] = self.mask_token.repeat()
 
         x = x + self.decoder_pos_embed_learned + tokens
         x = self.decoder_embed_ln(x)
@@ -223,8 +221,6 @@ class MAR(nn.Module):
         return loss
 
     def forward(self, x):
-        print(x.shape)
-        
         # patchify and mask (drop) tokens
         gt_latents = x.clone().detach()
         orders = self.sample_orders(bsz=x.size(0))
@@ -243,9 +239,7 @@ class MAR(nn.Module):
         z = self.forward_mae_decoder(x, tokens, mask)
 
         # diffloss
-        loss = self.forward_loss(z=z, target=gt_latents, mask=mask)
-        print(loss.item(), vq_loss.item())
-        loss = loss + vq_loss
+        loss = self.forward_loss(z=z, target=gt_latents, mask=mask) + vq_loss
 
         return tokens, loss
 
