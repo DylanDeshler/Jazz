@@ -65,7 +65,7 @@ class MAR(nn.Module):
         self.z_proj = nn.Linear(self.token_embed_dim, encoder_embed_dim, bias=True)
         self.z_proj_ln = nn.LayerNorm(encoder_embed_dim, eps=1e-6)
         self.buffer_size = buffer_size
-        self.encoder_pos_embed_learned = nn.Parameter(torch.zeros(1, self.seq_len + self.buffer_size, encoder_embed_dim))
+        self.encoder_pos_embed_learned = nn.Parameter(torch.zeros(1, self.seq_len, encoder_embed_dim))
 
         self.encoder_blocks = nn.ModuleList([
             Block(encoder_embed_dim, encoder_num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer,
@@ -95,7 +95,7 @@ class MAR(nn.Module):
         self.decoder_embed = nn.Linear(self.token_embed_dim, decoder_embed_dim, bias=True)
         self.decoder_embed_ln = nn.LayerNorm(decoder_embed_dim, eps=1e-6)
         self.mask_token = nn.Parameter(torch.zeros(1, 1, decoder_embed_dim))
-        self.decoder_pos_embed_learned = nn.Parameter(torch.zeros(1, self.seq_len + self.buffer_size, decoder_embed_dim))
+        self.decoder_pos_embed_learned = nn.Parameter(torch.zeros(1, self.seq_len, decoder_embed_dim))
 
         self.decoder_blocks = nn.ModuleList([
             Block(decoder_embed_dim, decoder_num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer,
@@ -177,6 +177,7 @@ class MAR(nn.Module):
         x = self.z_proj(x)
 
         # encoder position embedding
+
         x = x + self.encoder_pos_embed_learned
         x = self.z_proj_ln(x)
 
