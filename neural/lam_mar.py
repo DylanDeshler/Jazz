@@ -312,6 +312,10 @@ class MAR(nn.Module):
         tokens = self.unpatchify(tokens)
         return tokens
 
+'''
+Whats the best way to distribute compute between encoder and decoder?
+'''
+
 def mar_tiny(**kwargs):
     model = MAR(
         encoder_embed_dim=384, encoder_depth=6, encoder_num_heads=6,
@@ -327,9 +331,10 @@ def mar_small(**kwargs):
     return model
 
 def mar_base(**kwargs):
+    total_layers = 24
     model = MAR(
-        encoder_embed_dim=768, encoder_depth=12, encoder_num_heads=12,
-        decoder_embed_dim=768, decoder_depth=12, decoder_num_heads=12,
+        encoder_embed_dim=768, encoder_depth=total_layers // 4, encoder_num_heads=12,
+        decoder_embed_dim=768, decoder_depth=total_layers * 3 // 4, decoder_num_heads=12,
         mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     return model
 
