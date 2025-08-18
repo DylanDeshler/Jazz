@@ -115,20 +115,20 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
+# Writing train with shape:  (318575607, 128)
+# Writing val with shape:  (6501543, 128)
 # poor man's data loader
-paths = glob.glob('/home/dylan.d/research/music/Jazz/latents/*.bin')
-
 def get_batch(split='train'):
     if split == 'train':
         data = np.memmap('/home/dylan.d/research/music/Jazz/latents/train.bin', dtype=np.float32, mode='r')
         idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
-        batch = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs]), axis=0).to(device)
+        batch = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).to(device)
         return batch
     
     else:
         data = np.memmap('/home/dylan.d/research/music/Jazz/latents/val.bin', dtype=np.float32, mode='r')
         idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
-        batch = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs]), axis=0).to(device)
+        batch = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).to(device)
         return batch
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
