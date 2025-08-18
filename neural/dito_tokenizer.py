@@ -92,9 +92,8 @@ with torch.no_grad():
             with ctx:
                 z = model.encode(batch)
             latents.append(z.cpu().detach().numpy())
-    
-        print(np.concatenate(latents, axis=0).shape)
-        if len(latents) > 50_000:
+
+        if len(latents) > 1_500:
             latents = np.concatenate(latents, axis=0).permute(0, 2, 1)
             B, T, C = latents.shape
             latents = latents.reshape((B * T, C))
@@ -108,3 +107,15 @@ with torch.no_grad():
 
             save_idx += 1
             latents = []
+
+if len(latents) > 0:
+    latents = np.concatenate(latents, axis=0).permute(0, 2, 1)
+    B, T, C = latents.shape
+    latents = latents.reshape((B * T, C))
+    print('Writing latents with shape: ', latents.shape)
+
+    filename = os.path.join(os.path.dirname(__file__), f'jazz_{save_idx}.bin')
+    dtype = np.float32
+    arr = np.memmap(filename, dtype=dtype, mode='w+', shape=latents.shape)
+    arr[:] = latents
+    arr.flush()
