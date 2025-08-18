@@ -109,7 +109,7 @@ with torch.no_grad():
             latents = []
 
 if len(latents) > 0:
-    latents = np.concatenate(latents, axis=0).permute(0, 2, 1)
+    latents = np.concatenate(latents, axis=0).swapaxes(1, 2)
     B, T, C = latents.shape
     latents = latents.reshape((B * T, C))
     print('Writing latents with shape: ', latents.shape)
