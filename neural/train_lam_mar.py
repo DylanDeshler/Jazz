@@ -64,11 +64,11 @@ learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
-beta2 = 0.999
+beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
 decay_lr = False # whether to decay the learning rate
-warmup_iters = 2000 # how many steps to warm up for
+warmup_iters = 10000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
@@ -243,8 +243,8 @@ if wandb_log and master_process:
 
 # training loop
 step1 = 5001
-step2 = 20001
-step3 = 30001
+step2 = 10001
+step3 = 20001
 step4 = 50001
 
 X = get_batch('train') # fetch the very first batch
@@ -261,11 +261,11 @@ while True:
     
     if iter_num == step1 or local_iter_num == 0 and iter_num >= step1:
         batch_size *= 2
-    # if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
-    #     gradient_accumulation_steps *= 2
+    if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
+        gradient_accumulation_steps *= 2
     #     # batch_size *= 4
-    # if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
-    #     gradient_accumulation_steps *= 2
+    if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
+        gradient_accumulation_steps *= 2
     #     # batch_size *= 4
     # if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
     #     gradient_accumulation_steps *= 2
