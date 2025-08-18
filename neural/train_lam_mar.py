@@ -116,17 +116,18 @@ ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torc
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 # poor man's data loader
-data = np.memmap('', dtype=np.float32, mode='r', shape=())
-print(data.shape)
+paths = glob.glob('/home/dylan.d/research/music/Jazz/latents/*.bin')
 
 def get_batch(split='train'):
     if split == 'train':
-        idxs = torch.randint(int(len(data) * 0.98) - max_seq_len, (batch_size,))
+        data = np.memmap(paths[torch.randint(len(paths) - 2)], dtype=np.float32, mode='r')
+        idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
         batch = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs]), axis=0).to(device)
         return batch
     
     else:
-        idxs = torch.randint(int(len(data) * 0.98), len(data) - max_seq_len, (batch_size,))
+        data = np.memmap(paths[torch.randint(len(paths) - 2, len(paths))], dtype=np.float32, mode='r')
+        idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
         batch = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs]), axis=0).to(device)
         return batch
 
