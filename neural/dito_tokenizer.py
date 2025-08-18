@@ -67,6 +67,7 @@ model.eval()
 
 latents = []
 with torch.no_grad():
+    # encoding is light enough to batch over multiple songs
     for path in tqdm(paths):
         x, sr = librosa.load(path, sr=None)
         assert sr == rate
@@ -92,7 +93,9 @@ with torch.no_grad():
                 z = model.encode(batch)
             latents.append(z.cpu().detach().numpy())
         
-latents = np.concatenate(latents, axis=0)
+latents = np.concatenate(latents, axis=0).permute(0, 2, 1)
+B, T, C = latents.shape
+latents = latents.reshape((B * T, C))
 print(latents.shape)
 
 filename = os.path.join(os.path.dirname(__file__), f'jazz.bin')
