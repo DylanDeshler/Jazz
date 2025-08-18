@@ -43,6 +43,7 @@ checkpoint = torch.load(ckpt_path, map_location=device)
 model_args = checkpoint['model_args']
 
 model = Transformer(**model_args)
+print(checkpoint['model'].keys())
 state_dict = checkpoint['model']['model']
 # fix the keys of the state dictionary :(
 # honestly no idea how checkpoints sometimes get this prefix, have to debug more
