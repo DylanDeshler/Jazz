@@ -120,13 +120,13 @@ paths = glob.glob('/home/dylan.d/research/music/Jazz/latents/*.bin')
 
 def get_batch(split='train'):
     if split == 'train':
-        data = np.memmap(paths[torch.randint(len(paths) - 2)], dtype=np.float32, mode='r')
+        data = np.memmap('/home/dylan.d/research/music/Jazz/latents/train.bin', dtype=np.float32, mode='r')
         idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
         batch = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs]), axis=0).to(device)
         return batch
     
     else:
-        data = np.memmap(paths[torch.randint(len(paths) - 2, len(paths))], dtype=np.float32, mode='r')
+        data = np.memmap('/home/dylan.d/research/music/Jazz/latents/val.bin', dtype=np.float32, mode='r')
         idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
         batch = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs]), axis=0).to(device)
         return batch
