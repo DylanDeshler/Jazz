@@ -22,7 +22,7 @@ device = 'cuda'
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True
 
-batch_size = 96# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 512
 # model
 rate = 16000
 n_samples = rate
@@ -64,33 +64,6 @@ if compile and 'cuda' in device:
     model = torch.compile(model) # requires PyTorch 2.0
 
 model.eval()
-
-def get_batch(split='train'):
-    if split == 'train':
-        idxs = torch.randint(int(len(paths) * 0.98), (batch_size,))
-        samples = [paths[idx] for idx in idxs]
-        batch = []
-        for sample in samples:
-            x, sr = librosa.load(sample, sr=None)
-            assert sr == rate
-
-            start = np.random.randint(len(x) - n_samples)
-            batch.append(x[start:start + n_samples])
-        batch = torch.from_numpy(np.stack(batch, axis=0)).unsqueeze(1).to(device)
-        return batch
-    
-    else:
-        idxs = torch.randint(int(len(paths) * 0.98), len(paths), (batch_size,))
-        samples = [paths[idx] for idx in idxs]
-        batch = []
-        for sample in samples:
-            x, sr = librosa.load(sample, sr=None)
-            assert sr == rate
-
-            start = np.random.randint(len(x) - n_samples)
-            batch.append(x[start:start + n_samples])
-        batch = torch.from_numpy(np.stack(batch, axis=0)).unsqueeze(1).to(device)
-        return batch
 
 latents = []
 with torch.no_grad():
