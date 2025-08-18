@@ -243,9 +243,11 @@ class MAR(nn.Module):
         z = self.forward_mae_decoder(x, tokens, mask)
 
         # diffloss
-        loss = self.forward_loss(z=z, target=gt_latents, mask=mask) + vq_loss
+        loss = self.forward_loss(z=z, target=gt_latents, mask=mask)
+        print(loss.item(), vq_loss.item())
+        loss = loss + vq_loss
 
-        return loss
+        return tokens, loss
 
     def sample_tokens(self, bsz, num_iter=64, cfg=1.0, cfg_schedule="linear", labels=None, temperature=1.0, progress=False):
 
