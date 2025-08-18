@@ -38,6 +38,9 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
 print(len(paths))
 
+out_dir = '/home/dylan.d/research/music/Jazz/latents'
+os.makedirs(out_dir, exist_ok=True)
+
 ckpt_path = os.path.join('tokenizer9', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 model_args = checkpoint['model_args']
@@ -94,12 +97,12 @@ with torch.no_grad():
             latents.append(z.cpu().detach().numpy())
 
         if len(latents) > 1_500:
-            latents = np.concatenate(latents, axis=0).swapaxes(0, 2, 1)
+            latents = np.concatenate(latents, axis=0).swapaxes(1, 2)
             B, T, C = latents.shape
             latents = latents.reshape((B * T, C))
             print(f'Writing latents batch {save_idx} with shape: {latents.shape}')
 
-            filename = os.path.join(os.path.dirname(__file__), f'jazz_{save_idx}.bin')
+            filename = os.path.join(out_dir, f'{save_idx}.bin')
             dtype = np.float32
             arr = np.memmap(filename, dtype=dtype, mode='w+', shape=latents.shape)
             arr[:] = latents
@@ -114,7 +117,7 @@ if len(latents) > 0:
     latents = latents.reshape((B * T, C))
     print('Writing latents with shape: ', latents.shape)
 
-    filename = os.path.join(os.path.dirname(__file__), f'jazz_{save_idx}.bin')
+    filename = os.path.join(out_dir, f'{save_idx}.bin')
     dtype = np.float32
     arr = np.memmap(filename, dtype=dtype, mode='w+', shape=latents.shape)
     arr[:] = latents
