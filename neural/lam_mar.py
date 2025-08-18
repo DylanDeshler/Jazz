@@ -332,9 +332,13 @@ def mar_small(**kwargs):
 
 def mar_base(**kwargs):
     total_layers = 24
+    # model = MAR(
+    #     encoder_embed_dim=768, encoder_depth=total_layers // 4, encoder_num_heads=12,
+    #     decoder_embed_dim=768, decoder_depth=total_layers * 3 // 4, decoder_num_heads=12,
+    #     mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     model = MAR(
-        encoder_embed_dim=768, encoder_depth=total_layers // 4, encoder_num_heads=12,
-        decoder_embed_dim=768, decoder_depth=total_layers * 3 // 4, decoder_num_heads=12,
+        encoder_embed_dim=768, encoder_depth=total_layers // 2, encoder_num_heads=12,
+        decoder_embed_dim=768, decoder_depth=total_layers // 2, decoder_num_heads=12,
         mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     return model
 
