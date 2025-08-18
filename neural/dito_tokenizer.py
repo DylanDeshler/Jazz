@@ -93,7 +93,7 @@ with torch.no_grad():
                 z = model.encode(batch)
             latents.append(z.cpu().detach().numpy())
     
-        print(latents.shape)
+        print(np.concatenate(latents, axis=0).shape)
         if len(latents) > 50_000:
             latents = np.concatenate(latents, axis=0).permute(0, 2, 1)
             B, T, C = latents.shape
