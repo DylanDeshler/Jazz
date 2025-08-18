@@ -195,6 +195,7 @@ class MAR(nn.Module):
     def forward_mae_decoder(self, x, tokens, mask):
         x = self.decoder_embed(x)
 
+        print(x.shape, mask.shape, mask.dtype)
         x[mask] = self.mask_token.to(x.dtype)
         # x[mask.nonzero(as_tuple=True)] = self.mask_token.repeat()
 
