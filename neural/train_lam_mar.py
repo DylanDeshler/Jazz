@@ -223,17 +223,16 @@ def get_lr(it):
 
 
 def save_samples(xs, ys, samples, step):
-    pass
-    # batch_dir = os.path.join(out_dir, str(step))
-    # os.makedirs(batch_dir, exist_ok=True)
+    batch_dir = os.path.join(out_dir, str(step))
+    os.makedirs(batch_dir, exist_ok=True)
 
-    # for i in range(8):
-    #     x, y, sample = xs[i].squeeze(), ys[i].squeeze(), samples[i].squeeze()
+    for i in range(8):
+        x, y, sample = xs[i].squeeze(), ys[i].squeeze(), samples[i].squeeze()
 
-    #     # save .wavs
-    #     sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, rate)
-    #     sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, rate)
-    #     sf.write(os.path.join(batch_dir, f'{i}_sample.wav'), sample, rate)
+        # save .wavs
+        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, rate)
+        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, rate)
+        sf.write(os.path.join(batch_dir, f'{i}_sample.wav'), sample, rate)
 
 # logging
 if wandb_log and master_process:
@@ -275,12 +274,12 @@ while True:
     if iter_num % eval_interval == 0 and master_process:
         X = get_batch('test')
         model.eval()
-        with ctx:
-            # logits, loss = model(X)
-            logits = raw_model.reconstruct(X, (batch_size, 1, n_samples), n_steps=50, guidance=1)
-            samples = raw_model.sample((batch_size, 1, n_samples), n_steps=50)
-        model.train()
-        save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), samples.cpu().detach().float().numpy(), iter_num)
+        # with ctx:
+        #     # logits, loss = model(X)
+        #     logits = raw_model.reconstruct(X, (batch_size, 1, n_samples), n_steps=50, guidance=1)
+        #     samples = raw_model.sample((batch_size, 1, n_samples), n_steps=50)
+        # model.train()
+        # save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), samples.cpu().detach().float().numpy(), iter_num)
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
