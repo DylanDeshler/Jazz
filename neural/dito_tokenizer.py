@@ -65,9 +65,9 @@ if compile and 'cuda' in device:
 
 model.eval()
 
+save_idx = 0
 latents = []
 with torch.no_grad():
-    # encoding is light enough to batch over multiple songs
     for path in tqdm(paths):
         x, sr = librosa.load(path, sr=None)
         assert sr == rate
@@ -92,14 +92,19 @@ with torch.no_grad():
             with ctx:
                 z = model.encode(batch)
             latents.append(z.cpu().detach().numpy())
-        
-latents = np.concatenate(latents, axis=0).permute(0, 2, 1)
-B, T, C = latents.shape
-latents = latents.reshape((B * T, C))
-print(latents.shape)
+    
+    print(len(latents))
+    if len(latents) > 50_000:
+        latents = np.concatenate(latents, axis=0).permute(0, 2, 1)
+        B, T, C = latents.shape
+        latents = latents.reshape((B * T, C))
+        print('Writing latents with shape: ', latents.shape)
 
-filename = os.path.join(os.path.dirname(__file__), f'jazz.bin')
-dtype = np.float32
-arr = np.memmap(filename, dtype=dtype, mode='w+', shape=latents.shape)
-arr[:] = latents
-arr.flush()
+        filename = os.path.join(os.path.dirname(__file__), f'jazz_{save_idx}.bin')
+        dtype = np.float32
+        arr = np.memmap(filename, dtype=dtype, mode='w+', shape=latents.shape)
+        arr[:] = latents
+        arr.flush()
+
+        save_idx += 1
+        latents = []
