@@ -40,7 +40,7 @@ import glob
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
 out_dir = 'lam_mar'
-eval_interval = 2000
+eval_interval = 1000
 log_interval = 100
 eval_iters = 100
 eval_only = False # if True, script exits right after the first eval
@@ -56,8 +56,9 @@ gradient_accumulation_steps = 2 # used to simulate larger batch sizes
 batch_size = 48 * 2# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 max_seq_len = 50 * 5
-codebook_size=16
-codebook_dim=32
+codebook_size = 16
+codebook_dim = 32
+vae_embed_dim = 128
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
@@ -135,7 +136,7 @@ def get_batch(split='train'):
 iter_num = 0
 best_val_loss = 1e9
 
-model_args = dict(vae_embed_dim=128, seq_len=max_seq_len, codebook_size=codebook_size, codebook_dim=codebook_dim)
+model_args = dict(vae_embed_dim=vae_embed_dim, seq_len=max_seq_len, codebook_size=codebook_size, codebook_dim=codebook_dim)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -274,7 +275,7 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         X = get_batch('test')
-        model.eval()
+        # model.eval()
         # with ctx:
         #     # logits, loss = model(X)
         #     logits = raw_model.reconstruct(X, (batch_size, 1, n_samples), n_steps=50, guidance=1)
