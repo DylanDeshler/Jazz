@@ -119,5 +119,11 @@ with torch.no_grad():
                 z = model.encode(batch)
             latents.append(z.cpu().detach().numpy())
         
-        latents = np.concatenate(latents, axis=0)
-        print(latents.shape)
+latents = np.concatenate(latents, axis=0)
+print(latents.shape)
+
+filename = os.path.join(os.path.dirname(__file__), f'jazz.bin')
+dtype = np.float32
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=latents.shape)
+arr[:] = latents
+arr.flush()
