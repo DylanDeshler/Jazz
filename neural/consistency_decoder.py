@@ -151,7 +151,7 @@ class Upsample(nn.Module):
         gn_2 = self.gn_2(f_1)
         f_2 = self.f_2(F.silu(t_2 + (t_1 * gn_2)))
 
-        return f_2 + F.interpolate(x_skip, scale_factor=self.ratio, mode='nearest')
+        return f_2 + F.interpolate(x_skip.float(), scale_factor=self.ratio, mode='nearest').to(x_skip.dtype)
 
 
 class ConsistencyDecoderUNet(nn.Module):
