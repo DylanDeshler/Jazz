@@ -30,7 +30,7 @@ class DiTo(nn.Module):
     
     def sample(self, shape, n_steps=50):
         device = next(self.parameters()).device
-        return self.sampler.sample(self.unet, shape, n_steps, net_kwargs={'z_dec': torch.randn(shape[0] + self.z_shape, device=device)})
+        return self.sampler.sample(self.unet, shape, n_steps, net_kwargs={'z_dec': torch.randn((shape[0],) + self.z_shape, device=device)})
     
     def reconstruct(self, x, n_steps=50):
         z = self.encode(x)
