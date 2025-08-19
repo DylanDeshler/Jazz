@@ -10,7 +10,7 @@ class DiTo(nn.Module):
     def __init__(self):
         super().__init__()
         self.z_shape = (128, 50)
-        self.encoder = SEANetEncoder(n_residual_layers=2, lstm=0, transformer=1)
+        self.encoder = SEANetEncoder(n_residual_layers=2, lstm=0, transformer=2)
         self.z_norm = nn.LayerNorm(self.z_shape[0], elementwise_affine=False)
         self.unet = ConsistencyDecoderUNet(in_channels=1, z_dec_channels=128, c0=128, c1=256, c2=512)
 
