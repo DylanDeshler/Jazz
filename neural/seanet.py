@@ -393,14 +393,14 @@ def create_sin_embedding(positions: torch.Tensor, dim: int, max_period: float = 
 
 
 class StreamingTransformerEncoderLayer(nn.TransformerEncoderLayer):
-    def forward(self, x: torch.Tensor, x_past: torch.Tensor, past_context: int, causal: bool = False):  # type: ignore
+    def forward(self, x: torch.Tensor, x_past: torch.Tensor, past_context: int):  # type: ignore
         if self.norm_first:
             sa_input = self.norm1(x)
-            x = x + self._sa_block(sa_input, x_past, past_context, is_causal=causal)
+            x = x + self._sa_block(sa_input, x_past, past_context)
             x = x + self._ff_block(self.norm2(x))
         else:
             sa_input = x
-            x = self.norm1(x + self._sa_block(sa_input, x_past, past_context, is_causal=causal))
+            x = self.norm1(x + self._sa_block(sa_input, x_past, past_context))
             x = self.norm2(x + self._ff_block(x))
 
         return x, sa_input
