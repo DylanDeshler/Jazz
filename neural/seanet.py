@@ -393,14 +393,14 @@ def create_sin_embedding(positions: torch.Tensor, dim: int, max_period: float = 
 
 
 class StreamingTransformerEncoderLayer(nn.TransformerEncoderLayer):
-    def forward(self, x: torch.Tensor, x_past: torch.Tensor, past_context: int):  # type: ignore
+    def forward(self, x: torch.Tensor, x_past: torch.Tensor, past_context: int, causal: bool = False):  # type: ignore
         if self.norm_first:
             sa_input = self.norm1(x)
-            x = x + self._sa_block(sa_input, x_past, past_context)
+            x = x + self._sa_block(sa_input, x_past, past_context, is_causal=causal)
             x = x + self._ff_block(self.norm2(x))
         else:
             sa_input = x
-            x = self.norm1(x + self._sa_block(sa_input, x_past, past_context))
+            x = self.norm1(x + self._sa_block(sa_input, x_past, past_context, is_causal=causal))
             x = self.norm2(x + self._ff_block(x))
 
         return x, sa_input
@@ -441,10 +441,11 @@ class StreamingTransformerEncoder(nn.Module):
     """
     def __init__(self, dim, hidden_scale: float = 4., num_heads: int = 8, num_layers: int = 5,
                  max_period: float = 10000, past_context: int = 1000, gelu: bool = True,
-                 norm_in: bool = True, dropout: float = 0., **kwargs):
+                 norm_in: bool = True, dropout: float = 0., causal: bool = False, **kwargs):
         super().__init__()
         assert dim % num_heads == 0
         hidden_dim = int(dim * hidden_scale)
+        self.causal = causal
 
         self.max_period = max_period
         self.past_context = past_context
@@ -479,7 +480,7 @@ class StreamingTransformerEncoder(nn.Module):
         x = x + pos_emb
 
         for layer_state, layer in zip(states, self.layers):
-            x, new_layer_state = layer(x, layer_state, self.past_context)
+            x, new_layer_state = layer(x, layer_state, self.past_context, self.causal)
             new_layer_state = torch.cat([layer_state, new_layer_state], dim=1)
             new_state.append(new_layer_state[:, -self.past_context:, :])
         x = x.transpose(1, 2)
