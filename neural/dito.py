@@ -7,10 +7,10 @@ from seanet import SEANetEncoder
 from fm import FM, FMEulerSampler
 
 class DiTo(nn.Module):
-    def __init__(self):
+    def __init__(self, z_shape, n_residual_layers, lstm, transformer):
         super().__init__()
-        self.z_shape = (128, 50)
-        self.encoder = SEANetEncoder(n_residual_layers=2, lstm=0, transformer=2)
+        self.z_shape = z_shape
+        self.encoder = SEANetEncoder(n_residual_layers=n_residual_layers, lstm=lstm, transformer=transformer)
         self.z_norm = nn.LayerNorm(self.z_shape[0], elementwise_affine=False)
         self.unet = ConsistencyDecoderUNet(in_channels=1, z_dec_channels=128, c0=128, c1=256, c2=512)
 
