@@ -9,8 +9,9 @@ from fm import FM, FMEulerSampler
 class DiTo(nn.Module):
     def __init__(self):
         super().__init__()
+        self.z_shape = (128, 50)
         self.encoder = SEANetEncoder(n_residual_layers=2, lstm=0, transformer=1)
-        self.z_norm = nn.LayerNorm(128, elementwise_affine=False)
+        self.z_norm = nn.LayerNorm(self.z_shape[0], elementwise_affine=False)
         self.unet = ConsistencyDecoderUNet(in_channels=1, z_dec_channels=128, c0=128, c1=256, c2=512)
 
         self.diffusion = FM(timescale=1000.0)
@@ -29,7 +30,7 @@ class DiTo(nn.Module):
     
     def sample(self, shape, n_steps=50):
         device = next(self.parameters()).device
-        return self.sampler.sample(self.unet, shape, n_steps, net_kwargs={'z_dec': torch.randn(shape, device=device)})
+        return self.sampler.sample(self.unet, shape, n_steps, net_kwargs={'z_dec': torch.randn(shape[0] + self.z_shape, device=device)})
     
     def reconstruct(self, x, n_steps=50):
         z = self.encode(x)
