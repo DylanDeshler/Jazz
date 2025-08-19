@@ -19,8 +19,16 @@ class DiTo(nn.Module):
     
     def forward(self, x):
         z = self.encode(x)
-        # optional noise synchronization
-        loss = self.diffusion.loss(self.unet, x, net_kwargs={'z_dec': z})
+        
+        # noise synchronization
+        t = torch.rand(z.shape[0], device=z.device)
+        post_t = t + torch.rand(z.shape[0], device=z.device) * (1 - t)
+        z_t, _ = self.diffusion.add_noise(z, t)
+        mask_aug = (torch.rand(z.shape[0], device=z.device) < 0.1).float()
+        z = mask_aug.view(-1, 1, 1) * z_t + (1 - mask_aug).view(-1, 1, 1) * z
+        t[mask_aug.long()] = post_t
+        
+        loss = self.diffusion.loss(self.unet, x, t, net_kwargs={'z_dec': z})
         return loss
     
     def encode(self, x):
