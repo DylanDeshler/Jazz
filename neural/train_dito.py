@@ -184,7 +184,7 @@ elif init_from.startswith('gpt2'):
         model_args[k] = getattr(model.config, k)
 
 model.to(device)
-# summary(model)
+summary(model)
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
@@ -290,7 +290,7 @@ while True:
         X = get_batch('test')
         model.eval()
         with ctx:
-            logits = raw_model.reconstruct(X, n_steps=50, guidance=1)
+            logits = raw_model.reconstruct(X, n_steps=50)
             samples = raw_model.sample((batch_size, 1, n_samples), n_steps=50)
         model.train()
         save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), samples.cpu().detach().float().numpy(), iter_num)
