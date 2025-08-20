@@ -42,6 +42,7 @@ import glob
 out_dir = 'tokenizer10'
 eval_interval = 1000
 log_interval = 100
+save_interval = eval_interval * 10
 eval_iters = 100
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
@@ -319,6 +320,10 @@ while True:
                 }
                 print(f"saving checkpoint to {out_dir}")
                 torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+
+                if iter_num % save_interval == 0:
+                    torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
+
     if iter_num == 0 and eval_only:
         break
 
