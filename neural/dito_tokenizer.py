@@ -20,7 +20,7 @@ import glob
 
 device = 'cuda'
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
-compile = True
+compile = False
 
 batch_size = 512
 # model
@@ -41,7 +41,7 @@ print(len(paths))
 out_dir = '/home/dylan.d/research/music/Jazz/latents'
 os.makedirs(out_dir, exist_ok=True)
 
-ckpt_path = os.path.join('tokenizer9', 'ckpt.pt')
+ckpt_path = os.path.join('tokenizer10', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 model_args = checkpoint['model_args']
 
@@ -53,12 +53,6 @@ unwanted_prefix = '_orig_mod.'
 for k,v in list(state_dict.items()):
     if k.startswith(unwanted_prefix):
         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-# were loading the model directly from the trainer class
-unwanted_prefix = 'model.'
-for k,v in list(state_dict.items()):
-    if k.startswith(unwanted_prefix):
-        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-model.load_state_dict(state_dict)
 
 # compile the model
 if compile and 'cuda' in device:
@@ -103,7 +97,7 @@ latents = latents.reshape((B * T, C))
 train = latents[:int(len(latents) * 0.98)]
 print('Writing train with shape: ', train.shape)
 
-filename = os.path.join(out_dir, f'train.bin')
+filename = os.path.join(out_dir, 'train.bin')
 arr = np.memmap(filename, dtype=np.float32, mode='w+', shape=train.shape)
 
 n_batches = 30
@@ -118,7 +112,7 @@ arr.flush()
 val = latents[int(len(latents) * 0.98):]
 print('Writing val with shape: ', val.shape)
 
-filename = os.path.join(out_dir, f'val.bin')
+filename = os.path.join(out_dir, 'val.bin')
 arr = np.memmap(filename, dtype=np.float32, mode='w+', shape=val.shape)
 arr[:] = val
 arr.flush()

@@ -152,6 +152,73 @@ class MAR(nn.Module):
             )
 
         return random_actions
+    
+    def lam_vs_random_actions(self, video, random_rollout_steps: list[int] = None):
+        assert video.ndim == 5
+
+        b, c, f, *image_dims, device = *video.shape, video.device
+
+        assert not exists(random_rollout_steps) or max(random_rollout_steps) < f
+        if not exists(random_rollout_steps):
+            random_rollout_steps = [f - 1]
+
+        assert tuple(image_dims) == self.image_size
+        assert divisible_by(
+            f - 1, self.temporal_patch_size
+        ), f"number of frames ({f}) minus one ({f - 1}) must be divisible by temporal patch size ({self.temporal_patch_size})"
+
+        first_frame, rest_frames = video[:, :, :1], video[:, :, 1:]
+
+        # derive patches
+        first_frame_tokens = self.to_patch_emb_first_frame(first_frame)
+        rest_frames_tokens = self.to_patch_emb(rest_frames)
+
+        # simple cat, normal
+        enc_input_tokens = torch.cat((first_frame_tokens, rest_frames_tokens), dim=1)
+
+        # save height and width in
+        shape = enc_input_tokens.shape
+        *_, h, w, _ = shape
+
+        tokens = self.encode(enc_input_tokens)
+        tokens = self.to_action_emb(tokens)
+
+        tokens = tokens[:, 1:]
+
+        # quantize
+        tokens, packed_thw_shape = pack([tokens], "b * d")
+
+        tokens, action_indices, vq_loss = self.vq(tokens, mask=None)
+
+        # now repeate over the spatial dimensions
+        tokens = repeat(tokens, "b t d -> b t h w d", h=h, w=w)
+
+        dec_input_tokens = enc_input_tokens[:, :-1] + tokens
+
+        lam_recon_video = self.decode(dec_input_tokens)
+
+        random_rollout_recon_videos = []
+        random_actions_indices = self.generate_random_different_actions(
+            action_indices, device
+        )
+        for rollout_step in random_rollout_steps:
+            actions_to_take = action_indices.clone()[:, :rollout_step]
+            actions_to_take[:, rollout_step - 1] = random_actions_indices[
+                :, rollout_step - 1
+            ]
+            frame_embedds = enc_input_tokens[:, :rollout_step]
+
+            action_tokens = self.vq.codebook[actions_to_take]
+            action_tokens = self.vq.project_out(action_tokens)
+            action_tokens = repeat(action_tokens, "b t d -> b t h w d", h=h, w=w)
+
+            dec_input_tokens = frame_embedds + action_tokens
+
+            random_rollout_recon_video = self.decode(dec_input_tokens)
+
+            random_rollout_recon_videos.append(random_rollout_recon_video)
+
+        return lam_recon_video, random_rollout_recon_videos
 
     def sample_orders(self, bsz):
         # generate a batch of random generation orders
@@ -331,14 +398,9 @@ def mar_small(**kwargs):
     return model
 
 def mar_base(**kwargs):
-    total_layers = 24
-    # model = MAR(
-    #     encoder_embed_dim=768, encoder_depth=total_layers // 4, encoder_num_heads=12,
-    #     decoder_embed_dim=768, decoder_depth=total_layers * 3 // 4, decoder_num_heads=12,
-    #     mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     model = MAR(
-        encoder_embed_dim=768, encoder_depth=total_layers // 2, encoder_num_heads=12,
-        decoder_embed_dim=768, decoder_depth=total_layers // 2, decoder_num_heads=12,
+        encoder_embed_dim=768, encoder_depth=12, encoder_num_heads=12,
+        decoder_embed_dim=768, decoder_depth=12, decoder_num_heads=12,
         mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     return model
 
