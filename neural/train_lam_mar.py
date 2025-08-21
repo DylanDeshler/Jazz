@@ -30,6 +30,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
 from lam_mar import mar_base as mar
+from dito import DiTo as Tokenizer
 
 import matplotlib.pyplot as plt
 import soundfile as sf
@@ -173,12 +174,26 @@ elif init_from.startswith('gpt2'):
 model.to(device)
 summary(model)
 
+ckpt_path = os.path.join('tokenizer10', 'ckpt.pt')
+checkpoint = torch.load(ckpt_path, map_location=device)
+tokenizer_args = checkpoint['model_args']
+
+tokenizer = Tokenizer(**model_args).to(device)
+state_dict = checkpoint['model']
+# fix the keys of the state dictionary :(
+# honestly no idea how checkpoints sometimes get this prefix, have to debug more
+unwanted_prefix = '_orig_mod.'
+for k,v in list(state_dict.items()):
+    if k.startswith(unwanted_prefix):
+        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+tokenizer.load_state_dict(state_dict)
+
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 
 # optimizer
 # optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
-optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, betas=(beta1, beta2))
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
 checkpoint = None # free up memory
@@ -224,17 +239,33 @@ def get_lr(it):
     return min_lr + coeff * (learning_rate - min_lr)
 
 
-def save_samples(xs, ys, samples, step):
+def save_samples(xs, ys, random_ys, step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
 
-    for i in range(8):
-        x, y, sample = xs[i].squeeze(), ys[i].squeeze(), samples[i].squeeze()
+    assert xs.shape == ys.shape, f'shapes should match but got {xs.shape} != {ys.shape}'
+
+    B, L, D = xs.shape
+
+    # reconstruct wavform
+    n_cuts = L // 50
+    x_cuts, y_cuts, random_y_cuts = [], [], []
+    for cut in range(n_cuts):
+        x_cuts.append(tokenizer.reconstruct(xs[:, cut * 50: (cut + 1) * 50]))
+        y_cuts.append(tokenizer.reconstruct(ys[:, cut * 50: (cut + 1) * 50]))
+        random_y_cuts.append(tokenizer.reconstruct(random_ys[:, cut * 50: (cut + 1) * 50]))
+    xs = torch.cat(x_cuts, dim=-1).cpu().detach().numpy()
+    ys = torch.cat(y_cuts, dim=-1).cpu().detach().numpy()
+    random_ys = torch.cat(random_y_cuts, dim=-1).cpu().detach().numpy()
+    print(xs.shape, ys.shape, random_ys.shape)
+
+    for i in range(min(8, B)):
+        x, y, random_y = xs[i].squeeze(), ys[i].squeeze(), random_ys[i].squeeze()
 
         # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, rate)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, rate)
-        sf.write(os.path.join(batch_dir, f'{i}_sample.wav'), sample, rate)
+        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_sample.wav'), y, 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_y, 16000)
 
 # logging
 if wandb_log and master_process:
@@ -275,13 +306,11 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         X = get_batch('test')
-        # model.eval()
-        # with ctx:
-        #     # logits, loss = model(X)
-        #     logits = raw_model.reconstruct(X, (batch_size, 1, n_samples), n_steps=50, guidance=1)
-        #     samples = raw_model.sample((batch_size, 1, n_samples), n_steps=50)
-        # model.train()
-        # save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), samples.cpu().detach().float().numpy(), iter_num)
+        model.eval()
+        with ctx:
+            samples = raw_model.lam_vs_random_actions(X)
+        model.train()
+        save_samples(X, *samples, iter_num)
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:

@@ -18,7 +18,9 @@ from vector_quantize import VectorQuantize
 
 """
 MAR encoder sees all tokens and generates action tokens, decoder sees unmasked tokens + action tokens + masked tokens
-=> no token dropping
+=> no token dropping (rough on memory but good to not deal with causal nature or raw waveforms)
+
+Try using action tokens added to sequence tokens and/or as conditioning for adanorm layer
 """
 
 def mask_by_order(mask_len, order, bsz, seq_len):
@@ -153,72 +155,69 @@ class MAR(nn.Module):
 
         return random_actions
     
-    def lam_vs_random_actions(self, video, random_rollout_steps: list[int] = None):
-        assert video.ndim == 5
+    def sample(self, action_tokens, num_iter=64, temperature=1.0, ):
+        bsz = action_tokens.size(0)
 
-        b, c, f, *image_dims, device = *video.shape, video.device
+        # init and sample generation orders
+        mask = torch.ones(bsz, self.seq_len).cuda()
+        latents = torch.zeros(bsz, self.seq_len, self.token_embed_dim).cuda()
+        orders = self.sample_orders(bsz)
 
-        assert not exists(random_rollout_steps) or max(random_rollout_steps) < f
-        if not exists(random_rollout_steps):
-            random_rollout_steps = [f - 1]
+        for step in range(num_iter):
+            cur_latents = latents.clone()
 
-        assert tuple(image_dims) == self.image_size
-        assert divisible_by(
-            f - 1, self.temporal_patch_size
-        ), f"number of frames ({f}) minus one ({f - 1}) must be divisible by temporal patch size ({self.temporal_patch_size})"
+            # mae decoder
+            z = self.forward_mae_decoder(latents, action_tokens, mask)
 
-        first_frame, rest_frames = video[:, :, :1], video[:, :, 1:]
+            # mask ratio for the next round, following MaskGIT and MAGE.
+            mask_ratio = np.cos(math.pi / 2. * (step + 1) / num_iter)
+            mask_len = torch.Tensor([np.floor(self.seq_len * mask_ratio)]).cuda()
 
-        # derive patches
-        first_frame_tokens = self.to_patch_emb_first_frame(first_frame)
-        rest_frames_tokens = self.to_patch_emb(rest_frames)
+            # masks out at least one for the next iteration
+            mask_len = torch.maximum(torch.Tensor([1]).cuda(),
+                                        torch.minimum(torch.sum(mask, dim=-1, keepdims=True) - 1, mask_len))
 
-        # simple cat, normal
-        enc_input_tokens = torch.cat((first_frame_tokens, rest_frames_tokens), dim=1)
+            # get masking for next iteration and locations to be predicted in this iteration
+            mask_next = mask_by_order(mask_len[0], orders, bsz, self.seq_len)
+            if step >= num_iter - 1:
+                mask_to_pred = mask[:bsz].bool()
+            else:
+                mask_to_pred = torch.logical_xor(mask[:bsz].bool(), mask_next.bool())
+            mask = mask_next
 
-        # save height and width in
-        shape = enc_input_tokens.shape
-        *_, h, w, _ = shape
+            # sample token latents for this step
+            z = z[mask_to_pred.nonzero(as_tuple=True)]
+            
+            sampled_token_latent = self.diffloss.sample(z, temperature)
 
-        tokens = self.encode(enc_input_tokens)
-        tokens = self.to_action_emb(tokens)
+            cur_latents[mask_to_pred.nonzero(as_tuple=True)] = sampled_token_latent
+            latents = cur_latents.clone()
+        return latents
 
-        tokens = tokens[:, 1:]
+    def lam_vs_random_actions(self, latents):
+        assert latents.ndim == 3
 
-        # quantize
-        tokens, packed_thw_shape = pack([tokens], "b * d")
+        b, c, f, device = *latents.shape, latents.device
 
+        # generate actions
+        z = self.forward_mae_encoder(latents)
+        tokens = self.to_action_emb(z)
         tokens, action_indices, vq_loss = self.vq(tokens, mask=None)
 
-        # now repeate over the spatial dimensions
-        tokens = repeat(tokens, "b t d -> b t h w d", h=h, w=w)
+        # generate random actions
+        random_actions_indices = self.generate_random_different_actions(action_indices, device)
+        random_action_tokens = self.vq.codebook[random_actions_indices]
+        random_action_tokens = self.vq.project_out(random_action_tokens)
 
-        dec_input_tokens = enc_input_tokens[:, :-1] + tokens
+        # decode actions
+        mask = torch.oens(b, f).to(device)
+        recon_latents = self.sample(tokens, mask)
 
-        lam_recon_video = self.decode(dec_input_tokens)
+        # decode random actions
+        mask = torch.oens(b, f).to(device)
+        random_recon_latents = self.sample(random_action_tokens, mask)
 
-        random_rollout_recon_videos = []
-        random_actions_indices = self.generate_random_different_actions(
-            action_indices, device
-        )
-        for rollout_step in random_rollout_steps:
-            actions_to_take = action_indices.clone()[:, :rollout_step]
-            actions_to_take[:, rollout_step - 1] = random_actions_indices[
-                :, rollout_step - 1
-            ]
-            frame_embedds = enc_input_tokens[:, :rollout_step]
-
-            action_tokens = self.vq.codebook[actions_to_take]
-            action_tokens = self.vq.project_out(action_tokens)
-            action_tokens = repeat(action_tokens, "b t d -> b t h w d", h=h, w=w)
-
-            dec_input_tokens = frame_embedds + action_tokens
-
-            random_rollout_recon_video = self.decode(dec_input_tokens)
-
-            random_rollout_recon_videos.append(random_rollout_recon_video)
-
-        return lam_recon_video, random_rollout_recon_videos
+        return recon_latents, random_recon_latents
 
     def sample_orders(self, bsz):
         # generate a batch of random generation orders
