@@ -259,7 +259,7 @@ class MAR(nn.Module):
     def forward_mae_decoder(self, x, tokens, mask):
         x = self.decoder_embed(x)
 
-        x[mask] = self.mask_token.to(x.dtype)
+        x[mask.long()] = self.mask_token.to(x.dtype)
 
         x = x + self.decoder_pos_embed_learned + tokens
         x = self.decoder_embed_ln(x)
