@@ -163,9 +163,7 @@ class MAR(nn.Module):
         latents = torch.zeros(bsz, self.seq_len, self.token_embed_dim).cuda()
         orders = self.sample_orders(bsz)
 
-        print(num_iter)
-        steps = list(range(num_iter))
-        for step in steps:
+        for step in range(num_iter):
             cur_latents = latents.clone()
 
             # mae decoder
@@ -212,12 +210,10 @@ class MAR(nn.Module):
         random_action_tokens = self.vq.project_out(random_action_tokens)
 
         # decode actions
-        mask = torch.ones(b, f).to(device)
-        recon_latents = self.sample(tokens, mask)
+        recon_latents = self.sample(tokens)
 
         # decode random actions
-        mask = torch.ones(b, f).to(device)
-        random_recon_latents = self.sample(random_action_tokens, mask)
+        random_recon_latents = self.sample(random_action_tokens)
 
         return recon_latents, random_recon_latents
 
