@@ -105,6 +105,7 @@ batch_paths = []
 batch_shapes = []
 with torch.no_grad():
     for i, path in enumerate(tqdm(paths)):
+        print(i)
         x, sr = librosa.load(path, sr=None)
         assert sr == rate
 
