@@ -208,6 +208,7 @@ if compile and 'cuda' in device:
 # wrap model into DDP container
 if ddp:
     model = DDP(model, device_ids=[ddp_local_rank])
+    tokenizer = DDP(tokenizer, device_ids=[ddp_local_rank])
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
