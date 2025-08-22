@@ -44,7 +44,7 @@ eval_interval = 1000
 log_interval = 100
 save_interval = eval_interval * 10
 eval_iters = 100
-eval_only = False # if True, script exits right after the first eval
+eval_only = True # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
@@ -150,6 +150,41 @@ def get_batch(split='train'):
 iter_num = 0
 best_val_loss = 1e9
 
+def _extract_state_dict(checkpoint):
+    state_dict = checkpoint['model']
+    # fix the keys of the state dictionary :(
+    # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+    unwanted_prefix = '_orig_mod.'
+    for k,v in list(state_dict.items()):
+        if k.startswith(unwanted_prefix):
+            state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+    return state_dict
+
+def average_checkpoints(paths):
+    sd0 = _extract_state_dict(torch.load(paths[0], map_location='cpu'))
+    dtypes0 = {k: v.dtype for k, v in sd0.items()}
+    acc = {}
+
+    # Float tensors: accumulate in fp32; non-floats: copy from first
+    for k, v in sd0.items():
+        acc[k] = v.float().clone() if torch.is_floating_point(v) else v.clone()
+
+    # Add remaining checkpoints
+    for p in paths[1:]:
+        sdi = _extract_state_dict(torch.load(p, map_location='cpu'))
+        for k, v in sdi.items():
+            if torch.is_floating_point(v):
+                acc[k].add_(v.float())
+            # non-floats ignored (kept from first)
+
+    n = float(len(paths))
+    # Finalize: average floats and cast back to original dtype
+    for k in acc:
+        if torch.is_floating_point(acc[k]):
+            acc[k].div_(n)
+            acc[k] = acc[k].to(dtypes0[k])
+    return acc
+
 model_args = dict(z_shape=(128, 5), n_residual_layers=2, lstm=0, transformer=1)
 if init_from == 'scratch':
     # init a new model from scratch
@@ -164,17 +199,20 @@ elif init_from == 'resume':
     model_args = checkpoint['model_args']
 
     model = Transformer(**model_args)
-    state_dict = checkpoint['model']
-    # fix the keys of the state dictionary :(
-    # honestly no idea how checkpoints sometimes get this prefix, have to debug more
-    unwanted_prefix = '_orig_mod.'
-    for k,v in list(state_dict.items()):
-        if k.startswith(unwanted_prefix):
-            state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-    model.load_state_dict(state_dict)
-    iter_num = checkpoint['iter_num']
-    tokens_trained = checkpoint['tokens']
-    best_val_loss = checkpoint['best_val_loss']
+    if eval_only:
+        model.load_state_dict(average_checkpoints([os.path.join(out_dir, f'ckpt_{n}.pt') for n in [50000, 60000, 70000]]))
+    else:
+        state_dict = checkpoint['model']
+        # fix the keys of the state dictionary :(
+        # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+        unwanted_prefix = '_orig_mod.'
+        for k,v in list(state_dict.items()):
+            if k.startswith(unwanted_prefix):
+                state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+        model.load_state_dict(state_dict)
+        iter_num = checkpoint['iter_num']
+        tokens_trained = checkpoint['tokens']
+        best_val_loss = checkpoint['best_val_loss']
 elif init_from.startswith('gpt2'):
     print(f"Initializing from OpenAI GPT-2 weights: {init_from}")
     # initialize from OpenAI GPT-2 weights
@@ -284,6 +322,13 @@ while True:
     #     gradient_accumulation_steps *= 2
     
     tokens_trained += batch_size * gradient_accumulation_steps
+
+    if eval_only:
+        model.eval()
+        losses = estimate_loss()
+        print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        import sys
+        sys.exit()
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
