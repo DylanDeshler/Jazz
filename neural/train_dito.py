@@ -298,6 +298,14 @@ step2 = 20001
 step3 = 30001
 step4 = 50001
 
+if eval_only:
+    gradient_accumulation_steps *= 2
+    model.eval()
+    losses = estimate_loss()
+    print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+    import sys
+    sys.exit()
+
 X = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
@@ -320,15 +328,8 @@ while True:
     #     # batch_size *= 4
     # if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
     #     gradient_accumulation_steps *= 2
-    
-    tokens_trained += batch_size * gradient_accumulation_steps
 
-    if eval_only:
-        model.eval()
-        losses = estimate_loss()
-        print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-        import sys
-        sys.exit()
+    tokens_trained += batch_size * gradient_accumulation_steps
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
