@@ -104,8 +104,7 @@ latents = []
 batch_paths = []
 batch_shapes = []
 with torch.no_grad():
-    for i, path in enumerate(tqdm(paths)):
-        print(i)
+    for path_idx, path in enumerate(tqdm(paths)):
         x, sr = librosa.load(path, sr=None)
         assert sr == rate
 
@@ -130,14 +129,14 @@ with torch.no_grad():
                 z = model.encode(batch)
             latents.append(z.cpu().detach().numpy())
 
-        if (i + 1) % 5_000 == 0:
+        if (path_idx + 1) % 5_000 == 0:
             latents = np.concatenate(latents, axis=0).swapaxes(1, 2)
             B, T, C = latents.shape
             latents = latents.reshape((B * T, C))
 
             print('Writing latents with shape: ', latents.shape)
 
-            filename = os.path.join(out_dir, f'batch_{i}.bin')
+            filename = os.path.join(out_dir, f'batch_{path_idx}.bin')
             arr = np.memmap(filename, dtype=np.float32, mode='w+', shape=latents.shape)
             arr[:] = latents
             arr.flush()
@@ -153,7 +152,7 @@ if len(latents) > 0:
 
     print('Writing latents with shape: ', latents.shape)
 
-    filename = os.path.join(out_dir, f'batch_{i + 1}.bin')
+    filename = os.path.join(out_dir, f'batch_{path_idx + 1}.bin')
     arr = np.memmap(filename, dtype=np.float32, mode='w+', shape=latents.shape)
     arr[:] = latents
     arr.flush()
