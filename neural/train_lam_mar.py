@@ -177,7 +177,7 @@ ckpt_path = os.path.join('tokenizer10', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 tokenizer_args = checkpoint['model_args']
 
-tokenizer = Tokenizer(**model_args).to(device)
+tokenizer = Tokenizer(**tokenizer_args).to(device)
 state_dict = checkpoint['model']
 # fix the keys of the state dictionary :(
 # honestly no idea how checkpoints sometimes get this prefix, have to debug more
