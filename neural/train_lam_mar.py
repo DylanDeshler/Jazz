@@ -248,6 +248,9 @@ def save_samples(xs, ys, random_ys, step):
 
     B, L, D = xs.shape
 
+    print(xs.shape, ys.shape, random_ys.shape)
+    print(xs[:, 0 * 50: (0 + 1) * 50].shape)
+
     # reconstruct wavform
     n_cuts = L // 50
     x_cuts, y_cuts, random_y_cuts = [], [], []
