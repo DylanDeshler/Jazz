@@ -42,126 +42,136 @@ out_dir = '/home/dylan.d/research/music/Jazz/latents'
 os.makedirs(out_dir, exist_ok=True)
 
 
-def _extract_state_dict(checkpoint):
-    state_dict = checkpoint['model']
-    # fix the keys of the state dictionary :(
-    # honestly no idea how checkpoints sometimes get this prefix, have to debug more
-    unwanted_prefix = '_orig_mod.'
-    for k,v in list(state_dict.items()):
-        if k.startswith(unwanted_prefix):
-            state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-    return state_dict
+# def _extract_state_dict(checkpoint):
+#     state_dict = checkpoint['model']
+#     # fix the keys of the state dictionary :(
+#     # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+#     unwanted_prefix = '_orig_mod.'
+#     for k,v in list(state_dict.items()):
+#         if k.startswith(unwanted_prefix):
+#             state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+#     return state_dict
 
-def average_checkpoints(paths):
-    sd0 = _extract_state_dict(torch.load(paths[0], map_location='cpu'))
-    dtypes0 = {k: v.dtype for k, v in sd0.items()}
-    acc = {}
+# def average_checkpoints(paths):
+#     sd0 = _extract_state_dict(torch.load(paths[0], map_location='cpu'))
+#     dtypes0 = {k: v.dtype for k, v in sd0.items()}
+#     acc = {}
 
-    # Float tensors: accumulate in fp32; non-floats: copy from first
-    for k, v in sd0.items():
-        acc[k] = v.float().clone() if torch.is_floating_point(v) else v.clone()
+#     # Float tensors: accumulate in fp32; non-floats: copy from first
+#     for k, v in sd0.items():
+#         acc[k] = v.float().clone() if torch.is_floating_point(v) else v.clone()
 
-    # Add remaining checkpoints
-    for p in paths[1:]:
-        sdi = _extract_state_dict(torch.load(p, map_location='cpu'))
-        for k, v in sdi.items():
-            if torch.is_floating_point(v):
-                acc[k].add_(v.float())
-            # non-floats ignored (kept from first)
+#     # Add remaining checkpoints
+#     for p in paths[1:]:
+#         sdi = _extract_state_dict(torch.load(p, map_location='cpu'))
+#         for k, v in sdi.items():
+#             if torch.is_floating_point(v):
+#                 acc[k].add_(v.float())
+#             # non-floats ignored (kept from first)
 
-    n = float(len(paths))
-    # Finalize: average floats and cast back to original dtype
-    for k in acc:
-        if torch.is_floating_point(acc[k]):
-            acc[k].div_(n)
-            acc[k] = acc[k].to(dtypes0[k])
-    return acc
+#     n = float(len(paths))
+#     # Finalize: average floats and cast back to original dtype
+#     for k in acc:
+#         if torch.is_floating_point(acc[k]):
+#             acc[k].div_(n)
+#             acc[k] = acc[k].to(dtypes0[k])
+#     return acc
 
-ckpt_path = os.path.join('tokenizer10', 'ckpt.pt')
-checkpoint = torch.load(ckpt_path, map_location=device)
-model_args = checkpoint['model_args']
+# ckpt_path = os.path.join('tokenizer10', 'ckpt.pt')
+# checkpoint = torch.load(ckpt_path, map_location=device)
+# model_args = checkpoint['model_args']
 
-model = Transformer(**model_args).to(device)
-state_dict = checkpoint['model']
-# fix the keys of the state dictionary :(
-# honestly no idea how checkpoints sometimes get this prefix, have to debug more
-unwanted_prefix = '_orig_mod.'
-for k,v in list(state_dict.items()):
-    if k.startswith(unwanted_prefix):
-        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-model.load_state_dict(state_dict)
+# model = Transformer(**model_args).to(device)
+# state_dict = checkpoint['model']
+# # fix the keys of the state dictionary :(
+# # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+# unwanted_prefix = '_orig_mod.'
+# for k,v in list(state_dict.items()):
+#     if k.startswith(unwanted_prefix):
+#         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+# model.load_state_dict(state_dict)
 
-# compile the model
-if compile and 'cuda' in device:
-    print("compiling the model... (takes a ~minute)")
-    unoptimized_model = model
-    model = torch.compile(model) # requires PyTorch 2.0
+# # compile the model
+# if compile and 'cuda' in device:
+#     print("compiling the model... (takes a ~minute)")
+#     unoptimized_model = model
+#     model = torch.compile(model) # requires PyTorch 2.0
 
-model.eval()
+# model.eval()
 
-save_idx = 0
-latents = []
-batch_paths = []
-batch_shapes = []
-with torch.no_grad():
-    for path_idx, path in enumerate(tqdm(paths)):
-        x, sr = librosa.load(path, sr=None)
-        assert sr == rate
+# save_idx = 0
+# latents = []
+# batch_paths = []
+# batch_shapes = []
+# with torch.no_grad():
+#     for path_idx, path in enumerate(tqdm(paths)):
+#         x, sr = librosa.load(path, sr=None)
+#         assert sr == rate
 
-        samples = []
-        n_cuts = len(x) // n_samples
-        for i in range(n_cuts):
-            temp = x[i * n_samples : (i + 1) * n_samples]
-            if len(temp) < n_samples:
-                break
-            samples.append(temp)
+#         samples = []
+#         n_cuts = len(x) // n_samples
+#         for i in range(n_cuts):
+#             temp = x[i * n_samples : (i + 1) * n_samples]
+#             if len(temp) < n_samples:
+#                 break
+#             samples.append(temp)
         
-        n_batches = len(samples) // batch_size
-        for i in range(n_batches):
-            batch = torch.from_numpy(np.stack(samples[i * batch_size : (i + 1) * batch_size], axis=0)).unsqueeze(1).to(device)
-            with ctx:
-                z = model.encode(batch)
-            latents.append(z.cpu().detach().numpy())
+#         n_batches = len(samples) // batch_size
+#         for i in range(n_batches):
+#             batch = torch.from_numpy(np.stack(samples[i * batch_size : (i + 1) * batch_size], axis=0)).unsqueeze(1).to(device)
+#             with ctx:
+#                 z = model.encode(batch)
+#             latents.append(z.cpu().detach().numpy())
         
-        if len(samples) - n_batches * batch_size > 0:
-            batch = torch.from_numpy(np.stack(samples[n_batches * batch_size :], axis=0)).unsqueeze(1).to(device)
-            with ctx:
-                z = model.encode(batch)
-            latents.append(z.cpu().detach().numpy())
+#         if len(samples) - n_batches * batch_size > 0:
+#             batch = torch.from_numpy(np.stack(samples[n_batches * batch_size :], axis=0)).unsqueeze(1).to(device)
+#             with ctx:
+#                 z = model.encode(batch)
+#             latents.append(z.cpu().detach().numpy())
 
-        if (path_idx + 1) % 5_000 == 0:
-            latents = np.concatenate(latents, axis=0).swapaxes(1, 2)
-            B, T, C = latents.shape
-            latents = latents.reshape((B * T, C))
+#         if (path_idx + 1) % 5_000 == 0:
+#             latents = np.concatenate(latents, axis=0).swapaxes(1, 2)
+#             B, T, C = latents.shape
+#             latents = latents.reshape((B * T, C))
 
-            print('Writing latents with shape: ', latents.shape)
+#             print('Writing latents with shape: ', latents.shape)
 
-            filename = os.path.join(out_dir, f'batch_{path_idx}.bin')
-            arr = np.memmap(filename, dtype=np.float32, mode='w+', shape=latents.shape)
-            arr[:] = latents
-            arr.flush()
+#             filename = os.path.join(out_dir, f'batch_{path_idx}.bin')
+#             arr = np.memmap(filename, dtype=np.float32, mode='w+', shape=latents.shape)
+#             arr[:] = latents
+#             arr.flush()
 
-            batch_paths.append(filename)
-            batch_shapes.append(latents.shape)
-            latents = []
+#             batch_paths.append(filename)
+#             batch_shapes.append(latents.shape)
+#             latents = []
 
-if len(latents) > 0:
-    latents = np.concatenate(latents, axis=0).swapaxes(1, 2)
-    B, T, C = latents.shape
-    latents = latents.reshape((B * T, C))
+# if len(latents) > 0:
+#     latents = np.concatenate(latents, axis=0).swapaxes(1, 2)
+#     B, T, C = latents.shape
+#     latents = latents.reshape((B * T, C))
 
-    print('Writing latents with shape: ', latents.shape)
+#     print('Writing latents with shape: ', latents.shape)
 
-    filename = os.path.join(out_dir, f'batch_{path_idx + 1}.bin')
-    arr = np.memmap(filename, dtype=np.float32, mode='w+', shape=latents.shape)
-    arr[:] = latents
-    arr.flush()
+#     filename = os.path.join(out_dir, f'batch_{path_idx + 1}.bin')
+#     arr = np.memmap(filename, dtype=np.float32, mode='w+', shape=latents.shape)
+#     arr[:] = latents
+#     arr.flush()
 
-    batch_paths.append(filename)
-    batch_shapes.append(latents.shape)
+#     batch_paths.append(filename)
+#     batch_shapes.append(latents.shape)
+
+import glob
+paths
+
+batch_paths = sorted(glob.glob(os.path.join(out_dir, 'batch_*.bin')))
+batch_shapes = (49215200, 128), (49544050, 128), (49651750, 128), (48883000, 128), (49560850, 128), (49396700, 128), (28825600, 128)
+print(batch_paths)
+
+import sys
+sys.exit()
 
 n_tokens = sum([shape[0] for shape in batch_shapes])
-train_tokens = int(len(n_tokens) * 0.98)
+train_tokens = int(n_tokens * 0.98)
 val_tokens = n_tokens - train_tokens
 
 train_start = 0
