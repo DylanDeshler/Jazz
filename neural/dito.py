@@ -38,10 +38,10 @@ class DiTo(nn.Module):
 
     def reconstruct(self, x, n_steps=50):
         z = self.encode(x)
-        return self.decode(z, n_steps=n_steps)
+        return self.decode(z, shape=x.shape, n_steps=n_steps)
     
-    def decode(self, z, n_steps=50):
-        return self.sampler.sample(self.unet, x.shape, n_steps, net_kwargs={'z_dec': z})
+    def decode(self, z, shape=(1, 16000), n_steps=50):
+        return self.sampler.sample(self.unet, (z.shape[0], *shape[-2:]), n_steps, net_kwargs={'z_dec': z})
 
 if __name__ == '__main__':
     device = torch.device('mps')
