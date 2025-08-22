@@ -250,6 +250,7 @@ def save_samples(xs, ys, random_ys, step):
 
     print(xs.shape, ys.shape, random_ys.shape)
     print(xs[:, 0 * 50: (0 + 1) * 50].permute(0, 2, 1).shape)
+    print(tokenizer.decode(xs[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)).shape)
 
     # reconstruct wavform
     n_cuts = L // 50
