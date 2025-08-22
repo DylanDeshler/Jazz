@@ -108,6 +108,7 @@ with torch.no_grad():
 
         samples = []
         n_cuts = len(x) // n_samples
+        print(n_cuts)
         for i in range(n_cuts):
             temp = x[i * n_samples : (i + 1) * n_samples]
             if len(temp) < n_samples:
