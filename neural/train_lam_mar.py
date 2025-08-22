@@ -34,8 +34,6 @@ from dito import DiTo as Tokenizer
 
 import matplotlib.pyplot as plt
 import soundfile as sf
-import librosa
-import glob
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -43,6 +41,7 @@ import glob
 out_dir = 'lam_mar'
 eval_interval = 1000
 log_interval = 100
+save_interval = 10000
 eval_iters = 100
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
@@ -188,6 +187,7 @@ for k,v in list(state_dict.items()):
         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
 tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
+checkpoint = None
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
@@ -337,6 +337,9 @@ while True:
                 }
                 print(f"saving checkpoint to {out_dir}")
                 torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+
+                if iter_num % save_interval == 0:
+                    torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
     if iter_num == 0 and eval_only:
         break
 

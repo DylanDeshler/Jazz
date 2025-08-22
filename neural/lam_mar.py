@@ -298,8 +298,6 @@ class MAR(nn.Module):
         # action embedding
         tokens = self.to_action_emb(z)
         tokens, indices, vq_loss = self.vq(tokens, mask=None)
-        # now repeate over the spatial dimensions
-        # tokens = repeat(tokens, "b t d -> b t h w d", h=h, w=w)
 
         # mae decoder
         z = self.forward_mae_decoder(x, tokens, mask)
