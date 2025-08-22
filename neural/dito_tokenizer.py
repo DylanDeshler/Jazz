@@ -82,7 +82,14 @@ checkpoint = torch.load(ckpt_path, map_location=device)
 model_args = checkpoint['model_args']
 
 model = Transformer(**model_args).to(device)
-model.load_state_dict(average_checkpoints([os.path.join(out_dir, f'ckpt_{n}.pt') for n in [50000, 60000, 70000]]))
+state_dict = checkpoint['model']
+# fix the keys of the state dictionary :(
+# honestly no idea how checkpoints sometimes get this prefix, have to debug more
+unwanted_prefix = '_orig_mod.'
+for k,v in list(state_dict.items()):
+    if k.startswith(unwanted_prefix):
+        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+model.load_state_dict(state_dict)
 
 # compile the model
 if compile and 'cuda' in device:
