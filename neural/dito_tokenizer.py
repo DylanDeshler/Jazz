@@ -108,7 +108,6 @@ with torch.no_grad():
 
         samples = []
         n_cuts = len(x) // n_samples
-        print(n_cuts)
         for i in range(n_cuts):
             temp = x[i * n_samples : (i + 1) * n_samples]
             if len(temp) < n_samples:
@@ -127,6 +126,7 @@ with torch.no_grad():
             batch = torch.from_numpy(np.stack(samples[n_batches * batch_size :], axis=0)).unsqueeze(1).to(device)
             with ctx:
                 z = model.encode(batch)
+            print(z.cpu().detach().numpy().dtype)
             latents.append(z.cpu().detach().numpy())
 
 latents = np.concatenate(latents, axis=0).swapaxes(1, 2)
