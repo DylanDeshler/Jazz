@@ -41,19 +41,48 @@ print(len(paths))
 out_dir = '/home/dylan.d/research/music/Jazz/latents'
 os.makedirs(out_dir, exist_ok=True)
 
+
+def _extract_state_dict(checkpoint):
+    state_dict = checkpoint['model']
+    # fix the keys of the state dictionary :(
+    # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+    unwanted_prefix = '_orig_mod.'
+    for k,v in list(state_dict.items()):
+        if k.startswith(unwanted_prefix):
+            state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+    return state_dict
+
+def average_checkpoints(paths):
+    sd0 = _extract_state_dict(torch.load(paths[0], map_location='cpu'))
+    dtypes0 = {k: v.dtype for k, v in sd0.items()}
+    acc = {}
+
+    # Float tensors: accumulate in fp32; non-floats: copy from first
+    for k, v in sd0.items():
+        acc[k] = v.float().clone() if torch.is_floating_point(v) else v.clone()
+
+    # Add remaining checkpoints
+    for p in paths[1:]:
+        sdi = _extract_state_dict(torch.load(p, map_location='cpu'))
+        for k, v in sdi.items():
+            if torch.is_floating_point(v):
+                acc[k].add_(v.float())
+            # non-floats ignored (kept from first)
+
+    n = float(len(paths))
+    # Finalize: average floats and cast back to original dtype
+    for k in acc:
+        if torch.is_floating_point(acc[k]):
+            acc[k].div_(n)
+            acc[k] = acc[k].to(dtypes0[k])
+    return acc
+
 ckpt_path = os.path.join('tokenizer10', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 model_args = checkpoint['model_args']
 
 model = Transformer(**model_args).to(device)
-state_dict = checkpoint['model']
-# fix the keys of the state dictionary :(
-# honestly no idea how checkpoints sometimes get this prefix, have to debug more
-unwanted_prefix = '_orig_mod.'
-for k,v in list(state_dict.items()):
-    if k.startswith(unwanted_prefix):
-        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-model.load_state_dict(state_dict)
+model.load_state_dict(average_checkpoints([os.path.join(out_dir, f'ckpt_{n}.pt') for n in [50000, 60000, 70000]]))
 
 # compile the model
 if compile and 'cuda' in device:
@@ -101,7 +130,7 @@ print('Writing train with shape: ', train.shape)
 filename = os.path.join(out_dir, 'train.bin')
 arr = np.memmap(filename, dtype=np.float32, mode='w+', shape=train.shape)
 
-n_batches = 30
+n_batches = 50
 n_samples = len(train) // n_batches
 for i in range(n_batches):
     arr[i * n_samples : (i + 1) * n_samples] = train[i * n_samples : (i + 1) * n_samples]
