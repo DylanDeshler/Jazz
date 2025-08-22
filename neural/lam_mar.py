@@ -128,7 +128,7 @@ class Block(nn.Module):
             proj_bias: bool = True,
             proj_drop: float = 0.,
             attn_drop: float = 0.,
-            drop_path: float = 0.,
+            norm_layer=nn.LayerNorm,
     ) -> None:
         super().__init__()
         self.norm1 = nn.LayerNorm(dim, eps=1e-6)
