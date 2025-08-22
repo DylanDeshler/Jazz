@@ -30,7 +30,6 @@ def mask_by_order(mask_len, order, bsz, seq_len):
     return masking
 
 class Attention(nn.Module):
-
     def __init__(
             self,
             dim: int,
