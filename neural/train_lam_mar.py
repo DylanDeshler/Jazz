@@ -306,10 +306,10 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        X = get_batch('test')
+        X = get_batch('test')[:8]
         model.eval()
         with ctx:
-            samples = raw_model.lam_vs_random_actions(X[:8])
+            samples = raw_model.lam_vs_random_actions(X)
         save_samples(X, *samples, iter_num)
         model.train()
         losses = estimate_loss()
