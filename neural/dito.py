@@ -35,13 +35,12 @@ class DiTo(nn.Module):
         z = self.encoder(x)
         z = self.z_norm(z.transpose(1, 2)).transpose(1, 2)
         return z
-    
-    def sample(self, shape, n_steps=50):
-        device = next(self.parameters()).device
-        return self.sampler.sample(self.unet, shape, n_steps, net_kwargs={'z_dec': torch.randn((shape[0],) + self.z_shape, device=device)})
-    
+
     def reconstruct(self, x, n_steps=50):
         z = self.encode(x)
+        return self.decode(z, n_steps=n_steps)
+    
+    def decode(self, z, n_steps=50):
         return self.sampler.sample(self.unet, x.shape, n_steps, net_kwargs={'z_dec': z})
 
 if __name__ == '__main__':
