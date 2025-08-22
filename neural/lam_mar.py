@@ -210,11 +210,11 @@ class MAR(nn.Module):
         random_action_tokens = self.vq.project_out(random_action_tokens)
 
         # decode actions
-        mask = torch.oens(b, f).to(device)
+        mask = torch.ones(b, f).to(device)
         recon_latents = self.sample(tokens, mask)
 
         # decode random actions
-        mask = torch.oens(b, f).to(device)
+        mask = torch.ones(b, f).to(device)
         random_recon_latents = self.sample(random_action_tokens, mask)
 
         return recon_latents, random_recon_latents
