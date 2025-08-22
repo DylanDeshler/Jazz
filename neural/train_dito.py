@@ -43,8 +43,8 @@ out_dir = 'tokenizer10'
 eval_interval = 1000
 log_interval = 100
 save_interval = eval_interval * 10
-eval_iters = 100
-eval_only = False # if True, script exits right after the first eval
+eval_iters = 200
+eval_only = True # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
