@@ -119,6 +119,7 @@ with torch.no_grad():
             batch = torch.from_numpy(np.stack(samples[i * batch_size : (i + 1) * batch_size], axis=0)).unsqueeze(1).to(device)
             with ctx:
                 z = model.encode(batch)
+            print(z.cpu().detach().numpy().dtype)
             latents.append(z.cpu().detach().numpy())
         
         if len(samples) - n_batches * batch_size > 0:
