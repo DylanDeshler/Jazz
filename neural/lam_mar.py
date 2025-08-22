@@ -163,7 +163,7 @@ class MAR(nn.Module):
         latents = torch.zeros(bsz, self.seq_len, self.token_embed_dim).cuda()
         orders = self.sample_orders(bsz)
 
-        for step in range(num_iter):
+        for step in range(list(range(num_iter))):
             cur_latents = latents.clone()
 
             # mae decoder
