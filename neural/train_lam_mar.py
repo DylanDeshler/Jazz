@@ -248,11 +248,7 @@ def save_samples(xs, ys, random_ys, step):
 
     B, L, D = xs.shape
 
-    print(xs.shape, ys.shape, random_ys.shape)
-    print(xs[:, 0 * 50: (0 + 1) * 50].permute(0, 2, 1).shape)
-    print(tokenizer.decode(xs[:, 0 * 50: (0 + 1) * 50].permute(0, 2, 1)).shape)
-
-    # reconstruct wavform
+    # reconstruct wavform in series (could be smart and reshape into a batch for speed)
     n_cuts = L // 50
     x_cuts, y_cuts, random_y_cuts = [], [], []
     for cut in tqdm(range(n_cuts), desc='Decoding'):
@@ -262,14 +258,13 @@ def save_samples(xs, ys, random_ys, step):
     xs = torch.cat(x_cuts, dim=-1).cpu().detach().numpy()
     ys = torch.cat(y_cuts, dim=-1).cpu().detach().numpy()
     random_ys = torch.cat(random_y_cuts, dim=-1).cpu().detach().numpy()
-    print(xs.shape, ys.shape, random_ys.shape)
 
-    for i in range(min(8, B)):
+    for i in range(B):
         x, y, random_y = xs[i].squeeze(), ys[i].squeeze(), random_ys[i].squeeze()
 
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_sample.wav'), y, 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, 16000)
         sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_y, 16000)
 
 # logging
@@ -313,9 +308,9 @@ while True:
         X = get_batch('test')
         model.eval()
         with ctx:
-            samples = raw_model.lam_vs_random_actions(X)
-        model.train()
+            samples = raw_model.lam_vs_random_actions(X[:8])
         save_samples(X, *samples, iter_num)
+        model.train()
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
