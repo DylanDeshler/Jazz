@@ -101,8 +101,10 @@ model.eval()
 
 save_idx = 0
 latents = []
+batch_paths = []
+batch_shapes = []
 with torch.no_grad():
-    for path in tqdm(paths):
+    for i, path in enumerate(tqdm(paths)):
         x, sr = librosa.load(path, sr=None)
         assert sr == rate
 
@@ -119,39 +121,97 @@ with torch.no_grad():
             batch = torch.from_numpy(np.stack(samples[i * batch_size : (i + 1) * batch_size], axis=0)).unsqueeze(1).to(device)
             with ctx:
                 z = model.encode(batch)
-            print(z.cpu().detach().numpy().dtype)
             latents.append(z.cpu().detach().numpy())
         
         if len(samples) - n_batches * batch_size > 0:
             batch = torch.from_numpy(np.stack(samples[n_batches * batch_size :], axis=0)).unsqueeze(1).to(device)
             with ctx:
                 z = model.encode(batch)
-            print(z.cpu().detach().numpy().dtype)
             latents.append(z.cpu().detach().numpy())
 
-latents = np.concatenate(latents, axis=0).swapaxes(1, 2)
-B, T, C = latents.shape
-latents = latents.reshape((B * T, C))
+        if (i + 1) % 5_000 == 0:
+            latents = np.concatenate(latents, axis=0).swapaxes(1, 2)
+            B, T, C = latents.shape
+            latents = latents.reshape((B * T, C))
 
-train = latents[:int(len(latents) * 0.98)]
-print('Writing train with shape: ', train.shape)
+            print('Writing latents with shape: ', latents.shape)
 
-filename = os.path.join(out_dir, 'train.bin')
-arr = np.memmap(filename, dtype=np.float32, mode='w+', shape=train.shape)
+            filename = os.path.join(out_dir, f'batch_{i}.bin')
+            arr = np.memmap(filename, dtype=np.float32, mode='w+', shape=latents.shape)
+            arr[:] = latents
+            arr.flush()
 
-n_batches = 50
-n_samples = len(train) // n_batches
-for i in range(n_batches):
-    arr[i * n_samples : (i + 1) * n_samples] = train[i * n_samples : (i + 1) * n_samples]
+            latents = []
+            batch_paths.append(filename)
+            batch_shapes.append(latents.shape)
+
+if len(latents) > 0:
+    latents = np.concatenate(latents, axis=0).swapaxes(1, 2)
+    B, T, C = latents.shape
+    latents = latents.reshape((B * T, C))
+
+    print('Writing latents with shape: ', latents.shape)
+
+    filename = os.path.join(out_dir, f'batch_{i + 1}.bin')
+    arr = np.memmap(filename, dtype=np.float32, mode='w+', shape=latents.shape)
+    arr[:] = latents
     arr.flush()
 
-arr[n_batches * n_samples :] = train[n_batches * n_samples :]
-arr.flush()
+    batch_paths.append(filename)
+    batch_shapes.append(latents.shape)
 
-val = latents[int(len(latents) * 0.98):]
-print('Writing val with shape: ', val.shape)
+n_tokens = sum([shape[0] for shape in batch_shapes])
+train_tokens = int(len(n_tokens) * 0.98)
+val_tokens = n_tokens - train_tokens
 
-filename = os.path.join(out_dir, 'val.bin')
-arr = np.memmap(filename, dtype=np.float32, mode='w+', shape=val.shape)
-arr[:] = val
-arr.flush()
+train_start = 0
+val_start = 0
+train = np.memmap(os.path.join(out_dir, 'train.bin'), dtype=np.float32, mode='w+', shape=(train_tokens, C))
+val = np.memmap(os.path.join(out_dir, 'val.bin'), dtype=np.float32, mode='w+', shape=(val_tokens, C))
+for path, shape in zip(batch_paths, batch_shapes):
+    arr = np.memmap(path, dtype=np.float32, mode='r', shape=shape)
+    if train_start + len(arr) < train_tokens:
+        train[train_start:train_start + len(arr)] = arr[:]
+        train.flush()
+        train_start += len(arr)
+    elif val_start == 0:
+        train_delta = train_tokens - train_start
+        train[train_start:train_start + train_delta] = arr[:train_delta]
+        train.flush()
+        train_start += train_delta
+
+        val_delta = len(arr) - train_delta
+        val[:val_delta] = arr[train_delta:train_delta+val_delta]
+        val.flush()
+        val_start += val_delta
+    else:
+        val[val_start:val_start + len(arr)] = arr[:]
+        val.flush()
+        val_start += len(arr)
+
+# latents = np.concatenate(latents, axis=0).swapaxes(1, 2)
+# B, T, C = latents.shape
+# latents = latents.reshape((B * T, C))
+
+# train = latents[:int(len(latents) * 0.98)]
+# print('Writing train with shape: ', train.shape)
+
+# filename = os.path.join(out_dir, 'train.bin')
+# arr = np.memmap(filename, dtype=np.float32, mode='w+', shape=train.shape)
+
+# n_batches = 50
+# n_samples = len(train) // n_batches
+# for i in range(n_batches):
+#     arr[i * n_samples : (i + 1) * n_samples] = train[i * n_samples : (i + 1) * n_samples]
+#     arr.flush()
+
+# arr[n_batches * n_samples :] = train[n_batches * n_samples :]
+# arr.flush()
+
+# val = latents[int(len(latents) * 0.98):]
+# print('Writing val with shape: ', val.shape)
+
+# filename = os.path.join(out_dir, 'val.bin')
+# arr = np.memmap(filename, dtype=np.float32, mode='w+', shape=val.shape)
+# arr[:] = val
+# arr.flush()
