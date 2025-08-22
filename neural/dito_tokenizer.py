@@ -141,9 +141,9 @@ with torch.no_grad():
             arr[:] = latents
             arr.flush()
 
-            latents = []
             batch_paths.append(filename)
             batch_shapes.append(latents.shape)
+            latents = []
 
 if len(latents) > 0:
     latents = np.concatenate(latents, axis=0).swapaxes(1, 2)
