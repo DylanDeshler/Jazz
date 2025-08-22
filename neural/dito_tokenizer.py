@@ -160,15 +160,10 @@ os.makedirs(out_dir, exist_ok=True)
 #     batch_paths.append(filename)
 #     batch_shapes.append(latents.shape)
 
-import glob
-paths
-
-batch_paths = sorted(glob.glob(os.path.join(out_dir, 'batch_*.bin')))
+batch_paths = ['/home/dylan.d/research/music/Jazz/latents/batch_4999.bin', '/home/dylan.d/research/music/Jazz/latents/batch_9999.bin', '/home/dylan.d/research/music/Jazz/latents/batch_14999.bin', '/home/dylan.d/research/music/Jazz/latents/batch_19999.bin', '/home/dylan.d/research/music/Jazz/latents/batch_24999.bin', '/home/dylan.d/research/music/Jazz/latents/batch_29999.bin', '/home/dylan.d/research/music/Jazz/latents/batch_32939.bin']
 batch_shapes = (49215200, 128), (49544050, 128), (49651750, 128), (48883000, 128), (49560850, 128), (49396700, 128), (28825600, 128)
 print(batch_paths)
-
-import sys
-sys.exit()
+C = 128
 
 n_tokens = sum([shape[0] for shape in batch_shapes])
 train_tokens = int(n_tokens * 0.98)
@@ -178,6 +173,7 @@ train_start = 0
 val_start = 0
 train = np.memmap(os.path.join(out_dir, 'train.bin'), dtype=np.float32, mode='w+', shape=(train_tokens, C))
 val = np.memmap(os.path.join(out_dir, 'val.bin'), dtype=np.float32, mode='w+', shape=(val_tokens, C))
+print(train_tokens, val_tokens)
 for path, shape in zip(batch_paths, batch_shapes):
     arr = np.memmap(path, dtype=np.float32, mode='r', shape=shape)
     if train_start + len(arr) < train_tokens:
