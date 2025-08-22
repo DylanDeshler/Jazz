@@ -255,9 +255,9 @@ def save_samples(xs, ys, random_ys, step):
     n_cuts = L // 50
     x_cuts, y_cuts, random_y_cuts = [], [], []
     for cut in range(n_cuts):
-        x_cuts.append(tokenizer.reconstruct(xs[:, cut * 50: (cut + 1) * 50]))
-        y_cuts.append(tokenizer.reconstruct(ys[:, cut * 50: (cut + 1) * 50]))
-        random_y_cuts.append(tokenizer.reconstruct(random_ys[:, cut * 50: (cut + 1) * 50]))
+        x_cuts.append(tokenizer.reconstruct(xs[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
+        y_cuts.append(tokenizer.reconstruct(ys[:, cut * 50: (cut + 1) * 50]).permute(0, 2, 1))
+        random_y_cuts.append(tokenizer.reconstruct(random_ys[:, cut * 50: (cut + 1) * 50]).permute(0, 2, 1))
     xs = torch.cat(x_cuts, dim=-1).cpu().detach().numpy()
     ys = torch.cat(y_cuts, dim=-1).cpu().detach().numpy()
     random_ys = torch.cat(random_y_cuts, dim=-1).cpu().detach().numpy()
