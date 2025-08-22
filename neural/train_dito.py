@@ -199,7 +199,7 @@ elif init_from == 'resume':
     model_args = checkpoint['model_args']
 
     model = Transformer(**model_args)
-    if eval_only:
+    if not eval_only:
         model.load_state_dict(average_checkpoints([os.path.join(out_dir, f'ckpt_{n}.pt') for n in [50000, 60000, 70000]]))
     else:
         state_dict = checkpoint['model']
