@@ -45,7 +45,7 @@ save_interval = 10000
 eval_iters = 100
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -247,6 +247,10 @@ def save_samples(xs, ys, random_ys, step):
     assert xs.shape == ys.shape, f'shapes should match but got {xs.shape} != {ys.shape}'
 
     B, L, D = xs.shape
+    print('Mean: ', xs.mean().item(), ys.mean().item(), random_ys.mean().item())
+    print('Std: ', xs.std().item(), ys.std().item(), random_ys.std().item())
+    ys = torch.nn.functional.layer_norm(ys, D)
+    random_ys = torch.nn.functional.layer_norm(random_ys, D)
     print('Mean: ', xs.mean().item(), ys.mean().item(), random_ys.mean().item())
     print('Std: ', xs.std().item(), ys.std().item(), random_ys.std().item())
 
