@@ -249,8 +249,8 @@ def save_samples(xs, ys, random_ys, step):
     B, L, D = xs.shape
     print('Mean: ', xs.mean().item(), ys.mean().item(), random_ys.mean().item())
     print('Std: ', xs.std().item(), ys.std().item(), random_ys.std().item())
-    ys = torch.nn.functional.layer_norm(ys, D)
-    random_ys = torch.nn.functional.layer_norm(random_ys, D)
+    ys = torch.nn.functional.layer_norm(ys, (D,))
+    random_ys = torch.nn.functional.layer_norm(random_ys, (D,))
     print('Mean: ', xs.mean().item(), ys.mean().item(), random_ys.mean().item())
     print('Std: ', xs.std().item(), ys.std().item(), random_ys.std().item())
 
