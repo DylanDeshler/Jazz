@@ -136,6 +136,21 @@ def get_batch(split='train'):
 iter_num = 0
 best_val_loss = 1e9
 
+ckpt_path = os.path.join('tokenizer10', 'ckpt.pt')
+checkpoint = torch.load(ckpt_path, map_location=device)
+tokenizer_args = checkpoint['model_args']
+
+tokenizer = Tokenizer(**tokenizer_args).to(device)
+state_dict = checkpoint['model']
+# fix the keys of the state dictionary :(
+# honestly no idea how checkpoints sometimes get this prefix, have to debug more
+unwanted_prefix = '_orig_mod.'
+for k,v in list(state_dict.items()):
+    if k.startswith(unwanted_prefix):
+        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+tokenizer.load_state_dict(state_dict)
+tokenizer.eval()
+
 model_args = dict(vae_embed_dim=vae_embed_dim, seq_len=max_seq_len, codebook_size=codebook_size, codebook_dim=codebook_dim)
 if init_from == 'scratch':
     # init a new model from scratch
@@ -172,22 +187,6 @@ elif init_from.startswith('gpt2'):
 
 model.to(device)
 summary(model)
-
-ckpt_path = os.path.join('tokenizer10', 'ckpt.pt')
-checkpoint = torch.load(ckpt_path, map_location=device)
-tokenizer_args = checkpoint['model_args']
-
-tokenizer = Tokenizer(**tokenizer_args).to(device)
-state_dict = checkpoint['model']
-# fix the keys of the state dictionary :(
-# honestly no idea how checkpoints sometimes get this prefix, have to debug more
-unwanted_prefix = '_orig_mod.'
-for k,v in list(state_dict.items()):
-    if k.startswith(unwanted_prefix):
-        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-tokenizer.load_state_dict(state_dict)
-tokenizer.eval()
-checkpoint = None
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
