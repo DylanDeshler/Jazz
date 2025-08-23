@@ -60,7 +60,7 @@ codebook_size = 16
 codebook_dim = 32
 vae_embed_dim = 128
 # adamw optimizer
-learning_rate = 2e-4 # max learning rate
+learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
@@ -275,9 +275,9 @@ if wandb_log and master_process:
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
-step1 = 10001
-step2 = 20001
-step3 = 30001
+step1 = 5001
+step2 = 10001
+step3 = 20001
 step4 = 50001
 
 X = get_batch('train') # fetch the very first batch
