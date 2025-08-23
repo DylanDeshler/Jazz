@@ -248,6 +248,8 @@ def save_samples(xs, ys, random_ys, step):
     assert xs.shape == ys.shape, f'shapes should match but got {xs.shape} != {ys.shape}'
 
     B, L, D = xs.shape
+    print('Mean: ', xs.mean().item(), ys.mean().item(), random_ys.mean().item())
+    print('Std: ', xs.std().item(), ys.std().item(), random_ys.std().item())
 
     # reconstruct wavform in series (could be smart and reshape into a batch for speed)
     n_cuts = L // 50
