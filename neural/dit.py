@@ -357,7 +357,7 @@ class DiTWrapper(nn.Module):
         return loss
     
     def sample(self, shape, n_steps=50):
-        return self.sampler.sample(self, shape, n_steps)
+        return self.sampler.sample(self.model, shape, n_steps)
 
 #################################################################################
 #                   Sine/Cosine Positional Embedding Functions                  #
