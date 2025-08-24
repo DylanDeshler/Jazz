@@ -267,7 +267,7 @@ def save_samples(xs, ys, step):
 
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_gen.wav'), y, 16000)
 
 # logging
 if wandb_log and master_process:
