@@ -247,8 +247,6 @@ def save_samples(xs, ys, step):
     assert xs.shape == ys.shape, f'shapes should match but got {xs.shape} != {ys.shape}'
 
     B, L, D = xs.shape
-    print('Mean: ', xs.mean().item(), ys.mean().item())
-    print('Std: ', xs.std().item(), ys.std().item())
 
     # reconstruct wavform in series (could be smart and reshape into a batch for speed)
     n_cuts = L // 50
@@ -294,7 +292,7 @@ while True:
     if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
         batch_size *= 2
     if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
-        gradient_accumulation_steps *= 2
+        batch_size *= 2
     #     # batch_size *= 4
     # if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
     #     gradient_accumulation_steps *= 2
