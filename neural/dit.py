@@ -235,6 +235,7 @@ class DiT(nn.Module):
         num_heads=16,
         mlp_ratio=4.0,
         learn_sigma=False,
+        **kwargs,
     ):
         super().__init__()
         self.learn_sigma = learn_sigma
