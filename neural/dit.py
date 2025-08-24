@@ -329,10 +329,6 @@ class DiT(nn.Module):
         # x = self.unpatchify(x)                   # (N, out_channels, H, W)
         return x
     
-    def forward_loss(self, x):
-        loss = self.diffusion.loss(self, x)
-        return loss
-
     def forward_with_cfg(self, x, t, y, cfg_scale):
         """
         Forward pass of DiT, but also batches the unconditional forward pass for classifier-free guidance.
@@ -354,6 +350,14 @@ class DiT(nn.Module):
     def sample(self, shape, n_steps=50):
         return self.sampler.sample(self, shape, n_steps)
 
+class DiTWrapper(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        self.model = DiT(*args, **kwargs)
+    
+    def forward(self, x):
+        loss = self.diffusion.loss(self.model, x)
+        return loss
 
 #################################################################################
 #                   Sine/Cosine Positional Embedding Functions                  #
@@ -427,40 +431,40 @@ def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
 #################################################################################
 
 def DiT_XL_2(**kwargs):
-    return DiT(depth=28, hidden_size=1152, patch_size=2, num_heads=16, **kwargs)
+    return DiTWrapper(depth=28, hidden_size=1152, patch_size=2, num_heads=16, **kwargs)
 
 def DiT_XL_4(**kwargs):
-    return DiT(depth=28, hidden_size=1152, patch_size=4, num_heads=16, **kwargs)
+    return DiTWrapper(depth=28, hidden_size=1152, patch_size=4, num_heads=16, **kwargs)
 
 def DiT_XL_8(**kwargs):
-    return DiT(depth=28, hidden_size=1152, patch_size=8, num_heads=16, **kwargs)
+    return DiTWrapper(depth=28, hidden_size=1152, patch_size=8, num_heads=16, **kwargs)
 
 def DiT_L_2(**kwargs):
-    return DiT(depth=24, hidden_size=1024, patch_size=2, num_heads=16, **kwargs)
+    return DiTWrapper(depth=24, hidden_size=1024, patch_size=2, num_heads=16, **kwargs)
 
 def DiT_L_4(**kwargs):
-    return DiT(depth=24, hidden_size=1024, patch_size=4, num_heads=16, **kwargs)
+    return DiTWrapper(depth=24, hidden_size=1024, patch_size=4, num_heads=16, **kwargs)
 
 def DiT_L_8(**kwargs):
-    return DiT(depth=24, hidden_size=1024, patch_size=8, num_heads=16, **kwargs)
+    return DiTWrapper(depth=24, hidden_size=1024, patch_size=8, num_heads=16, **kwargs)
 
 def DiT_B_2(**kwargs):
-    return DiT(depth=12, hidden_size=768, patch_size=2, num_heads=12, **kwargs)
+    return DiTWrapper(depth=12, hidden_size=768, patch_size=2, num_heads=12, **kwargs)
 
 def DiT_B_4(**kwargs):
-    return DiT(depth=12, hidden_size=768, patch_size=4, num_heads=12, **kwargs)
+    return DiTWrapper(depth=12, hidden_size=768, patch_size=4, num_heads=12, **kwargs)
 
 def DiT_B_8(**kwargs):
-    return DiT(depth=12, hidden_size=768, patch_size=8, num_heads=12, **kwargs)
+    return DiTWrapper(depth=12, hidden_size=768, patch_size=8, num_heads=12, **kwargs)
 
 def DiT_S_2(**kwargs):
-    return DiT(depth=12, hidden_size=384, patch_size=2, num_heads=6, **kwargs)
+    return DiTWrapper(depth=12, hidden_size=384, patch_size=2, num_heads=6, **kwargs)
 
 def DiT_S_4(**kwargs):
-    return DiT(depth=12, hidden_size=384, patch_size=4, num_heads=6, **kwargs)
+    return DiTWrapper(depth=12, hidden_size=384, patch_size=4, num_heads=6, **kwargs)
 
 def DiT_S_8(**kwargs):
-    return DiT(depth=12, hidden_size=384, patch_size=8, num_heads=6, **kwargs)
+    return DiTWrapper(depth=12, hidden_size=384, patch_size=8, num_heads=6, **kwargs)
 
 
 DiT_models = {
