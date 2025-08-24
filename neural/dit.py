@@ -254,9 +254,6 @@ class DiT(nn.Module):
             DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
         self.final_layer = FinalLayer(hidden_size, self.out_channels)
-
-        self.diffusion = FM(timescale=1000.0)
-        self.sampler = FMEulerSampler(self.diffusion)
         self.initialize_weights()
 
     def initialize_weights(self):
@@ -354,6 +351,9 @@ class DiTWrapper(nn.Module):
     def __init__(self, *args, **kwargs):
         super().__init__()
         self.model = DiT(*args, **kwargs)
+
+        self.diffusion = FM(timescale=1000.0)
+        self.sampler = FMEulerSampler(self.diffusion)
     
     def forward(self, x):
         loss = self.diffusion.loss(self.model, x)
