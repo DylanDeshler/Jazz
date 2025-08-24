@@ -343,9 +343,6 @@ class DiT(nn.Module):
         half_eps = uncond_eps + cfg_scale * (cond_eps - uncond_eps)
         eps = torch.cat([half_eps, half_eps], dim=0)
         return torch.cat([eps, rest], dim=1)
-    
-    def sample(self, shape, n_steps=50):
-        return self.sampler.sample(self, shape, n_steps)
 
 class DiTWrapper(nn.Module):
     def __init__(self, *args, **kwargs):
@@ -360,7 +357,7 @@ class DiTWrapper(nn.Module):
         return loss
     
     def sample(self, shape, n_steps=50):
-        return self.model.sample(shape, n_steps=n_steps)
+        return self.sampler.sample(self, shape, n_steps)
 
 #################################################################################
 #                   Sine/Cosine Positional Embedding Functions                  #
