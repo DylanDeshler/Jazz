@@ -313,7 +313,7 @@ while True:
         model.eval()
         with ctx:
             samples = raw_model.sample(X.shape)
-        save_samples(X, *samples, iter_num)
+        save_samples(X, samples, iter_num)
         model.train()
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
