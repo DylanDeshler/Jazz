@@ -259,13 +259,11 @@ def save_samples(xs, ys, step):
     for cut in tqdm(range(n_cuts), desc='Decoding'):
         x_cuts.append(tokenizer.decode(xs[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
         y_cuts.append(tokenizer.decode(ys[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
-        random_y_cuts.append(tokenizer.decode(random_ys[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
     xs = torch.cat(x_cuts, dim=-1).cpu().detach().numpy()
     ys = torch.cat(y_cuts, dim=-1).cpu().detach().numpy()
-    random_ys = torch.cat(random_y_cuts, dim=-1).cpu().detach().numpy()
 
     for i in range(B):
-        x, y, random_y = xs[i].squeeze(), ys[i].squeeze(), random_ys[i].squeeze()
+        x, y = xs[i].squeeze(), ys[i].squeeze()
 
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, 16000)
