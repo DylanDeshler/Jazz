@@ -358,6 +358,9 @@ class DiTWrapper(nn.Module):
     def forward(self, x):
         loss = self.diffusion.loss(self.model, x)
         return loss
+    
+    def sample(self, shape, n_steps=50):
+        return self.model.sample(shape, n_steps=n_steps)
 
 #################################################################################
 #                   Sine/Cosine Positional Embedding Functions                  #
