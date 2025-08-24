@@ -252,7 +252,7 @@ def save_samples(xs, ys, step):
 
     # reconstruct wavform in series (could be smart and reshape into a batch for speed)
     n_cuts = L // 50
-    x_cuts, y_cuts, random_y_cuts = [], [], []
+    x_cuts, y_cuts = [], []
     for cut in tqdm(range(n_cuts), desc='Decoding'):
         x_cuts.append(tokenizer.decode(xs[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
         y_cuts.append(tokenizer.decode(ys[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
