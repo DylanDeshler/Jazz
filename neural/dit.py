@@ -510,7 +510,6 @@ class LAM(nn.Module):
         local_tokens = self.to_local_action_emb(z)
         local_tokens, indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
 
-        print(x.shape, global_tokens.shape, local_tokens.shape)
         loss = self.diffusion.loss(self.decoder.model, x, net_kwargs={'y': global_tokens + local_tokens}) + global_vq_loss + local_vq_loss
 
         return loss
@@ -535,7 +534,7 @@ class LAM(nn.Module):
 
         # generate actions
         z = self.encoder(latents)
-        print(z.shape)
+        
         global_tokens = self.to_global_action_emb(z)
         global_tokens, global_action_indices, global_vq_loss = self.global_vq(global_tokens, mask=None)
         global_tokens = repeat(global_tokens, "b d -> b t d", t=latents.shape[1])
@@ -554,7 +553,6 @@ class LAM(nn.Module):
         random_local_action_tokens = self.local_vq.project_out(random_local_action_tokens)
 
         # decode actions
-        print(latents.shape, global_tokens.shape, local_tokens.shape)
         recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': global_tokens + local_tokens}, n_steps=n_steps)
         
         # decode random actions
