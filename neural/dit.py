@@ -519,7 +519,7 @@ class LAM(nn.Module):
 
         return random_actions
     
-    def lam_vs_random_actions(self, latents):
+    def lam_vs_random_actions(self, latents, n_steps=50):
         assert latents.ndim == 3
 
         b, c, f, device = *latents.shape, latents.device
@@ -546,10 +546,10 @@ class LAM(nn.Module):
 
         # decode actions
         print(latents.shape, global_tokens.shape, local_tokens.shape)
-        recon_latents = self.sampler.sample(self.decoder, latents.shape, net_kwargs={'y': global_tokens + local_tokens})
+        recon_latents = self.sampler.sample(self.decoder, latents.shape, net_kwargs={'y': global_tokens + local_tokens}, n_steps=n_steps)
         
         # decode random actions
-        random_recon_latents = self.sampler.sample(self.decoder, latents.shape, net_kwargs={'y': random_global_action_tokens + random_local_action_tokens})
+        random_recon_latents = self.sampler.sample(self.decoder, latents.shape, net_kwargs={'y': random_global_action_tokens + random_local_action_tokens}, n_steps=n_steps)
 
         return recon_latents, random_recon_latents
     
