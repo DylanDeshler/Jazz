@@ -532,13 +532,13 @@ class LAM(nn.Module):
         global_tokens = self.to_global_action_emb(z)
         global_tokens, indices, global_vq_loss = self.global_vq(global_tokens, mask=None)
         mask = torch.rand(x.shape[0]) < 0.1
-        global_tokens[mask.long()] = self.null_tokens.weight[0]
+        global_tokens[mask.long()] = self.null_tokens.weight[0].to(global_tokens.dtype)
         global_tokens = repeat(global_tokens, "b d -> b t d", t=x.shape[1])
 
         local_tokens = self.to_local_action_emb(z)
         local_tokens, indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
         mask =  torch.rand(x.shape[0], x.shape[1]) < 0.1
-        local_tokens[mask.long()] = self.null_tokens.weight[1]
+        local_tokens[mask.long()] = self.null_tokens.weight[1].to(local_tokens.dtype)
 
         loss = self.diffusion.loss(self.decoder.model, x, net_kwargs={'y': global_tokens + local_tokens}) + global_vq_loss + local_vq_loss
 
