@@ -219,7 +219,7 @@ class DiTBlock(nn.Module):
         )
 
     def forward(self, x, c):
-        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(c).chunk(6, dim=1)
+        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(c).chunk(6, dim=-1)
         if c.ndim == 3:
             print(x.shape, gate_msa.shape, shift_msa.shape, scale_msa.shape)
             x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa))
