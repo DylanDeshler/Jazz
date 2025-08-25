@@ -151,7 +151,7 @@ for k,v in list(state_dict.items()):
 tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 
-model_args = dict(vae_embed_dim=vae_embed_dim, seq_len=max_seq_len, codebook_size=codebook_size, codebook_dim=codebook_dim)
+model_args = {}#dict(vae_embed_dim=vae_embed_dim, seq_len=max_seq_len, codebook_size=codebook_size, codebook_dim=codebook_dim)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
