@@ -442,7 +442,7 @@ class LAM(nn.Module):
         self.decoder = decoder
 
         self.to_global_action_emb = nn.Sequential(
-            Rearrange("b t ... -> b t (...)"),
+            Rearrange("b t d -> b (t d)"),
             nn.Linear(max_input_size * hidden_size, hidden_size),
             nn.LayerNorm(hidden_size),
         )
@@ -492,6 +492,7 @@ class LAM(nn.Module):
         z = self.encoder(x)
 
         # action embeddings
+        print(z.shape)
         local_tokens = self.to_global_action_emb(z)
         global_tokens, indices, global_vq_loss = self.global_vq(global_tokens, mask=None)
         # global_tokens = repeat(global_tokens, "b d -> b t d", t=x.shape[1])
