@@ -274,7 +274,7 @@ class DiT(nn.Module):
 
         self.x_embedder = nn.Linear(in_channels, hidden_size, bias=True)
         self.t_embedder = TimestepEmbedder(hidden_size)
-        if not conditional:
+        if conditional:
             self.y_embedder = nn.Linear(in_channels, hidden_size, bias=True)
         # self.y_embedder = LabelEmbedder(n_classes, hidden_size, class_dropout_prob)
         # Will use fixed sin-cos embedding:
@@ -307,7 +307,7 @@ class DiT(nn.Module):
         nn.init.constant_(self.x_embedder.bias, 0)
 
         # Initialize label embedding table:
-        if not self.conditional:
+        if self.conditional:
             nn.init.normal_(self.y_embedder.weight, std=0.02)
             nn.init.constant_(self.y_embedder.bias, 0)
 
