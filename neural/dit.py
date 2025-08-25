@@ -502,7 +502,7 @@ class LAM(nn.Module):
         local_tokens, indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
 
         print(x.shape, global_tokens.shape, local_tokens.shape)
-        loss = self.diffusion.loss(self.decoder, x, net_kwargs={'y': global_tokens + local_tokens}) + global_vq_loss + local_vq_loss
+        loss = self.diffusion.loss(self.decoder.model, x, net_kwargs={'y': global_tokens + local_tokens}) + global_vq_loss + local_vq_loss
 
         return loss
     
@@ -546,10 +546,10 @@ class LAM(nn.Module):
 
         # decode actions
         print(latents.shape, global_tokens.shape, local_tokens.shape)
-        recon_latents = self.sampler.sample(self.decoder, latents.shape, net_kwargs={'y': global_tokens + local_tokens}, n_steps=n_steps)
+        recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': global_tokens + local_tokens}, n_steps=n_steps)
         
         # decode random actions
-        random_recon_latents = self.sampler.sample(self.decoder, latents.shape, net_kwargs={'y': random_global_action_tokens + random_local_action_tokens}, n_steps=n_steps)
+        random_recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': random_global_action_tokens + random_local_action_tokens}, n_steps=n_steps)
 
         return recon_latents, random_recon_latents
     
