@@ -492,7 +492,6 @@ class LAM(nn.Module):
         z = self.encoder(x)
 
         # action embeddings
-        print(z.shape)
         local_tokens = self.to_global_action_emb(z)
         global_tokens, indices, global_vq_loss = self.global_vq(global_tokens, mask=None)
         # global_tokens = repeat(global_tokens, "b d -> b t d", t=x.shape[1])
@@ -525,6 +524,7 @@ class LAM(nn.Module):
 
         # generate actions
         z = self.encoder(latents)
+        print(z.shape)
         global_tokens = self.to_global_action_emb(z)
         global_tokens, global_action_indices, global_vq_loss = self.global_vq(global_tokens, mask=None)
 
