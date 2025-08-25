@@ -503,7 +503,7 @@ class LAM(nn.Module):
         z = self.encoder(x)
 
         # action embeddings
-        local_tokens = self.to_global_action_emb(z)
+        global_tokens = self.to_global_action_emb(z)
         global_tokens, indices, global_vq_loss = self.global_vq(global_tokens, mask=None)
         global_tokens = repeat(global_tokens, "b d -> b t d", t=x.shape[1])
 
