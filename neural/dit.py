@@ -15,7 +15,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
+from einops import repeat, pack
+from einops.layers.torch import Rearrange
+
 from fm import FM, FMEulerSampler
+from vector_quantize import VectorQuantize
 
 def modulate(x, shift, scale):
     return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
@@ -179,6 +183,21 @@ class Mlp(nn.Module):
         x = self.drop2(x)
         return x
 
+class TransformerBlock(nn.Module):
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
+        super().__init__()
+        self.norm1 = nn.LayerNorm(hidden_size, eps=1e-6)
+        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
+        self.norm2 = nn.LayerNorm(hidden_size, eps=1e-6)
+        mlp_hidden_dim = int(hidden_size * mlp_ratio)
+        approx_gelu = lambda: nn.GELU(approximate="tanh")
+        self.mlp = Mlp(in_features=hidden_size, hidden_features=mlp_hidden_dim, act_layer=approx_gelu, drop=0)
+
+    def forward(self, x, c):
+        x = x + self.attn(self.norm1(x))
+        x = x + self.mlp(self.norm2(x))
+        return x
+
 class DiTBlock(nn.Module):
     """
     A DiT block with adaptive layer norm zero (adaLN-Zero) conditioning.
@@ -309,7 +328,7 @@ class DiT(nn.Module):
     #     imgs = x.reshape(shape=(x.shape[0], c, h * p, h * p))
     #     return imgs
 
-    def forward(self, x, t):
+    def forward(self, x, t, y=None):
         """
         Forward pass of DiT.
         x: (N, C, H, W) tensor of spatial inputs (images or latent representations of images)
@@ -318,13 +337,215 @@ class DiT(nn.Module):
         """
         x = self.x_embedder(x) + self.pos_embed  # (N, T, D), where T = H * W / patch_size ** 2
         t = self.t_embedder(t)                   # (N, D)
-        # y = self.y_embedder(class_labels, self.training)    # (N, D)
-        c = t# + y                                # (N, D)
+        if y is not None:
+            c = t + y
+        else:
+            c = t                                # (N, D)
         for block in self.blocks:
             x = block(x, c)                      # (N, T, D)
         x = self.final_layer(x, c)               # (N, T, patch_size ** 2 * out_channels)
         # x = self.unpatchify(x)                   # (N, out_channels, H, W)
         return x
+    
+    def forward_with_cfg(self, x, t, y, cfg_scale):
+        """
+        Forward pass of DiT, but also batches the unconditional forward pass for classifier-free guidance.
+        """
+        # https://github.com/openai/glide-text2im/blob/main/notebooks/text2im.ipynb
+        half = x[: len(x) // 2]
+        combined = torch.cat([half, half], dim=0)
+        model_out = self.forward(combined, t, y)
+        # For exact reproducibility reasons, we apply classifier-free guidance on only
+        # three channels by default. The standard approach to cfg applies it to all channels.
+        # This can be done by uncommenting the following line and commenting-out the line following that.
+        # eps, rest = model_out[:, :self.in_channels], model_out[:, self.in_channels:]
+        eps, rest = model_out[:, :3], model_out[:, 3:]
+        cond_eps, uncond_eps = torch.split(eps, len(eps) // 2, dim=0)
+        half_eps = uncond_eps + cfg_scale * (cond_eps - uncond_eps)
+        eps = torch.cat([half_eps, half_eps], dim=0)
+        return torch.cat([eps, rest], dim=1)
+
+class Transformer(nn.Module):
+    def __init__(
+        self,
+        max_input_size=250,
+        in_channels=128,
+        hidden_size=1152,
+        depth=28,
+        num_heads=16,
+        mlp_ratio=4.0,
+        **kwargs,
+    ):
+        super().__init__()
+        self.in_channels = in_channels
+        self.num_heads = num_heads
+
+        self.x_embedder = nn.Linear(in_channels, hidden_size, bias=True)
+        self.pos_embed = nn.Parameter(torch.zeros(1, max_input_size, hidden_size), requires_grad=False)
+
+        self.blocks = nn.ModuleList([
+            TransformerBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+        ])
+        self.final_norm = nn.LayerNorm(hidden_size, eps=1e-6)
+        self.final_layer = nn.Linear(hidden_size, in_channels, bias=True)
+        self.initialize_weights()
+
+    def initialize_weights(self):
+        # Initialize transformer layers:
+        def _basic_init(module):
+            if isinstance(module, nn.Linear):
+                torch.nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+        self.apply(_basic_init)
+
+        # Initialize (and freeze) pos_embed by sin-cos embedding:
+        pos_embed = get_1d_sincos_pos_embed(self.pos_embed.shape[-1], self.pos_embed.shape[-2])
+        self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
+
+        # Zero-out output layers:
+        nn.init.constant_(self.final_layer.weight, 0)
+        nn.init.constant_(self.final_layer.bias, 0)
+
+    def forward(self, x):
+        """
+        Forward pass of DiT.
+        x: (N, C, H, W) tensor of spatial inputs (images or latent representations of images)
+        t: (N,) tensor of diffusion timesteps
+        y: (N,) tensor of class labels
+        """
+        x = self.x_embedder(x) + self.pos_embed  # (N, T, D), where T = H * W / patch_size ** 2                             # (N, D)
+        for block in self.blocks:
+            x = block(x)                      # (N, T, D)
+        x = self.final_norm(x)
+        x = self.final_layer(x)               # (N, T, patch_size ** 2 * out_channels)
+        return x
+
+class LAM(nn.Module):
+    """
+    Diffusion model with a Transformer backbone.
+    """
+    def __init__(
+        self,
+        encoder,
+        decoder,
+        max_input_size=250,
+        hidden_size=1152,
+        local_codebook_size=16,
+        global_codebook_size=8,
+        codebook_dim=32,
+        **kwargs,
+    ):
+        super().__init__()
+
+        self.encoder = encoder
+        self.decoder = decoder
+
+        self.to_global_action_emb = nn.Sequential(
+            Rearrange("b t ... -> b t (...)"),
+            nn.Linear(max_input_size * hidden_size, hidden_size),
+            nn.LayerNorm(hidden_size),
+        )
+
+        self.to_local_action_emb = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size),
+            nn.LayerNorm(hidden_size)
+        )
+
+        self.global_vq = VectorQuantize(
+            dim=hidden_size,
+            codebook_size=global_codebook_size,
+            learnable_codebook=True,
+            ema_update=False,
+            use_cosine_sim=True,
+            commitment_weight=0.25,
+            codebook_dim=codebook_dim,
+        )
+
+        self.local_vq = VectorQuantize(
+            dim=hidden_size,
+            codebook_size=local_codebook_size,
+            learnable_codebook=True,
+            ema_update=False,
+            use_cosine_sim=True,
+            commitment_weight=0.25,
+            codebook_dim=codebook_dim,
+        )
+
+        self.initialize_weights()
+        self.encoder.initialize_weights()
+        self.decoder.initialize_weights()
+
+        self.diffusion = FM(timescale=1000.0)
+        self.sampler = FMEulerSampler(self.diffusion)
+
+    def initialize_weights(self):
+        # Initialize transformer layers:
+        def _basic_init(module):
+            if isinstance(module, nn.Linear):
+                torch.nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+        self.apply(_basic_init)
+
+    def forward(self, x):
+        z = self.encoder(x)
+
+        # action embeddings
+        local_tokens = self.to_global_action_emb(z)
+        global_tokens, indices, global_vq_loss = self.global_vq(global_tokens, mask=None)
+        # global_tokens = repeat(global_tokens, "b d -> b t d", t=x.shape[1])
+
+        local_tokens = self.to_global_action_emb(z)
+        local_tokens, indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
+
+        print(x.shape, global_tokens.shape, local_tokens.shape)
+        loss = self.diffusion.loss(self.decoder, x, net_kwargs={'y': global_tokens + local_tokens}) + global_vq_loss + local_vq_loss
+
+        return loss
+    
+    def generate_random_different_actions(self, actions_indices, codebook_size, device):
+        shape = actions_indices.shape
+        random_actions = torch.randint(0, codebook_size, shape, device=device)
+
+        while torch.any(random_actions == actions_indices):
+            random_actions = torch.where(
+                random_actions == actions_indices,
+                torch.randint(0, codebook_size, shape, device=device),
+                random_actions,
+            )
+
+        return random_actions
+    
+    def lam_vs_random_actions(self, latents):
+        assert latents.ndim == 3
+
+        b, c, f, device = *latents.shape, latents.device
+
+        # generate actions
+        z = self.encoder(latents)
+        global_tokens = self.to_global_action_emb(z)
+        global_tokens, global_action_indices, global_vq_loss = self.global_vq(global_tokens, mask=None)
+
+        local_tokens = self.to_local_action_emb(z)
+        local_tokens, local_action_indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
+
+        # generate random actions
+        random_global_actions_indices = self.generate_random_different_actions(global_action_indices, self.global_vq.codebook_size, device)
+        random_global_action_tokens = self.global_vq.codebook[random_global_actions_indices]
+        random_global_action_tokens = self.global_vq.project_out(random_global_action_tokens)
+
+        random_local_actions_indices = self.generate_random_different_actions(local_action_indices, self.local_vq.codebook_size, device)
+        random_local_action_tokens = self.local_vq.codebook[random_local_actions_indices]
+        random_local_action_tokens = self.local_vq.project_out(random_local_action_tokens)
+
+        # decode actions
+        recon_latents = self.sampler.sample(self.decoder, latents.shape, net_kwargs={'y': global_tokens + local_tokens})
+        
+        # decode random actions
+        random_recon_latents = self.sampler.sample(self.decoder, latents.shape, net_kwargs={'y': random_global_action_tokens + random_local_action_tokens})
+
+        return recon_latents, random_recon_latents
     
     def forward_with_cfg(self, x, t, y, cfg_scale):
         """
@@ -450,6 +671,9 @@ def DiT_L_8(**kwargs):
 
 def DiT_B_2(**kwargs):
     return DiTWrapper(depth=12, hidden_size=768, patch_size=2, num_heads=12, **kwargs)
+
+def LAM_B_2(**kwargs):
+    return LAM(depth=12, hidden_size=768, patch_size=2, num_heads=12, **kwargs)
 
 def DiT_B_4(**kwargs):
     return DiTWrapper(depth=12, hidden_size=768, patch_size=4, num_heads=12, **kwargs)
