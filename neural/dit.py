@@ -265,6 +265,7 @@ class DiT(nn.Module):
 
         self.x_embedder = nn.Linear(in_channels, hidden_size, bias=True)
         self.t_embedder = TimestepEmbedder(hidden_size)
+        self.y_embedder = nn.Linear(in_channels, hidden_size, bias=True)
         # self.y_embedder = LabelEmbedder(n_classes, hidden_size, class_dropout_prob)
         # Will use fixed sin-cos embedding:
         self.pos_embed = nn.Parameter(torch.zeros(1, max_input_size, hidden_size), requires_grad=False)
@@ -296,7 +297,8 @@ class DiT(nn.Module):
         nn.init.constant_(self.x_embedder.bias, 0)
 
         # Initialize label embedding table:
-        # nn.init.normal_(self.y_embedder.embedding_table.weight, std=0.02)
+        nn.init.normal_(self.y_embedder.weight, std=0.02)
+        nn.init.constant_(self.y_embedder.bias, 0)
 
         # Initialize timestep embedding MLP:
         nn.init.normal_(self.t_embedder.mlp[0].weight, std=0.02)
@@ -338,7 +340,7 @@ class DiT(nn.Module):
         x = self.x_embedder(x) + self.pos_embed  # (N, T, D), where T = H * W / patch_size ** 2
         t = self.t_embedder(t)                   # (N, D)
         if y is not None:
-            c = t + y
+            c = t + self.y_embedder(y)
         else:
             c = t                                # (N, D)
         for block in self.blocks:
@@ -677,7 +679,7 @@ def Transformer_B_2(**kwargs):
     return Transformer(depth=12, hidden_size=768, patch_size=2, num_heads=12, **kwargs)
 
 def LAM_B_2(**kwargs):
-    return LAM(encoder=Transformer_B_2(), decoder=DiT_B_2(), depth=12, hidden_size=768, patch_size=2, num_heads=12, **kwargs)
+    return LAM(encoder=Transformer_B_2(), decoder=DiT_B_2(), depth=12, hidden_size=128, patch_size=2, num_heads=12, **kwargs)
 
 def DiT_B_4(**kwargs):
     return DiTWrapper(depth=12, hidden_size=768, patch_size=4, num_heads=12, **kwargs)
