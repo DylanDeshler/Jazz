@@ -172,7 +172,7 @@ elif init_from == 'resume':
     for k,v in list(state_dict.items()):
         if k.startswith(unwanted_prefix):
             state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-    model.load_state_dict(state_dict, strict=False)
+    model.load_state_dict(state_dict)
     iter_num = checkpoint['iter_num']
     tokens_trained = checkpoint['tokens']
     best_val_loss = checkpoint['best_val_loss']
@@ -194,8 +194,8 @@ scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 # optimizer
 # optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, betas=(beta1, beta2))
-# if init_from == 'resume':
-#     optimizer.load_state_dict(checkpoint['optimizer'])
+if init_from == 'resume':
+    optimizer.load_state_dict(checkpoint['optimizer'])
 checkpoint = None # free up memory
 
 # compile the model
