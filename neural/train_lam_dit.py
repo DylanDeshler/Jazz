@@ -38,7 +38,7 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'dit'
+out_dir = 'lam_dit'
 eval_interval = 1000
 log_interval = 100
 save_interval = 10000
