@@ -487,6 +487,8 @@ class LAM(nn.Module):
             codebook_dim=codebook_dim,
         )
 
+        self.null_tokens = nn.Embedding(2, hidden_size)
+
         self.initialize_weights()
         self.encoder.initialize_weights()
         self.decoder.model.initialize_weights()
@@ -503,16 +505,40 @@ class LAM(nn.Module):
                     nn.init.constant_(module.bias, 0)
         self.apply(_basic_init)
 
+        nn.init.normal_(self.null_tokens.weight, std=0.02)
+    
+    def token_drop(self, labels, force_drop_ids=None):
+        """
+        Drops labels to enable classifier-free guidance.
+        """
+        if force_drop_ids is None:
+            drop_ids = torch.rand(labels.shape[0], device=labels.device) < self.dropout_prob
+        else:
+            drop_ids = force_drop_ids == 1
+        labels = torch.where(drop_ids, self.num_classes, labels)
+        return labels
+
+    def forward(self, labels, train, force_drop_ids=None):
+        use_dropout = self.dropout_prob > 0
+        if (train and use_dropout) or (force_drop_ids is not None):
+            labels = self.token_drop(labels, force_drop_ids)
+        embeddings = self.embedding_table(labels)
+        return embeddings
+
     def forward(self, x):
         z = self.encoder(x)
 
         # action embeddings
         global_tokens = self.to_global_action_emb(z)
         global_tokens, indices, global_vq_loss = self.global_vq(global_tokens, mask=None)
+        mask = torch.rand(x.shape[0]) < 0.1
+        global_tokens[mask.long()] = self.null_tokens[0]
         global_tokens = repeat(global_tokens, "b d -> b t d", t=x.shape[1])
 
         local_tokens = self.to_local_action_emb(z)
         local_tokens, indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
+        mask =  torch.rand(x.shape[0], x.shape[1]) < 0.1
+        local_tokens[mask.long()] = self.null_tokens[1]
 
         loss = self.diffusion.loss(self.decoder.model, x, net_kwargs={'y': global_tokens + local_tokens}) + global_vq_loss + local_vq_loss
 
