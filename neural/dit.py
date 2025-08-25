@@ -474,7 +474,7 @@ class LAM(nn.Module):
 
         self.initialize_weights()
         self.encoder.initialize_weights()
-        self.decoder.initialize_weights()
+        self.decoder.model.initialize_weights()
 
         self.diffusion = FM(timescale=1000.0)
         self.sampler = FMEulerSampler(self.diffusion)
