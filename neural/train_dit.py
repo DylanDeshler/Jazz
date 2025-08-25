@@ -160,7 +160,7 @@ if init_from == 'scratch':
 elif init_from == 'resume':
     print(f"Resuming training from {out_dir}")
     # resume training from a checkpoint.
-    ckpt_path = os.path.join(out_dir, 'ckpt.pt')
+    ckpt_path = os.path.join(out_dir, 'ckpt_30000.pt')
     checkpoint = torch.load(ckpt_path, map_location=device)
     model_args = checkpoint['model_args']
 
@@ -292,7 +292,7 @@ while True:
     if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
         batch_size *= 2
     if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
-        batch_size *= 2
+        batch_size *= 2 #batch_size = 256
     #     # batch_size *= 4
     # if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
     #     gradient_accumulation_steps *= 2
