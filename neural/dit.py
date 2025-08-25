@@ -672,8 +672,11 @@ def DiT_L_8(**kwargs):
 def DiT_B_2(**kwargs):
     return DiTWrapper(depth=12, hidden_size=768, patch_size=2, num_heads=12, **kwargs)
 
+def Transformer_B_2(**kwargs):
+    return Transformer(depth=12, hidden_size=768, patch_size=2, num_heads=12, **kwargs)
+
 def LAM_B_2(**kwargs):
-    return LAM(depth=12, hidden_size=768, patch_size=2, num_heads=12, **kwargs)
+    return LAM(Transformer_B_2(), DiT_B_2(), depth=12, hidden_size=768, patch_size=2, num_heads=12, **kwargs)
 
 def DiT_B_4(**kwargs):
     return DiTWrapper(depth=12, hidden_size=768, patch_size=4, num_heads=12, **kwargs)
