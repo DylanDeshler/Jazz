@@ -543,6 +543,7 @@ class LAM(nn.Module):
         random_local_action_tokens = self.local_vq.project_out(random_local_action_tokens)
 
         # decode actions
+        print(latents.shape, global_tokens.shape, local_tokens.shape)
         recon_latents = self.sampler.sample(self.decoder, latents.shape, net_kwargs={'y': global_tokens + local_tokens})
         
         # decode random actions
