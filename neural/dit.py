@@ -507,7 +507,7 @@ class LAM(nn.Module):
         global_tokens, indices, global_vq_loss = self.global_vq(global_tokens, mask=None)
         global_tokens = repeat(global_tokens, "b d -> b t d", t=x.shape[1])
 
-        local_tokens = self.to_global_action_emb(z)
+        local_tokens = self.to_local_action_emb(z)
         local_tokens, indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
 
         print(x.shape, global_tokens.shape, local_tokens.shape)
