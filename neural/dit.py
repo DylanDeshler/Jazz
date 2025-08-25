@@ -529,7 +529,7 @@ class LAM(nn.Module):
         print(z.shape)
         global_tokens = self.to_global_action_emb(z)
         global_tokens, global_action_indices, global_vq_loss = self.global_vq(global_tokens, mask=None)
-        global_tokens = repeat(global_tokens, "b d -> b t d", t=x.shape[1])
+        global_tokens = repeat(global_tokens, "b d -> b t d", t=latents.shape[1])
 
         local_tokens = self.to_local_action_emb(z)
         local_tokens, local_action_indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
@@ -538,7 +538,7 @@ class LAM(nn.Module):
         random_global_actions_indices = self.generate_random_different_actions(global_action_indices, self.global_vq.codebook_size, device)
         random_global_action_tokens = self.global_vq.codebook[random_global_actions_indices]
         random_global_action_tokens = self.global_vq.project_out(random_global_action_tokens)
-        random_global_action_tokens = repeat(random_global_action_tokens, "b d -> b t d", t=x.shape[1])
+        random_global_action_tokens = repeat(random_global_action_tokens, "b d -> b t d", t=latents.shape[1])
 
         random_local_actions_indices = self.generate_random_different_actions(local_action_indices, self.local_vq.codebook_size, device)
         random_local_action_tokens = self.local_vq.codebook[random_local_actions_indices]
