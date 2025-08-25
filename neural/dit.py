@@ -262,6 +262,7 @@ class DiT(nn.Module):
         num_heads=16,
         mlp_ratio=4.0,
         learn_sigma=False,
+        conditional=False,
         **kwargs,
     ):
         super().__init__()
@@ -269,10 +270,12 @@ class DiT(nn.Module):
         self.in_channels = in_channels
         self.out_channels = in_channels * 2 if learn_sigma else in_channels
         self.num_heads = num_heads
+        self.conditional = conditional
 
         self.x_embedder = nn.Linear(in_channels, hidden_size, bias=True)
         self.t_embedder = TimestepEmbedder(hidden_size)
-        self.y_embedder = nn.Linear(in_channels, hidden_size, bias=True)
+        if not conditional:
+            self.y_embedder = nn.Linear(in_channels, hidden_size, bias=True)
         # self.y_embedder = LabelEmbedder(n_classes, hidden_size, class_dropout_prob)
         # Will use fixed sin-cos embedding:
         self.pos_embed = nn.Parameter(torch.zeros(1, max_input_size, hidden_size), requires_grad=False)
@@ -304,8 +307,9 @@ class DiT(nn.Module):
         nn.init.constant_(self.x_embedder.bias, 0)
 
         # Initialize label embedding table:
-        nn.init.normal_(self.y_embedder.weight, std=0.02)
-        nn.init.constant_(self.y_embedder.bias, 0)
+        if not self.conditional:
+            nn.init.normal_(self.y_embedder.weight, std=0.02)
+            nn.init.constant_(self.y_embedder.bias, 0)
 
         # Initialize timestep embedding MLP:
         nn.init.normal_(self.t_embedder.mlp[0].weight, std=0.02)
@@ -689,7 +693,7 @@ def Transformer_B_2(**kwargs):
     return Transformer(depth=12, hidden_size=768, patch_size=2, num_heads=12, **kwargs)
 
 def LAM_B_2(**kwargs):
-    return LAM(encoder=Transformer_B_2(), decoder=DiT_B_2(), depth=12, hidden_size=128, patch_size=2, num_heads=12, **kwargs)
+    return LAM(encoder=Transformer_B_2(**kwargs), decoder=DiT_B_2(conditional=True, **kwargs), depth=12, hidden_size=128, patch_size=2, num_heads=12, **kwargs)
 
 def DiT_B_4(**kwargs):
     return DiTWrapper(depth=12, hidden_size=768, patch_size=4, num_heads=12, **kwargs)
