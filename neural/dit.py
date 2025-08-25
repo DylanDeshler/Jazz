@@ -193,7 +193,7 @@ class TransformerBlock(nn.Module):
         approx_gelu = lambda: nn.GELU(approximate="tanh")
         self.mlp = Mlp(in_features=hidden_size, hidden_features=mlp_hidden_dim, act_layer=approx_gelu, drop=0)
 
-    def forward(self, x, c):
+    def forward(self, x):
         x = x + self.attn(self.norm1(x))
         x = x + self.mlp(self.norm2(x))
         return x
@@ -676,7 +676,7 @@ def Transformer_B_2(**kwargs):
     return Transformer(depth=12, hidden_size=768, patch_size=2, num_heads=12, **kwargs)
 
 def LAM_B_2(**kwargs):
-    return LAM(Transformer_B_2(), DiT_B_2(), depth=12, hidden_size=768, patch_size=2, num_heads=12, **kwargs)
+    return LAM(encoder=Transformer_B_2(), decoder=DiT_B_2(), depth=12, hidden_size=768, patch_size=2, num_heads=12, **kwargs)
 
 def DiT_B_4(**kwargs):
     return DiTWrapper(depth=12, hidden_size=768, patch_size=4, num_heads=12, **kwargs)
