@@ -22,7 +22,10 @@ from fm import FM, FMEulerSampler
 from vector_quantize import VectorQuantize
 
 def modulate(x, shift, scale):
-    return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
+    if scale.ndim == 3:
+        return x * (1 + scale) + shift
+    else:
+        return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
 
 
 #################################################################################
