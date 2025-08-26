@@ -565,10 +565,10 @@ class LAM(nn.Module):
         random_local_action_tokens = self.local_vq.project_out(random_local_action_tokens)
 
         # decode actions
-        recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': global_tokens + local_tokens}, n_steps=n_steps)
+        recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': global_tokens + local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=2)
         
         # decode random actions
-        random_recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': random_global_action_tokens + random_local_action_tokens}, n_steps=n_steps)
+        random_recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': random_global_action_tokens + random_local_action_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=2)
 
         return recon_latents, random_recon_latents
     
