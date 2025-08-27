@@ -495,6 +495,30 @@ class LAM(nn.Module):
 
         self.diffusion = FM(timescale=1000.0)
         self.sampler = FMEulerSampler(self.diffusion)
+    
+    def configure_optimizer(self, learning_rate, betas):
+        def seperate_weights_and_biases(module):
+            weights = [p for p in module.parameters() if p.ndim >= 2]
+            biases = [p for p in module.parameters() if p.ndim < 2]
+            return weights, biases
+        from muon import MuonWithAuxAdam
+        adam_groups = [self.null_tokens, self.encoder.x_embedder, self.encoder.pos_embed, self.decoder.x_embedder, self.decoder.t_embedder, self.decoder.y_embedder, self.decoder.pos_embed, self.decoder.final_layer]
+
+        hidden_groups = [self.to_global_action_emb, self.to_local_action_emb, self.global_vq, self.local_vq, 
+                       self.encoder.blocks, self.encoder.final_norm, self.encoder.final_layer,
+                       self.decoder.blocks, ]
+        hidden_groups = [seperate_weights_and_biases(m) for m in hidden_groups]
+        muon_groups = [g[0] for g in hidden_groups]
+        hidden_biases = [g[1] for g in hidden_groups]
+        muon_groups = [dict(params=g.parameters(), lr=100 * learning_rate, use_muon=True) for g in muon_groups]
+        adam_groups = [dict(g.parameters(), lr=learning_rate, betas=betas, use_muon=False) for g in adam_groups + hidden_biases]
+
+        param_groups = [*adam_groups, *muon_groups]
+        optimizer = MuonWithAuxAdam(param_groups)
+        for group in optimizer.param_groups:
+            group["initial_lr"] = group["lr"]
+
+        return optimizer
 
     def initialize_weights(self):
         # Initialize transformer layers:
@@ -506,6 +530,18 @@ class LAM(nn.Module):
         self.apply(_basic_init)
 
         nn.init.normal_(self.null_tokens.weight, std=0.02)
+
+    @torch.no_grad()
+    def encode_action_indices(self, x):
+        z = self.encoder(x)
+
+        global_tokens = self.to_global_action_emb(z)
+        global_tokens, global_indices, global_vq_loss = self.global_vq(global_tokens, mask=None)
+
+        local_tokens = self.to_local_action_emb(z)
+        local_tokens, local_indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
+
+        return global_indices, local_indices
     
     def encode_actions(self, x):
         z = self.encoder(x)

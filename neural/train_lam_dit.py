@@ -192,10 +192,12 @@ summary(model)
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 
 # optimizer
+optimizer = model.configure_optimizer(learning_rate, (beta1, beta2))
+
 # optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
-optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, betas=(beta1, beta2))
-if init_from == 'resume':
-    optimizer.load_state_dict(checkpoint['optimizer'])
+# optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, betas=(beta1, beta2))
+# if init_from == 'resume':
+#     optimizer.load_state_dict(checkpoint['optimizer'])
 checkpoint = None # free up memory
 
 # compile the model
