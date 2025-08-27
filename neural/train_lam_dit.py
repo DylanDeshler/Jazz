@@ -308,7 +308,7 @@ while True:
         model.eval()
         with ctx:
             recons = raw_model.lam_vs_random_actions(X, guidance=2)
-            mask = np.concatenate([np.zeros((X.shape[0], 75)).to(device), np.ones((X.shape[0], 100)).to(device), np.zeros((X.shape[0], 75)).to(device)], axis=1)
+            mask = torch.from_numpy(np.concatenate([np.zeros((X.shape[0], 75)), np.ones((X.shape[0], 100)), np.zeros((X.shape[0], 75))], axis=1)).to(device)
             inpaints = raw_model.inpaint(X, mask, guidance=2)
         save_samples(X, *recons, inpaints, iter_num)
         model.train()
