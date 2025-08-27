@@ -124,6 +124,8 @@ class FMEulerSampler:
         guidance=1.0,
         noise=None,
     ):
+        if mask.ndim == 2:
+            mask = mask.unsqueeze(-1)
         device = next(net.parameters()).device
         x_t = torch.randn(z.shape, device=device) if noise is None else noise
         t_steps = torch.linspace(1, 0, n_steps + 1, device=device)
