@@ -314,7 +314,7 @@ while True:
         #     inpaints = raw_model.inpaint(X, mask, guidance=2)
         # save_samples(X, *recons, inpaints, iter_num)
         # model.train()
-        losses = estimate_loss()
+        # losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
             wandb.log({
