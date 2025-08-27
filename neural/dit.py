@@ -521,6 +521,7 @@ class LAM(nn.Module):
         adam_groups = [dict(params=cast(g), lr=learning_rate, betas=betas, use_muon=False) for g in adam_groups + hidden_biases]
 
         param_groups = [*adam_groups, *muon_groups]
+        print(param_groups)
         optimizer = MuonWithAuxAdam(param_groups)
         for group in optimizer.param_groups:
             group["initial_lr"] = group["lr"]
