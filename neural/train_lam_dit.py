@@ -240,7 +240,7 @@ def get_lr(it):
     return min_lr + coeff * (learning_rate - min_lr)
 
 @torch.no_grad()
-def save_samples(xs, ys, random_ys, step):
+def save_samples(xs, ys, random_ys, inpaints, step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
 
@@ -250,22 +250,25 @@ def save_samples(xs, ys, random_ys, step):
 
     # reconstruct wavform in series (could be smart and reshape into a batch for speed)
     n_cuts = L // 50
-    x_cuts, y_cuts, random_y_cuts = [], [], []
+    x_cuts, y_cuts, random_y_cuts, inpaint_cuts = [], [], [], []
     for cut in tqdm(range(n_cuts), desc='Decoding'):
         x_cuts.append(tokenizer.decode(xs[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
         y_cuts.append(tokenizer.decode(ys[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
         random_y_cuts.append(tokenizer.decode(random_ys[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
+        inpaint_cuts.append(tokenizer.decode(inpaints[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
     xs = torch.cat(x_cuts, dim=-1).cpu().detach().numpy()
     ys = torch.cat(y_cuts, dim=-1).cpu().detach().numpy()
     random_ys = torch.cat(random_y_cuts, dim=-1).cpu().detach().numpy()
+    inpaints = torch.cat(inpaint_cuts, dim=-1).cpu().detach().numpy()
 
     for i in range(B):
-        x, y, random_y = xs[i].squeeze(), ys[i].squeeze(), random_ys[i].squeeze()
+        x, y, random_y, inpaint = xs[i].squeeze(), ys[i].squeeze(), random_ys[i].squeeze(), inpaints[i].squeeze()
 
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, 16000)
         sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, 16000)
         sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_y, 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_inpaint.wav'), inpaint, 16000)
 
 # logging
 if wandb_log and master_process:
@@ -304,8 +307,10 @@ while True:
         X = get_batch('test')[:8]
         model.eval()
         with ctx:
-            samples = raw_model.lam_vs_random_actions(X)
-        save_samples(X, *samples, iter_num)
+            recons = raw_model.lam_vs_random_actions(X, guidance=2)
+            mask = np.concatenate([np.zeros(X.shape[0], 75), np.ones(X.shape[0], 100), np.zeros(X.shape[0], 75)], axis=1)
+            inpaints = raw_model.inpaint(X, mask, guidance=2)
+        save_samples(X, *recons, inpaints, iter_num)
         model.train()
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")

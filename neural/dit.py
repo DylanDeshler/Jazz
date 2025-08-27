@@ -506,6 +506,25 @@ class LAM(nn.Module):
         self.apply(_basic_init)
 
         nn.init.normal_(self.null_tokens.weight, std=0.02)
+    
+    def encode_actions(self, x):
+        z = self.encoder(x)
+
+        # action embeddings
+        global_tokens = self.to_global_action_emb(z)
+        global_tokens, indices, global_vq_loss = self.global_vq(global_tokens, mask=None)
+        if self.training:
+            mask = torch.rand(x.shape[0]) < 0.1
+            global_tokens[mask.long()] = self.null_tokens.weight[0].to(global_tokens.dtype)
+        global_tokens = repeat(global_tokens, "b d -> b t d", t=x.shape[1])
+
+        local_tokens = self.to_local_action_emb(z)
+        local_tokens, indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
+        if self.training:
+            mask =  torch.rand(x.shape[0], x.shape[1]) < 0.1
+            local_tokens[mask.long()] = self.null_tokens.weight[1].to(local_tokens.dtype)
+
+        return global_tokens, local_tokens
 
     def forward(self, x):
         z = self.encoder(x)
@@ -513,14 +532,16 @@ class LAM(nn.Module):
         # action embeddings
         global_tokens = self.to_global_action_emb(z)
         global_tokens, indices, global_vq_loss = self.global_vq(global_tokens, mask=None)
-        mask = torch.rand(x.shape[0]) < 0.1
-        global_tokens[mask.long()] = self.null_tokens.weight[0].to(global_tokens.dtype)
+        if self.training:
+            mask = torch.rand(x.shape[0]) < 0.1
+            global_tokens[mask.long()] = self.null_tokens.weight[0].to(global_tokens.dtype)
         global_tokens = repeat(global_tokens, "b d -> b t d", t=x.shape[1])
 
         local_tokens = self.to_local_action_emb(z)
         local_tokens, indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
-        mask =  torch.rand(x.shape[0], x.shape[1]) < 0.1
-        local_tokens[mask.long()] = self.null_tokens.weight[1].to(local_tokens.dtype)
+        if self.training:
+            mask =  torch.rand(x.shape[0], x.shape[1]) < 0.1
+            local_tokens[mask.long()] = self.null_tokens.weight[1].to(local_tokens.dtype)
 
         loss = self.diffusion.loss(self.decoder.model, x, net_kwargs={'y': global_tokens + local_tokens}) + global_vq_loss + local_vq_loss
 
@@ -539,7 +560,7 @@ class LAM(nn.Module):
 
         return random_actions
     
-    def lam_vs_random_actions(self, latents, n_steps=50):
+    def lam_vs_random_actions(self, latents, n_steps=50, guidance=1):
         assert latents.ndim == 3
 
         b, c, f, device = *latents.shape, latents.device
@@ -565,12 +586,19 @@ class LAM(nn.Module):
         random_local_action_tokens = self.local_vq.project_out(random_local_action_tokens)
 
         # decode actions
-        recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': global_tokens + local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=2)
+        recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': global_tokens + local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance)
         
         # decode random actions
-        random_recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': random_global_action_tokens + random_local_action_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=2)
+        random_recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': random_global_action_tokens + random_local_action_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance)
 
         return recon_latents, random_recon_latents
+    
+    def inpaint(self, latents, mask, n_steps=50, guidance=1):
+        global_tokens, local_tokens = self.encode_actions(latents)
+
+        inpaints = self.sampler.inpaint(self.decoder.model, latents, mask, n_steps=n_steps, net_kwargs={'y': global_tokens + local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance)
+
+        return inpaints
     
     def forward_with_cfg(self, x, t, y, cfg_scale):
         """
