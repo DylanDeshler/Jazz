@@ -513,7 +513,7 @@ class LAM(nn.Module):
 
         hidden_groups = [self.to_global_action_emb, self.to_local_action_emb, self.global_vq, self.local_vq, 
                        self.encoder.blocks, self.encoder.final_norm, self.encoder.final_layer,
-                       self.decoder.model.blocks, ]
+                       self.decoder.model.blocks]
         hidden_groups = [seperate_weights_and_biases(m) for m in hidden_groups]
         muon_groups = [g[0] for g in hidden_groups]
         hidden_biases = [g[1] for g in hidden_groups]
