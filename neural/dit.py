@@ -515,8 +515,8 @@ class LAM(nn.Module):
                        self.encoder.blocks, self.encoder.final_norm, self.encoder.final_layer,
                        self.decoder.model.blocks]
         hidden_groups = [seperate_weights_and_biases(m) for m in hidden_groups]
-        muon_groups = [g[0] for g in hidden_groups]
-        hidden_biases = [g[1] for g in hidden_groups]
+        muon_groups = [g[0] for g in hidden_groups if len(g[0]) > 0]
+        hidden_biases = [g[1] for g in hidden_groups if len(g[1]) > 0]
         muon_groups = [dict(params=cast(g), lr=100 * learning_rate, use_muon=True) for g in muon_groups]
         adam_groups = [dict(params=cast(g), lr=learning_rate, betas=betas, use_muon=False) for g in adam_groups + hidden_biases]
 
