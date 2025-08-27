@@ -596,7 +596,7 @@ class LAM(nn.Module):
     def inpaint(self, latents, mask, n_steps=50, guidance=1):
         global_tokens, local_tokens = self.encode_actions(latents)
 
-        inpaints = self.sampler.inpaint(self.decoder.model, latents, mask, n_steps=n_steps, net_kwargs={'y': global_tokens + local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance)
+        inpaints = self.sampler.inpaint(self.decoder.model, latents, mask, net_kwargs={'y': global_tokens + local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance)
 
         return inpaints
     
