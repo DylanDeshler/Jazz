@@ -202,15 +202,6 @@ if ddp:
     model = DDP(model, device_ids=[ddp_local_rank])
     # tokenizer = DDP(tokenizer, device_ids=[ddp_local_rank])
 
-# optimizer
-optimizer = model.configure_optimizer(learning_rate, (beta1, beta2))
-
-# optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
-# optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, betas=(beta1, beta2))
-# if init_from == 'resume':
-#     optimizer.load_state_dict(checkpoint['optimizer'])
-checkpoint = None # free up memory
-
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
 def estimate_loss():
@@ -288,6 +279,15 @@ t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
+
+# optimizer
+optimizer = raw_model.configure_optimizer(learning_rate, (beta1, beta2))
+
+# optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
+# optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, betas=(beta1, beta2))
+# if init_from == 'resume':
+#     optimizer.load_state_dict(checkpoint['optimizer'])
+checkpoint = None # free up memory
 while True:
 
     # determine and set the learning rate for this iteration
