@@ -136,7 +136,7 @@ def get_batch(split='train'):
 iter_num = 0
 best_val_loss = 1e9
 
-ckpt_path = os.path.join('tokenizer10', 'ckpt.pt')
+ckpt_path = os.path.join('tokenizer10', '84000_ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 tokenizer_args = checkpoint['model_args']
 
@@ -281,11 +281,11 @@ raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
 
 # optimizer
-optimizer = raw_model.configure_optimizer(learning_rate, (beta1, beta2))
+# optimizer = raw_model.configure_optimizer(learning_rate, (beta1, beta2))
 # optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
-# optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, betas=(beta1, beta2))
-# if init_from == 'resume':
-#     optimizer.load_state_dict(checkpoint['optimizer'])
+optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, betas=(beta1, beta2))
+if init_from == 'resume':
+    optimizer.load_state_dict(checkpoint['optimizer'])
 checkpoint = None # free up memory
 while True:
 
