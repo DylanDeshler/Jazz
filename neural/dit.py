@@ -501,6 +501,13 @@ class LAM(nn.Module):
             weights = [p for p in module.parameters() if p.ndim >= 2]
             biases = [p for p in module.parameters() if p.ndim < 2]
             return weights, biases
+        def cast(thing):
+            if isinstance(thing, list):
+                return thing
+            if isinstance(thing, nn.Parameter):
+                return [thing]
+            else:
+                return thing.parameters()
         from muon import MuonWithAuxAdam
         adam_groups = [self.null_tokens, self.encoder.x_embedder, self.encoder.pos_embed, self.decoder.model.x_embedder, self.decoder.model.t_embedder, self.decoder.model.y_embedder, self.decoder.model.pos_embed, self.decoder.model.final_layer]
 
@@ -510,8 +517,8 @@ class LAM(nn.Module):
         hidden_groups = [seperate_weights_and_biases(m) for m in hidden_groups]
         muon_groups = [g[0] for g in hidden_groups]
         hidden_biases = [g[1] for g in hidden_groups]
-        muon_groups = [dict(params=g.parameters() if not isinstance(g, list) else g, lr=100 * learning_rate, use_muon=True) for g in muon_groups]
-        adam_groups = [dict(params=g.parameters() if not isinstance(g, (list, nn.Parameter)) else g, lr=learning_rate, betas=betas, use_muon=False) for g in adam_groups + hidden_biases]
+        muon_groups = [dict(params=cast(g), lr=100 * learning_rate, use_muon=True) for g in muon_groups]
+        adam_groups = [dict(params=cast(g), lr=learning_rate, betas=betas, use_muon=False) for g in adam_groups + hidden_biases]
 
         param_groups = [*adam_groups, *muon_groups]
         optimizer = MuonWithAuxAdam(param_groups)

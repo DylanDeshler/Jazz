@@ -306,14 +306,14 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        X = get_batch('test')[:8]
-        model.eval()
-        with ctx:
-            recons = raw_model.lam_vs_random_actions(X, guidance=2)
-            mask = torch.from_numpy(np.concatenate([np.zeros((X.shape[0], 75)), np.ones((X.shape[0], 100)), np.zeros((X.shape[0], 75))], axis=1)).long().to(device)
-            inpaints = raw_model.inpaint(X, mask, guidance=2)
-        save_samples(X, *recons, inpaints, iter_num)
-        model.train()
+        # X = get_batch('test')[:8]
+        # model.eval()
+        # with ctx:
+        #     recons = raw_model.lam_vs_random_actions(X, guidance=2)
+        #     mask = torch.from_numpy(np.concatenate([np.zeros((X.shape[0], 75)), np.ones((X.shape[0], 100)), np.zeros((X.shape[0], 75))], axis=1)).long().to(device)
+        #     inpaints = raw_model.inpaint(X, mask, guidance=2)
+        # save_samples(X, *recons, inpaints, iter_num)
+        # model.train()
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
