@@ -502,10 +502,10 @@ class LAM(nn.Module):
             biases = [p for p in module.parameters() if p.ndim < 2]
             return weights, biases
         from muon import MuonWithAuxAdam
-        adam_groups = [self.null_tokens, self.encoder.model.x_embedder, self.encoder.model.pos_embed, self.decoder.model.x_embedder, self.decoder.model.t_embedder, self.decoder.model.y_embedder, self.decoder.model.pos_embed, self.decoder.model.final_layer]
+        adam_groups = [self.null_tokens, self.encoder.x_embedder, self.encoder.pos_embed, self.decoder.model.x_embedder, self.decoder.model.t_embedder, self.decoder.model.y_embedder, self.decoder.model.pos_embed, self.decoder.model.final_layer]
 
         hidden_groups = [self.to_global_action_emb, self.to_local_action_emb, self.global_vq, self.local_vq, 
-                       self.encoder.model.blocks, self.encoder.model.final_norm, self.encoder.model.final_layer,
+                       self.encoder.blocks, self.encoder.final_norm, self.encoder.final_layer,
                        self.decoder.model.blocks, ]
         hidden_groups = [seperate_weights_and_biases(m) for m in hidden_groups]
         muon_groups = [g[0] for g in hidden_groups]
