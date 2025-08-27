@@ -511,7 +511,7 @@ class LAM(nn.Module):
         muon_groups = [g[0] for g in hidden_groups]
         hidden_biases = [g[1] for g in hidden_groups]
         muon_groups = [dict(params=g.parameters() if not isinstance(g, list) else g, lr=100 * learning_rate, use_muon=True) for g in muon_groups]
-        adam_groups = [dict(params=g.parameters() if not isinstance(g, list, nn.Parameter) else g, lr=learning_rate, betas=betas, use_muon=False) for g in adam_groups + hidden_biases]
+        adam_groups = [dict(params=g.parameters() if not isinstance(g, (list, nn.Parameter)) else g, lr=learning_rate, betas=betas, use_muon=False) for g in adam_groups + hidden_biases]
 
         param_groups = [*adam_groups, *muon_groups]
         optimizer = MuonWithAuxAdam(param_groups)
