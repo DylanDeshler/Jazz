@@ -132,6 +132,7 @@ class FMEulerSampler:
             for i in range(n_steps):
                 t = t_steps[i].repeat(x_t.shape[0])
                 z_t, _ = self.diffusion.add_noise(z, t)
+                print(x_t.shape, z_t.shape, mask.shape)
                 x_t = z_t * (1 - mask) + x_t * mask
                 neg_v = self.diffusion.get_prediction(
                     net,
