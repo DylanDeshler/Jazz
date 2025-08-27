@@ -131,7 +131,7 @@ class FMEulerSampler:
         with torch.no_grad():
             for i in range(n_steps):
                 t = t_steps[i].repeat(x_t.shape[0])
-                z_t = self.diffusion.add_noise(z, t)
+                z_t, _ = self.diffusion.add_noise(z, t)
                 x_t = z_t * (1 - mask) + x_t * mask
                 neg_v = self.diffusion.get_prediction(
                     net,
