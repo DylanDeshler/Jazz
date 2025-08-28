@@ -648,7 +648,7 @@ class LAM(nn.Module):
 
         noise = torch.randn(shape, device=next(self.parameters()).device)
         if global_action_indices is not None:
-            global_tokens = self.global_vq.project_out(self.global_vq.codebook[global_action_indices])
+            global_tokens = repeat(self.global_vq.project_out(self.global_vq.codebook[global_action_indices]), "b d -> b t d", t=shape[1])
         else:
             global_tokens = repeat(self.null_tokens.weight[0], "d -> b t d", b=shape[0], t=shape[1])
         
