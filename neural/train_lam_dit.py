@@ -160,7 +160,7 @@ if init_from == 'scratch':
 elif init_from == 'resume':
     print(f"Resuming training from {out_dir}")
     # resume training from a checkpoint.
-    ckpt_path = os.path.join(out_dir, 'ckpt_80000.pt')
+    ckpt_path = os.path.join(out_dir, 'ckpt.pt')
     checkpoint = torch.load(ckpt_path, map_location=device)
     model_args = checkpoint['model_args']
 
@@ -236,6 +236,8 @@ def get_lr(it):
 def generate_samples_with_all_global_actions(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
+    batch_dir = os.path.join(batch_dir, 'global_actions')
+    os.makedirs(batch_dir, exist_ok=True)
 
     global_actions = torch.arange(0, raw_model.global_vq.codebook_size, device=device).long()
     samples = raw_model.sample_with_actions((global_actions.shape[0], max_seq_len, 128), global_actions, None, guidance=2)
@@ -257,6 +259,8 @@ def generate_samples_with_all_global_actions(step):
 @torch.no_grad()
 def generate_samples_with_all_local_actions(step):
     batch_dir = os.path.join(out_dir, str(step))
+    os.makedirs(batch_dir, exist_ok=True)
+    batch_dir = os.path.join(batch_dir, 'local_actions')
     os.makedirs(batch_dir, exist_ok=True)
 
     actions = torch.arange(0, raw_model.local_vq.codebook_size, device=device).long()
