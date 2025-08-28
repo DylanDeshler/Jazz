@@ -136,7 +136,7 @@ def get_batch(split='train'):
 iter_num = 0
 best_val_loss = 1e9
 
-ckpt_path = os.path.join('tokenizer10', 'ckpt_80000.pt')
+ckpt_path = os.path.join('tokenizer10', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 tokenizer_args = checkpoint['model_args']
 
@@ -160,7 +160,7 @@ if init_from == 'scratch':
 elif init_from == 'resume':
     print(f"Resuming training from {out_dir}")
     # resume training from a checkpoint.
-    ckpt_path = os.path.join(out_dir, 'ckpt.pt')
+    ckpt_path = os.path.join(out_dir, 'ckpt_80000.pt')
     checkpoint = torch.load(ckpt_path, map_location=device)
     model_args = checkpoint['model_args']
 
