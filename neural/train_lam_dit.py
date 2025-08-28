@@ -264,11 +264,10 @@ def generate_lam_vs_random_actions(x, step):
     random_recon = torch.cat(random_y_cuts, dim=-1).cpu().detach().numpy()
 
     for i in range(B):
-        x, y, random_y = x[i].squeeze(), recon[i].squeeze(), random_recon[i].squeeze()
-        print(x.shape, y.shape, random_y.shape)
+        og, y, random_y = x[i].squeeze(), recon[i].squeeze(), random_recon[i].squeeze()
 
         # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), og, 16000)
         sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, 16000)
         sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_y, 16000)
 
