@@ -333,7 +333,7 @@ def generate_inpainting_samples(x, step):
 
     # reconstruct wavform in series (could be smart and reshape into a batch for speed)
     n_cuts = L // 50
-    inpaint_cuts = [], [], [], []
+    inpaint_cuts = []
     for cut in tqdm(range(n_cuts), desc='Decoding'):
         inpaint_cuts.append(tokenizer.decode(inpaints[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
     inpaints = torch.cat(inpaint_cuts, dim=-1).cpu().detach().numpy()
