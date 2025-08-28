@@ -469,7 +469,7 @@ class LAM(nn.Module):
         self.local_window = local_window
         self.to_local_action_emb = nn.Sequential(
             Rearrange("b (t1 t2) d -> b t1 (t2 d)", t1=max_input_size // local_window, t2=local_window),
-            nn.Linear(hidden_size, hidden_size),
+            nn.Linear(local_window * hidden_size, hidden_size),
             nn.LayerNorm(hidden_size)
         )
 
