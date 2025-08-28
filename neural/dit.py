@@ -643,10 +643,19 @@ class LAM(nn.Module):
 
         return inpaints
     
-    def sample_with_actions(self, shape, global_action_indices, local_action_indices, n_step=50, guidance=1):
+    def sample_with_actions(self, shape, global_action_indices=None, local_action_indices=None, n_step=50, guidance=1):
+        assert global_action_indices is not None or local_action_indices is not None
+
         noise = torch.randn(shape, device=next(self.parameters()).device)
-        global_tokens = self.global_vq.project_out(self.global_vq.codebook[global_action_indices])
-        local_tokens = self.local_vq.project_out(self.local_vq.codebook[local_action_indices])
+        if global_action_indices is not None:
+            global_tokens = self.global_vq.project_out(self.global_vq.codebook[global_action_indices])
+        else:
+            global_tokens = self.null_tokens.weight[0]
+        
+        if local_action_indices is not None:
+            local_tokens = self.local_vq.project_out(self.local_vq.codebook[local_action_indices])
+        else:
+            local_tokens = self.null_tokens.weight[1]
 
         samples = self.sampler.sample(self.decoder.model, shape, n_steps=n_step, net_kwargs={'y': global_tokens + local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(next(self.parameters()).dtype), "d -> b t d", b=shape[0], t=shape[1])}, guidance=guidance, noise=noise)
 
