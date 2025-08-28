@@ -244,7 +244,7 @@ def generate_lam_vs_random_actions(x, step):
 
     fig, axs = plt.subplots(1, B)
     for i in range(B):
-        axs.ravel()[i].plot(recon['local_actions'][i])
+        axs.ravel()[i].plot(recon['local_actions'][i].cpu().detach().numpy())
         axs.ravel()[i].set_ylabel('Local Action Index')
     plt.title('Local Action Indicies')
     plt.savefig(os.path.join(batch_dir, f'local_actions.png'))
