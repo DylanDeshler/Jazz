@@ -242,11 +242,12 @@ def generate_lam_vs_random_actions(x, step):
     B, L, D = x.shape
     recon, random_recon = raw_model.lam_vs_random_actions(x, guidance=2)
 
-    fig, axs = plt.subplots(B, 1)
+    fig, axs = plt.subplots(B, 1, figsize=(20, 20))
     for i in range(B):
         axs.ravel()[i].plot(recon['local_actions'][i].cpu().detach().numpy())
-        axs.ravel()[i].set_ylabel('Local Action Index')
     plt.title('Local Action Indicies')
+    plt.ylabel('Local Action Index')
+    plt.xlabel('Time (1/50)s')
     plt.savefig(os.path.join(batch_dir, f'local_actions.png'))
     plt.close('all')
     
@@ -304,6 +305,31 @@ def generate_samples_with_all_local_actions(step):
 
     actions = torch.arange(0, raw_model.local_vq.codebook_size, device=device).long()
     samples = raw_model.sample_with_actions((actions.shape[0], max_seq_len, 128), None, actions, guidance=2)
+    
+    B, L, D = samples.shape
+
+    # reconstruct wavform in series (could be smart and reshape into a batch for speed)
+    n_cuts = L // 50
+    sample_cuts = []
+    for cut in tqdm(range(n_cuts), desc='Decoding'):
+        sample_cuts.append(tokenizer.decode(samples[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
+    samples = torch.cat(sample_cuts, dim=-1).cpu().detach().numpy()
+
+    for i in range(B):
+        sample = samples[i].squeeze()
+
+        sf.write(os.path.join(batch_dir, f'local_action_{i}.wav'), sample, 16000)
+
+@torch.no_grad()
+def generate_samples_with_global_and_local_actions(step):
+    batch_dir = os.path.join(out_dir, str(step))
+    os.makedirs(batch_dir, exist_ok=True)
+    batch_dir = os.path.join(batch_dir, 'global_and_local_actions')
+    os.makedirs(batch_dir, exist_ok=True)
+
+    global_actions = torch.cat([torch.arange(0, raw_model.global_vq.codebook_size, device=device), torch.arange(0, raw_model.global_vq.codebook_size, device=device)]).long()
+    local_actions = torch.arange(0, raw_model.local_vq.codebook_size, device=device).long()
+    samples = raw_model.sample_with_actions((local_actions.shape[0], max_seq_len, 128), global_actions, local_actions, guidance=2)
     
     B, L, D = samples.shape
 
@@ -393,6 +419,7 @@ while True:
             generate_inpainting_samples(X, iter_num)
             generate_samples_with_all_global_actions(iter_num)
             generate_samples_with_all_local_actions(iter_num)
+            generate_samples_with_global_and_local_actions(iter_num)
         model.train()
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
