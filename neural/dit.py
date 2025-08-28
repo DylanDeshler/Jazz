@@ -615,6 +615,7 @@ class LAM(nn.Module):
         local_tokens = repeat(local_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
 
         # decode actions
+        print(global_tokens.shape, local_tokens.shape)
         recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': global_tokens + local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance)
         
         # decode random actions
