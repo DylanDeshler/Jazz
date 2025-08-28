@@ -605,14 +605,12 @@ class LAM(nn.Module):
 
         # generate random actions
         random_global_actions_indices = self.generate_random_different_actions(global_action_indices, self.global_vq.codebook_size, device)
-        random_global_action_tokens = self.global_vq.codebook[random_global_actions_indices]
-        random_global_action_tokens = self.global_vq.project_out(random_global_action_tokens)
+        random_global_action_tokens = self.global_vq.get_output_from_indices(random_global_actions_indices)
         random_global_action_tokens = repeat(random_global_action_tokens, "b d -> b t d", t=latents.shape[1])
 
         random_local_actions_indices = self.generate_random_different_actions(local_action_indices, self.local_vq.codebook_size, device)
-        random_local_action_tokens = self.local_vq.codebook[random_local_actions_indices]
-        random_local_action_tokens = self.local_vq.project_out(random_local_action_tokens)
-        local_tokens = repeat(local_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
+        random_local_action_tokens = self.local_vq.get_output_from_indices(random_local_actions_indices)
+        random_local_action_tokens = repeat(random_local_action_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
 
         # decode actions
         print(global_tokens.shape, local_tokens.shape)
