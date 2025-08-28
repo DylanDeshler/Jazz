@@ -648,12 +648,12 @@ class LAM(nn.Module):
 
         noise = torch.randn(shape, device=next(self.parameters()).device)
         if global_action_indices is not None:
-            global_tokens = repeat(self.global_vq.project_out(self.global_vq.codebook[global_action_indices]), "b d -> b t d", t=shape[1])
+            global_tokens = repeat(self.global_vq.get_output_from_indices(global_action_indices), "b d -> b t d", t=shape[1])
         else:
             global_tokens = repeat(self.null_tokens.weight[0], "d -> b t d", b=shape[0], t=shape[1])
         
         if local_action_indices is not None:
-            local_tokens = repeat(self.local_vq.project_out(self.local_vq.codebook[local_action_indices]), "b d -> b t d", t=shape[1])
+            local_tokens = repeat(self.local_vq.get_output_from_indices(local_action_indices), "b d -> b t d", t=shape[1])
         else:
             local_tokens = repeat(self.null_tokens.weight[1], "d -> b t d", b=shape[0], t=shape[1])
 
