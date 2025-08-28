@@ -265,6 +265,7 @@ def generate_lam_vs_random_actions(x, step):
 
     for i in range(B):
         x, y, random_y = x[i].squeeze(), recon[i].squeeze(), random_recon[i].squeeze()
+        print(x.shape, y.shape, random_y.shape)
 
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, 16000)
