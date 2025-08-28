@@ -136,7 +136,7 @@ def get_batch(split='train'):
 iter_num = 0
 best_val_loss = 1e9
 
-ckpt_path = os.path.join('tokenizer10', 'ckpt.pt')
+ckpt_path = os.path.join('tokenizer10', 'ckpt_80000.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 tokenizer_args = checkpoint['model_args']
 
@@ -238,7 +238,7 @@ def generate_samples_with_all_global_actions(step):
     os.makedirs(batch_dir, exist_ok=True)
 
     global_actions = torch.arange(0, raw_model.global_vq.codebook_size, device=device).long()
-    samples = raw_model.sample_with_actions((global_actions.shape[0], max_seq_len, 128), global_actions, None, guidance=2.5)
+    samples = raw_model.sample_with_actions((global_actions.shape[0], max_seq_len, 128), global_actions, None, guidance=2)
     
     B, L, D = samples.shape
 
@@ -253,6 +253,28 @@ def generate_samples_with_all_global_actions(step):
         sample = samples[i].squeeze()
 
         sf.write(os.path.join(batch_dir, f'global_action_{i}.wav'), sample, 16000)
+
+@torch.no_grad()
+def generate_samples_with_all_local_actions(step):
+    batch_dir = os.path.join(out_dir, str(step))
+    os.makedirs(batch_dir, exist_ok=True)
+
+    actions = torch.arange(0, raw_model.local_vq.codebook_size, device=device).long()
+    samples = raw_model.sample_with_actions((actions.shape[0], max_seq_len, 128), None, actions, guidance=2)
+    
+    B, L, D = samples.shape
+
+    # reconstruct wavform in series (could be smart and reshape into a batch for speed)
+    n_cuts = L // 50
+    sample_cuts = []
+    for cut in tqdm(range(n_cuts), desc='Decoding'):
+        sample_cuts.append(tokenizer.decode(samples[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
+    samples = torch.cat(sample_cuts, dim=-1).cpu().detach().numpy()
+
+    for i in range(B):
+        sample = samples[i].squeeze()
+
+        sf.write(os.path.join(batch_dir, f'local_action_{i}.wav'), sample, 16000)
 
 @torch.no_grad()
 def save_samples(xs, ys, random_ys, inpaints, step):
