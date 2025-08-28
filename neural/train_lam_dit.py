@@ -237,7 +237,7 @@ def generate_samples_with_all_global_actions(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
 
-    global_actions = torch.arange(0, raw_model.global_vq.codebook_size, (raw_model.global_vq.codebook_size,), device=device)
+    global_actions = torch.arange(0, raw_model.global_vq.codebook_size, device=device)
     samples = raw_model.sample_with_actions((global_actions.shape[0], max_seq_len, 128), global_actions, raw_model.null_tokens.weight[1].to(dtype), guidance=2.5)
     
     B, L, D = samples.shape
