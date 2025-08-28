@@ -653,7 +653,7 @@ class LAM(nn.Module):
             global_tokens = repeat(self.null_tokens.weight[0], "d -> b t d", b=shape[0], t=shape[1])
         
         if local_action_indices is not None:
-            local_tokens = self.local_vq.project_out(self.local_vq.codebook[local_action_indices])
+            local_tokens = repeat(self.local_vq.project_out(self.local_vq.codebook[local_action_indices]), "b d -> b t d", t=shape[1])
         else:
             local_tokens = repeat(self.null_tokens.weight[1], "d -> b t d", b=shape[0], t=shape[1])
 
