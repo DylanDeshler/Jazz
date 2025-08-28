@@ -449,9 +449,12 @@ class LAM(nn.Module):
         local_codebook_size=16,
         global_codebook_size=8,
         codebook_dim=32,
+        ema_update=False,
+        local_window=1,
         **kwargs,
     ):
         super().__init__()
+        assert max_input_size % local_window == 0
 
         self.encoder = encoder
         self.decoder = decoder
@@ -462,7 +465,10 @@ class LAM(nn.Module):
             nn.LayerNorm(hidden_size),
         )
 
+        self.max_input_size = max_input_size
+        self.local_window = local_window
         self.to_local_action_emb = nn.Sequential(
+            Rearrange("b t d -> b t1 (t2 d)", t1=max_input_size / local_window, t2=local_window),
             nn.Linear(hidden_size, hidden_size),
             nn.LayerNorm(hidden_size)
         )
@@ -470,8 +476,8 @@ class LAM(nn.Module):
         self.global_vq = VectorQuantize(
             dim=hidden_size,
             codebook_size=global_codebook_size,
-            learnable_codebook=True,
-            ema_update=False,
+            learnable_codebook=not ema_update,
+            ema_update=ema_update,
             use_cosine_sim=True,
             commitment_weight=0.25,
             codebook_dim=codebook_dim,
@@ -480,8 +486,8 @@ class LAM(nn.Module):
         self.local_vq = VectorQuantize(
             dim=hidden_size,
             codebook_size=local_codebook_size,
-            learnable_codebook=True,
-            ema_update=False,
+            learnable_codebook=not ema_update,
+            ema_update=ema_update,
             use_cosine_sim=True,
             commitment_weight=0.25,
             codebook_dim=codebook_dim,
@@ -555,36 +561,23 @@ class LAM(nn.Module):
 
         # action embeddings
         global_tokens = self.to_global_action_emb(z)
-        global_tokens, indices, global_vq_loss = self.global_vq(global_tokens, mask=None)
+        global_tokens, global_indices, global_vq_loss = self.global_vq(global_tokens, mask=None)
         if self.training:
             mask = torch.rand(x.shape[0]) < 0.1
             global_tokens[mask.long()] = self.null_tokens.weight[0].to(global_tokens.dtype)
         global_tokens = repeat(global_tokens, "b d -> b t d", t=x.shape[1])
 
         local_tokens = self.to_local_action_emb(z)
-        local_tokens, indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
+        local_tokens, local_indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
         if self.training:
             mask =  torch.rand(x.shape[0], x.shape[1]) < 0.1
             local_tokens[mask.long()] = self.null_tokens.weight[1].to(local_tokens.dtype)
+        local_tokens = repeat(local_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
 
-        return global_tokens, local_tokens
+        return (global_tokens, local_tokens), (global_indices, local_indices), (global_vq_loss, local_vq_loss)
 
     def forward(self, x):
-        z = self.encoder(x)
-
-        # action embeddings
-        global_tokens = self.to_global_action_emb(z)
-        global_tokens, indices, global_vq_loss = self.global_vq(global_tokens, mask=None)
-        if self.training:
-            mask = torch.rand(x.shape[0]) < 0.1
-            global_tokens[mask.long()] = self.null_tokens.weight[0].to(global_tokens.dtype)
-        global_tokens = repeat(global_tokens, "b d -> b t d", t=x.shape[1])
-
-        local_tokens = self.to_local_action_emb(z)
-        local_tokens, indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
-        if self.training:
-            mask = torch.rand(x.shape[0], x.shape[1]) < 0.1
-            local_tokens[mask.long()] = self.null_tokens.weight[1].to(local_tokens.dtype)
+        (global_tokens, local_tokens), _, (global_vq_loss, local_vq_loss) = self.encode_actions(x)
 
         loss = self.diffusion.loss(self.decoder.model, x, net_kwargs={'y': global_tokens + local_tokens}) + global_vq_loss + local_vq_loss
 
@@ -608,15 +601,7 @@ class LAM(nn.Module):
 
         b, c, f, device = *latents.shape, latents.device
 
-        # generate actions
-        z = self.encoder(latents)
-        
-        global_tokens = self.to_global_action_emb(z)
-        global_tokens, global_action_indices, global_vq_loss = self.global_vq(global_tokens, mask=None)
-        global_tokens = repeat(global_tokens, "b d -> b t d", t=latents.shape[1])
-
-        local_tokens = self.to_local_action_emb(z)
-        local_tokens, local_action_indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
+        (global_tokens, local_tokens), (global_action_indices, local_action_indices), _ = self.encode_actions(latents)
 
         # generate random actions
         random_global_actions_indices = self.generate_random_different_actions(global_action_indices, self.global_vq.codebook_size, device)
@@ -637,7 +622,7 @@ class LAM(nn.Module):
         return {'latents': recon_latents, 'global_actions': global_action_indices, 'local_actions': local_action_indices}, {'latents': random_recon_latents, 'global_actions': random_global_actions_indices, 'local_actions': random_local_actions_indices}
     
     def inpaint(self, latents, mask, n_steps=50, guidance=1):
-        global_tokens, local_tokens = self.encode_actions(latents)
+        (global_tokens, local_tokens), _, _ = self.encode_actions(latents)
 
         inpaints = self.sampler.inpaint(self.decoder.model, latents, mask, net_kwargs={'y': global_tokens + local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance)
 
