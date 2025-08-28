@@ -583,7 +583,7 @@ class LAM(nn.Module):
         local_tokens = self.to_local_action_emb(z)
         local_tokens, indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
         if self.training:
-            mask =  torch.rand(x.shape[0], x.shape[1]) < 0.1
+            mask = torch.rand(x.shape[0], x.shape[1]) < 0.1
             local_tokens[mask.long()] = self.null_tokens.weight[1].to(local_tokens.dtype)
 
         loss = self.diffusion.loss(self.decoder.model, x, net_kwargs={'y': global_tokens + local_tokens}) + global_vq_loss + local_vq_loss
@@ -634,7 +634,7 @@ class LAM(nn.Module):
         # decode random actions
         random_recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': random_global_action_tokens + random_local_action_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance)
 
-        return recon_latents, random_recon_latents
+        return {'latents': recon_latents, 'global_actions': global_action_indices, 'local_actions': local_action_indices}, {'latents': random_recon_latents, 'global_actions': random_global_actions_indices, 'local_actions': random_local_actions_indices}
     
     def inpaint(self, latents, mask, n_steps=50, guidance=1):
         global_tokens, local_tokens = self.encode_actions(latents)

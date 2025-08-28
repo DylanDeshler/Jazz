@@ -233,6 +233,45 @@ def get_lr(it):
     return min_lr + coeff * (learning_rate - min_lr)
 
 @torch.no_grad()
+def generate_lam_vs_random_actions(x, step):
+    batch_dir = os.path.join(out_dir, str(step))
+    os.makedirs(batch_dir, exist_ok=True)
+    batch_dir = os.path.join(batch_dir, 'lam_vs_random')
+    os.makedirs(batch_dir, exist_ok=True)
+
+    B, L, D = x.shape
+    recon, random_recon = raw_model.lam_vs_random_actions(x, guidance=2)
+
+    fig, axs = plt.subplots(1, B)
+    for i in range(B):
+        axs.ravel()[i].plot(recon['local_actions'][i])
+        axs.ravel()[i].set_ylabel('Local Action Index')
+    plt.title('Local Action Indicies')
+    plt.savefig(os.path.join(batch_dir, f'local_actions.png'))
+    plt.close('all')
+    
+    recon = recon['latents']
+    random_recon = random_recon['latents']
+    # reconstruct wavform in series (could be smart and reshape into a batch for speed)
+    n_cuts = L // 50
+    x_cuts, y_cuts, random_y_cuts = [], [], []
+    for cut in tqdm(range(n_cuts), desc='Decoding'):
+        x_cuts.append(tokenizer.decode(x[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
+        y_cuts.append(tokenizer.decode(recon[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
+        random_y_cuts.append(tokenizer.decode(random_recon[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
+    x = torch.cat(x_cuts, dim=-1).cpu().detach().numpy()
+    recon = torch.cat(y_cuts, dim=-1).cpu().detach().numpy()
+    random_recon = torch.cat(random_y_cuts, dim=-1).cpu().detach().numpy()
+
+    for i in range(B):
+        x, y, random_y = x[i].squeeze(), recon[i].squeeze(), random_recon[i].squeeze()
+
+        # save .wavs
+        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_y, 16000)
+
+@torch.no_grad()
 def generate_samples_with_all_global_actions(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
@@ -356,7 +395,7 @@ while True:
         X = get_batch('test')[:8]
         model.eval()
         with ctx:
-            recons = raw_model.lam_vs_random_actions(X, guidance=2)
+            generate_lam_vs_random_actions(X, iter_num)
             mask = torch.from_numpy(np.concatenate([np.zeros((X.shape[0], 75)), np.ones((X.shape[0], 100)), np.zeros((X.shape[0], 75))], axis=1)).long().to(device)
             inpaints = raw_model.inpaint(X, mask, guidance=2)
             generate_samples_with_all_global_actions(iter_num)
