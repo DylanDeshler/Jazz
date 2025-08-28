@@ -160,7 +160,7 @@ if init_from == 'scratch':
 elif init_from == 'resume':
     print(f"Resuming training from {out_dir}")
     # resume training from a checkpoint.
-    ckpt_path = os.path.join(out_dir, 'ckpt_80000.pt')
+    ckpt_path = os.path.join(out_dir, 'ckpt.pt')
     checkpoint = torch.load(ckpt_path, map_location=device)
     model_args = checkpoint['model_args']
 
@@ -356,6 +356,7 @@ while True:
             mask = torch.from_numpy(np.concatenate([np.zeros((X.shape[0], 75)), np.ones((X.shape[0], 100)), np.zeros((X.shape[0], 75))], axis=1)).long().to(device)
             inpaints = raw_model.inpaint(X, mask, guidance=2)
             generate_samples_with_all_global_actions(iter_num)
+            generate_samples_with_all_local_actions(iter_num)
         save_samples(X, *recons, inpaints, iter_num)
         model.train()
         losses = estimate_loss()
