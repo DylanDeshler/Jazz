@@ -481,6 +481,7 @@ class LAM(nn.Module):
             use_cosine_sim=True,
             commitment_weight=0.25,
             codebook_dim=codebook_dim,
+            decay=0.999,
         )
 
         self.local_vq = VectorQuantize(
@@ -491,6 +492,7 @@ class LAM(nn.Module):
             use_cosine_sim=True,
             commitment_weight=0.25,
             codebook_dim=codebook_dim,
+            decay=0.999,
         )
 
         self.null_tokens = nn.Embedding(2, hidden_size)
@@ -760,6 +762,12 @@ def DiT_XL_8(**kwargs):
 
 def DiT_L_2(**kwargs):
     return DiTWrapper(depth=24, hidden_size=1024, patch_size=2, num_heads=16, **kwargs)
+
+def Transformer_L_2(**kwargs):
+    return Transformer(depth=24, hidden_size=1024, patch_size=2, num_heads=16, **kwargs)
+
+def LAM_L_2(**kwargs):
+    return LAM(encoder=Transformer_B_2(**kwargs), decoder=DiT_L_2(conditional=True, **kwargs), depth=24, hidden_size=128, patch_size=2, num_heads=16, **kwargs)
 
 def DiT_L_4(**kwargs):
     return DiTWrapper(depth=24, hidden_size=1024, patch_size=4, num_heads=16, **kwargs)
