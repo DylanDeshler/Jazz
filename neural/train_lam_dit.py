@@ -233,6 +233,28 @@ def get_lr(it):
     return min_lr + coeff * (learning_rate - min_lr)
 
 @torch.no_grad()
+def generate_samples_with_all_global_actions(step):
+    batch_dir = os.path.join(out_dir, str(step))
+    os.makedirs(batch_dir, exist_ok=True)
+
+    global_actions = torch.arange(0, raw_model.global_vq.codebook_size, (raw_model.global_vq.codebook_size,), device=device)
+    samples = raw_model.sample_with_actions((global_actions.shape[0], max_seq_len, 128), global_actions, raw_model.null_tokens.weight[1].to(dtype), guidance=2.5)
+    
+    B, L, D = samples.shape
+
+    # reconstruct wavform in series (could be smart and reshape into a batch for speed)
+    n_cuts = L // 50
+    sample_cuts = []
+    for cut in tqdm(range(n_cuts), desc='Decoding'):
+        sample_cuts.append(tokenizer.decode(samples[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
+    samples = torch.cat(sample_cuts, dim=-1).cpu().detach().numpy()
+
+    for i in range(B):
+        sample = samples[i].squeeze()
+
+        sf.write(os.path.join(batch_dir, f'global_action_{i}.wav'), sample, 16000)
+
+@torch.no_grad()
 def save_samples(xs, ys, random_ys, inpaints, step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
@@ -311,6 +333,7 @@ while True:
             recons = raw_model.lam_vs_random_actions(X, guidance=2)
             mask = torch.from_numpy(np.concatenate([np.zeros((X.shape[0], 75)), np.ones((X.shape[0], 100)), np.zeros((X.shape[0], 75))], axis=1)).long().to(device)
             inpaints = raw_model.inpaint(X, mask, guidance=2)
+            generate_samples_with_all_global_actions(iter_num)
         save_samples(X, *recons, inpaints, iter_num)
         model.train()
         losses = estimate_loss()
