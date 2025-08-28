@@ -320,35 +320,29 @@ def generate_samples_with_all_local_actions(step):
         sf.write(os.path.join(batch_dir, f'local_action_{i}.wav'), sample, 16000)
 
 @torch.no_grad()
-def save_samples(xs, ys, random_ys, inpaints, step):
+def generate_inpainting_samples(x, step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
+    batch_dir = os.path.join(batch_dir, 'inpainting')
+    os.makedirs(batch_dir, exist_ok=True)
 
-    assert xs.shape == ys.shape, f'shapes should match but got {xs.shape} != {ys.shape}'
+    mask = torch.from_numpy(np.concatenate([np.zeros((x.shape[0], 75)), np.ones((x.shape[0], 100)), np.zeros((x.shape[0], 75))], axis=1)).long().to(device)
+    inpaints = raw_model.inpaint(x, mask, guidance=2)
 
-    B, L, D = xs.shape
+    B, L, D = x.shape
 
     # reconstruct wavform in series (could be smart and reshape into a batch for speed)
     n_cuts = L // 50
-    x_cuts, y_cuts, random_y_cuts, inpaint_cuts = [], [], [], []
+    inpaint_cuts = [], [], [], []
     for cut in tqdm(range(n_cuts), desc='Decoding'):
-        x_cuts.append(tokenizer.decode(xs[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
-        y_cuts.append(tokenizer.decode(ys[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
-        random_y_cuts.append(tokenizer.decode(random_ys[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
         inpaint_cuts.append(tokenizer.decode(inpaints[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
-    xs = torch.cat(x_cuts, dim=-1).cpu().detach().numpy()
-    ys = torch.cat(y_cuts, dim=-1).cpu().detach().numpy()
-    random_ys = torch.cat(random_y_cuts, dim=-1).cpu().detach().numpy()
     inpaints = torch.cat(inpaint_cuts, dim=-1).cpu().detach().numpy()
 
     for i in range(B):
-        x, y, random_y, inpaint = xs[i].squeeze(), ys[i].squeeze(), random_ys[i].squeeze(), inpaints[i].squeeze()
+        inpaint = inpaints[i].squeeze()
 
         # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_y, 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_inpaint.wav'), inpaint, 16000)
+        sf.write(os.path.join(batch_dir, f'{i}.wav'), inpaint, 16000)
 
 # logging
 if wandb_log and master_process:
@@ -396,11 +390,9 @@ while True:
         model.eval()
         with ctx:
             generate_lam_vs_random_actions(X, iter_num)
-            mask = torch.from_numpy(np.concatenate([np.zeros((X.shape[0], 75)), np.ones((X.shape[0], 100)), np.zeros((X.shape[0], 75))], axis=1)).long().to(device)
-            inpaints = raw_model.inpaint(X, mask, guidance=2)
+            generate_inpainting_samples(X, iter_num)
             generate_samples_with_all_global_actions(iter_num)
             generate_samples_with_all_local_actions(iter_num)
-        save_samples(X, *recons, inpaints, iter_num)
         model.train()
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
