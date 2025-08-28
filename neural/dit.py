@@ -650,12 +650,13 @@ class LAM(nn.Module):
         if global_action_indices is not None:
             global_tokens = self.global_vq.project_out(self.global_vq.codebook[global_action_indices])
         else:
-            global_tokens = self.null_tokens.weight[0]
+            global_tokens = repeat(self.null_tokens.weight[0], "d -> b t d", b=shape[0], t=shape[1])
         
         if local_action_indices is not None:
             local_tokens = self.local_vq.project_out(self.local_vq.codebook[local_action_indices])
         else:
-            local_tokens = self.null_tokens.weight[1]
+            local_tokens = repeat(self.null_tokens.weight[1], "d -> b t d", b=shape[0], t=shape[1])
+        print(global_tokens.shape, local_tokens.shape)
 
         samples = self.sampler.sample(self.decoder.model, shape, n_steps=n_step, net_kwargs={'y': global_tokens + local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(next(self.parameters()).dtype), "d -> b t d", b=shape[0], t=shape[1])}, guidance=guidance, noise=noise)
 
