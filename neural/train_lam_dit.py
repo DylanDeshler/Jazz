@@ -242,7 +242,7 @@ def generate_lam_vs_random_actions(x, step):
     B, L, D = x.shape
     recon, random_recon = raw_model.lam_vs_random_actions(x, guidance=2)
 
-    fig, axs = plt.subplots(1, B)
+    fig, axs = plt.subplots(B, 1)
     for i in range(B):
         axs.ravel()[i].plot(recon['local_actions'][i].cpu().detach().numpy())
         axs.ravel()[i].set_ylabel('Local Action Index')
