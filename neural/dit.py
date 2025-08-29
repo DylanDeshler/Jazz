@@ -538,7 +538,7 @@ class MaskedDiT(nn.Module):
         full_mask = torch.rand(x.shape[0]) < 0.1
         mask[full_mask.long()] = 1
 
-        print(mask.float().min().item(), mask.float().mean().item(), mask.float().std().item(), mask.float().max().item())
+        # print(mask.float().min().item(), mask.float().mean().item(), mask.float().std().item(), mask.float().max().item())
         x[mask] = self.mask_token.weight[0].to(x.dtype)
         return x
 
@@ -554,12 +554,9 @@ class MaskedDiT(nn.Module):
             x = self.mask_tokens(x, mask=mask)
         x = x + self.pos_embed.weight.unsqueeze(0).expand(x.shape)
         t = self.t_embedder(t)                   # (N, D)
-        if y is not None:
-            y = self.y_embedder(y)
-            t = repeat(t, "b d -> b t d", t=y.shape[1])
-            c = t + y
-        else:
-            c = t                                # (N, D)
+        y = self.y_embedder(y)
+        t = repeat(t, "b d -> b t d", t=y.shape[1])
+        c = t + y                            # (N, D)
         for block in self.blocks:
             x = block(x, c)                      # (N, T, D)
         x = self.final_layer(x, c)               # (N, T, patch_size ** 2 * out_channels)
