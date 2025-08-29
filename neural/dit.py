@@ -734,7 +734,7 @@ class MaskedLAM(nn.Module):
         (global_tokens, local_tokens), (global_action_indices, local_action_indices), _ = self.encode_actions(latents)
 
         x_t = torch.randn(latents.shape, device=next(self.parameters()).device)
-        x_t[:] = self.decoder.mask_token.weight[0].to(x_t.device)
+        x_t[:] = self.decoder.model.mask_token.weight[0].to(x_t.device)
 
         # generate random actions
         random_global_actions_indices = self.generate_random_different_actions(global_action_indices, self.global_vq.codebook_size, device)
@@ -757,7 +757,7 @@ class MaskedLAM(nn.Module):
         (global_tokens, local_tokens), _, _ = self.encode_actions(latents)
 
         x_t = torch.randn(latents.shape, device=latents.device)
-        x_t[mask.long()] = self.decoder.mask_token.weight[0].to(latents.dtype)
+        x_t[mask.long()] = self.decoder.model.mask_token.weight[0].to(latents.dtype)
         inpaints = self.sampler.masked_inpaint(self.decoder.model, latents, x_t, mask, net_kwargs={'y': global_tokens + local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance)
 
         return inpaints
@@ -766,7 +766,7 @@ class MaskedLAM(nn.Module):
         assert global_action_indices is not None or local_action_indices is not None
 
         x_t = torch.randn(shape, device=next(self.parameters()).device)
-        x_t[:] = self.decoder.mask_token.weight[0].to(x_t.device)
+        x_t[:] = self.decoder.model.mask_token.weight[0].to(x_t.device)
         if global_action_indices is not None:
             global_tokens = repeat(self.global_vq.get_output_from_indices(global_action_indices), "b d -> b t d", t=shape[1])
         else:
