@@ -412,6 +412,7 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
+        pass
         X = get_batch('test')[:8]
         model.eval()
         with ctx:
