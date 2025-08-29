@@ -364,7 +364,7 @@ def generate_inpainting_samples(x, step):
         inpaint_cuts.append(tokenizer.decode(inpaints[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
         x_cuts.append(tokenizer.decode(x[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
     inpaints = torch.cat(inpaint_cuts, dim=-1).cpu().detach().numpy()
-    x = torch.cat(x, dim=-1).cpu().detach().numpy()
+    x = torch.cat(x_cuts, dim=-1).cpu().detach().numpy()
 
     for i in range(B):
         inpaint = inpaints[i].squeeze()
