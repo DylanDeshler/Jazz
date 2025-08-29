@@ -535,8 +535,11 @@ class MaskedDiT(nn.Module):
         span_mask = span_mask & active
         mask = span_mask.any(dim=1)  # [B, T]
 
-        full_mask = torch.rand(x.shape[0]) < 0.1
+        p = torch.rand(x.shape[0])
+        full_mask = p < 0.15
+        no_mask = p < 0.05
         mask[full_mask.long()] = 1
+        mask[no_mask.long()] = 0
 
         # print(mask.float().min().item(), mask.float().mean().item(), mask.float().std().item(), mask.float().max().item())
         x[mask] = self.mask_token.weight[0].to(x.dtype)
