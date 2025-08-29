@@ -509,7 +509,7 @@ class MaskedDiT(nn.Module):
         
         B, T = x.shape[:2]
         device = x.device
-        N = 2
+        N = 3
         min_len = 25
         max_len = 50 * 3
 
