@@ -535,6 +535,7 @@ class MaskedDiT(nn.Module):
         span_mask = span_mask & active
         mask = span_mask.any(dim=1)  # [B, T]
         print(mask.float().mean())
+        x[mask] = self.mask_token.weight[0]
         return mask
 
     def forward(self, x, t, y=None, mask=None):
@@ -548,7 +549,7 @@ class MaskedDiT(nn.Module):
         if self.training:
             x = self.mask_tokens(x, mask=mask)
         print(x.shape, self.pos_embed.weight.shape)
-        x = x + self.pos_embed.weight
+        x = x + self.pos_embed.weight.unsqueeze(0)
         t = self.t_embedder(t)                   # (N, D)
         if y is not None:
             y = self.y_embedder(y)
