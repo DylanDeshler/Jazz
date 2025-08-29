@@ -45,7 +45,7 @@ save_interval = 10000
 eval_iters = 100
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -247,7 +247,7 @@ def generate_lam_vs_random_actions(x, step):
         axs.ravel()[i].plot(recon['local_actions'][i].cpu().detach().numpy())
     plt.title('Local Action Indicies')
     plt.ylabel('Local Action Index')
-    plt.xlabel('Time (1/50)s')
+    plt.xlabel('Time (1/10)s')
     plt.savefig(os.path.join(batch_dir, f'local_actions.png'))
     plt.close('all')
     

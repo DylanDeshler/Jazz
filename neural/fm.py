@@ -145,3 +145,61 @@ class FMEulerSampler:
                 )
                 x_t = x_t + neg_v * (t_steps[i] - t_steps[i + 1])
         return x_t
+    
+    def masked_sample(
+        self,
+        net,
+        x_t,
+        n_steps,
+        net_kwargs=None,
+        uncond_net_kwargs=None,
+        guidance=1.0,
+    ):
+        device = next(net.parameters()).device
+        t_steps = torch.linspace(1, 0, n_steps + 1, device=device)
+
+        with torch.no_grad():
+            for i in range(n_steps):
+                t = t_steps[i].repeat(x_t.shape[0])
+                neg_v = self.diffusion.get_prediction(
+                    net,
+                    x_t,
+                    t,
+                    net_kwargs=net_kwargs,
+                    uncond_net_kwargs=uncond_net_kwargs,
+                    guidance=guidance,
+                )
+                x_t = x_t + neg_v * (t_steps[i] - t_steps[i + 1])
+        return x_t
+    
+    def masked_inpaint(
+        self,
+        net,
+        z,
+        x_t,
+        mask,
+        n_steps,
+        net_kwargs=None,
+        uncond_net_kwargs=None,
+        guidance=1.0,
+    ):
+        if mask.ndim == 2:
+            mask = mask.unsqueeze(-1)
+        device = next(net.parameters()).device
+        t_steps = torch.linspace(1, 0, n_steps + 1, device=device)
+
+        with torch.no_grad():
+            for i in range(n_steps):
+                t = t_steps[i].repeat(x_t.shape[0])
+                z_t, _ = self.diffusion.add_noise(z, t)
+                x_t = z_t * (1 - mask) + x_t * mask
+                neg_v = self.diffusion.get_prediction(
+                    net,
+                    x_t,
+                    t,
+                    net_kwargs=net_kwargs,
+                    uncond_net_kwargs=uncond_net_kwargs,
+                    guidance=guidance,
+                )
+                x_t = x_t + neg_v * (t_steps[i] - t_steps[i + 1])
+        return x_t
