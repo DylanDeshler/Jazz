@@ -45,7 +45,7 @@ save_interval = 10000
 eval_iters = 100
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -382,7 +382,7 @@ if wandb_log and master_process:
 step1 = 5001
 step2 = 10001
 step3 = 20001
-step4 = 50001
+step4 = 60001
 
 X = get_batch('train') # fetch the very first batch
 t0 = time.time()
@@ -409,6 +409,8 @@ while True:
     if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
         batch_size = 128
     if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
+        gradient_accumulation_steps *= 2
+    if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
         gradient_accumulation_steps *= 2
     
     tokens_trained += batch_size * gradient_accumulation_steps * max_seq_len
