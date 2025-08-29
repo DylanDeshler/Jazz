@@ -504,7 +504,8 @@ class MaskedDiT(nn.Module):
         nn.init.constant_(self.final_layer.linear.weight, 0)
         nn.init.constant_(self.final_layer.linear.bias, 0)
     
-    def mask_tokens(self, x, mask=None, force_mask=False):
+    def mask_tokens(self, x, t, mask=None, force_mask=False):
+        print(t)
         if mask is not None:
             x[mask.long()] = self.mask_token.weight[0].to(x.dtype)
             return x
@@ -551,6 +552,15 @@ class MaskedDiT(nn.Module):
 
             # for k, v in stats.items():
             #     print(k, np.mean(v))
+
+            def exponential_decay(t, lam):
+                t_scaled = t / 1000
+                probs = (torch.exp(-lam * t_scaled) - torch.exp(torch.tensor(-lam))) / (1 - torch.exp(torch.tensor(-lam)))
+                return probs
+
+            probs = exponential_decay(t, 20)
+            mask_row = torch.bernoulli(probs).bool()
+            mask = mask & mask_row
             x[mask] = self.mask_token.weight[0].to(x.dtype)
             return x
         
@@ -564,7 +574,7 @@ class MaskedDiT(nn.Module):
         y: (N, L, C) tensor of class labels
         """
         x = self.x_embedder(x)  # (N, T, D), where T = H * W / patch_size ** 2
-        x = self.mask_tokens(x, mask=mask, force_mask=force_mask)
+        x = self.mask_tokens(x, t, mask=mask, force_mask=force_mask)
         x = x + self.pos_embed.weight.unsqueeze(0).expand(x.shape)
         t = self.t_embedder(t)                   # (N, D)
         y = self.y_embedder(y)
