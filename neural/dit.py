@@ -505,7 +505,6 @@ class MaskedDiT(nn.Module):
         nn.init.constant_(self.final_layer.linear.bias, 0)
     
     def mask_tokens(self, x, t, mask=None, force_mask=False):
-        print(t)
         if mask is not None:
             x[mask.long()] = self.mask_token.weight[0].to(x.dtype)
             return x
