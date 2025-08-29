@@ -544,10 +544,10 @@ class MaskedDiT(nn.Module):
             mask[full_mask.long()] = 1
             mask[no_mask.long()] = 0
             
-            stats['min'].append(mask.float().min(0).mean().item())
+            stats['min'].append(mask.float().min(0)[0].mean().item())
             stats['mean'].append(mask.float().mean(0).mean().item())
             stats['std'].append(mask.float().std(0).mean().item())
-            stats['max'].append(mask.float().max(0).mean().item())
+            stats['max'].append(mask.float().max(0)[0].mean().item())
 
             for k, v in stats.items():
                 print(k, np.mean(v))

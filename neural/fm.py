@@ -200,8 +200,8 @@ class FMEulerSampler:
         with torch.no_grad():
             for i in range(n_steps):
                 if i == 0:
-                    cur_net_kwargs = net_kwargs | {'mask': torch.ones(z.shape).long()}
-                    cur_uncond_net_kwargs = uncond_net_kwargs | {'mask': torch.ones(z.shape).long()}
+                    cur_net_kwargs = net_kwargs | {'mask': mask.long()}
+                    cur_uncond_net_kwargs = uncond_net_kwargs | {'mask': mask.long()}
                 else:
                     cur_net_kwargs = net_kwargs
                     cur_uncond_net_kwargs = uncond_net_kwargs
