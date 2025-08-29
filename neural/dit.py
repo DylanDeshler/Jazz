@@ -514,7 +514,7 @@ class MaskedDiT(nn.Module):
             device = x.device
             N = 2
             min_len = 25
-            max_len = 50 * 3
+            max_len = 50 * 2
 
             # Random number of spans per sample
             num_spans = torch.randint(1, N + 1, (B,), device=device)  # [B]
