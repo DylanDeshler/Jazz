@@ -412,44 +412,43 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        pass
-        # X = get_batch('test')[:8]
-        # model.eval()
-        # with ctx:
-        #     generate_lam_vs_random_actions(X, iter_num)
-        #     generate_inpainting_samples(X, iter_num)
-        #     generate_samples_with_all_global_actions(iter_num)
-        #     generate_samples_with_all_local_actions(iter_num)
-        #     generate_samples_with_global_and_local_actions(iter_num)
-        # model.train()
-        # losses = estimate_loss()
-        # print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-        # if wandb_log:
-        #     wandb.log({
-        #         "iter": iter_num,
-        #         "train/loss": losses['train'],
-        #         "val/loss": losses['val'],
-        #         "lr": lr,
-        #         "mfu": running_mfu*100, # convert to percentage
-        #         "tokens": tokens_trained,
-        #     })
-        # if losses['val'] < best_val_loss or always_save_checkpoint:
-        #     best_val_loss = losses['val']
-        #     if iter_num > 0:
-        #         checkpoint = {
-        #             'model': raw_model.state_dict(),
-        #             'optimizer': optimizer.state_dict(),
-        #             'model_args': model_args,
-        #             'iter_num': iter_num,
-        #             'best_val_loss': best_val_loss,
-        #             'config': config,
-        #             'tokens': tokens_trained,
-        #         }
-        #         print(f"saving checkpoint to {out_dir}")
-        #         torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+        X = get_batch('test')[:8]
+        model.eval()
+        with ctx:
+            generate_lam_vs_random_actions(X, iter_num)
+            generate_inpainting_samples(X, iter_num)
+            generate_samples_with_all_global_actions(iter_num)
+            generate_samples_with_all_local_actions(iter_num)
+            generate_samples_with_global_and_local_actions(iter_num)
+        model.train()
+        losses = estimate_loss()
+        print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        if wandb_log:
+            wandb.log({
+                "iter": iter_num,
+                "train/loss": losses['train'],
+                "val/loss": losses['val'],
+                "lr": lr,
+                "mfu": running_mfu*100, # convert to percentage
+                "tokens": tokens_trained,
+            })
+        if losses['val'] < best_val_loss or always_save_checkpoint:
+            best_val_loss = losses['val']
+            if iter_num > 0:
+                checkpoint = {
+                    'model': raw_model.state_dict(),
+                    'optimizer': optimizer.state_dict(),
+                    'model_args': model_args,
+                    'iter_num': iter_num,
+                    'best_val_loss': best_val_loss,
+                    'config': config,
+                    'tokens': tokens_trained,
+                }
+                print(f"saving checkpoint to {out_dir}")
+                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
 
-        #         if iter_num % save_interval == 0:
-        #             torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
+                if iter_num % save_interval == 0:
+                    torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
     if iter_num == 0 and eval_only:
         break
 
