@@ -248,7 +248,6 @@ class FinalLayer(nn.Module):
         x = self.linear(x)
         return x
 
-
 class DiT(nn.Module):
     """
     Diffusion model with a Transformer backbone.
@@ -436,6 +435,342 @@ class Transformer(nn.Module):
         x = self.final_layer(x)               # (N, T, patch_size ** 2 * out_channels)
         return x
 
+class MaskedDiT(nn.Module):
+    """
+    Diffusion model with a Transformer backbone.
+    """
+    def __init__(
+        self,
+        max_input_size=250,
+        in_channels=128,
+        hidden_size=1152,
+        depth=28,
+        num_heads=16,
+        mlp_ratio=4.0,
+        learn_sigma=False,
+        **kwargs,
+    ):
+        super().__init__()
+        self.learn_sigma = learn_sigma
+        self.in_channels = in_channels
+        self.out_channels = in_channels * 2 if learn_sigma else in_channels
+        self.num_heads = num_heads
+
+        self.x_embedder = nn.Linear(in_channels, hidden_size, bias=True)
+        self.t_embedder = TimestepEmbedder(hidden_size)
+        self.y_embedder = nn.Linear(in_channels, hidden_size, bias=True)
+
+        # Will use fixed sin-cos embedding:
+        self.pos_embed = nn.Embedding(max_input_size, hidden_size)
+        self.mask_token = nn.Embedding(1, hidden_size)
+
+        self.blocks = nn.ModuleList([
+            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+        ])
+        self.final_layer = FinalLayer(hidden_size, self.out_channels)
+        self.initialize_weights()
+
+    def initialize_weights(self):
+        # Initialize transformer layers:
+        def _basic_init(module):
+            if isinstance(module, nn.Linear):
+                torch.nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+        self.apply(_basic_init)
+
+        # Initialize patch_embed like nn.Linear (instead of nn.Conv2d):
+        nn.init.xavier_uniform_(self.x_embedder.weight.data)
+        nn.init.constant_(self.x_embedder.bias, 0)
+
+        # Initialize label embedding proj:
+        nn.init.normal_(self.y_embedder.weight, std=0.02)
+        nn.init.constant_(self.y_embedder.bias, 0)
+
+        # Initialize timestep embedding MLP:
+        nn.init.normal_(self.t_embedder.mlp[0].weight, std=0.02)
+        nn.init.normal_(self.t_embedder.mlp[2].weight, std=0.02)
+
+        # Zero-out adaLN modulation layers in DiT blocks:
+        for block in self.blocks:
+            nn.init.constant_(block.adaLN_modulation[-1].weight, 0)
+            nn.init.constant_(block.adaLN_modulation[-1].bias, 0)
+
+        # Zero-out output layers:
+        nn.init.constant_(self.final_layer.adaLN_modulation[-1].weight, 0)
+        nn.init.constant_(self.final_layer.adaLN_modulation[-1].bias, 0)
+        nn.init.constant_(self.final_layer.linear.weight, 0)
+        nn.init.constant_(self.final_layer.linear.bias, 0)
+    
+    def mask_tokens(self, x, mask=None):
+        if mask is not None:
+            x[mask.long()] = self.mask_token.weight[0]
+            return x
+        
+        B, T = x.shape[:2]
+        device = x.device
+        N = 2
+        min_len = 25
+        max_len = 50 * 3
+
+        # Random number of spans per sample
+        num_spans = torch.randint(1, N + 1, (B,), device=device)  # [B]
+
+        # Random lengths and starts
+        span_lens = torch.randint(min_len, max_len + 1, (B, N), device=device)
+        span_starts = torch.randint(0, T, (B, N), device=device)
+        span_starts = torch.minimum(span_starts, T - span_lens)
+
+        t = torch.arange(T, device=device).view(1, 1, T)
+
+        starts = span_starts.unsqueeze(-1)  # [B, N, 1]
+        lengths = span_lens.unsqueeze(-1)   # [B, N, 1]
+
+        span_mask = (t >= starts) & (t < starts + lengths)  # [B, N, T]
+
+        ids = torch.arange(N, device=device).view(1, N)
+        active = ids < num_spans.view(B, 1)
+        active = active.unsqueeze(-1)  # [B, N, 1]
+
+        span_mask = span_mask & active
+        mask = span_mask.any(dim=1)  # [B, T]
+        print(mask.mean())
+        return mask
+
+    def forward(self, x, t, y=None, mask=None):
+        """
+        Forward pass of DiT.
+        x: (N, L, C) tensor of spatial inputs (images or latent representations of images)
+        t: (N,) tensor of diffusion timesteps
+        y: (N, L, C) tensor of class labels
+        """
+        x = self.x_embedder(x)  # (N, T, D), where T = H * W / patch_size ** 2
+        if self.training:
+            x = self.mask_tokens(x, mask=mask)
+        x = x + self.pos_embed.weight
+        t = self.t_embedder(t)                   # (N, D)
+        if y is not None:
+            y = self.y_embedder(y)
+            # t = repeat(t, "b d -> b t d", t=y.shape[1])
+            print(t.shape, y.shape)
+            c = t + y
+        else:
+            c = t                                # (N, D)
+        for block in self.blocks:
+            x = block(x, c)                      # (N, T, D)
+        x = self.final_layer(x, c)               # (N, T, patch_size ** 2 * out_channels)
+        return x
+
+class MaskedLAM(nn.Module):
+    def __init__(
+        self,
+        encoder,
+        decoder,
+        max_input_size=250,
+        hidden_size=1152,
+        local_codebook_size=16,
+        global_codebook_size=8,
+        codebook_dim=32,
+        ema_update=False,
+        local_window=1,
+        **kwargs,
+    ):
+        super().__init__()
+        assert max_input_size % local_window == 0
+
+        self.encoder = encoder
+        self.decoder = decoder
+
+        self.to_global_action_emb = nn.Sequential(
+            Rearrange("b t d -> b (t d)"),
+            nn.Linear(max_input_size * hidden_size, hidden_size),
+            nn.LayerNorm(hidden_size),
+        )
+
+        self.max_input_size = max_input_size
+        self.local_window = local_window
+        self.to_local_action_emb = nn.Sequential(
+            Rearrange("b (t1 t2) d -> b t1 (t2 d)", t1=max_input_size // local_window, t2=local_window),
+            nn.Linear(local_window * hidden_size, hidden_size),
+            nn.LayerNorm(hidden_size)
+        )
+
+        self.global_vq = VectorQuantize(
+            dim=hidden_size,
+            codebook_size=global_codebook_size,
+            learnable_codebook=not ema_update,
+            ema_update=ema_update,
+            use_cosine_sim=True,
+            commitment_weight=0.25,
+            codebook_dim=codebook_dim,
+            decay=0.999,
+        )
+
+        self.local_vq = VectorQuantize(
+            dim=hidden_size,
+            codebook_size=local_codebook_size,
+            learnable_codebook=not ema_update,
+            ema_update=ema_update,
+            use_cosine_sim=True,
+            commitment_weight=0.25,
+            codebook_dim=codebook_dim,
+            decay=0.999,
+        )
+
+        self.null_tokens = nn.Embedding(2, hidden_size)
+
+        self.initialize_weights()
+        self.encoder.initialize_weights()
+        self.decoder.model.initialize_weights()
+
+        self.diffusion = FM(timescale=1000.0)
+        self.sampler = FMEulerSampler(self.diffusion)
+    
+    def configure_optimizer(self, learning_rate, betas):
+        def seperate_weights_and_biases(module):
+            weights = [p for p in module.parameters() if p.ndim >= 2]
+            biases = [p for p in module.parameters() if p.ndim < 2]
+            return weights, biases
+        def cast(thing):
+            if isinstance(thing, list):
+                return thing
+            if isinstance(thing, nn.Parameter):
+                return [thing]
+            else:
+                return thing.parameters()
+        from muon import MuonWithAuxAdam
+        adam_groups = [self.null_tokens, self.encoder.x_embedder, self.encoder.pos_embed, self.decoder.model.x_embedder, self.decoder.model.t_embedder, self.decoder.model.y_embedder, self.decoder.model.pos_embed, self.decoder.model.final_layer]
+
+        hidden_groups = [self.to_global_action_emb, self.to_local_action_emb, self.global_vq, self.local_vq, 
+                       self.encoder.blocks, self.encoder.final_norm, self.encoder.final_layer,
+                       self.decoder.model.blocks]
+        hidden_groups = [seperate_weights_and_biases(m) for m in hidden_groups]
+        muon_groups = [g[0] for g in hidden_groups if len(g[0]) > 0]
+        hidden_biases = [g[1] for g in hidden_groups if len(g[1]) > 0]
+        muon_groups = [dict(params=cast(g), lr=100 * learning_rate, use_muon=True) for g in muon_groups]
+        adam_groups = [dict(params=cast(g), lr=learning_rate, betas=betas, use_muon=False) for g in adam_groups + hidden_biases]
+
+        param_groups = [*adam_groups, *muon_groups]
+        optimizer = MuonWithAuxAdam(param_groups)
+        for group in optimizer.param_groups:
+            group["initial_lr"] = group["lr"]
+
+        return optimizer
+
+    def initialize_weights(self):
+        # Initialize transformer layers:
+        def _basic_init(module):
+            if isinstance(module, nn.Linear):
+                torch.nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+        self.apply(_basic_init)
+
+        nn.init.normal_(self.null_tokens.weight, std=0.02)
+
+    @torch.no_grad()
+    def encode_action_indices(self, x):
+        z = self.encoder(x)
+
+        global_tokens = self.to_global_action_emb(z)
+        global_tokens, global_indices, global_vq_loss = self.global_vq(global_tokens, mask=None)
+
+        local_tokens = self.to_local_action_emb(z)
+        local_tokens, local_indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
+
+        return global_indices, local_indices
+    
+    def encode_actions(self, x):
+        z = self.encoder(x)
+
+        # action embeddings
+        global_tokens = self.to_global_action_emb(z)
+        global_tokens, global_indices, global_vq_loss = self.global_vq(global_tokens, mask=None)
+        if self.training:
+            mask = torch.rand(x.shape[0]) < 0.1
+            global_tokens[mask.long()] = self.null_tokens.weight[0].to(global_tokens.dtype)
+        global_tokens = repeat(global_tokens, "b d -> b t d", t=x.shape[1])
+
+        local_tokens = self.to_local_action_emb(z)
+        local_tokens, local_indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
+        if self.training:
+            mask =  torch.rand(x.shape[0], x.shape[1]) < 0.1
+            local_tokens[mask.long()] = self.null_tokens.weight[1].to(local_tokens.dtype)
+        local_tokens = repeat(local_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
+
+        return (global_tokens, local_tokens), (global_indices, local_indices), (global_vq_loss, local_vq_loss)
+
+    def forward(self, x):
+        (global_tokens, local_tokens), _, (global_vq_loss, local_vq_loss) = self.encode_actions(x)
+
+        loss = self.diffusion.loss(self.decoder.model, x, net_kwargs={'y': global_tokens + local_tokens}) + global_vq_loss + local_vq_loss
+
+        return loss
+    
+    def generate_random_different_actions(self, actions_indices, codebook_size, device):
+        shape = actions_indices.shape
+        random_actions = torch.randint(0, codebook_size, shape, device=device)
+
+        while torch.any(random_actions == actions_indices):
+            random_actions = torch.where(
+                random_actions == actions_indices,
+                torch.randint(0, codebook_size, shape, device=device),
+                random_actions,
+            )
+
+        return random_actions
+    
+    def lam_vs_random_actions(self, latents, n_steps=50, guidance=1):
+        assert latents.ndim == 3
+
+        b, c, f, device = *latents.shape, latents.device
+
+        (global_tokens, local_tokens), (global_action_indices, local_action_indices), _ = self.encode_actions(latents)
+
+        noise = torch.randn(latents.shape, device=next(self.parameters()).device)
+
+        # generate random actions
+        random_global_actions_indices = self.generate_random_different_actions(global_action_indices, self.global_vq.codebook_size, device)
+        random_global_action_tokens = self.global_vq.get_output_from_indices(random_global_actions_indices)
+        random_global_action_tokens = repeat(random_global_action_tokens, "b d -> b t d", t=latents.shape[1])
+
+        random_local_actions_indices = self.generate_random_different_actions(local_action_indices, self.local_vq.codebook_size, device)
+        random_local_action_tokens = self.local_vq.get_output_from_indices(random_local_actions_indices)
+        random_local_action_tokens = repeat(random_local_action_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
+
+        # decode actions
+        recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': global_tokens + local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance, noise=noise)
+        
+        # decode random actions
+        random_recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': random_global_action_tokens + random_local_action_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance, noise=noise)
+
+        return {'latents': recon_latents, 'global_actions': global_action_indices, 'local_actions': local_action_indices}, {'latents': random_recon_latents, 'global_actions': random_global_actions_indices, 'local_actions': random_local_actions_indices}
+    
+    def inpaint(self, latents, mask, n_steps=50, guidance=1):
+        (global_tokens, local_tokens), _, _ = self.encode_actions(latents)
+
+        inpaints = self.sampler.inpaint(self.decoder.model, latents, mask, net_kwargs={'y': global_tokens + local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance)
+
+        return inpaints
+    
+    def sample_with_actions(self, shape, global_action_indices=None, local_action_indices=None, n_step=50, guidance=1):
+        assert global_action_indices is not None or local_action_indices is not None
+
+        noise = torch.randn(shape, device=next(self.parameters()).device)
+        if global_action_indices is not None:
+            global_tokens = repeat(self.global_vq.get_output_from_indices(global_action_indices), "b d -> b t d", t=shape[1])
+        else:
+            global_tokens = repeat(self.null_tokens.weight[0], "d -> b t d", b=shape[0], t=shape[1])
+        
+        if local_action_indices is not None:
+            local_tokens = repeat(self.local_vq.get_output_from_indices(local_action_indices), "b d -> b t d", t=shape[1])
+        else:
+            local_tokens = repeat(self.null_tokens.weight[1], "d -> b t d", b=shape[0], t=shape[1])
+
+        samples = self.sampler.sample(self.decoder.model, shape, n_steps=n_step, net_kwargs={'y': global_tokens + local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(next(self.parameters()).dtype), "d -> b t d", b=shape[0], t=shape[1])}, guidance=guidance, noise=noise)
+
+        return samples
+
 class LAM(nn.Module):
     """
     Diffusion model with a Transformer backbone.
@@ -605,6 +940,8 @@ class LAM(nn.Module):
 
         (global_tokens, local_tokens), (global_action_indices, local_action_indices), _ = self.encode_actions(latents)
 
+        noise = torch.randn(latents.shape, device=next(self.parameters()).device)
+
         # generate random actions
         random_global_actions_indices = self.generate_random_different_actions(global_action_indices, self.global_vq.codebook_size, device)
         random_global_action_tokens = self.global_vq.get_output_from_indices(random_global_actions_indices)
@@ -615,10 +952,10 @@ class LAM(nn.Module):
         random_local_action_tokens = repeat(random_local_action_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
 
         # decode actions
-        recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': global_tokens + local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance)
+        recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': global_tokens + local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance, noise=noise)
         
         # decode random actions
-        random_recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': random_global_action_tokens + random_local_action_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance)
+        random_recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': random_global_action_tokens + random_local_action_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance, noise=noise)
 
         return {'latents': recon_latents, 'global_actions': global_action_indices, 'local_actions': local_action_indices}, {'latents': random_recon_latents, 'global_actions': random_global_actions_indices, 'local_actions': random_local_actions_indices}
     
@@ -643,7 +980,7 @@ class LAM(nn.Module):
         else:
             local_tokens = repeat(self.null_tokens.weight[1], "d -> b t d", b=shape[0], t=shape[1])
 
-        samples = self.sampler.sample(self.decoder.model, shape, n_steps=n_step, net_kwargs={'y': global_tokens + local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(next(self.parameters()).dtype), "d -> b t d", b=shape[0], t=shape[1])}, guidance=guidance, noise=None)
+        samples = self.sampler.sample(self.decoder.model, shape, n_steps=n_step, net_kwargs={'y': global_tokens + local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(next(self.parameters()).dtype), "d -> b t d", b=shape[0], t=shape[1])}, guidance=guidance, noise=noise)
 
         return samples
     
@@ -669,6 +1006,21 @@ class DiTWrapper(nn.Module):
     def __init__(self, *args, **kwargs):
         super().__init__()
         self.model = DiT(*args, **kwargs)
+
+        self.diffusion = FM(timescale=1000.0)
+        self.sampler = FMEulerSampler(self.diffusion)
+    
+    def forward(self, x):
+        loss = self.diffusion.loss(self.model, x)
+        return loss
+    
+    def sample(self, shape, n_steps=50):
+        return self.sampler.sample(self.model, shape, n_steps)
+
+class MaskedDiTWrapper(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        self.model = MaskedDiT(*args, **kwargs)
 
         self.diffusion = FM(timescale=1000.0)
         self.sampler = FMEulerSampler(self.diffusion)
@@ -778,11 +1130,17 @@ def DiT_L_8(**kwargs):
 def DiT_B_2(**kwargs):
     return DiTWrapper(depth=12, hidden_size=768, patch_size=2, num_heads=12, **kwargs)
 
+def MaskedDiT_B_2(**kwargs):
+    return MaskedDiTWrapper(depth=12, hidden_size=768, patch_size=2, num_heads=12, **kwargs)
+
 def Transformer_B_2(**kwargs):
     return Transformer(depth=12, hidden_size=768, patch_size=2, num_heads=12, **kwargs)
 
 def LAM_B_2(**kwargs):
     return LAM(encoder=Transformer_B_2(**kwargs), decoder=DiT_B_2(conditional=True, **kwargs), depth=12, hidden_size=128, patch_size=2, num_heads=12, **kwargs)
+
+def MaskedLAM_B_2(**kwargs):
+    return MaskedLAM(encoder=Transformer_B_2(**kwargs), decoder=MaskedDiT_B_2(conditional=True, **kwargs), depth=12, hidden_size=128, patch_size=2, num_heads=12, **kwargs)
 
 def DiT_B_4(**kwargs):
     return DiTWrapper(depth=12, hidden_size=768, patch_size=4, num_heads=12, **kwargs)
