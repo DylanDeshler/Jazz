@@ -184,7 +184,6 @@ class FMEulerSampler:
         self,
         net,
         z,
-        shape,
         mask,
         n_steps,
         net_kwargs=None,
@@ -195,18 +194,20 @@ class FMEulerSampler:
         if mask.ndim == 2:
             mask = mask.unsqueeze(-1)
         device = next(net.parameters()).device
-        x_t = torch.randn(shape, device=device) if noise is None else noise
+        x_t = torch.randn(z.shape, device=device) if noise is None else noise
         t_steps = torch.linspace(1, 0, n_steps + 1, device=device)
 
         with torch.no_grad():
             for i in range(n_steps):
                 if i == 0:
-                    cur_net_kwargs = net_kwargs | {'mask': torch.ones(shape).long()}
-                    cur_uncond_net_kwargs = uncond_net_kwargs | {'mask': torch.ones(shape).long()}
+                    cur_net_kwargs = net_kwargs | {'mask': torch.ones(z.shape).long()}
+                    cur_uncond_net_kwargs = uncond_net_kwargs | {'mask': torch.ones(z.shape).long()}
                 else:
                     cur_net_kwargs = net_kwargs
                     cur_uncond_net_kwargs = uncond_net_kwargs
                 t = t_steps[i].repeat(x_t.shape[0])
+                z_t, _ = self.diffusion.add_noise(z, t)
+                x_t = z_t * (1 - mask) + x_t * mask
                 neg_v = self.diffusion.get_prediction(
                     net,
                     x_t,

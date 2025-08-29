@@ -755,9 +755,8 @@ class MaskedLAM(nn.Module):
     def inpaint(self, latents, mask, n_steps=50, guidance=1):
         (global_tokens, local_tokens), _, _ = self.encode_actions(latents)
 
-        x_t = torch.randn(latents.shape, device=latents.device)
-        x_t[mask.long()] = self.decoder.model.mask_token.weight[0].to(latents.dtype)
-        inpaints = self.sampler.masked_inpaint(self.decoder.model, latents, x_t, mask, net_kwargs={'y': global_tokens + local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance)
+        noise = torch.randn(latents.shape, device=next(self.parameters()).device)
+        inpaints = self.sampler.masked_inpaint(self.decoder.model, latents, noise, mask, net_kwargs={'y': global_tokens + local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance)
 
         return inpaints
     
