@@ -435,6 +435,8 @@ class Transformer(nn.Module):
         x = self.final_layer(x)               # (N, T, patch_size ** 2 * out_channels)
         return x
 
+from collections import defaultdict
+stats = defaultdict(list)
 class MaskedDiT(nn.Module):
     """
     Diffusion model with a Transformer backbone.
@@ -502,53 +504,64 @@ class MaskedDiT(nn.Module):
         nn.init.constant_(self.final_layer.linear.weight, 0)
         nn.init.constant_(self.final_layer.linear.bias, 0)
     
-    def mask_tokens(self, x, mask=None):
+    def mask_tokens(self, x, mask=None, force_mask=False):
         if mask is not None:
             x[mask.long()] = self.mask_token.weight[0].to(x.dtype)
             return x
         
-        if not self.training:
+        if self.training or force_mask:
+            B, T = x.shape[:2]
+            device = x.device
+            N = 2
+            min_len = 25
+            max_len = 50 * 3
+
+            # Random number of spans per sample
+            num_spans = torch.randint(1, N + 1, (B,), device=device)  # [B]
+
+            # Random lengths and starts
+            span_lens = torch.randint(min_len, max_len + 1, (B, N), device=device)
+            span_starts = torch.randint(0, T, (B, N), device=device)
+            span_starts = torch.minimum(span_starts, T - span_lens)
+
+            t = torch.arange(T, device=device).view(1, 1, T)
+
+            starts = span_starts.unsqueeze(-1)  # [B, N, 1]
+            lengths = span_lens.unsqueeze(-1)   # [B, N, 1]
+
+            span_mask = (t >= starts) & (t < starts + lengths)  # [B, N, T]
+
+            ids = torch.arange(N, device=device).view(1, N)
+            active = ids < num_spans.view(B, 1)
+            active = active.unsqueeze(-1)  # [B, N, 1]
+
+            span_mask = span_mask & active
+            mask = span_mask.any(dim=1)  # [B, T]
+
+            p = torch.rand(x.shape[0])
+            full_mask = p < 0.15
+            no_mask = p < 0.05
+            mask[full_mask.long()] = 1
+            mask[no_mask.long()] = 0
+
+            def calc_mask_stats(mask):
+                mask = mask.float()
+                
+                stats['min'].append(mask.min(0).mean().item())
+                stats['mean'].append(mask.mean(0).mean().item())
+                stats['std'].append(mask.std(0).mean().item())
+                stats['max'].append(mask.max(0).mean().item())
+                return stats
+
+            stats = calc_mask_stats(mask)
+            for k, v in stats.items():
+                print(k, np.mean(v))
+            x[mask] = self.mask_token.weight[0].to(x.dtype)
             return x
         
-        B, T = x.shape[:2]
-        device = x.device
-        N = 2
-        min_len = 25
-        max_len = 50 * 3
-
-        # Random number of spans per sample
-        num_spans = torch.randint(1, N + 1, (B,), device=device)  # [B]
-
-        # Random lengths and starts
-        span_lens = torch.randint(min_len, max_len + 1, (B, N), device=device)
-        span_starts = torch.randint(0, T, (B, N), device=device)
-        span_starts = torch.minimum(span_starts, T - span_lens)
-
-        t = torch.arange(T, device=device).view(1, 1, T)
-
-        starts = span_starts.unsqueeze(-1)  # [B, N, 1]
-        lengths = span_lens.unsqueeze(-1)   # [B, N, 1]
-
-        span_mask = (t >= starts) & (t < starts + lengths)  # [B, N, T]
-
-        ids = torch.arange(N, device=device).view(1, N)
-        active = ids < num_spans.view(B, 1)
-        active = active.unsqueeze(-1)  # [B, N, 1]
-
-        span_mask = span_mask & active
-        mask = span_mask.any(dim=1)  # [B, T]
-
-        p = torch.rand(x.shape[0])
-        full_mask = p < 0.15
-        no_mask = p < 0.05
-        mask[full_mask.long()] = 1
-        mask[no_mask.long()] = 0
-
-        # print(mask.float().min().item(), mask.float().mean().item(), mask.float().std().item(), mask.float().max().item())
-        x[mask] = self.mask_token.weight[0].to(x.dtype)
         return x
 
-    def forward(self, x, t, y, mask=None):
+    def forward(self, x, t, y, mask=None, force_mask=False):
         """
         Forward pass of DiT.
         x: (N, L, C) tensor of spatial inputs (images or latent representations of images)
@@ -556,7 +569,7 @@ class MaskedDiT(nn.Module):
         y: (N, L, C) tensor of class labels
         """
         x = self.x_embedder(x)  # (N, T, D), where T = H * W / patch_size ** 2
-        x = self.mask_tokens(x, mask=mask)
+        x = self.mask_tokens(x, mask=mask, force_mask=force_mask)
         x = x + self.pos_embed.weight.unsqueeze(0).expand(x.shape)
         t = self.t_embedder(t)                   # (N, D)
         y = self.y_embedder(y)
@@ -706,10 +719,10 @@ class MaskedLAM(nn.Module):
 
         return (global_tokens, local_tokens), (global_indices, local_indices), (global_vq_loss, local_vq_loss)
 
-    def forward(self, x):
+    def forward(self, x, force_mask=False):
         (global_tokens, local_tokens), _, (global_vq_loss, local_vq_loss) = self.encode_actions(x)
 
-        loss = self.diffusion.loss(self.decoder.model, x, net_kwargs={'y': global_tokens + local_tokens}) + global_vq_loss + local_vq_loss
+        loss = self.diffusion.loss(self.decoder.model, x, net_kwargs={'y': global_tokens + local_tokens, 'force_mask': force_mask}) + global_vq_loss + local_vq_loss
 
         return loss
     
