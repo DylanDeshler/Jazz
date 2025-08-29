@@ -367,11 +367,11 @@ def generate_inpainting_samples(x, step):
     x = torch.cat(x_cuts, dim=-1).cpu().detach().numpy()
 
     for i in range(B):
-        inpaint = inpaints[i].squeeze()
+        inpaint, x_ = inpaints[i].squeeze(), x[i].squeeze()
 
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}.wav'), inpaint, 16000)
-        sf.write(os.path.join(batch_dir, f'{i}.wav'), x, 16000)
+        sf.write(os.path.join(batch_dir, f'{i}.wav'), x_, 16000)
 
 # logging
 if wandb_log and master_process:
