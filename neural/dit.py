@@ -538,7 +538,7 @@ class MaskedDiT(nn.Module):
         full_mask = torch.rand(x.shape[0]) < 0.1
         mask[full_mask.long()] = 1
 
-        print(mask.float().min(), mask.float().mean(), mask.float().std(), mask.float().max())
+        print(mask.float().min().item(), mask.float().mean().item(), mask.float().std().item(), mask.float().max().item())
         x[mask] = self.mask_token.weight[0].to(x.dtype)
         return x
 
