@@ -734,6 +734,7 @@ class MaskedLAM(nn.Module):
         (global_tokens, local_tokens), (global_action_indices, local_action_indices), _ = self.encode_actions(latents)
 
         x_t = repeat(self.decoder.model.mask_token.weight[0].to(latents.device), "d -> b t d", b=b, t=t)
+        print(x_t.shape)
 
         # generate random actions
         random_global_actions_indices = self.generate_random_different_actions(global_action_indices, self.global_vq.codebook_size, device)
