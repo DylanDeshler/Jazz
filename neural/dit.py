@@ -559,7 +559,8 @@ class MaskedDiT(nn.Module):
 
             probs = exponential_decay(t, 20)
             mask_row = torch.bernoulli(probs).bool()
-            mask = mask & mask_row
+            print(mask.shape, mask_row.shape)
+            mask = mask & mask_row.unsqueeze(-1)
             x[mask] = self.mask_token.weight[0].to(x.dtype)
             return x
         
