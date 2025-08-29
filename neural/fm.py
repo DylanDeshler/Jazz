@@ -35,6 +35,7 @@ class FM:
         
         if t is None:
             t = torch.rand(x.shape[0], device=x.device)
+        print(t.shape, x.shape)
         x_t, noise = self.add_noise(x, t)
         
         pred = net(x_t, t=t * self.timescale, **net_kwargs)
