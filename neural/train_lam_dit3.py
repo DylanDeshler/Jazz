@@ -359,16 +359,19 @@ def generate_inpainting_samples(x, step):
 
     # reconstruct wavform in series (could be smart and reshape into a batch for speed)
     n_cuts = L // 50
-    inpaint_cuts = []
+    x_cuts, inpaint_cuts = [], []
     for cut in tqdm(range(n_cuts), desc='Decoding'):
         inpaint_cuts.append(tokenizer.decode(inpaints[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
+        x_cuts.append(tokenizer.decode(x[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
     inpaints = torch.cat(inpaint_cuts, dim=-1).cpu().detach().numpy()
+    x = torch.cat(x, dim=-1).cpu().detach().numpy()
 
     for i in range(B):
         inpaint = inpaints[i].squeeze()
 
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}.wav'), inpaint, 16000)
+        sf.write(os.path.join(batch_dir, f'{i}.wav'), x, 16000)
 
 # logging
 if wandb_log and master_process:
