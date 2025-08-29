@@ -733,8 +733,7 @@ class MaskedLAM(nn.Module):
 
         (global_tokens, local_tokens), (global_action_indices, local_action_indices), _ = self.encode_actions(latents)
 
-        x_t = repeat(self.decoder.model.mask_token.weight[0].to(latents.device), "d -> b t d", b=b, t=t)
-        print(x_t.shape)
+        noise = torch.randn(latents.shape, device=next(self.parameters()).device)
 
         # generate random actions
         random_global_actions_indices = self.generate_random_different_actions(global_action_indices, self.global_vq.codebook_size, device)
@@ -746,10 +745,10 @@ class MaskedLAM(nn.Module):
         random_local_action_tokens = repeat(random_local_action_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
 
         # decode actions
-        recon_latents = self.sampler.masked_sample(self.decoder.model, x_t, net_kwargs={'y': global_tokens + local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance)
+        recon_latents = self.sampler.masked_sample(self.decoder.model, latents.shape, net_kwargs={'y': global_tokens + local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance, noise=noise)
         
         # decode random actions
-        random_recon_latents = self.sampler.masked_sample(self.decoder.model, x_t, net_kwargs={'y': random_global_action_tokens + random_local_action_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance)
+        random_recon_latents = self.sampler.masked_sample(self.decoder.model, latents.shape, net_kwargs={'y': random_global_action_tokens + random_local_action_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance, noise=noise)
 
         return {'latents': recon_latents, 'global_actions': global_action_indices, 'local_actions': local_action_indices}, {'latents': random_recon_latents, 'global_actions': random_global_actions_indices, 'local_actions': random_local_actions_indices}
     
@@ -765,7 +764,7 @@ class MaskedLAM(nn.Module):
     def sample_with_actions(self, shape, global_action_indices=None, local_action_indices=None, n_step=50, guidance=1):
         assert global_action_indices is not None or local_action_indices is not None
 
-        x_t = repeat(self.decoder.model.mask_token.weight[0].to(next(self.parameters).device), "d -> b t d", b=shape[0], t=shape[1])
+        noise = torch.randn(shape, device=next(self.parameters()).device)
         if global_action_indices is not None:
             global_tokens = repeat(self.global_vq.get_output_from_indices(global_action_indices), "b d -> b t d", t=shape[1])
         else:
@@ -776,7 +775,7 @@ class MaskedLAM(nn.Module):
         else:
             local_tokens = repeat(self.null_tokens.weight[1], "d -> b t d", b=shape[0], t=shape[1])
 
-        samples = self.sampler.masked_sample(self.decoder.model, x_t, n_steps=n_step, net_kwargs={'y': global_tokens + local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(next(self.parameters()).dtype), "d -> b t d", b=shape[0], t=shape[1])}, guidance=guidance)
+        samples = self.sampler.masked_sample(self.decoder.model, shape, n_steps=n_step, net_kwargs={'y': global_tokens + local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(next(self.parameters()).dtype), "d -> b t d", b=shape[0], t=shape[1])}, guidance=guidance, noise=noise)
 
         return samples
 
