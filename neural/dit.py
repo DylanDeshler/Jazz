@@ -544,13 +544,13 @@ class MaskedDiT(nn.Module):
             mask[full_mask] = 1
             mask[no_mask] = 0
             
-            stats['min'].append(mask.float().min(0)[0].mean().item())
-            stats['mean'].append(mask[~full_mask & ~no_mask].float().mean(0).mean().item())
-            stats['std'].append(mask[~full_mask & ~no_mask].float().std(0).mean().item())
-            stats['max'].append(mask.float().max(0)[0].mean().item())
+            # stats['min'].append(mask.float().min(0)[0].mean().item())
+            # stats['mean'].append(mask[~full_mask & ~no_mask].float().mean(0).mean().item())
+            # stats['std'].append(mask[~full_mask & ~no_mask].float().std(0).mean().item())
+            # stats['max'].append(mask.float().max(0)[0].mean().item())
 
-            for k, v in stats.items():
-                print(k, np.mean(v))
+            # for k, v in stats.items():
+            #     print(k, np.mean(v))
             x[mask] = self.mask_token.weight[0].to(x.dtype)
             return x
         
