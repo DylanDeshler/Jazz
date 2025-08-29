@@ -549,7 +549,7 @@ class MaskedDiT(nn.Module):
         if self.training:
             x = self.mask_tokens(x, mask=mask)
         print(x.shape, self.pos_embed.weight.shape)
-        x = x + self.pos_embed.weight.unsqueeze(0).expand((x.shape, 1, 1))
+        x = x + self.pos_embed.weight.unsqueeze(0).expand((x.shape[0], 1, 1))
         t = self.t_embedder(t)                   # (N, D)
         if y is not None:
             y = self.y_embedder(y)
