@@ -551,8 +551,7 @@ class MaskedDiT(nn.Module):
         t = self.t_embedder(t)                   # (N, D)
         if y is not None:
             y = self.y_embedder(y)
-            # t = repeat(t, "b d -> b t d", t=y.shape[1])
-            print(t.shape, y.shape)
+            t = repeat(t, "b d -> b t d", t=y.shape[1])
             c = t + y
         else:
             c = t                                # (N, D)
