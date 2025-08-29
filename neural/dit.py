@@ -536,7 +536,7 @@ class MaskedDiT(nn.Module):
         mask = span_mask.any(dim=1)  # [B, T]
         print(mask.float().mean())
         x[mask] = self.mask_token.weight[0].to(x.dtype)
-        return mask
+        return x
 
     def forward(self, x, t, y=None, mask=None):
         """
