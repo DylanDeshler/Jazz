@@ -539,14 +539,14 @@ class MaskedDiT(nn.Module):
             mask = span_mask.any(dim=1)  # [B, T]
 
             p = torch.rand(x.shape[0])
-            full_mask = p < 0.15
-            no_mask = p < 0.05
-            mask[full_mask.long()] = 1
-            mask[no_mask.long()] = 0
+            full_mask = (p < 0.15).long()
+            no_mask = (p < 0.05).long()
+            mask[full_mask] = 1
+            mask[no_mask] = 0
             
             stats['min'].append(mask.float().min(0)[0].mean().item())
-            stats['mean'].append(mask.float().mean(0).mean().item())
-            stats['std'].append(mask.float().std(0).mean().item())
+            stats['mean'].append(mask[~full_mask & ~no_mask].float().mean(0).mean().item())
+            stats['std'].append(mask[~full_mask & ~no_mask].float().std(0).mean().item())
             stats['max'].append(mask.float().max(0)[0].mean().item())
 
             for k, v in stats.items():
