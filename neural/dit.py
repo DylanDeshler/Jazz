@@ -504,7 +504,7 @@ class MaskedDiT(nn.Module):
     
     def mask_tokens(self, x, mask=None):
         if mask is not None:
-            x[mask.long()] = self.mask_token.weight[0]
+            x[mask.long()] = self.mask_token.weight[0].to(x.dtype)
             return x
         
         B, T = x.shape[:2]
@@ -535,7 +535,7 @@ class MaskedDiT(nn.Module):
         span_mask = span_mask & active
         mask = span_mask.any(dim=1)  # [B, T]
         print(mask.float().mean())
-        x[mask] = self.mask_token.weight[0]
+        x[mask] = self.mask_token.weight[0].to(x.dtype)
         return mask
 
     def forward(self, x, t, y=None, mask=None):
