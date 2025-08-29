@@ -524,12 +524,12 @@ class MaskedDiT(nn.Module):
             span_starts = torch.randint(0, T, (B, N), device=device)
             span_starts = torch.minimum(span_starts, T - span_lens)
 
-            t = torch.arange(T, device=device).view(1, 1, T)
+            t_range = torch.arange(T, device=device).view(1, 1, T)
 
             starts = span_starts.unsqueeze(-1)  # [B, N, 1]
             lengths = span_lens.unsqueeze(-1)   # [B, N, 1]
 
-            span_mask = (t >= starts) & (t < starts + lengths)  # [B, N, T]
+            span_mask = (t_range >= starts) & (t_range < starts + lengths)  # [B, N, T]
 
             ids = torch.arange(N, device=device).view(1, N)
             active = ids < num_spans.view(B, 1)
