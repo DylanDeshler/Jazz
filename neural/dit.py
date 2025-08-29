@@ -548,7 +548,7 @@ class MaskedDiT(nn.Module):
         x[mask] = self.mask_token.weight[0].to(x.dtype)
         return x
 
-    def forward(self, x, t, y=None, mask=None):
+    def forward(self, x, t, y, mask=None):
         """
         Forward pass of DiT.
         x: (N, L, C) tensor of spatial inputs (images or latent representations of images)
