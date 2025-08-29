@@ -729,12 +729,11 @@ class MaskedLAM(nn.Module):
     def lam_vs_random_actions(self, latents, n_steps=50, guidance=1):
         assert latents.ndim == 3
 
-        b, c, f, device = *latents.shape, latents.device
+        b, t, c, device = *latents.shape, latents.device
 
         (global_tokens, local_tokens), (global_action_indices, local_action_indices), _ = self.encode_actions(latents)
 
-        x_t = torch.randn(latents.shape, device=next(self.parameters()).device)
-        x_t[:] = self.decoder.model.mask_token.weight[0].to(x_t.device)
+        x_t = repeat(self.decoder.model.mask_token.weight[0].to(x_t.device), "d -> b t d", b=b, t=t)
 
         # generate random actions
         random_global_actions_indices = self.generate_random_different_actions(global_action_indices, self.global_vq.codebook_size, device)
@@ -765,8 +764,7 @@ class MaskedLAM(nn.Module):
     def sample_with_actions(self, shape, global_action_indices=None, local_action_indices=None, n_step=50, guidance=1):
         assert global_action_indices is not None or local_action_indices is not None
 
-        x_t = torch.randn(shape, device=next(self.parameters()).device)
-        x_t[:] = self.decoder.model.mask_token.weight[0].to(x_t.device)
+        x_t = repeat(self.decoder.model.mask_token.weight[0].to(x_t.device), "d -> b t d", b=shape[0], t=shape[1])
         if global_action_indices is not None:
             global_tokens = repeat(self.global_vq.get_output_from_indices(global_action_indices), "b d -> b t d", t=shape[1])
         else:
