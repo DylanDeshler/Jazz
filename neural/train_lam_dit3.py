@@ -296,6 +296,34 @@ def generate_samples_with_all_local_actions(step):
 
         sf.write(os.path.join(batch_dir, f'local_action_{i}.wav'), sample, 16000)
 
+def psnr(y_true, y_pred, max_val=1.):
+    mse = torch.mean((y_true - y_pred) ** 2, dim=1)  # (B,)
+    res = 10 * torch.log10((max_val ** 2) / (mse + 1e-8))
+    return res
+
+def recon_vs_random_psnr(x):
+    B, L, D = x.shape
+    recon, random_recon = raw_model.lam_vs_random_actions(x, guidance=2)
+    
+    recon = recon['latents']
+    random_recon = random_recon['latents']
+    # reconstruct wavform in series (could be smart and reshape into a batch for speed)
+    total_cuts = L // 50
+    n_cuts = 2
+    x_cuts, y_cuts, random_y_cuts = [], [], []
+    for cut in tqdm(range(n_cuts), desc='Decoding'):
+        x_cuts.append(tokenizer.decode(x[:, (total_cuts - n_cuts + cut) * 50: (total_cuts - n_cuts + cut + 1) * 50].permute(0, 2, 1)))
+        y_cuts.append(tokenizer.decode(recon[:, (total_cuts - n_cuts + cut) * 50: (total_cuts - n_cuts + cut + 1) * 50].permute(0, 2, 1)))
+        random_y_cuts.append(tokenizer.decode(random_recon[:, (total_cuts - n_cuts + cut) * 50: (total_cuts - n_cuts + cut + 1) * 50].permute(0, 2, 1)))
+    x = torch.cat(x_cuts, dim=-1).cpu().detach().numpy()
+    recon = torch.cat(y_cuts, dim=-1).cpu().detach().numpy()
+    random_recon = torch.cat(random_y_cuts, dim=-1).cpu().detach().numpy()
+
+    recon_psnr = psnr(x, recon)
+    random_psnr = psnr(x, random_recon)
+
+    return torch.mean(recon_psnr - random_psnr).item()
+
 # logging
 if wandb_log and master_process:
     import wandb
@@ -350,7 +378,7 @@ while True:
             # generate_samples_with_global_and_local_actions(iter_num)
         model.train()
         losses = estimate_loss()
-        print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, delta PSNR {recon_vs_random_psnr(X):.3f}")
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
