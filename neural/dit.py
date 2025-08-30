@@ -451,7 +451,7 @@ class CausalLAM(nn.Module):
         assert max_input_size % local_window == 0
 
         self.encoder = Transformer(depth=depth, hidden_size=hidden_size, num_heads=num_heads)
-        self.decoder = DiTWrapper(depth=depth, hidden_size=hidden_size, num_heads=num_heads)
+        self.decoder = DiTWrapper(depth=depth, hidden_size=hidden_size, num_heads=num_heads, conditional=True)
 
         self.max_input_size = max_input_size
         self.local_window = local_window
