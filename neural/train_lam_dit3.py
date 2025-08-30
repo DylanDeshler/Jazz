@@ -212,7 +212,7 @@ def estimate_loss():
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
             X = get_batch(split)
             with ctx:
-                loss = model(X, force_mask=True)
+                loss = model(X)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
