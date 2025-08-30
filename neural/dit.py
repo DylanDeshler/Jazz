@@ -1336,6 +1336,9 @@ def MaskedLAM_B_2(**kwargs):
 def CausalLAM_L(**kwargs):
     return CausalLAM(depth=24, hidden_size=1024, num_heads=16, **kwargs)
 
+def CausalLAM_M(**kwargs):
+    return CausalLAM(depth=20, hidden_size=1024, num_heads=16, **kwargs)
+
 def CausalLAM_B(**kwargs):
     return CausalLAM(depth=12, hidden_size=768, num_heads=12, **kwargs)
 
