@@ -547,6 +547,8 @@ class CausalLAM(nn.Module):
         causal_plus_1_mask = torch.tril(torch.ones((x.shape[1], x.shape[1]), device=x.device, dtype=torch.bool), diagonal=1)
         local_tokens, _, local_vq_loss = self.encode_actions(x, attn_mask=causal_plus_1_mask)
 
+        print(x.shape, local_tokens.shape)
+
         causal_mask = torch.tril(torch.ones((x.shape[1], x.shape[1]), device=x.device, dtype=torch.bool), diagonal=0)
         loss = self.diffusion.loss(self.decoder.model, x, net_kwargs={'y': local_tokens, 'attn_mask': causal_mask}) + local_vq_loss
 
