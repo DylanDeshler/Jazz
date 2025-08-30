@@ -531,7 +531,9 @@ class CausalLAM(nn.Module):
         return local_indices
     
     def encode_actions(self, x, attn_mask=None):
+        print(x.shape)
         z = self.encoder(x, attn_mask=attn_mask)
+        print(z.shape)
 
         # action embeddings
         local_tokens = self.to_local_action_emb(z)
