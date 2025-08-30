@@ -471,7 +471,7 @@ class CausalLAM(nn.Module):
             codebook_dim=codebook_dim,
         )
 
-        self.null_tokens = nn.Embedding(1, hidden_size)
+        self.null_tokens = nn.Embedding(1, in_channels)
 
         self.initialize_weights()
         self.encoder.initialize_weights()
