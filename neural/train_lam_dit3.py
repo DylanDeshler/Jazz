@@ -29,7 +29,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from dit import CausalLAM_B as dit
+from dit import CausalLAM_M as dit
 from dito import DiTo as Tokenizer
 
 import matplotlib.pyplot as plt
@@ -45,7 +45,7 @@ save_interval = 10000
 eval_iters = 100
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -53,7 +53,7 @@ wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
-batch_size = 48# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 128# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 max_seq_len = 50 * 5
 codebook_size = 16
