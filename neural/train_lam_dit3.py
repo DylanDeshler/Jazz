@@ -29,7 +29,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from dit import CausalLAM_M as dit
+from dit import CausalLAM_B as dit
 from dito import DiTo as Tokenizer
 
 import matplotlib.pyplot as plt
@@ -160,7 +160,7 @@ if init_from == 'scratch':
 elif init_from == 'resume':
     print(f"Resuming training from {out_dir}")
     # resume training from a checkpoint.
-    ckpt_path = os.path.join(out_dir, 'ckpt_20000.pt')
+    ckpt_path = os.path.join(out_dir, 'ckpt_30000.pt')
     checkpoint = torch.load(ckpt_path, map_location=device)
     model_args = checkpoint['model_args']
 
