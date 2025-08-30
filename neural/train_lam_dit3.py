@@ -271,6 +271,11 @@ def generate_lam_vs_random_actions(x, step):
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), og, 16000)
         sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, 16000)
         sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_y, 16000)
+    
+    recon_psnr = psnr(x[-2 * 16000:], recon[-2 * 16000:])
+    random_psnr = psnr(x[-2 * 16000:], random_recon[-2 * 16000:])
+
+    return torch.mean(recon_psnr - random_psnr).item()
 
 @torch.no_grad()
 def generate_samples_with_all_local_actions(step):
@@ -297,32 +302,9 @@ def generate_samples_with_all_local_actions(step):
         sf.write(os.path.join(batch_dir, f'local_action_{i}.wav'), sample, 16000)
 
 def psnr(y_true, y_pred, max_val=1.):
-    mse = torch.mean((y_true - y_pred) ** 2, dim=1)  # (B,)
-    res = 10 * torch.log10((max_val ** 2) / (mse + 1e-8))
+    mse = np.mean((y_true - y_pred) ** 2, axis=1)  # (B,)
+    res = 10 * np.log10((max_val ** 2) / (mse + 1e-8))
     return res
-
-def recon_vs_random_psnr(x):
-    B, L, D = x.shape
-    recon, random_recon = raw_model.lam_vs_random_actions(x, guidance=2)
-    
-    recon = recon['latents']
-    random_recon = random_recon['latents']
-    # reconstruct wavform in series (could be smart and reshape into a batch for speed)
-    total_cuts = L // 50
-    n_cuts = 2
-    x_cuts, y_cuts, random_y_cuts = [], [], []
-    for cut in tqdm(range(n_cuts), desc='Decoding'):
-        x_cuts.append(tokenizer.decode(x[:, (total_cuts - n_cuts + cut) * 50: (total_cuts - n_cuts + cut + 1) * 50].permute(0, 2, 1)))
-        y_cuts.append(tokenizer.decode(recon[:, (total_cuts - n_cuts + cut) * 50: (total_cuts - n_cuts + cut + 1) * 50].permute(0, 2, 1)))
-        random_y_cuts.append(tokenizer.decode(random_recon[:, (total_cuts - n_cuts + cut) * 50: (total_cuts - n_cuts + cut + 1) * 50].permute(0, 2, 1)))
-    x = torch.cat(x_cuts, dim=-1).cpu().detach().numpy()
-    recon = torch.cat(y_cuts, dim=-1).cpu().detach().numpy()
-    random_recon = torch.cat(random_y_cuts, dim=-1).cpu().detach().numpy()
-
-    recon_psnr = psnr(x, recon)
-    random_psnr = psnr(x, random_recon)
-
-    return torch.mean(recon_psnr - random_psnr).item()
 
 # logging
 if wandb_log and master_process:
@@ -371,14 +353,14 @@ while True:
         X = get_batch('test')[:8]
         model.eval()
         with ctx:
-            generate_lam_vs_random_actions(X, iter_num)
+            delta_psnr = generate_lam_vs_random_actions(X, iter_num)
             # generate_inpainting_samples(X, iter_num)
             # generate_samples_with_all_global_actions(iter_num)
             generate_samples_with_all_local_actions(iter_num)
             # generate_samples_with_global_and_local_actions(iter_num)
         model.train()
         losses = estimate_loss()
-        print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, delta PSNR {recon_vs_random_psnr(X):.3f}")
+        print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, delta PSNR {delta_psnr:.3f}")
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
