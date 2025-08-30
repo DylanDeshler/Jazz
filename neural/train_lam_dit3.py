@@ -273,30 +273,6 @@ def generate_lam_vs_random_actions(x, step):
         sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_y, 16000)
 
 @torch.no_grad()
-def generate_samples_with_all_global_actions(step):
-    batch_dir = os.path.join(out_dir, str(step))
-    os.makedirs(batch_dir, exist_ok=True)
-    batch_dir = os.path.join(batch_dir, 'global_actions')
-    os.makedirs(batch_dir, exist_ok=True)
-
-    global_actions = torch.arange(0, raw_model.global_vq.codebook_size, device=device).long()
-    samples = raw_model.sample_with_actions((global_actions.shape[0], max_seq_len, 128), global_actions, None, guidance=2)
-    
-    B, L, D = samples.shape
-
-    # reconstruct wavform in series (could be smart and reshape into a batch for speed)
-    n_cuts = L // 50
-    sample_cuts = []
-    for cut in tqdm(range(n_cuts), desc='Decoding'):
-        sample_cuts.append(tokenizer.decode(samples[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
-    samples = torch.cat(sample_cuts, dim=-1).cpu().detach().numpy()
-
-    for i in range(B):
-        sample = samples[i].squeeze()
-
-        sf.write(os.path.join(batch_dir, f'global_action_{i}.wav'), sample, 16000)
-
-@torch.no_grad()
 def generate_samples_with_all_local_actions(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
@@ -304,7 +280,7 @@ def generate_samples_with_all_local_actions(step):
     os.makedirs(batch_dir, exist_ok=True)
 
     actions = torch.arange(0, raw_model.local_vq.codebook_size, device=device).long()
-    samples = raw_model.sample_with_actions((actions.shape[0], max_seq_len, 128), None, actions, guidance=2)
+    samples = raw_model.sample_with_actions((actions.shape[0], max_seq_len, 128), actions, guidance=2)
     
     B, L, D = samples.shape
 
@@ -319,59 +295,6 @@ def generate_samples_with_all_local_actions(step):
         sample = samples[i].squeeze()
 
         sf.write(os.path.join(batch_dir, f'local_action_{i}.wav'), sample, 16000)
-
-@torch.no_grad()
-def generate_samples_with_global_and_local_actions(step):
-    batch_dir = os.path.join(out_dir, str(step))
-    os.makedirs(batch_dir, exist_ok=True)
-    batch_dir = os.path.join(batch_dir, 'global_and_local_actions')
-    os.makedirs(batch_dir, exist_ok=True)
-
-    global_actions = torch.cat([torch.arange(0, raw_model.global_vq.codebook_size, device=device), torch.arange(0, raw_model.global_vq.codebook_size, device=device)]).long()
-    local_actions = torch.arange(0, raw_model.local_vq.codebook_size, device=device).long()
-    samples = raw_model.sample_with_actions((local_actions.shape[0], max_seq_len, 128), global_actions, local_actions, guidance=2)
-    
-    B, L, D = samples.shape
-
-    # reconstruct wavform in series (could be smart and reshape into a batch for speed)
-    n_cuts = L // 50
-    sample_cuts = []
-    for cut in tqdm(range(n_cuts), desc='Decoding'):
-        sample_cuts.append(tokenizer.decode(samples[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
-    samples = torch.cat(sample_cuts, dim=-1).cpu().detach().numpy()
-
-    for i in range(B):
-        sample = samples[i].squeeze()
-
-        sf.write(os.path.join(batch_dir, f'local_action_{i}.wav'), sample, 16000)
-
-@torch.no_grad()
-def generate_inpainting_samples(x, step):
-    batch_dir = os.path.join(out_dir, str(step))
-    os.makedirs(batch_dir, exist_ok=True)
-    batch_dir = os.path.join(batch_dir, 'inpainting')
-    os.makedirs(batch_dir, exist_ok=True)
-
-    mask = torch.from_numpy(np.concatenate([np.zeros((x.shape[0], 75)), np.ones((x.shape[0], 100)), np.zeros((x.shape[0], 75))], axis=1)).long().to(device)
-    inpaints = raw_model.inpaint(x, mask, guidance=2)
-
-    B, L, D = x.shape
-
-    # reconstruct wavform in series (could be smart and reshape into a batch for speed)
-    n_cuts = L // 50
-    x_cuts, inpaint_cuts = [], []
-    for cut in tqdm(range(n_cuts), desc='Decoding'):
-        inpaint_cuts.append(tokenizer.decode(inpaints[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
-        x_cuts.append(tokenizer.decode(x[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
-    inpaints = torch.cat(inpaint_cuts, dim=-1).cpu().detach().numpy()
-    x = torch.cat(x_cuts, dim=-1).cpu().detach().numpy()
-
-    for i in range(B):
-        inpaint, x_ = inpaints[i].squeeze(), x[i].squeeze()
-
-        # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_inpaint.wav'), inpaint, 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x_, 16000)
 
 # logging
 if wandb_log and master_process:
