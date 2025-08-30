@@ -1336,7 +1336,10 @@ def LAM_B_2(**kwargs):
 def MaskedLAM_B_2(**kwargs):
     return MaskedLAM(encoder=Transformer_B_2(**kwargs), decoder=MaskedDiT_B_2(conditional=True, **kwargs), depth=12, hidden_size=128, patch_size=2, num_heads=12, **kwargs)
 
-def CausalLAM_B_2(**kwargs):
+def CausalLAM_L(**kwargs):
+    return CausalLAM(depth=24, hidden_size=1024, num_heads=16, **kwargs)
+
+def CausalLAM_B(**kwargs):
     return CausalLAM(depth=12, hidden_size=768, num_heads=12, **kwargs)
 
 def DiT_B_4(**kwargs):

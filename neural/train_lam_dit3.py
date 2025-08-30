@@ -29,7 +29,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from dit import CausalLAM_B_2 as dit
+from dit import CausalLAM_B as dit
 from dito import DiTo as Tokenizer
 
 import matplotlib.pyplot as plt
