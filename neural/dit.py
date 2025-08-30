@@ -464,6 +464,7 @@ class CausalLAM(nn.Module):
             dim=hidden_size,
             codebook_size=local_codebook_size,
             learnable_codebook=True,
+            ema_update=False,
             use_cosine_sim=True,
             commitment_weight=0.25,
             codebook_dim=codebook_dim,
