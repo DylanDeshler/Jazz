@@ -440,6 +440,8 @@ class CausalLAM(nn.Module):
     def __init__(self, 
         max_input_size=250,
         hidden_size=1152,
+        depth=12,
+        num_heads=12,
         local_codebook_size=64,
         codebook_dim=32,
         local_window=1,
@@ -447,8 +449,8 @@ class CausalLAM(nn.Module):
         super().__init__()
         assert max_input_size % local_window == 0
 
-        self.encoder = Transformer(depth=12, hidden_size=768, patch_size=2, num_heads=12)
-        self.decoder = DiTWrapper(depth=12, hidden_size=768, patch_size=2, num_heads=12)
+        self.encoder = Transformer(depth=depth, hidden_size=hidden_size, num_heads=num_heads)
+        self.decoder = DiTWrapper(depth=depth, hidden_size=hidden_size, num_heads=num_heads)
 
         self.max_input_size = max_input_size
         self.local_window = local_window
