@@ -539,8 +539,8 @@ class CausalLAM(nn.Module):
         local_tokens = self.to_local_action_emb(z)
         local_tokens, local_indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
         if self.training:
-            mask =  torch.rand(x.shape[0], x.shape[1]) < 0.1
-            local_tokens[mask.long()] = self.null_tokens.weight[1].to(local_tokens.dtype)
+            mask = torch.rand(x.shape[0], x.shape[1]) < 0.1
+            local_tokens[mask.long()] = self.null_tokens.weight[0].to(local_tokens.dtype)
         local_tokens = repeat(local_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
 
         return local_tokens, local_indices, local_vq_loss
