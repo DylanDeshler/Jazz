@@ -439,6 +439,7 @@ class Transformer(nn.Module):
 class CausalLAM(nn.Module):
     def __init__(self, 
         max_input_size=250,
+        in_channels=128, 
         hidden_size=1152,
         depth=12,
         num_heads=12,
@@ -456,12 +457,12 @@ class CausalLAM(nn.Module):
         self.local_window = local_window
         self.to_local_action_emb = nn.Sequential(
             Rearrange("b (t1 t2) d -> b t1 (t2 d)", t1=max_input_size // local_window, t2=local_window),
-            nn.Linear(local_window * hidden_size, hidden_size),
-            nn.LayerNorm(hidden_size)
+            nn.Linear(local_window * in_channels, in_channels),
+            nn.LayerNorm(in_channels)
         )
 
         self.local_vq = VectorQuantize(
-            dim=hidden_size,
+            dim=in_channels,
             codebook_size=local_codebook_size,
             learnable_codebook=True,
             ema_update=False,
