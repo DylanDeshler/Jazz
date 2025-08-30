@@ -144,6 +144,7 @@ class Attention(nn.Module):
                 dropout_p=self.attn_drop.p if self.training else 0.,
             )
         else:
+            raise NotImplementedError()
             q = q * self.scale
             attn = q @ k.transpose(-2, -1)
             attn = maybe_add_mask(attn, attn_mask)
@@ -196,8 +197,8 @@ class TransformerBlock(nn.Module):
         approx_gelu = lambda: nn.GELU(approximate="tanh")
         self.mlp = Mlp(in_features=hidden_size, hidden_features=mlp_hidden_dim, act_layer=approx_gelu, drop=0)
 
-    def forward(self, x):
-        x = x + self.attn(self.norm1(x))
+    def forward(self, x, attn_mask=None):
+        x = x + self.attn(self.norm1(x), attn_mask=attn_mask)
         x = x + self.mlp(self.norm2(x))
         return x
 
@@ -218,13 +219,13 @@ class DiTBlock(nn.Module):
             nn.Linear(hidden_size, 6 * hidden_size, bias=True)
         )
 
-    def forward(self, x, c):
+    def forward(self, x, c, attn_mask=None):
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(c).chunk(6, dim=-1)
         if c.ndim == 3:
-            x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa))
+            x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), attn_mask=attn_mask)
             x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
         else:
-            x = x + gate_msa.unsqueeze(1) * self.attn(modulate(self.norm1(x), shift_msa, scale_msa))
+            x = x + gate_msa.unsqueeze(1) * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), attn_mask=attn_mask)
             x = x + gate_mlp.unsqueeze(1) * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
         return x
 
@@ -340,7 +341,7 @@ class DiT(nn.Module):
     #     imgs = x.reshape(shape=(x.shape[0], c, h * p, h * p))
     #     return imgs
 
-    def forward(self, x, t, y=None):
+    def forward(self, x, t, y=None, attn_mask=None):
         """
         Forward pass of DiT.
         x: (N, C, H, W) tensor of spatial inputs (images or latent representations of images)
@@ -356,7 +357,7 @@ class DiT(nn.Module):
         else:
             c = t                                # (N, D)
         for block in self.blocks:
-            x = block(x, c)                      # (N, T, D)
+            x = block(x, c, attn_mask=attn_mask)                      # (N, T, D)
         x = self.final_layer(x, c)               # (N, T, patch_size ** 2 * out_channels)
         # x = self.unpatchify(x)                   # (N, out_channels, H, W)
         return x
@@ -421,7 +422,7 @@ class Transformer(nn.Module):
         nn.init.constant_(self.final_layer.weight, 0)
         nn.init.constant_(self.final_layer.bias, 0)
 
-    def forward(self, x):
+    def forward(self, x, attn_mask=None):
         """
         Forward pass of DiT.
         x: (N, C, H, W) tensor of spatial inputs (images or latent representations of images)
@@ -430,10 +431,175 @@ class Transformer(nn.Module):
         """
         x = self.x_embedder(x) + self.pos_embed  # (N, T, D), where T = H * W / patch_size ** 2                             # (N, D)
         for block in self.blocks:
-            x = block(x)                      # (N, T, D)
+            x = block(x, attn_mask=attn_mask)                      # (N, T, D)
         x = self.final_norm(x)
         x = self.final_layer(x)               # (N, T, patch_size ** 2 * out_channels)
         return x
+
+class CausalLAM(nn.Module):
+    def __init__(self, 
+        max_input_size=250,
+        hidden_size=1152,
+        local_codebook_size=64,
+        codebook_dim=32,
+        local_window=1,
+        ):
+        super().__init__()
+        assert max_input_size % local_window == 0
+
+        self.encoder = Transformer(depth=12, hidden_size=768, patch_size=2, num_heads=12)
+        self.decoder = DiTWrapper(depth=12, hidden_size=768, patch_size=2, num_heads=12)
+
+        self.max_input_size = max_input_size
+        self.local_window = local_window
+        self.to_local_action_emb = nn.Sequential(
+            Rearrange("b (t1 t2) d -> b t1 (t2 d)", t1=max_input_size // local_window, t2=local_window),
+            nn.Linear(local_window * hidden_size, hidden_size),
+            nn.LayerNorm(hidden_size)
+        )
+
+        self.local_vq = VectorQuantize(
+            dim=hidden_size,
+            codebook_size=local_codebook_size,
+            learnable_codebook=True,
+            use_cosine_sim=True,
+            commitment_weight=0.25,
+            codebook_dim=codebook_dim,
+        )
+
+        self.null_tokens = nn.Embedding(1, hidden_size)
+
+        self.initialize_weights()
+        self.encoder.initialize_weights()
+        self.decoder.model.initialize_weights()
+
+        self.diffusion = FM(timescale=1000.0)
+        self.sampler = FMEulerSampler(self.diffusion)
+    
+    def configure_optimizer(self, learning_rate, betas):
+        def seperate_weights_and_biases(module):
+            weights = [p for p in module.parameters() if p.ndim >= 2]
+            biases = [p for p in module.parameters() if p.ndim < 2]
+            return weights, biases
+        def cast(thing):
+            if isinstance(thing, list):
+                return thing
+            if isinstance(thing, nn.Parameter):
+                return [thing]
+            else:
+                return thing.parameters()
+        from muon import MuonWithAuxAdam
+        adam_groups = [self.null_tokens, self.encoder.x_embedder, self.encoder.pos_embed, self.decoder.model.x_embedder, self.decoder.model.t_embedder, self.decoder.model.y_embedder, self.decoder.model.pos_embed, self.decoder.model.final_layer]
+
+        hidden_groups = [self.to_global_action_emb, self.to_local_action_emb, self.global_vq, self.local_vq, 
+                       self.encoder.blocks, self.encoder.final_norm, self.encoder.final_layer,
+                       self.decoder.model.blocks]
+        hidden_groups = [seperate_weights_and_biases(m) for m in hidden_groups]
+        muon_groups = [g[0] for g in hidden_groups if len(g[0]) > 0]
+        hidden_biases = [g[1] for g in hidden_groups if len(g[1]) > 0]
+        muon_groups = [dict(params=cast(g), lr=100 * learning_rate, use_muon=True) for g in muon_groups]
+        adam_groups = [dict(params=cast(g), lr=learning_rate, betas=betas, use_muon=False) for g in adam_groups + hidden_biases]
+
+        param_groups = [*adam_groups, *muon_groups]
+        optimizer = MuonWithAuxAdam(param_groups)
+        for group in optimizer.param_groups:
+            group["initial_lr"] = group["lr"]
+
+        return optimizer
+
+    def initialize_weights(self):
+        # Initialize transformer layers:
+        def _basic_init(module):
+            if isinstance(module, nn.Linear):
+                torch.nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+        self.apply(_basic_init)
+
+        nn.init.normal_(self.null_tokens.weight, std=0.02)
+
+    @torch.no_grad()
+    def encode_action_indices(self, x):
+        z = self.encoder(x)
+
+        local_tokens = self.to_local_action_emb(z)
+        local_tokens, local_indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
+
+        return local_indices
+    
+    def encode_actions(self, x, attn_mask=None):
+        z = self.encoder(x, attn_mask=attn_mask)
+
+        # action embeddings
+        local_tokens = self.to_local_action_emb(z)
+        local_tokens, local_indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
+        if self.training:
+            mask =  torch.rand(x.shape[0], x.shape[1]) < 0.1
+            local_tokens[mask.long()] = self.null_tokens.weight[1].to(local_tokens.dtype)
+        local_tokens = repeat(local_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
+
+        return local_tokens, local_indices, local_vq_loss
+
+    def forward(self, x):
+        causal_plus_1_mask = torch.tril(torch.ones((x.shape[1], x.shape[1]), device=x.device, dtype=torch.bool), diagonal=1)
+        local_tokens, _, local_vq_loss = self.encode_actions(x, attn_mask=causal_plus_1_mask)
+
+        causal_mask = torch.tril(torch.ones((x.shape[1], x.shape[1]), device=x.device, dtype=torch.bool), diagonal=0)
+        loss = self.diffusion.loss(self.decoder.model, x, net_kwargs={'y': local_tokens, 'attn_mask': causal_mask}) + local_vq_loss
+
+        return loss
+    
+    def generate_random_different_actions(self, actions_indices, codebook_size, device):
+        shape = actions_indices.shape
+        random_actions = torch.randint(0, codebook_size, shape, device=device)
+
+        while torch.any(random_actions == actions_indices):
+            random_actions = torch.where(
+                random_actions == actions_indices,
+                torch.randint(0, codebook_size, shape, device=device),
+                random_actions,
+            )
+
+        return random_actions
+    
+    def lam_vs_random_actions(self, latents, n_steps=50, guidance=1):
+        assert latents.ndim == 3
+
+        b, c, f, device = *latents.shape, latents.device
+
+        local_tokens, local_action_indices, _ = self.encode_actions(latents)
+
+        noise = torch.randn(latents.shape, device=next(self.parameters()).device)
+
+        # generate random actions
+        random_local_actions_indices = self.generate_random_different_actions(local_action_indices, self.local_vq.codebook_size, device)
+        random_local_action_tokens = self.local_vq.get_output_from_indices(random_local_actions_indices)
+        random_local_action_tokens = repeat(random_local_action_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
+
+        # decode actions
+        recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance, noise=noise)
+        
+        # decode random actions
+        random_recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': random_local_action_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance, noise=noise)
+
+        return {'latents': recon_latents, 'local_actions': local_action_indices}, {'latents': random_recon_latents, 'local_actions': random_local_actions_indices}
+    
+    def inpaint(self, latents, mask, n_steps=50, guidance=1):
+        local_tokens, _, _ = self.encode_actions(latents)
+
+        inpaints = self.sampler.inpaint(self.decoder.model, latents, mask, net_kwargs={'y': local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1])}, n_steps=n_steps, guidance=guidance)
+
+        return inpaints
+    
+    def sample_with_actions(self, shape, local_action_indices=None, n_step=50, guidance=1):
+        assert local_action_indices is not None
+
+        noise = torch.randn(shape, device=next(self.parameters()).device)
+        local_tokens = repeat(self.local_vq.get_output_from_indices(local_action_indices), "b d -> b t d", t=shape[1])
+
+        samples = self.sampler.sample(self.decoder.model, shape, n_steps=n_step, net_kwargs={'y': local_tokens}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(next(self.parameters()).dtype), "d -> b t d", b=shape[0], t=shape[1])}, guidance=guidance, noise=noise)
+
+        return samples
 
 from collections import defaultdict
 stats = defaultdict(list)
@@ -1165,6 +1331,9 @@ def LAM_B_2(**kwargs):
 
 def MaskedLAM_B_2(**kwargs):
     return MaskedLAM(encoder=Transformer_B_2(**kwargs), decoder=MaskedDiT_B_2(conditional=True, **kwargs), depth=12, hidden_size=128, patch_size=2, num_heads=12, **kwargs)
+
+def CausalLAM_B_2(**kwargs):
+    return CausalLAM(depth=12, hidden_size=768, num_heads=12, **kwargs)
 
 def DiT_B_4(**kwargs):
     return DiTWrapper(depth=12, hidden_size=768, patch_size=4, num_heads=12, **kwargs)

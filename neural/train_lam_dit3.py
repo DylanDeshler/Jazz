@@ -29,7 +29,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from dit import MaskedLAM_B_2 as dit
+from dit import CausalLAM_B_2 as dit
 from dito import DiTo as Tokenizer
 
 import matplotlib.pyplot as plt
@@ -45,7 +45,7 @@ save_interval = 10000
 eval_iters = 100
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -151,7 +151,7 @@ for k,v in list(state_dict.items()):
 tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 
-model_args = dict(ema_update=False, local_window=10)#dict(vae_embed_dim=vae_embed_dim, seq_len=max_seq_len, codebook_size=codebook_size, codebook_dim=codebook_dim)
+model_args = dict(max_input_size=max_seq_len, local_codebook_size=64, codebook_dim=32, local_window=10)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
