@@ -547,6 +547,8 @@ class CausalLAM(nn.Module):
             local_tokens[mask.long()] = self.null_tokens.weight[0].to(local_tokens.dtype)
         # local_tokens = repeat(local_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
 
+        print('tokens: ', x.shape, z.shape, local_tokens.shape)
+
         return local_tokens, local_indices, local_vq_loss
 
     def forward(self, x):
