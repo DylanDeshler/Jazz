@@ -257,8 +257,11 @@ class PatchEmbed(nn.Module):
         self.norm = nn.LayerNorm(hidden_size)
     
     def forward(self, x):
+        print(x.shape)
         x = self.reshape(x)
+        print(x.shape)
         x = self.proj(x)
+        print(x.shape)
         x = self.norm(x)
 
 class DiT(nn.Module):
