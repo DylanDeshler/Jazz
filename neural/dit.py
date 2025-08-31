@@ -335,6 +335,7 @@ class DiT(nn.Module):
         t: (N,) tensor of diffusion timesteps
         y: (N,) tensor of class labels
         """
+        print(x.shape)
         x = self.x_embedder(x) + self.pos_embed  # (N, T, D), where T = H * W / patch_size ** 2
         t = self.t_embedder(t)                   # (N, D)
         if y is not None:
@@ -347,6 +348,7 @@ class DiT(nn.Module):
             x = block(x, c, attn_mask=attn_mask)                      # (N, T, D)
         x = self.final_layer(x, c)               # (N, T, patch_size ** 2 * out_channels)
         x = self.unpatchify(x)                   # (N, out_channels, H, W)
+        print(x.shape)
         return x
     
     def forward_with_cfg(self, x, t, y, cfg_scale):
