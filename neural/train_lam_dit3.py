@@ -151,6 +151,7 @@ for k,v in list(state_dict.items()):
 tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 
+#
 model_args = dict(in_channels=128, max_input_size=max_seq_len, local_codebook_size=128, codebook_dim=32, local_window=25)
 if init_from == 'scratch':
     # init a new model from scratch
