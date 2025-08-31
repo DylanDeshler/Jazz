@@ -355,7 +355,7 @@ while True:
             X, Y = get_batch('test')[:8]
             model.eval()
             with ctx:
-                # delta_psnr = generate_lam_vs_random_actions(X, Y, iter_num)
+                delta_psnr = generate_lam_vs_random_actions(X, Y, iter_num)
                 # generate_inpainting_samples(X, iter_num)
                 # generate_samples_with_all_global_actions(iter_num)
                 generate_samples_with_all_local_actions(iter_num)
