@@ -39,7 +39,8 @@ import soundfile as sf
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
 out_dir = 'lam_dit5'
-eval_interval = 2000
+eval_interval = 1000
+sample_interval = 4000
 log_interval = 100
 save_interval = 10000
 eval_iters = 100
@@ -351,15 +352,16 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        X, Y = get_batch('test')[:8]
-        model.eval()
-        with ctx:
-            delta_psnr = generate_lam_vs_random_actions(X, Y, iter_num)
-            # generate_inpainting_samples(X, iter_num)
-            # generate_samples_with_all_global_actions(iter_num)
-            generate_samples_with_all_local_actions(iter_num)
-            # generate_samples_with_global_and_local_actions(iter_num)
-        model.train()
+        if iter_num % sample_interval == 0 and master_process:
+            X, Y = get_batch('test')[:8]
+            model.eval()
+            with ctx:
+                delta_psnr = generate_lam_vs_random_actions(X, Y, iter_num)
+                # generate_inpainting_samples(X, iter_num)
+                # generate_samples_with_all_global_actions(iter_num)
+                generate_samples_with_all_local_actions(iter_num)
+                # generate_samples_with_global_and_local_actions(iter_num)
+            model.train()
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, delta PSNR {delta_psnr:.3f}")
         if wandb_log:
@@ -386,7 +388,7 @@ while True:
                 print(f"saving checkpoint to {out_dir}")
                 torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
 
-                if iter_num % save_interval == 0:
+                if iter_num % save_interval == 0 and master_process == 0:
                     torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
     if iter_num == 0 and eval_only:
         break
