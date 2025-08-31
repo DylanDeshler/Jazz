@@ -285,6 +285,7 @@ class DiT(nn.Module):
             DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
         self.final_layer = FinalLayer(hidden_size, self.out_channels, local_window=local_window)
+        self.unpatchify = Rearrange("b t1 (t2 d) -> b (t1 t2) d", t2=local_window)
         self.initialize_weights()
 
     def initialize_weights(self):
@@ -345,7 +346,7 @@ class DiT(nn.Module):
         for block in self.blocks:
             x = block(x, c, attn_mask=attn_mask)                      # (N, T, D)
         x = self.final_layer(x, c)               # (N, T, patch_size ** 2 * out_channels)
-        # x = self.unpatchify(x)                   # (N, out_channels, H, W)
+        x = self.unpatchify(x)                   # (N, out_channels, H, W)
         return x
     
     def forward_with_cfg(self, x, t, y, cfg_scale):
@@ -460,8 +461,6 @@ class CausalLAM(nn.Module):
         )
 
         self.null_tokens = nn.Embedding(1, hidden_size)
-
-        self.unpatch_embed = Rearrange("b t1 (t2 d) -> b (t1 t2) d", t2=self.local_window)
 
         self.initialize_weights()
         self.encoder.initialize_weights()
