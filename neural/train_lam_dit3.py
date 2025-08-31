@@ -55,7 +55,7 @@ dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
 batch_size = 48# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
-max_seq_len = 50 * 20
+max_seq_len = 50 * 50
 codebook_size = 16
 codebook_dim = 32
 vae_embed_dim = 128
@@ -257,7 +257,7 @@ def generate_lam_vs_random_actions(x, step):
     # reconstruct wavform in series (could be smart and reshape into a batch for speed)
     n_cuts = L // 50
     x_cuts, y_cuts, random_y_cuts = [], [], []
-    for cut in tqdm(range(n_cuts), desc='Decoding'):
+    for cut in tqdm(range(min(n_cuts, 10)), desc='Decoding'):
         x_cuts.append(tokenizer.decode(x[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
         y_cuts.append(tokenizer.decode(recon[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
         random_y_cuts.append(tokenizer.decode(random_recon[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
@@ -273,8 +273,8 @@ def generate_lam_vs_random_actions(x, step):
         sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, 16000)
         sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_y, 16000)
     
-    recon_psnr = psnr(x[:, -2 * 16000:], recon[:, -2 * 16000:])
-    random_psnr = psnr(x[:, -2 * 16000:], random_recon[:, -2 * 16000:])
+    recon_psnr = psnr(x[:, 4 * 16000:], recon[:, -2 * 16000:])
+    random_psnr = psnr(x[:, 4 * 16000:], random_recon[:, -2 * 16000:])
 
     return np.mean(recon_psnr - random_psnr).item()
 
@@ -294,7 +294,7 @@ def generate_samples_with_all_local_actions(step):
     # reconstruct wavform in series (could be smart and reshape into a batch for speed)
     n_cuts = L // 50
     sample_cuts = []
-    for cut in tqdm(range(n_cuts), desc='Decoding'):
+    for cut in tqdm(range(min(n_cuts, 10)), desc='Decoding'):
         sample_cuts.append(tokenizer.decode(samples[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
     samples = torch.cat(sample_cuts, dim=-1).cpu().detach().numpy()
 
