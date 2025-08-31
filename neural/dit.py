@@ -292,7 +292,7 @@ class DiT(nn.Module):
             self.y_embedder = nn.Linear(in_channels, hidden_size, bias=True)
         # self.y_embedder = LabelEmbedder(n_classes, hidden_size, class_dropout_prob)
         # Will use fixed sin-cos embedding:
-        self.pos_embed = nn.Parameter(torch.zeros(1, max_input_size, hidden_size), requires_grad=False)
+        self.pos_embed = nn.Parameter(torch.zeros(1, max_input_size // local_window, hidden_size), requires_grad=False)
 
         self.blocks = nn.ModuleList([
             DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
@@ -399,7 +399,7 @@ class Transformer(nn.Module):
         self.num_heads = num_heads
 
         self.x_embedder = PatchEmbed(in_channels, hidden_size, max_input_size, local_window)
-        self.pos_embed = nn.Parameter(torch.zeros(1, max_input_size, hidden_size), requires_grad=False)
+        self.pos_embed = nn.Parameter(torch.zeros(1, max_input_size // local_window, hidden_size), requires_grad=False)
 
         self.blocks = nn.ModuleList([
             TransformerBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
