@@ -414,6 +414,7 @@ class Transformer(nn.Module):
         t: (N,) tensor of diffusion timesteps
         y: (N,) tensor of class labels
         """
+        print(x.shape, self.x_embedder(x).shape, self.pos_embed.shape)
         x = self.x_embedder(x) + self.pos_embed  # (N, T, D), where T = H * W / patch_size ** 2                             # (N, D)
         for block in self.blocks:
             x = block(x, attn_mask=attn_mask)                      # (N, T, D)
