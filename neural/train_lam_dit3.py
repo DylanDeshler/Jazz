@@ -214,7 +214,7 @@ def estimate_loss():
     for split in ['train', 'val']:
         losses = torch.zeros(eval_iters * gradient_accumulation_steps)
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
-            X = get_batch(split)
+            X, Y = get_batch(split)
             with ctx:
                 loss = model(X, Y)
             losses[k] = loss.item()
