@@ -234,10 +234,10 @@ class FinalLayer(nn.Module):
     """
     The final layer of DiT.
     """
-    def __init__(self, hidden_size, out_channels):
+    def __init__(self, hidden_size, out_channels, local_window=1):
         super().__init__()
         self.norm_final = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
-        self.linear = nn.Linear(hidden_size, out_channels, bias=True)
+        self.linear = nn.Linear(hidden_size, local_window * out_channels, bias=True)
         self.adaLN_modulation = nn.Sequential(
             nn.SiLU(),
             nn.Linear(hidden_size, 2 * hidden_size, bias=True)
@@ -263,6 +263,7 @@ class DiT(nn.Module):
         mlp_ratio=4.0,
         learn_sigma=False,
         conditional=False,
+        local_window=1,
         **kwargs,
     ):
         super().__init__()
@@ -283,7 +284,7 @@ class DiT(nn.Module):
         self.blocks = nn.ModuleList([
             DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
-        self.final_layer = FinalLayer(hidden_size, self.out_channels)
+        self.final_layer = FinalLayer(hidden_size, self.out_channels, local_window=local_window)
         self.initialize_weights()
 
     def initialize_weights(self):
@@ -436,7 +437,7 @@ class CausalLAM(nn.Module):
         assert max_input_size % local_window == 0
 
         self.encoder = Transformer(max_input_size=max_input_size // local_window, depth=depth, in_channels=hidden_size, hidden_size=hidden_size, num_heads=num_heads)
-        self.decoder = DiTWrapper(max_input_size=max_input_size // local_window, depth=depth, in_channels=hidden_size, hidden_size=hidden_size, num_heads=num_heads, conditional=True)
+        self.decoder = DiTWrapper(max_input_size=max_input_size // local_window, depth=depth, in_channels=hidden_size, hidden_size=hidden_size, num_heads=num_heads, conditional=True, local_window=local_window)
 
         self.patch_embed = nn.Sequential(
             Rearrange("b (t1 t2) d -> b t1 (t2 d)", t1=max_input_size // local_window, t2=local_window),
@@ -459,6 +460,8 @@ class CausalLAM(nn.Module):
         )
 
         self.null_tokens = nn.Embedding(1, hidden_size)
+
+        self.unpatch_embed = Rearrange("b t1 (t2 d) -> b (t1 t2) d", t2=self.local_window)
 
         self.initialize_weights()
         self.encoder.initialize_weights()
@@ -508,21 +511,6 @@ class CausalLAM(nn.Module):
         self.apply(_basic_init)
 
         nn.init.normal_(self.null_tokens.weight, std=0.02)
-    
-    def unpatchify(self, x):
-        """
-        x: (N, T, patch_size**2 * C)
-        imgs: (N, H, W, C)
-        """
-        c = self.out_channels
-        p = self.x_embedder.patch_size[0]
-        h = w = int(x.shape[1] ** 0.5)
-        assert h * w == x.shape[1]
-
-        x = x.reshape(shape=(x.shape[0], h, w, p, p, c))
-        x = torch.einsum('nhwpqc->nchpwq', x)
-        imgs = x.reshape(shape=(x.shape[0], c, h * p, h * p))
-        return imgs
 
     @torch.no_grad()
     def encode_action_indices(self, x):
