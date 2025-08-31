@@ -40,7 +40,7 @@ import soundfile as sf
 # I/O
 out_dir = 'lam_dit5'
 eval_interval = 1000
-sample_interval = 4000
+sample_interval = 5000
 log_interval = 100
 save_interval = 10000
 eval_iters = 100
