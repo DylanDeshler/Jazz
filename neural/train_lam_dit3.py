@@ -312,9 +312,9 @@ if wandb_log and master_process:
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
-step1 = 5001
-step2 = 10001
-step3 = 20001
+step1 = 6001
+step2 = 14001
+step3 = 24001
 step4 = 60001
 
 X = get_batch('train') # fetch the very first batch
