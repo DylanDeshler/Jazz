@@ -273,8 +273,8 @@ def generate_lam_vs_random_actions(x, step):
         sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, 16000)
         sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_y, 16000)
     
-    recon_psnr = psnr(x[:, 4 * 16000:], recon[:, -2 * 16000:])
-    random_psnr = psnr(x[:, 4 * 16000:], random_recon[:, -2 * 16000:])
+    recon_psnr = psnr(x[:, 4 * 16000:], recon[:, 4 * 16000:])
+    random_psnr = psnr(x[:, 4 * 16000:], random_recon[:, 4 * 16000:])
 
     return np.mean(recon_psnr - random_psnr).item()
 
