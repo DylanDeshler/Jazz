@@ -352,6 +352,7 @@ class DiT(nn.Module):
         x = self.x_embedder(x) + self.pos_embed  # (N, T, D), where T = H * W / patch_size ** 2
         t = self.t_embedder(t)                   # (N, D)
         if y is not None:
+            print(x.shape, t.shape, y.shape)
             y = self.y_embedder(y)
             t = repeat(t, "b d -> b t d", t=y.shape[1])
             c = t + y
