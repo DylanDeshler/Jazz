@@ -38,14 +38,14 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'lam_dit3'
+out_dir = 'lam_dit4'
 eval_interval = 2000
 log_interval = 100
 save_interval = 10000
 eval_iters = 100
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -151,7 +151,7 @@ for k,v in list(state_dict.items()):
 tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 
-model_args = dict(in_channels=128, max_input_size=max_seq_len, local_codebook_size=64, codebook_dim=32, local_window=10)
+model_args = dict(in_channels=128, max_input_size=max_seq_len, local_codebook_size=32, codebook_dim=32, local_window=50)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
