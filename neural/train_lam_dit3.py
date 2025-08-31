@@ -256,20 +256,12 @@ def generate_lam_vs_random_actions(x, y, step):
     
     recon = recon['latents']
     random_recon = random_recon['latents']
-    # reconstruct wavform in series (could be smart and reshape into a batch for speed)
     n_cuts = L // 50
-    x_cuts, recon_cuts, random_recon_cuts, y_cuts = [], [], [], []
+    batches = []
     for cut in tqdm(range(min(n_cuts, 10)), desc='Decoding'):
         batch = torch.cat([x[:, cut * 50: (cut + 1) * 50], recon[:, cut * 50: (cut + 1) * 50], random_recon[:, cut * 50: (cut + 1) * 50], y[:, cut * 50: (cut + 1) * 50]], dim=0).permute(0, 2, 1)
-        print(tokenizer.decode(batch).shape)
-        x_cuts.append(tokenizer.decode(x[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
-        recon_cuts.append(tokenizer.decode(recon[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
-        random_recon_cuts.append(tokenizer.decode(random_recon[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
-        y_cuts.append(tokenizer.decode(y[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
-    x = torch.cat(x_cuts, dim=-1).cpu().detach().numpy().squeeze(1)
-    recon = torch.cat(recon_cuts, dim=-1).cpu().detach().numpy().squeeze(1)
-    random_recon = torch.cat(random_recon_cuts, dim=-1).cpu().detach().numpy().squeeze(1)
-    y = torch.cat(y, dim=-1).cpu().detach().numpy().squeeze(1)
+        batches.append(batch)
+    x, recon, random_recon, y = [res.cpu().detach().numpy().squeeze(1) for res in torch.cat(batches, dim=-1).split(B, dim=0)]
 
     recon_psnr = psnr(y[:, 4 * 16000:], recon[:, 4 * 16000:])
     random_psnr = psnr(y[:, 4 * 16000:], random_recon[:, 4 * 16000:])
