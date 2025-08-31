@@ -522,6 +522,28 @@ class CausalLAM(nn.Module):
         self.apply(_basic_init)
 
         nn.init.normal_(self.null_tokens.weight, std=0.02)
+    
+    def block_causal_mask(self, diag=0, device=None):
+        """
+        Create a block-causal attention mask.
+
+        Args:
+            diag: how many blocks ahead are visible (0 = current only, 1 = allow next block)
+            device: torch device
+
+        Returns:
+            mask (seq_len, seq_len) bool tensor
+                mask[i, j] = True if token i can attend to token j
+        """
+        idx = torch.arange(self.max_input_size, device=device)
+        bi = idx // self.local_window  # block index of each position
+        
+        bi_i = bi[:, None]  # (seq_len, 1)
+        bi_j = bi[None, :]  # (1, seq_len)
+        
+        # Allow attending to all tokens up to "diag" blocks ahead
+        allowed_blocks = (bi_j <= bi_i + diag)
+        return allowed_blocks
 
     @torch.no_grad()
     def encode_action_indices(self, x):
@@ -545,13 +567,13 @@ class CausalLAM(nn.Module):
 
         return local_tokens, local_indices, local_vq_loss
 
-    def forward(self, x):
+    def forward(self, x, targets):
         t = self.max_input_size // self.local_window
         causal_plus_1_mask = torch.tril(torch.ones((t, t), device=x.device, dtype=torch.bool), diagonal=1)
         local_tokens, _, local_vq_loss = self.encode_actions(x, attn_mask=causal_plus_1_mask)
 
         causal_mask = torch.tril(torch.ones((t, t), device=x.device, dtype=torch.bool), diagonal=0)
-        loss = self.diffusion.loss(self.decoder.model, x, net_kwargs={'y': local_tokens, 'attn_mask': causal_mask}) + local_vq_loss
+        loss = self.diffusion.causal_loss(self.decoder.model, x, targets, net_kwargs={'y': local_tokens, 'attn_mask': causal_mask}) + local_vq_loss
 
         return loss
     

@@ -55,8 +55,9 @@ dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
 batch_size = 48# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
-max_seq_len = 50 * 10
-codebook_size = 16
+local_window = 10
+max_seq_len = 50 * local_window
+codebook_size = 128
 codebook_dim = 32
 vae_embed_dim = 128
 # adamw optimizer
@@ -122,15 +123,17 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 def get_batch(split='train'):
     if split == 'train':
         data = np.memmap('/home/dylan.d/research/music/Jazz/latents/train.bin', dtype=np.float32, mode='r', shape=(318575607, 128))
-        idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
-        batch = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).to(device)
-        return batch
+        idxs = torch.randint(len(data) - max_seq_len - local_window, (batch_size,))
+        x = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).to(device)
+        y = torch.from_numpy(np.stack([data[idx+local_window:idx+local_window+max_seq_len] for idx in idxs], axis=0)).to(device)
+        return x, y
     
     else:
         data = np.memmap('/home/dylan.d/research/music/Jazz/latents/val.bin', dtype=np.float32, mode='r', shape=(6501543, 128))
-        idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
-        batch = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).to(device)
-        return batch
+        idxs = torch.randint(len(data) - max_seq_len - local_window, (batch_size,))
+        x = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).to(device)
+        y = torch.from_numpy(np.stack([data[idx+local_window:idx+local_window+max_seq_len] for idx in idxs], axis=0)).to(device)
+        return x, y
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
@@ -151,8 +154,7 @@ for k,v in list(state_dict.items()):
 tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 
-
-model_args = dict(in_channels=128, max_input_size=max_seq_len, local_codebook_size=128, codebook_dim=32, local_window=10)
+model_args = dict(in_channels=vae_embed_dim, max_input_size=max_seq_len, local_codebook_size=codebook_size, codebook_dim=codebook_dim, local_window=local_window)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -213,7 +215,7 @@ def estimate_loss():
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
             X = get_batch(split)
             with ctx:
-                loss = model(X)
+                loss = model(X, Y)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -234,7 +236,7 @@ def get_lr(it):
     return min_lr + coeff * (learning_rate - min_lr)
 
 @torch.no_grad()
-def generate_lam_vs_random_actions(x, step):
+def generate_lam_vs_random_actions(x, y, step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
     batch_dir = os.path.join(batch_dir, 'lam_vs_random')
@@ -265,6 +267,9 @@ def generate_lam_vs_random_actions(x, step):
     recon = torch.cat(y_cuts, dim=-1).cpu().detach().numpy().squeeze(1)
     random_recon = torch.cat(random_y_cuts, dim=-1).cpu().detach().numpy().squeeze(1)
 
+    recon_psnr = psnr(y[:, 4 * 16000:], recon[:, 4 * 16000:])
+    random_psnr = psnr(y[:, 4 * 16000:], random_recon[:, 4 * 16000:])
+
     for i in range(B):
         og, y, random_y = x[i], recon[i], random_recon[i]
 
@@ -273,9 +278,6 @@ def generate_lam_vs_random_actions(x, step):
         sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, 16000)
         sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_y, 16000)
     
-    recon_psnr = psnr(x[:, 4 * 16000:], recon[:, 4 * 16000:])
-    random_psnr = psnr(x[:, 4 * 16000:], random_recon[:, 4 * 16000:])
-
     return np.mean(recon_psnr - random_psnr).item()
 
 @torch.no_grad()
@@ -319,7 +321,7 @@ step2 = 14001
 step3 = 24001
 step4 = 60001
 
-X = get_batch('train') # fetch the very first batch
+X, Y = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
@@ -352,10 +354,10 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        X = get_batch('test')[:8]
+        X, Y = get_batch('test')[:8]
         model.eval()
         with ctx:
-            delta_psnr = generate_lam_vs_random_actions(X, iter_num)
+            delta_psnr = generate_lam_vs_random_actions(X, Y, iter_num)
             # generate_inpainting_samples(X, iter_num)
             # generate_samples_with_all_global_actions(iter_num)
             generate_samples_with_all_local_actions(iter_num)
@@ -402,10 +404,10 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            loss = model(X)
+            loss = model(X, Y)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
-        X = get_batch('train')
+        X, Y = get_batch('train')
         # backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
     # clip the gradient
