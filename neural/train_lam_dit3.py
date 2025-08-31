@@ -45,7 +45,7 @@ save_interval = 10000
 eval_iters = 100
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'restart' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -55,7 +55,7 @@ dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
 batch_size = 48# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
-max_seq_len = 50 * 50
+max_seq_len = 50 * 10
 codebook_size = 16
 codebook_dim = 32
 vae_embed_dim = 128
@@ -273,6 +273,7 @@ def generate_lam_vs_random_actions(x, step):
         sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, 16000)
         sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_y, 16000)
     
+    print(x.shape, recon.shape, random_recon.shape)
     recon_psnr = psnr(x[:, 4 * 16000:], recon[:, 4 * 16000:])
     random_psnr = psnr(x[:, 4 * 16000:], random_recon[:, 4 * 16000:])
 
