@@ -261,19 +261,18 @@ def generate_lam_vs_random_actions(x, step):
         x_cuts.append(tokenizer.decode(x[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
         y_cuts.append(tokenizer.decode(recon[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
         random_y_cuts.append(tokenizer.decode(random_recon[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
-    x = torch.cat(x_cuts, dim=-1).cpu().detach().numpy()
-    recon = torch.cat(y_cuts, dim=-1).cpu().detach().numpy()
-    random_recon = torch.cat(random_y_cuts, dim=-1).cpu().detach().numpy()
+    x = torch.cat(x_cuts, dim=-1).cpu().detach().numpy().squeeze(1)
+    recon = torch.cat(y_cuts, dim=-1).cpu().detach().numpy().squeeze(1)
+    random_recon = torch.cat(random_y_cuts, dim=-1).cpu().detach().numpy().squeeze(1)
 
     for i in range(B):
-        og, y, random_y = x[i].squeeze(), recon[i].squeeze(), random_recon[i].squeeze()
+        og, y, random_y = x[i], recon[i], random_recon[i]
 
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), og, 16000)
         sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, 16000)
         sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_y, 16000)
     
-    print(x.shape, recon.shape, random_recon.shape)
     recon_psnr = psnr(x[:, 4 * 16000:], recon[:, 4 * 16000:])
     random_psnr = psnr(x[:, 4 * 16000:], random_recon[:, 4 * 16000:])
 
