@@ -259,9 +259,9 @@ def generate_lam_vs_random_actions(x, y, step):
     # reconstruct wavform in series (could be smart and reshape into a batch for speed)
     n_cuts = L // 50
     x_cuts, recon_cuts, random_recon_cuts, y_cuts = [], [], [], []
-    x = tokenizer.decode(x.view(B * n_cuts, 50, D).permute(0, 2, 1))
-    print(x.shape)
     for cut in tqdm(range(min(n_cuts, 10)), desc='Decoding'):
+        batch = torch.cat([x[:, cut * 50: (cut + 1) * 50], recon[:, cut * 50: (cut + 1) * 50], random_recon[:, cut * 50: (cut + 1) * 50], y[:, cut * 50: (cut + 1) * 50]], dim=0).permute(0, 2, 1)
+        print(tokenizer.decode(batch).shape)
         x_cuts.append(tokenizer.decode(x[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
         recon_cuts.append(tokenizer.decode(recon[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
         random_recon_cuts.append(tokenizer.decode(random_recon[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
