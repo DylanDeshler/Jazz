@@ -348,11 +348,9 @@ class DiT(nn.Module):
         t: (N,) tensor of diffusion timesteps
         y: (N,) tensor of class labels
         """
-        print(x.shape)
         x = self.x_embedder(x) + self.pos_embed  # (N, T, D), where T = H * W / patch_size ** 2
         t = self.t_embedder(t)                   # (N, D)
         if y is not None:
-            print(x.shape, t.shape, y.shape)
             y = self.y_embedder(y)
             t = repeat(t, "b d -> b t d", t=y.shape[1])
             c = t + y
@@ -362,7 +360,6 @@ class DiT(nn.Module):
             x = block(x, c, attn_mask=attn_mask)                      # (N, T, D)
         x = self.final_layer(x, c)               # (N, T, patch_size ** 2 * out_channels)
         x = self.unpatchify(x)                   # (N, out_channels, H, W)
-        print(x.shape)
         return x
     
     def forward_with_cfg(self, x, t, y, cfg_scale):
@@ -437,7 +434,6 @@ class Transformer(nn.Module):
         t: (N,) tensor of diffusion timesteps
         y: (N,) tensor of class labels
         """
-        print(x.shape, self.x_embedder(x).shape, self.pos_embed.shape)
         x = self.x_embedder(x) + self.pos_embed  # (N, T, D), where T = H * W / patch_size ** 2                             # (N, D)
         for block in self.blocks:
             x = block(x, attn_mask=attn_mask)                      # (N, T, D)
@@ -546,8 +542,6 @@ class CausalLAM(nn.Module):
             mask = torch.rand(z.shape[0], z.shape[1]) < 0.1
             local_tokens[mask.long()] = self.null_tokens.weight[0].to(local_tokens.dtype)
         # local_tokens = repeat(local_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
-
-        print('tokens: ', x.shape, z.shape, local_tokens.shape)
 
         return local_tokens, local_indices, local_vq_loss
 
