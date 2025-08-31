@@ -414,7 +414,6 @@ class Transformer(nn.Module):
         t: (N,) tensor of diffusion timesteps
         y: (N,) tensor of class labels
         """
-        print(x.shape, self.x_embedder(x).shape, self.pos_embed.shape)
         x = self.x_embedder(x) + self.pos_embed  # (N, T, D), where T = H * W / patch_size ** 2                             # (N, D)
         for block in self.blocks:
             x = block(x, attn_mask=attn_mask)                      # (N, T, D)
@@ -585,7 +584,7 @@ class CausalLAM(nn.Module):
         # generate random actions
         random_local_actions_indices = self.generate_random_different_actions(local_action_indices, self.local_vq.codebook_size, device)
         random_local_action_tokens = self.local_vq.get_output_from_indices(random_local_actions_indices)
-        random_local_action_tokens = repeat(random_local_action_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
+        # random_local_action_tokens = repeat(random_local_action_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
 
         # decode actions
         causal_mask = torch.tril(torch.ones((latents.shape[1], latents.shape[1]), device=latents.device, dtype=torch.bool), diagonal=0)
