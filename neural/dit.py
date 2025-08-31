@@ -435,8 +435,8 @@ class CausalLAM(nn.Module):
         super().__init__()
         assert max_input_size % local_window == 0
 
-        self.encoder = Transformer(depth=depth, hidden_size=hidden_size, num_heads=num_heads)
-        self.decoder = DiTWrapper(depth=depth, hidden_size=hidden_size, num_heads=num_heads, conditional=True)
+        self.encoder = Transformer(max_input_size=max_input_size // local_window, depth=depth, hidden_size=hidden_size, num_heads=num_heads)
+        self.decoder = DiTWrapper(max_input_size=max_input_size // local_window, depth=depth, hidden_size=hidden_size, num_heads=num_heads, conditional=True)
 
         self.patch_embed = nn.Sequential(
             Rearrange("b (t1 t2) d -> b t1 (t2 d)", t1=max_input_size // local_window, t2=local_window),
