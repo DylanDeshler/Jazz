@@ -455,13 +455,18 @@ class CausalLAM(nn.Module):
         super().__init__()
         assert max_input_size % local_window == 0
 
-        self.encoder = Transformer(max_input_size=max_input_size, depth=depth, in_channels=in_channels, hidden_size=hidden_size, num_heads=num_heads, local_window=local_window)
-        self.decoder = DiTWrapper(max_input_size=max_input_size, depth=depth, in_channels=in_channels, hidden_size=hidden_size, num_heads=num_heads, conditional=True, local_window=local_window)
+        self.encoder = Transformer(max_input_size=max_input_size, depth=depth, in_channels=in_channels, hidden_size=hidden_size, num_heads=num_heads, local_window=1)
+        self.decoder = DiTWrapper(max_input_size=max_input_size, depth=depth, in_channels=in_channels, hidden_size=hidden_size, num_heads=num_heads, conditional=True, local_window=1)
 
         self.max_input_size = max_input_size
         self.local_window = local_window
 
-        self.to_local_action_emb = nn.Identity()
+        # self.to_local_action_emb = nn.Identity()
+        self.to_local_action_emb = nn.Sequential(
+            Rearrange("b (t1 t2) d -> b t1 (t2 d)", t1=max_input_size // local_window, t2=local_window),
+            nn.Linear(local_window * hidden_size, hidden_size),
+            nn.LayerNorm(hidden_size)
+        )
         self.local_vq = VectorQuantize(
             dim=in_channels,
             codebook_size=local_codebook_size,
@@ -480,6 +485,13 @@ class CausalLAM(nn.Module):
 
         self.diffusion = FM(timescale=1000.0)
         self.sampler = FMEulerSampler(self.diffusion)
+
+        t = self.max_input_size // self.local_window
+        self.causal_plus_1_mask = self.register_buffer('causal_plus_1_mask', torch.tril(torch.ones((t, t), dtype=torch.bool), diagonal=1))
+        self.causal_mask = self.register_buffer('causal_mask', torch.tril(torch.ones((t, t), dtype=torch.bool), diagonal=0))
+
+        self.causal_plus_1_mask = self.register_buffer('causal_plus_1_mask', self.block_causal_mask(diag=1))
+        self.causal_mask = self.register_buffer('causal_mask', self.block_causal_mask(diag=0))
     
     def configure_optimizer(self, learning_rate, betas):
         def seperate_weights_and_biases(module):
@@ -523,19 +535,18 @@ class CausalLAM(nn.Module):
 
         nn.init.normal_(self.null_tokens.weight, std=0.02)
     
-    def block_causal_mask(self, diag=0, device=None):
+    def block_causal_mask(self, diag=0):
         """
         Create a block-causal attention mask.
 
         Args:
             diag: how many blocks ahead are visible (0 = current only, 1 = allow next block)
-            device: torch device
 
         Returns:
             mask (seq_len, seq_len) bool tensor
                 mask[i, j] = True if token i can attend to token j
         """
-        idx = torch.arange(self.max_input_size, device=device)
+        idx = torch.arange(self.max_input_size)
         bi = idx // self.local_window  # block index of each position
         
         bi_i = bi[:, None]  # (seq_len, 1)
@@ -563,17 +574,14 @@ class CausalLAM(nn.Module):
         if self.training:
             mask = torch.rand(z.shape[0], z.shape[1]) < 0.1
             local_tokens[mask.long()] = self.null_tokens.weight[0].to(local_tokens.dtype)
-        # local_tokens = repeat(local_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
+        local_tokens = repeat(local_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
 
         return local_tokens, local_indices, local_vq_loss
 
     def forward(self, x, targets):
-        t = self.max_input_size // self.local_window
-        causal_plus_1_mask = torch.tril(torch.ones((t, t), device=x.device, dtype=torch.bool), diagonal=1)
-        local_tokens, _, local_vq_loss = self.encode_actions(x, attn_mask=causal_plus_1_mask)
+        local_tokens, _, local_vq_loss = self.encode_actions(x, attn_mask=self.causal_plus_1_mask)
 
-        causal_mask = torch.tril(torch.ones((t, t), device=x.device, dtype=torch.bool), diagonal=0)
-        loss = self.diffusion.causal_loss(self.decoder.model, x, targets, net_kwargs={'y': local_tokens, 'attn_mask': causal_mask}) + local_vq_loss
+        loss = self.diffusion.causal_loss(self.decoder.model, x, targets, net_kwargs={'y': local_tokens, 'attn_mask': self.causal_mask}) + local_vq_loss
 
         return loss
     
@@ -594,7 +602,8 @@ class CausalLAM(nn.Module):
         assert latents.ndim == 3
 
         b, c, f, device = *latents.shape, latents.device
-        t = self.max_input_size // self.local_window
+        # t = self.max_input_size // self.local_window
+        t = self.max_input_size
         
         causal_plus_1_mask = torch.tril(torch.ones((t, t), device=latents.device, dtype=torch.bool), diagonal=1)
         local_tokens, local_action_indices, _ = self.encode_actions(latents, attn_mask=causal_plus_1_mask)
@@ -604,7 +613,7 @@ class CausalLAM(nn.Module):
         # generate random actions
         random_local_actions_indices = self.generate_random_different_actions(local_action_indices, self.local_vq.codebook_size, device)
         random_local_action_tokens = self.local_vq.get_output_from_indices(random_local_actions_indices)
-        # random_local_action_tokens = repeat(random_local_action_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
+        random_local_action_tokens = repeat(random_local_action_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
 
         # decode actions
         causal_mask = torch.tril(torch.ones((t, t), device=latents.device, dtype=torch.bool), diagonal=0)
@@ -618,7 +627,8 @@ class CausalLAM(nn.Module):
     def sample_with_actions(self, shape, local_action_indices=None, n_step=50, guidance=1):
         assert local_action_indices is not None
 
-        t = self.max_input_size // self.local_window
+        # t = self.max_input_size // self.local_window
+        t = self.max_input_size
         device = next(self.parameters()).device
         noise = torch.randn(shape, device=device)
         local_tokens = repeat(self.local_vq.get_output_from_indices(local_action_indices), "b d -> b t d", t=t)
