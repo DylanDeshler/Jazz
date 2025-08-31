@@ -249,6 +249,18 @@ class FinalLayer(nn.Module):
         x = self.linear(x)
         return x
 
+class PatchEmbed(nn.Module):
+    def __init__(self, in_channels, hidden_size, max_input_size, local_window):
+        super().__init__()
+        self.reshape = Rearrange("b (t1 t2) d -> b t1 (t2 d)", t1=max_input_size // local_window, t2=local_window)
+        self.proj = nn.Linear(local_window * in_channels, hidden_size, bias=True)
+        self.norm = nn.LayerNorm(hidden_size)
+    
+    def forward(self, x):
+        x = self.reshape(x)
+        x = self.proj(x)
+        x = self.norm(x)
+
 class DiT(nn.Module):
     """
     Diffusion model with a Transformer backbone.
@@ -273,7 +285,7 @@ class DiT(nn.Module):
         self.num_heads = num_heads
         self.conditional = conditional
 
-        self.x_embedder = nn.Linear(in_channels, hidden_size, bias=True)
+        self.x_embedder = PatchEmbed(in_channels, hidden_size, max_input_size, local_window)
         self.t_embedder = TimestepEmbedder(hidden_size)
         if conditional:
             self.y_embedder = nn.Linear(in_channels, hidden_size, bias=True)
@@ -305,8 +317,8 @@ class DiT(nn.Module):
         # w = self.x_embedder.proj.weight.data
         # nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
         # nn.init.constant_(self.x_embedder.proj.bias, 0)
-        nn.init.xavier_uniform_(self.x_embedder.weight.data)
-        nn.init.constant_(self.x_embedder.bias, 0)
+        nn.init.xavier_uniform_(self.x_embedder.proj.weight.data)
+        nn.init.constant_(self.x_embedder.proj.bias, 0)
 
         # Initialize label embedding table:
         if self.conditional:
@@ -378,13 +390,14 @@ class Transformer(nn.Module):
         depth=28,
         num_heads=16,
         mlp_ratio=4.0,
+        local_window=1,
         **kwargs,
     ):
         super().__init__()
         self.in_channels = in_channels
         self.num_heads = num_heads
 
-        self.x_embedder = nn.Linear(in_channels, hidden_size, bias=True)
+        self.x_embedder = PatchEmbed(in_channels, hidden_size, max_input_size, local_window)
         self.pos_embed = nn.Parameter(torch.zeros(1, max_input_size, hidden_size), requires_grad=False)
 
         self.blocks = nn.ModuleList([
@@ -439,14 +452,8 @@ class CausalLAM(nn.Module):
         super().__init__()
         assert max_input_size % local_window == 0
 
-        self.encoder = Transformer(max_input_size=max_input_size // local_window, depth=depth, in_channels=hidden_size, hidden_size=hidden_size, num_heads=num_heads)
-        self.decoder = DiTWrapper(max_input_size=max_input_size // local_window, depth=depth, in_channels=hidden_size, hidden_size=hidden_size, num_heads=num_heads, conditional=True, local_window=local_window)
-
-        self.patch_embed = nn.Sequential(
-            Rearrange("b (t1 t2) d -> b t1 (t2 d)", t1=max_input_size // local_window, t2=local_window),
-            nn.Linear(local_window * in_channels, hidden_size),
-            nn.LayerNorm(hidden_size)
-        )
+        self.encoder = Transformer(max_input_size=max_input_size, depth=depth, in_channels=hidden_size, hidden_size=hidden_size, num_heads=num_heads, local_window=local_window)
+        self.decoder = DiTWrapper(max_input_size=max_input_size, depth=depth, in_channels=hidden_size, hidden_size=hidden_size, num_heads=num_heads, conditional=True, local_window=local_window)
 
         self.max_input_size = max_input_size
         self.local_window = local_window
@@ -529,19 +536,18 @@ class CausalLAM(nn.Module):
         local_tokens = self.to_local_action_emb(z)
         local_tokens, local_indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
         if self.training:
-            mask = torch.rand(x.shape[0], x.shape[1]) < 0.1
+            mask = torch.rand(z.shape[0], z.shape[1]) < 0.1
             local_tokens[mask.long()] = self.null_tokens.weight[0].to(local_tokens.dtype)
         # local_tokens = repeat(local_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
 
         return local_tokens, local_indices, local_vq_loss
 
     def forward(self, x):
-        x = self.patch_embed(x)
-
-        causal_plus_1_mask = torch.tril(torch.ones((x.shape[1], x.shape[1]), device=x.device, dtype=torch.bool), diagonal=1)
+        t = self.max_input_size // self.local_window
+        causal_plus_1_mask = torch.tril(torch.ones((t, t), device=x.device, dtype=torch.bool), diagonal=1)
         local_tokens, _, local_vq_loss = self.encode_actions(x, attn_mask=causal_plus_1_mask)
 
-        causal_mask = torch.tril(torch.ones((x.shape[1], x.shape[1]), device=x.device, dtype=torch.bool), diagonal=0)
+        causal_mask = torch.tril(torch.ones((t, t), device=x.device, dtype=torch.bool), diagonal=0)
         loss = self.diffusion.loss(self.decoder.model, x, net_kwargs={'y': local_tokens, 'attn_mask': causal_mask}) + local_vq_loss
 
         return loss
@@ -562,10 +568,10 @@ class CausalLAM(nn.Module):
     def lam_vs_random_actions(self, latents, n_steps=50, guidance=1):
         assert latents.ndim == 3
 
-        latents = self.patch_embed(latents)
         b, c, f, device = *latents.shape, latents.device
+        t = self.max_input_size // self.local_window
         
-        causal_plus_1_mask = torch.tril(torch.ones((latents.shape[1], latents.shape[1]), device=latents.device, dtype=torch.bool), diagonal=1)
+        causal_plus_1_mask = torch.tril(torch.ones((t, t), device=latents.device, dtype=torch.bool), diagonal=1)
         local_tokens, local_action_indices, _ = self.encode_actions(latents, attn_mask=causal_plus_1_mask)
 
         noise = torch.randn(latents.shape, device=next(self.parameters()).device)
@@ -576,7 +582,7 @@ class CausalLAM(nn.Module):
         # random_local_action_tokens = repeat(random_local_action_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
 
         # decode actions
-        causal_mask = torch.tril(torch.ones((latents.shape[1], latents.shape[1]), device=latents.device, dtype=torch.bool), diagonal=0)
+        causal_mask = torch.tril(torch.ones((t, t), device=latents.device, dtype=torch.bool), diagonal=0)
         recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': local_tokens, 'attn_mask': causal_mask}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight[0].to(latents.dtype), "d -> b t d", b=latents.shape[0], t=latents.shape[1]), 'attn_mask': causal_mask}, n_steps=n_steps, guidance=guidance, noise=noise)
         
         # decode random actions
