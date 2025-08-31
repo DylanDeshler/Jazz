@@ -257,12 +257,10 @@ class PatchEmbed(nn.Module):
         self.norm = nn.LayerNorm(hidden_size)
     
     def forward(self, x):
-        print(x.shape)
         x = self.reshape(x)
-        print(x.shape)
         x = self.proj(x)
-        print(x.shape)
         x = self.norm(x)
+        return x
 
 class DiT(nn.Module):
     """
@@ -423,6 +421,10 @@ class Transformer(nn.Module):
         pos_embed = get_1d_sincos_pos_embed(self.pos_embed.shape[-1], self.pos_embed.shape[-2])
         self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
 
+        # Initialize patch_embed like nn.Linear (instead of nn.Conv2d):
+        nn.init.xavier_uniform_(self.x_embedder.proj.weight.data)
+        nn.init.constant_(self.x_embedder.proj.bias, 0)
+
         # Zero-out output layers:
         nn.init.constant_(self.final_layer.weight, 0)
         nn.init.constant_(self.final_layer.bias, 0)
@@ -434,6 +436,7 @@ class Transformer(nn.Module):
         t: (N,) tensor of diffusion timesteps
         y: (N,) tensor of class labels
         """
+        print(x.shape, self.x_embedder(x).shape, self.pos_embed.shape)
         x = self.x_embedder(x) + self.pos_embed  # (N, T, D), where T = H * W / patch_size ** 2                             # (N, D)
         for block in self.blocks:
             x = block(x, attn_mask=attn_mask)                      # (N, T, D)
