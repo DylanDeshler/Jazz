@@ -285,7 +285,8 @@ def generate_samples_with_all_local_actions(step):
     batch_dir = os.path.join(batch_dir, 'local_actions')
     os.makedirs(batch_dir, exist_ok=True)
 
-    actions = torch.arange(0, raw_model.local_vq.codebook_size, device=device).long()
+    # actions = torch.arange(0, raw_model.local_vq.codebook_size, device=device).long()
+    actions = torch.randint(0, raw_model.local_vq.codebook_size, (32,), device=device).long()
     samples = raw_model.sample_with_actions((actions.shape[0], max_seq_len, 128), actions, guidance=2)
     
     B, L, D = samples.shape
