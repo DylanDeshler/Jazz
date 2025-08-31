@@ -326,21 +326,6 @@ class DiT(nn.Module):
         nn.init.constant_(self.final_layer.linear.weight, 0)
         nn.init.constant_(self.final_layer.linear.bias, 0)
 
-    # def unpatchify(self, x):
-    #     """
-    #     x: (N, T, patch_size**2 * C)
-    #     imgs: (N, H, W, C)
-    #     """
-    #     c = self.out_channels
-    #     p = self.x_embedder.patch_size[0]
-    #     h = w = int(x.shape[1] ** 0.5)
-    #     assert h * w == x.shape[1]
-
-    #     x = x.reshape(shape=(x.shape[0], h, w, p, p, c))
-    #     x = torch.einsum('nhwpqc->nchpwq', x)
-    #     imgs = x.reshape(shape=(x.shape[0], c, h * p, h * p))
-    #     return imgs
-
     def forward(self, x, t, y=None, attn_mask=None):
         """
         Forward pass of DiT.
@@ -453,14 +438,16 @@ class CausalLAM(nn.Module):
         self.encoder = Transformer(depth=depth, hidden_size=hidden_size, num_heads=num_heads)
         self.decoder = DiTWrapper(depth=depth, hidden_size=hidden_size, num_heads=num_heads, conditional=True)
 
-        self.max_input_size = max_input_size
-        self.local_window = local_window
-        self.to_local_action_emb = nn.Sequential(
+        self.patch_embed = nn.Sequential(
             Rearrange("b (t1 t2) d -> b t1 (t2 d)", t1=max_input_size // local_window, t2=local_window),
-            nn.Linear(local_window * in_channels, in_channels),
-            nn.LayerNorm(in_channels)
+            nn.Linear(local_window * in_channels, hidden_size),
+            nn.LayerNorm(hidden_size)
         )
 
+        self.max_input_size = max_input_size
+        self.local_window = local_window
+
+        self.to_local_action_emb = nn.Identity()
         self.local_vq = VectorQuantize(
             dim=in_channels,
             codebook_size=local_codebook_size,
@@ -521,6 +508,21 @@ class CausalLAM(nn.Module):
         self.apply(_basic_init)
 
         nn.init.normal_(self.null_tokens.weight, std=0.02)
+    
+    def unpatchify(self, x):
+        """
+        x: (N, T, patch_size**2 * C)
+        imgs: (N, H, W, C)
+        """
+        c = self.out_channels
+        p = self.x_embedder.patch_size[0]
+        h = w = int(x.shape[1] ** 0.5)
+        assert h * w == x.shape[1]
+
+        x = x.reshape(shape=(x.shape[0], h, w, p, p, c))
+        x = torch.einsum('nhwpqc->nchpwq', x)
+        imgs = x.reshape(shape=(x.shape[0], c, h * p, h * p))
+        return imgs
 
     @torch.no_grad()
     def encode_action_indices(self, x):
@@ -540,11 +542,13 @@ class CausalLAM(nn.Module):
         if self.training:
             mask = torch.rand(x.shape[0], x.shape[1]) < 0.1
             local_tokens[mask.long()] = self.null_tokens.weight[0].to(local_tokens.dtype)
-        local_tokens = repeat(local_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
+        # local_tokens = repeat(local_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
 
         return local_tokens, local_indices, local_vq_loss
 
     def forward(self, x):
+        x = self.patch_embed(x)
+
         causal_plus_1_mask = torch.tril(torch.ones((x.shape[1], x.shape[1]), device=x.device, dtype=torch.bool), diagonal=1)
         local_tokens, _, local_vq_loss = self.encode_actions(x, attn_mask=causal_plus_1_mask)
 
@@ -569,8 +573,9 @@ class CausalLAM(nn.Module):
     def lam_vs_random_actions(self, latents, n_steps=50, guidance=1):
         assert latents.ndim == 3
 
+        latents = self.patch_embed(latents)
         b, c, f, device = *latents.shape, latents.device
-
+        
         causal_plus_1_mask = torch.tril(torch.ones((latents.shape[1], latents.shape[1]), device=latents.device, dtype=torch.bool), diagonal=1)
         local_tokens, local_action_indices, _ = self.encode_actions(latents, attn_mask=causal_plus_1_mask)
 
@@ -595,6 +600,8 @@ class CausalLAM(nn.Module):
 
         device = next(self.parameters()).device
         noise = torch.randn(shape, device=device)
+        noise = self.patch_embed(noise)
+        shape = noise.shape
         local_tokens = repeat(self.local_vq.get_output_from_indices(local_action_indices), "b d -> b t d", t=shape[1])
 
         causal_mask = torch.tril(torch.ones((shape[1], shape[1]), device=device, dtype=torch.bool), diagonal=0)
