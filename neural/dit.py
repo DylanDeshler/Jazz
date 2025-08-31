@@ -436,8 +436,8 @@ class CausalLAM(nn.Module):
         super().__init__()
         assert max_input_size % local_window == 0
 
-        self.encoder = Transformer(max_input_size=max_input_size // local_window, depth=depth, hidden_size=hidden_size, num_heads=num_heads)
-        self.decoder = DiTWrapper(max_input_size=max_input_size // local_window, depth=depth, hidden_size=hidden_size, num_heads=num_heads, conditional=True)
+        self.encoder = Transformer(max_input_size=max_input_size // local_window, depth=depth, in_channels=hidden_size, hidden_size=hidden_size, num_heads=num_heads)
+        self.decoder = DiTWrapper(max_input_size=max_input_size // local_window, depth=depth, in_channels=hidden_size, hidden_size=hidden_size, num_heads=num_heads, conditional=True)
 
         self.patch_embed = nn.Sequential(
             Rearrange("b (t1 t2) d -> b t1 (t2 d)", t1=max_input_size // local_window, t2=local_window),
@@ -450,7 +450,7 @@ class CausalLAM(nn.Module):
 
         self.to_local_action_emb = nn.Identity()
         self.local_vq = VectorQuantize(
-            dim=in_channels,
+            dim=hidden_size,
             codebook_size=local_codebook_size,
             learnable_codebook=True,
             ema_update=False,
@@ -459,7 +459,7 @@ class CausalLAM(nn.Module):
             codebook_dim=codebook_dim,
         )
 
-        self.null_tokens = nn.Embedding(1, in_channels)
+        self.null_tokens = nn.Embedding(1, hidden_size)
 
         self.initialize_weights()
         self.encoder.initialize_weights()
