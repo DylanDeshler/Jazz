@@ -466,7 +466,7 @@ class CausalLAM(nn.Module):
 
         self.to_local_action_emb = nn.Identity()
         self.local_vq = VectorQuantize(
-            dim=hidden_size,
+            dim=in_channels,
             codebook_size=local_codebook_size,
             learnable_codebook=True,
             ema_update=False,
@@ -539,7 +539,7 @@ class CausalLAM(nn.Module):
         z = self.encoder(x, attn_mask=attn_mask)
 
         # action embeddings
-        local_tokens = self.to_local_action_emb(z);print(z.shape, local_tokens.shape)
+        local_tokens = self.to_local_action_emb(z)
         local_tokens, local_indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
         if self.training:
             mask = torch.rand(z.shape[0], z.shape[1]) < 0.1
