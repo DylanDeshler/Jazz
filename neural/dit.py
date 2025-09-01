@@ -605,8 +605,7 @@ class CausalLAM(nn.Module):
         # t = self.max_input_size // self.local_window
         t = self.max_input_size
         
-        causal_plus_1_mask = torch.tril(torch.ones((t, t), device=latents.device, dtype=torch.bool), diagonal=1)
-        local_tokens, local_action_indices, _ = self.encode_actions(latents, attn_mask=causal_plus_1_mask)
+        local_tokens, local_action_indices, _ = self.encode_actions(latents, attn_mask=self.causal_plus_1_mask)
 
         noise = torch.randn(latents.shape, device=next(self.parameters()).device)
 
@@ -616,11 +615,10 @@ class CausalLAM(nn.Module):
         random_local_action_tokens = repeat(random_local_action_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
 
         # decode actions
-        causal_mask = torch.tril(torch.ones((t, t), device=latents.device, dtype=torch.bool), diagonal=0)
-        recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': local_tokens, 'attn_mask': causal_mask}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight[0].to(latents.dtype), "d -> b t d", b=latents.shape[0], t=t), 'attn_mask': causal_mask}, n_steps=n_steps, guidance=guidance, noise=noise)
+        recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': local_tokens, 'attn_mask': self.causal_mask}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight[0].to(latents.dtype), "d -> b t d", b=latents.shape[0], t=t), 'attn_mask': self.causal_mask}, n_steps=n_steps, guidance=guidance, noise=noise)
         
         # decode random actions
-        random_recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': random_local_action_tokens, 'attn_mask': causal_mask}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=t), 'attn_mask': causal_mask}, n_steps=n_steps, guidance=guidance, noise=noise)
+        random_recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': random_local_action_tokens, 'attn_mask': self.causal_mask}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=t), 'attn_mask': self.causal_mask}, n_steps=n_steps, guidance=guidance, noise=noise)
 
         return {'latents': recon_latents, 'local_actions': local_action_indices}, {'latents': random_recon_latents, 'local_actions': random_local_actions_indices}
     
@@ -633,8 +631,7 @@ class CausalLAM(nn.Module):
         noise = torch.randn(shape, device=device)
         local_tokens = repeat(self.local_vq.get_output_from_indices(local_action_indices), "b d -> b t d", t=t)
 
-        causal_mask = torch.tril(torch.ones((t, t), device=device, dtype=torch.bool), diagonal=0)
-        samples = self.sampler.sample(self.decoder.model, shape, n_steps=n_step, net_kwargs={'y': local_tokens, 'attn_mask': causal_mask}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(next(self.parameters()).dtype), "d -> b t d", b=shape[0], t=t), 'attn_mask': causal_mask}, guidance=guidance, noise=noise)
+        samples = self.sampler.sample(self.decoder.model, shape, n_steps=n_step, net_kwargs={'y': local_tokens, 'attn_mask': self.causal_mask}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(next(self.parameters()).dtype), "d -> b t d", b=shape[0], t=t), 'attn_mask': self.causal_mask}, guidance=guidance, noise=noise)
 
         return samples
 
