@@ -204,7 +204,7 @@ if compile and 'cuda' in device:
 # wrap model into DDP container
 if ddp:
     model = DDP(model, device_ids=[ddp_local_rank])
-    # tokenizer = DDP(tokenizer, device_ids=[ddp_local_rank])
+    tokenizer = DDP(tokenizer, device_ids=[ddp_local_rank])
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
@@ -351,7 +351,7 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        losses = estimate_loss()
+        # losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
             X, Y = get_batch('test')[:8]
             model.eval()
