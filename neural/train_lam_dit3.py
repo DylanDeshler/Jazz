@@ -353,18 +353,18 @@ while True:
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
-            X, Y = get_batch('test')[:6]
+            X, Y = get_batch('test')[:8]
             model.eval()
             with ctx:
-                delta_psnr = generate_lam_vs_random_actions(X, Y, iter_num)
+                # delta_psnr = generate_lam_vs_random_actions(X, Y, iter_num)
                 # generate_inpainting_samples(X, iter_num)
                 # generate_samples_with_all_global_actions(iter_num)
                 generate_samples_with_all_local_actions(iter_num)
                 # generate_samples_with_global_and_local_actions(iter_num)
             model.train()
-            print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, delta PSNR {delta_psnr:.3f}")
-        else:
-            print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        #     print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, delta PSNR {delta_psnr:.3f}")
+        # else:
+        print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
