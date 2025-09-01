@@ -487,8 +487,8 @@ class CausalLAM(nn.Module):
         self.sampler = FMEulerSampler(self.diffusion)
 
         t = self.max_input_size // self.local_window
-        self.causal_plus_1_mask = self.register_buffer('causal_plus_1_mask', torch.tril(torch.ones((t, t), dtype=torch.bool), diagonal=1))
-        self.causal_mask = self.register_buffer('causal_mask', torch.tril(torch.ones((t, t), dtype=torch.bool), diagonal=0))
+        # self.causal_plus_1_mask = self.register_buffer('causal_plus_1_mask', torch.tril(torch.ones((t, t), dtype=torch.bool), diagonal=1))
+        # self.causal_mask = self.register_buffer('causal_mask', torch.tril(torch.ones((t, t), dtype=torch.bool), diagonal=0))
 
         self.causal_plus_1_mask = self.register_buffer('causal_plus_1_mask', self.block_causal_mask(diag=1))
         self.causal_mask = self.register_buffer('causal_mask', self.block_causal_mask(diag=0))
