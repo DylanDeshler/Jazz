@@ -38,15 +38,15 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'lam_dit6'
+out_dir = 'lam_dit7'
 eval_interval = 1000
-sample_interval = 5000
+sample_interval = 1000
 log_interval = 100
 save_interval = 10000
 eval_iters = 100
-eval_only = True # if True, script exits right after the first eval
+eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -56,9 +56,9 @@ dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
 batch_size = 48# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
-local_window = 25
+local_window = 10
 max_seq_len = 50 * 5
-codebook_size = 128
+codebook_size = 16
 codebook_dim = 32
 vae_embed_dim = 128
 # adamw optimizer
@@ -351,7 +351,7 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        # losses = estimate_loss()
+        losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
             X, Y = get_batch('test')
             X, Y = X[:10], Y[:10] 
@@ -363,9 +363,9 @@ while True:
                 generate_samples_with_all_local_actions(iter_num)
                 # generate_samples_with_global_and_local_actions(iter_num)
             model.train()
-        #     print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, delta PSNR {delta_psnr:.3f}")
-        # else:
-        print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+            print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, delta PSNR {delta_psnr:.3f}")
+        else:
+            print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
