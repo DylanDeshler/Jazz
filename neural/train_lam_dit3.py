@@ -351,8 +351,8 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
+        losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
-            losses = estimate_loss()
             X, Y = get_batch('test')[:8]
             model.eval()
             with ctx:
