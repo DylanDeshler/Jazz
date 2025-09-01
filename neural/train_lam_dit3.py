@@ -353,7 +353,7 @@ while True:
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
-            X, Y = get_batch('test')[:8]
+            X, Y = get_batch('test')[:6]
             model.eval()
             with ctx:
                 delta_psnr = generate_lam_vs_random_actions(X, Y, iter_num)
