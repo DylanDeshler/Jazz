@@ -38,7 +38,7 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'lam_dit5'
+out_dir = 'lam_dit6'
 eval_interval = 1000
 sample_interval = 5000
 log_interval = 100
@@ -46,7 +46,7 @@ save_interval = 10000
 eval_iters = 100
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -56,7 +56,7 @@ dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
 batch_size = 48# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
-local_window = 10
+local_window = 25
 max_seq_len = 50 * 5
 codebook_size = 128
 codebook_dim = 32
@@ -300,7 +300,7 @@ def generate_samples_with_all_local_actions(step):
     for i in range(B):
         sample = samples[i].squeeze()
 
-        sf.write(os.path.join(batch_dir, f'local_action_{i}.wav'), sample, 16000)
+        sf.write(os.path.join(batch_dir, f'local_action_{actions[i].item()}.wav'), sample, 16000)
 
 def psnr(y_true, y_pred, max_val=1.):
     mse = np.mean((y_true - y_pred) ** 2, axis=1)  # (B,)
@@ -314,9 +314,9 @@ if wandb_log and master_process:
 
 # training loop
 step1 = 6001
-step2 = 14001
-step3 = 24001
-step4 = 60001
+step2 = 10001
+step3 = 20001
+step4 = 40001
 
 X, Y = get_batch('train') # fetch the very first batch
 t0 = time.time()
