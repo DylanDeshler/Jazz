@@ -316,7 +316,7 @@ if wandb_log and master_process:
 step1 = 5001
 step2 = 10001
 step3 = 20001
-step4 = 40001
+step4 = 35001
 
 X, Y = get_batch('train') # fetch the very first batch
 t0 = time.time()
