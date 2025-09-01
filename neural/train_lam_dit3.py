@@ -44,7 +44,7 @@ sample_interval = 5000
 log_interval = 100
 save_interval = 10000
 eval_iters = 100
-eval_only = False # if True, script exits right after the first eval
+eval_only = True # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
@@ -356,7 +356,7 @@ while True:
             X, Y = get_batch('test')[:8]
             model.eval()
             with ctx:
-                # delta_psnr = generate_lam_vs_random_actions(X, Y, iter_num)
+                delta_psnr = generate_lam_vs_random_actions(X, Y, iter_num)
                 # generate_inpainting_samples(X, iter_num)
                 # generate_samples_with_all_global_actions(iter_num)
                 generate_samples_with_all_local_actions(iter_num)
