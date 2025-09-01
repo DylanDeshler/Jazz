@@ -352,6 +352,7 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         if iter_num % sample_interval == 0 and master_process:
+            losses = estimate_loss()
             X, Y = get_batch('test')[:8]
             model.eval()
             with ctx:
@@ -361,8 +362,9 @@ while True:
                 generate_samples_with_all_local_actions(iter_num)
                 # generate_samples_with_global_and_local_actions(iter_num)
             model.train()
-        losses = estimate_loss()
-        print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, delta PSNR {delta_psnr:.3f}")
+            print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, delta PSNR {delta_psnr:.3f}")
+        else:
+            print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
