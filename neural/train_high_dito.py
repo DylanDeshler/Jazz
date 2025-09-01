@@ -315,7 +315,7 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        X = get_batch('test')
+        X = get_batch('test');print(X.shape)
         model.eval()
         with ctx:
             logits = raw_model.reconstruct(X, n_steps=50)
