@@ -261,7 +261,7 @@ def generate_lam_vs_random_actions(x, y, step):
     batches = []
     for cut in tqdm(range(min(n_cuts, 8)), desc='Decoding'):
         batch = torch.cat([x[:, cut * 50: (cut + 1) * 50], recon[:, cut * 50: (cut + 1) * 50], random_recon[:, cut * 50: (cut + 1) * 50], y[:, cut * 50: (cut + 1) * 50]], dim=0).permute(0, 2, 1)
-        batches.append(torch.cat([tokenizer.decode(batch[:batch.shape[0]//2]), tokenizer.decode(batch[batch.shape[0]//2:])], dim=0))
+        batches.append(tokenizer.decode(batch))
     x, recon, random_recon, y = [res.cpu().detach().numpy().squeeze(1) for res in torch.cat(batches, dim=-1).split(B, dim=0)]
 
     recon_psnr = psnr(y[:, 4 * 16000:], recon[:, 4 * 16000:])
@@ -353,7 +353,8 @@ while True:
     if iter_num % eval_interval == 0 and master_process:
         # losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
-            X, Y = get_batch('test')[:4]
+            X, Y = get_batch('test')
+            X, Y = X[:10], Y[:10] 
             model.eval()
             with ctx:
                 delta_psnr = generate_lam_vs_random_actions(X, Y, iter_num)
