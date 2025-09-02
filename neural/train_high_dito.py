@@ -288,7 +288,7 @@ def save_samples(xs, ys, step):
         batches = []
         for cut in tqdm(range(n_cuts), desc='Decoding'):
             batch = torch.cat([x[:, :, cut * 50: (cut + 1) * 50], y[:, :, cut * 50: (cut + 1) * 50]], dim=0).permute(0, 2, 1)
-            batches.append(tokenizer.decode(batch))
+            batches.append(tokenizer.decode(batch, shape=(128, 50)))
         x, y = [res.cpu().detach().numpy().squeeze(1) for res in torch.cat(batches, dim=-1).split(B, dim=0)]
 
         # save .wavs
