@@ -282,12 +282,12 @@ def save_samples(xs, ys, step):
     print(xs.shape, ys.shape)
 
     for i in range(8):
-        x, y = xs[i].squeeze(), ys[i].squeeze()
+        x, y = xs[[i]].squeeze(), ys[[i]].squeeze()
 
         n_cuts = max_seq_len // 50
         batches = []
         for cut in tqdm(range(n_cuts), desc='Decoding'):
-            batch = torch.cat([x[:, cut * 50: (cut + 1) * 50], y[:, cut * 50: (cut + 1) * 50]], dim=0).permute(0, 2, 1)
+            batch = torch.cat([x[:, :, cut * 50: (cut + 1) * 50], y[:, :, cut * 50: (cut + 1) * 50]], dim=0).permute(0, 2, 1)
             batches.append(tokenizer.decode(batch))
         x, y = [res.cpu().detach().numpy().squeeze(1) for res in torch.cat(batches, dim=-1).split(B, dim=0)]
 
