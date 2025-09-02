@@ -183,7 +183,7 @@ def average_checkpoints(paths):
             acc[k] = acc[k].to(dtypes0[k])
     return acc
 
-model_args = dict(z_shape=(256, 25), n_residual_layers=2, lstm=0, transformer=1, channels=128, ratios=[2, 2, 2, 2], dimension=256, n_filters=64)
+model_args = dict(z_shape=(256, 25), n_residual_layers=2, lstm=0, transformer=1, channels=128, ratios=[1, 2, 2, 2], dimension=256, n_filters=64)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -325,10 +325,9 @@ while True:
         param_group['lr'] = lr
     
     if iter_num == step1 or local_iter_num == 0 and iter_num >= step1:
-        gradient_accumulation_steps *= 2
-    # if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
-    #     gradient_accumulation_steps *= 2
-    #     # batch_size *= 4
+        batch_size *= 2
+    if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
+        batch_size *= 2
     # if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
     #     gradient_accumulation_steps *= 2
     #     # batch_size *= 4
