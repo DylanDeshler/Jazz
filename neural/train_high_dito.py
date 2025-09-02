@@ -39,14 +39,14 @@ import glob
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'tokenizer_high1'
+out_dir = 'tokenizer10'
 eval_interval = 1000
 log_interval = 100
 save_interval = eval_interval * 10
 eval_iters = 100
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -54,10 +54,10 @@ wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
-batch_size = 48 * 2 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 48 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
-max_seq_len = 50 * 8
+n_samples = 8 * rate
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
@@ -116,37 +116,39 @@ ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torc
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 # poor man's data loader
+paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
+print(len(paths))
+
 def get_batch(split='train'):
     if split == 'train':
-        data = np.memmap('/home/dylan.d/research/music/Jazz/latents/train.bin', dtype=np.float32, mode='r', shape=(318575607, 128))
-        idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
-        batch = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).permute(0, 2, 1).to(device)
+        idxs = torch.randint(int(len(paths) * 0.98), (batch_size,))
+        samples = [paths[idx] for idx in idxs]
+        batch = []
+        for sample in samples:
+            x, sr = librosa.load(sample, sr=None)
+            assert sr == rate
+
+            start = np.random.randint(len(x) - n_samples)
+            batch.append(x[start:start + n_samples])
+        batch = torch.from_numpy(np.stack(batch, axis=0)).unsqueeze(1).to(device)
         return batch
     
     else:
-        data = np.memmap('/home/dylan.d/research/music/Jazz/latents/val.bin', dtype=np.float32, mode='r', shape=(6501543, 128))
-        idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
-        batch = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).permute(0, 2, 1).to(device)
+        idxs = torch.randint(int(len(paths) * 0.98), len(paths), (batch_size,))
+        samples = [paths[idx] for idx in idxs]
+        batch = []
+        for sample in samples:
+            x, sr = librosa.load(sample, sr=None)
+            assert sr == rate
+
+            start = np.random.randint(len(x) - n_samples)
+            batch.append(x[start:start + n_samples])
+        batch = torch.from_numpy(np.stack(batch, axis=0)).unsqueeze(1).to(device)
         return batch
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
 best_val_loss = 1e9
-
-ckpt_path = os.path.join('tokenizer10', 'ckpt.pt')
-checkpoint = torch.load(ckpt_path, map_location=device)
-tokenizer_args = checkpoint['model_args']
-
-tokenizer = Transformer(**tokenizer_args).to(device)
-state_dict = checkpoint['model']
-# fix the keys of the state dictionary :(
-# honestly no idea how checkpoints sometimes get this prefix, have to debug more
-unwanted_prefix = '_orig_mod.'
-for k,v in list(state_dict.items()):
-    if k.startswith(unwanted_prefix):
-        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-tokenizer.load_state_dict(state_dict)
-tokenizer.eval()
 
 def _extract_state_dict(checkpoint):
     state_dict = checkpoint['model']
@@ -183,7 +185,7 @@ def average_checkpoints(paths):
             acc[k] = acc[k].to(dtypes0[k])
     return acc
 
-model_args = dict(z_shape=(256, 50), n_residual_layers=4, lstm=0, transformer=0, channels=128, ratios=[1, 2, 2, 2], dimension=256, n_filters=128, c0=192, c1=384, c2=768)
+model_args = dict(z_shape=(256, 100), n_residual_layers=2, lstm=0, transformer=1, dimension = 256, n_filters = 128, ratios = [8, 5, 4, 2, 2, 2, 2], c0=192, c1=384, c2=768)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -278,20 +280,12 @@ def save_samples(xs, ys, step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
 
-    B = xs.shape[0]
-
-    n_cuts = max_seq_len // 50
-    batches = []
-    for cut in tqdm(range(n_cuts), desc='Decoding'):
-        batch = torch.cat([xs[:, :, cut * 50: (cut + 1) * 50], ys[:, :, cut * 50: (cut + 1) * 50]], dim=0)
-        batches.append(tokenizer.decode(batch))
-    xs, ys = [res.cpu().detach().numpy().squeeze() for res in torch.cat(batches, dim=-1).split(B, dim=0)]
-
-    for i in range(B):
+    for i in range(8):
+        x, y = xs[i].squeeze(), ys[i].squeeze()
 
         # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), xs[i].squeeze(), rate)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), ys[i].squeeze(), rate)
+        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, rate)
+        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, rate)
 
 # logging
 if wandb_log and master_process:
@@ -325,9 +319,10 @@ while True:
         param_group['lr'] = lr
     
     if iter_num == step1 or local_iter_num == 0 and iter_num >= step1:
-        batch_size *= 2
-    if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
-        batch_size *= 2
+        gradient_accumulation_steps *= 2
+    # if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
+    #     gradient_accumulation_steps *= 2
+    #     # batch_size *= 4
     # if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
     #     gradient_accumulation_steps *= 2
     #     # batch_size *= 4
@@ -338,12 +333,12 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        X = get_batch('test')[:8]
+        X = get_batch('test')
         model.eval()
         with ctx:
             logits = raw_model.reconstruct(X, n_steps=50)
         model.train()
-        save_samples(X, logits, iter_num)
+        save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
