@@ -36,8 +36,6 @@ import soundfile as sf
 import librosa
 import glob
 
-torch._dynamo.config.suppress_errors = True
-
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
@@ -242,6 +240,13 @@ if compile and 'cuda' in device:
     print("compiling the model... (takes a ~minute)")
     unoptimized_model = model
     model = torch.compile(model) # requires PyTorch 2.0
+
+for name, buf in model.named_buffers():
+    if torch.is_tensor(buf) and buf.dtype == torch.int64:
+        print("buffer int64:", name, buf.shape)
+for name, p in model.named_parameters():
+    if p.dtype == torch.int64:
+        print("param int64:", name, p.shape)
 
 # wrap model into DDP container
 if ddp:
