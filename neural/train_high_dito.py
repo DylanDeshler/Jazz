@@ -282,7 +282,7 @@ def save_samples(xs, ys, step):
     print(xs.shape, ys.shape)
 
     for i in range(8):
-        x, y = xs[[i]].squeeze(), ys[[i]].squeeze()
+        x, y = xs[[i]], ys[[i]]
 
         n_cuts = max_seq_len // 50
         batches = []
