@@ -289,6 +289,7 @@ if eval_only:
     sys.exit()
 
 X = get_batch('train') # fetch the very first batch
+print(X.shape)
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
@@ -315,7 +316,7 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        X = get_batch('test');print(X.shape)
+        X = get_batch('test')
         model.eval()
         with ctx:
             logits = raw_model.reconstruct(X, n_steps=50)
