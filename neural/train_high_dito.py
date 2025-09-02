@@ -278,9 +278,6 @@ def save_samples(xs, ys, step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
 
-    B = xs.shape[0]
-    print(xs.shape, ys.shape)
-
     for i in range(8):
         x, y = xs[[i]], ys[[i]]
 
@@ -290,7 +287,7 @@ def save_samples(xs, ys, step):
             batch = torch.cat([x[:, :, cut * 50: (cut + 1) * 50], y[:, :, cut * 50: (cut + 1) * 50]], dim=0)
             print('batch: ', batch.shape)
             batches.append(tokenizer.decode(batch))
-        x, y = [res.cpu().detach().numpy().squeeze(1) for res in torch.cat(batches, dim=-1).split(B, dim=0)]
+        x, y = [res.cpu().detach().numpy().squeeze(1) for res in torch.cat(batches, dim=-1).chunk(2, dim=0)]
 
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, rate)
