@@ -57,7 +57,7 @@ gradient_accumulation_steps = 2 # used to simulate larger batch sizes
 batch_size = 24 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
-n_samples = 8 * rate
+n_samples = 6 * rate
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
@@ -185,7 +185,7 @@ def average_checkpoints(paths):
             acc[k] = acc[k].to(dtypes0[k])
     return acc
 
-model_args = dict(z_shape=(256, 50), n_residual_layers=2, lstm=0, transformer=0, dimension = 256, n_filters = 64, ratios = [8, 5, 4, 4, 2, 2], c0=192, c1=384, c2=768)
+model_args = dict(z_shape=(256, 50), n_residual_layers=2, lstm=0, transformer=0, dimension = 256, n_filters = 32, ratios = [8, 5, 5, 4, 2], c0=192, c1=384, c2=768)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
