@@ -121,7 +121,7 @@ print(len(paths))
 
 def get_batch(split='train'):
     if split == 'train':
-        idxs = torch.randint(int(len(paths) * 0.98), (batch_size,))
+        idxs = torch.randint(int(len(paths) * 0.98), (batch_size,), dtype=torch.int32)
         samples = [paths[idx] for idx in idxs]
         batch = []
         for sample in samples:
@@ -134,7 +134,7 @@ def get_batch(split='train'):
         return batch
     
     else:
-        idxs = torch.randint(int(len(paths) * 0.98), len(paths), (batch_size,))
+        idxs = torch.randint(int(len(paths) * 0.98), len(paths), (batch_size,), dtype=torch.int32)
         samples = [paths[idx] for idx in idxs]
         batch = []
         for sample in samples:
