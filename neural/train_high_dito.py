@@ -285,9 +285,9 @@ def save_samples(xs, ys, step):
         batches = []
         for cut in tqdm(range(n_cuts), desc='Decoding'):
             batch = torch.cat([x[:, :, cut * 50: (cut + 1) * 50], y[:, :, cut * 50: (cut + 1) * 50]], dim=0)
-            print('batch: ', batch.shape)
             batches.append(tokenizer.decode(batch))
-        x, y = [res.cpu().detach().numpy().squeeze(1) for res in torch.cat(batches, dim=-1).chunk(2, dim=0)]
+        print(torch.cat(batches, dim=-1).shape)
+        x, y = [res.cpu().detach().numpy().squeeze() for res in torch.cat(batches, dim=-1).chunk(2, dim=0)]
 
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, rate)
