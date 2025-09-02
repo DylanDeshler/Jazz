@@ -183,7 +183,7 @@ def average_checkpoints(paths):
             acc[k] = acc[k].to(dtypes0[k])
     return acc
 
-model_args = dict(z_shape=(256, 25), n_residual_layers=2, lstm=0, transformer=1, channels=128, ratios=[2, 2, 2, 2], dimension=512, n_filters=128)
+model_args = dict(z_shape=(512, 25), n_residual_layers=2, lstm=0, transformer=1, channels=128, ratios=[2, 2, 2, 2], dimension=512, n_filters=128)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
