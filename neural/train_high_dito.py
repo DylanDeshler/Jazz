@@ -54,7 +54,7 @@ wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
-batch_size = 4 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
 n_samples = 5 * rate
@@ -71,7 +71,7 @@ warmup_iters = 2000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
-backend = 'nccl' # 'nccl', 'gloo', etc.
+backend = 'gloo' # 'nccl', 'gloo', etc.
 # system
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
@@ -121,7 +121,7 @@ print(len(paths))
 
 def get_batch(split='train'):
     if split == 'train':
-        idxs = torch.randint(int(len(paths) * 0.98), (batch_size,), dtype=torch.int32)
+        idxs = torch.randint(int(len(paths) * 0.98), (batch_size,))
         samples = [paths[idx] for idx in idxs]
         batch = []
         for sample in samples:
@@ -134,7 +134,7 @@ def get_batch(split='train'):
         return batch
     
     else:
-        idxs = torch.randint(int(len(paths) * 0.98), len(paths), (batch_size,), dtype=torch.int32)
+        idxs = torch.randint(int(len(paths) * 0.98), len(paths), (batch_size,))
         samples = [paths[idx] for idx in idxs]
         batch = []
         for sample in samples:
@@ -240,13 +240,6 @@ if compile and 'cuda' in device:
     print("compiling the model... (takes a ~minute)")
     unoptimized_model = model
     model = torch.compile(model) # requires PyTorch 2.0
-
-for name, buf in model.named_buffers():
-    if torch.is_tensor(buf) and buf.dtype == torch.int64:
-        print("buffer int64:", name, buf.shape)
-for name, p in model.named_parameters():
-    if p.dtype == torch.int64:
-        print("param int64:", name, p.shape)
 
 # wrap model into DDP container
 if ddp:
