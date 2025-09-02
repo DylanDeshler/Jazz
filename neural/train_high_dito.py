@@ -36,6 +36,8 @@ import soundfile as sf
 import librosa
 import glob
 
+torch._dynamo.config.suppress_errors = True
+
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
