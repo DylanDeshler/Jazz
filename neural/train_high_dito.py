@@ -278,16 +278,14 @@ def save_samples(xs, ys, step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
 
-    for i in range(8):
-        x, y = xs[[i]], ys[[i]]
+    n_cuts = max_seq_len // 50
+    batches = []
+    for cut in tqdm(range(n_cuts), desc='Decoding'):
+        batch = torch.cat([xs[:, :, cut * 50: (cut + 1) * 50], ys[:, :, cut * 50: (cut + 1) * 50]], dim=0)
+        batches.append(tokenizer.decode(batch))
+    xs, ys = [res.cpu().detach().numpy().squeeze() for res in torch.cat(batches, dim=-1).chunk(2, dim=0)]
 
-        n_cuts = max_seq_len // 50
-        batches = []
-        for cut in tqdm(range(n_cuts), desc='Decoding'):
-            batch = torch.cat([x[:, :, cut * 50: (cut + 1) * 50], y[:, :, cut * 50: (cut + 1) * 50]], dim=0)
-            batches.append(tokenizer.decode(batch))
-        print(torch.cat(batches, dim=-1).shape)
-        x, y = [res.cpu().detach().numpy().squeeze() for res in torch.cat(batches, dim=-1).chunk(2, dim=0)]
+    for x, y in zip(xs, ys):
 
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, rate)
@@ -339,7 +337,7 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        X = get_batch('test')
+        X = get_batch('test')[:8]
         model.eval()
         with ctx:
             logits = raw_model.reconstruct(X, n_steps=50)
