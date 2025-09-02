@@ -56,6 +56,7 @@ dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
 batch_size = 48 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
+rate = 16000
 max_seq_len = 50 * 8
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
@@ -131,6 +132,21 @@ def get_batch(split='train'):
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
 best_val_loss = 1e9
+
+ckpt_path = os.path.join('tokenizer10', 'ckpt.pt')
+checkpoint = torch.load(ckpt_path, map_location=device)
+tokenizer_args = checkpoint['model_args']
+
+tokenizer = Transformer(**tokenizer_args).to(device)
+state_dict = checkpoint['model']
+# fix the keys of the state dictionary :(
+# honestly no idea how checkpoints sometimes get this prefix, have to debug more
+unwanted_prefix = '_orig_mod.'
+for k,v in list(state_dict.items()):
+    if k.startswith(unwanted_prefix):
+        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+tokenizer.load_state_dict(state_dict)
+tokenizer.eval()
 
 def _extract_state_dict(checkpoint):
     state_dict = checkpoint['model']
@@ -262,8 +278,17 @@ def save_samples(xs, ys, step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
 
+    B = xs.shape[0]
+
     for i in range(8):
         x, y = xs[i].squeeze(), ys[i].squeeze()
+
+        n_cuts = max_seq_len // 50
+        batches = []
+        for cut in tqdm(range(n_cuts), desc='Decoding'):
+            batch = torch.cat([x[:, cut * 50: (cut + 1) * 50], y[:, cut * 50: (cut + 1) * 50]], dim=0).permute(0, 2, 1)
+            batches.append(tokenizer.decode(batch))
+        x, y = [res.cpu().detach().numpy().squeeze(1) for res in torch.cat(batches, dim=-1).split(B, dim=0)]
 
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, rate)
@@ -289,7 +314,6 @@ if eval_only:
     sys.exit()
 
 X = get_batch('train') # fetch the very first batch
-print(X.shape)
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed

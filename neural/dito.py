@@ -32,7 +32,7 @@ class DiTo(nn.Module):
         return loss
     
     def encode(self, x):
-        z = self.encoder(x)
+        z = self.encoder(x);print(x.shape, z.shape)
         z = self.z_norm(z.transpose(1, 2)).transpose(1, 2)
         return z
 
