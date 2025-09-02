@@ -119,13 +119,13 @@ def get_batch(split='train'):
     if split == 'train':
         data = np.memmap('/home/dylan.d/research/music/Jazz/latents/train.bin', dtype=np.float32, mode='r', shape=(318575607, 128))
         idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
-        batch = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).to(device)
+        batch = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).permute(0, 2, 1).to(device)
         return batch
     
     else:
         data = np.memmap('/home/dylan.d/research/music/Jazz/latents/val.bin', dtype=np.float32, mode='r', shape=(6501543, 128))
         idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
-        batch = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).to(device)
+        batch = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).permute(0, 2, 1).to(device)
         return batch
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
