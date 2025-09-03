@@ -46,7 +46,7 @@ save_interval = eval_interval * 10
 eval_iters = 100
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -293,10 +293,9 @@ if wandb_log and master_process:
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
-step1 = 5001
-step2 = 20001
-step3 = 30001
-step4 = 50001
+step1 = 3001
+step2 = 5001
+step3 = 10001
 
 if eval_only:
     gradient_accumulation_steps *= 2
@@ -319,13 +318,11 @@ while True:
         param_group['lr'] = lr
     
     if iter_num == step1 or local_iter_num == 0 and iter_num >= step1:
-        gradient_accumulation_steps *= 2
+        batch_size = 24
     if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
         gradient_accumulation_steps *= 2
-    #     # batch_size *= 4
-    # if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
-    #     gradient_accumulation_steps *= 2
-    #     # batch_size *= 4
+    if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
+        gradient_accumulation_steps *= 2
     # if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
     #     gradient_accumulation_steps *= 2
 
