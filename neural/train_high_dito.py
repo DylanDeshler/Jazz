@@ -40,14 +40,14 @@ import glob
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'tokenizer_high1'
+out_dir = 'tokenizer_high2'
 eval_interval = 1000
 log_interval = 100
 save_interval = eval_interval * 10
 eval_iters = 100
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -55,10 +55,10 @@ wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
-batch_size = 16 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
-n_samples = 5 * rate
+n_samples = 8 * rate
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
@@ -187,8 +187,8 @@ def average_checkpoints(paths):
             acc[k] = acc[k].to(dtypes0[k])
     return acc
 
-model_args = dict(z_shape=(256, 50), n_residual_layers=2, lstm=0, transformer=1, dimension=256, n_filters=32, ratios=[8, 5, 5, 4, 2], c0=128, c1=256, c2=512)
-# model_args = dict(z_shape=(256, 50), n_residual_layers=2, lstm=0, transformer=1, dimension=256, n_filters=64, ratios=[8, 5, 5, 4, 2], c0=192, c1=384, c2=768)
+# model_args = dict(z_shape=(256, 50), n_residual_layers=2, lstm=0, transformer=1, dimension=256, n_filters=32, ratios=[8, 5, 5, 4, 2], c0=128, c1=256, c2=512)
+model_args = dict(z_shape=(256, 50), n_residual_layers=2, lstm=0, transformer=1, dimension=256, n_filters=64, ratios=[8, 5, 5, 4, 2], dilation_base=3, c0=192, c1=384, c2=768)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
