@@ -19,6 +19,7 @@ $ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=1 --master_addr=123.456.123
 import os
 import time
 import math
+import shutil
 import pickle
 from contextlib import nullcontext
 from tqdm import tqdm
@@ -107,6 +108,7 @@ print(f"tokens per iteration will be: {tokens_per_iter:,}")
 
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
+    shutil.copy(os.path.abspath(__file__), os.path.join(out_dir, os.path.basename(os.path.abspath(__file__))))
 torch.manual_seed(1337 + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
@@ -185,7 +187,8 @@ def average_checkpoints(paths):
             acc[k] = acc[k].to(dtypes0[k])
     return acc
 
-model_args = dict(z_shape=(256, 50), n_residual_layers=2, lstm=0, transformer=1, dimension = 256, n_filters = 32, ratios = [8, 5, 5, 4, 2], c0=128, c1=256, c2=512)
+model_args = dict(z_shape=(256, 50), n_residual_layers=2, lstm=0, transformer=1, dimension=256, n_filters=32, ratios=[8, 5, 5, 4, 2], c0=128, c1=256, c2=512)
+# model_args = dict(z_shape=(256, 50), n_residual_layers=2, lstm=0, transformer=1, dimension=256, n_filters=64, ratios=[8, 5, 5, 4, 2], c0=192, c1=384, c2=768)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -295,7 +298,7 @@ if wandb_log and master_process:
 # training loop
 step1 = 3001
 step2 = 5001
-step3 = 10001
+step3 = 8001
 
 if eval_only:
     gradient_accumulation_steps *= 2
@@ -323,8 +326,6 @@ while True:
         gradient_accumulation_steps *= 2
     if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
         gradient_accumulation_steps *= 2
-    # if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
-    #     gradient_accumulation_steps *= 2
 
     tokens_trained += batch_size * gradient_accumulation_steps
 
