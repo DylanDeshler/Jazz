@@ -296,13 +296,9 @@ if wandb_log and master_process:
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
-# step1 = 3001
-# step2 = 5001
-# step3 = 8001
-step1 = 1001
-step2 = 3001
-step3 = 5001
-
+step1 = 3001
+step2 = 5001
+step3 = 8001
 if eval_only:
     gradient_accumulation_steps *= 2
     model.eval()
