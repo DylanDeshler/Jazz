@@ -515,7 +515,7 @@ class SEANetEncoder(nn.Module):
                  ratios: tp.List[int] = [8, 5, 4, 2], activation: str = 'ELU', activation_params: dict = {'alpha': 1.0},
                  norm: str = 'weight_norm', norm_params: tp.Dict[str, tp.Any] = {}, kernel_size: int = 7,
                  last_kernel_size: int = 7, residual_kernel_size: int = 3, dilation_base: int = 2, causal: bool = False,
-                 pad_mode: str = 'reflect', true_skip: bool = False, compress: int = 2, lstm: int = 2, transformer: int = 1, down_proj: bool = False):
+                 pad_mode: str = 'reflect', true_skip: bool = False, compress: int = 2, lstm: int = 2, transformer: int = 1, down_proj: int = None):
         super().__init__()
         self.channels = channels
         self.dimension = dimension
@@ -555,10 +555,8 @@ class SEANetEncoder(nn.Module):
         if lstm:
             model += [SLSTM(mult * n_filters, num_layers=lstm)]
         if transformer:
-            if down_proj:
-                SConv1d(mult * n_filters, dimension, kernel_size=last_kernel_size, norm=norm, norm_kwargs=norm_params, causal=causal, pad_mode=pad_mode)
-                model += [StreamingTransformerEncoder(dimension, num_heads=4, num_layers=transformer)]
-                SConv1d(dimension, mult * n_filters, kernel_size=last_kernel_size, norm=norm, norm_kwargs=norm_params, causal=causal, pad_mode=pad_mode)
+            if down_proj is not None:
+                model += [SConv1d(mult * n_filters, down_proj, kernel_size=last_kernel_size, norm=norm, norm_kwargs=norm_params, causal=causal, pad_mode=pad_mode), StreamingTransformerEncoder(down_proj, num_heads=4, num_layers=transformer), SConv1d(down_proj, mult * n_filters, kernel_size=last_kernel_size, norm=norm, norm_kwargs=norm_params, causal=causal, pad_mode=pad_mode)]
             else:
                 model += [StreamingTransformerEncoder(mult * n_filters, num_heads=4, num_layers=transformer)]
 

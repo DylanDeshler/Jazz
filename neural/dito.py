@@ -7,7 +7,7 @@ from seanet import SEANetEncoder
 from fm import FM, FMEulerSampler
 
 class DiTo(nn.Module):
-    def __init__(self, z_shape, n_residual_layers, lstm, transformer, down_proj=False, channels=1, dimension=128, n_filters=32, ratios=[8, 5, 4, 2], dilation_base=2, c0=128, c1=256, c2=512):
+    def __init__(self, z_shape, n_residual_layers, lstm, transformer, down_proj=None, channels=1, dimension=128, n_filters=32, ratios=[8, 5, 4, 2], dilation_base=2, c0=128, c1=256, c2=512):
         super().__init__()
         self.z_shape = z_shape
         self.encoder = SEANetEncoder(channels=channels, dimension=dimension, n_filters=n_filters, ratios=ratios, n_residual_layers=n_residual_layers, lstm=lstm, transformer=transformer, dilation_base=dilation_base, down_proj=down_proj)
