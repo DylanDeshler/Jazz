@@ -556,7 +556,7 @@ class SEANetEncoder(nn.Module):
             model += [SLSTM(mult * n_filters, num_layers=lstm)]
         if transformer:
             if down_proj is not None:
-                model += [SConv1d(mult * n_filters, down_proj, kernel_size=last_kernel_size, norm=norm, norm_kwargs=norm_params, causal=causal, pad_mode=pad_mode), StreamingTransformerEncoder(down_proj, num_heads=4, num_layers=transformer), SConv1d(down_proj, mult * n_filters, kernel_size=last_kernel_size, norm=norm, norm_kwargs=norm_params, causal=causal, pad_mode=pad_mode)]
+                model += [SConv1d(mult * n_filters, down_proj, kernel_size=1, norm=norm, norm_kwargs=norm_params, causal=causal, pad_mode=pad_mode), StreamingTransformerEncoder(down_proj, num_heads=4, num_layers=transformer), SConv1d(down_proj, mult * n_filters, kernel_size=1, norm=norm, norm_kwargs=norm_params, causal=causal, pad_mode=pad_mode)]
             else:
                 model += [StreamingTransformerEncoder(mult * n_filters, num_heads=4, num_layers=transformer)]
 
