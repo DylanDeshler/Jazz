@@ -555,7 +555,9 @@ class SEANetEncoder(nn.Module):
         if lstm:
             model += [SLSTM(mult * n_filters, num_layers=lstm)]
         if transformer:
-            model += [StreamingTransformerEncoder(mult * n_filters, num_heads=4, num_layers=transformer)]
+            SConv1d(mult * n_filters, dimension, kernel_size=last_kernel_size, norm=norm, norm_kwargs=norm_params, causal=causal, pad_mode=pad_mode)
+            model += [StreamingTransformerEncoder(dimension, num_heads=4, num_layers=transformer)]
+            SConv1d(dimension, mult * n_filters, kernel_size=last_kernel_size, norm=norm, norm_kwargs=norm_params, causal=causal, pad_mode=pad_mode)
 
         model += [
             act(**activation_params),
