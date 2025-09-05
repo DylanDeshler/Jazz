@@ -320,8 +320,8 @@ while True:
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
     
-    # if iter_num == step1 or local_iter_num == 0 and iter_num >= step1:
-    #     batch_size = 24
+    if iter_num == step1 or local_iter_num == 0 and iter_num >= step1:
+        batch_size = 22
     if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
         gradient_accumulation_steps *= 2
     if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
