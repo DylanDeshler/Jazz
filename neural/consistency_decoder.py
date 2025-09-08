@@ -346,7 +346,7 @@ class ConsistencyDecoderUNetV2(nn.Module):
             ConvResblock(channels[-1] * 2, channels[-1], t_dim),
             Upsample(channels[-1], t_dim, ratios[-1]),
         ]))
-        self.up.append(up_2 = nn.ModuleList([
+        self.up.append(nn.ModuleList([
             ConvResblock(channels[-1] * 2, channels[-1], t_dim),
             ConvResblock(channels[-1] * 2, channels[-1], t_dim),
             ConvResblock(channels[-1] * 2, channels[-1], t_dim),
