@@ -354,7 +354,7 @@ class ConsistencyDecoderUNetV2(nn.Module):
             Upsample(channels[-1], t_dim, ratios[-2]),
         ]))
 
-        for i in range(2, len(channels)):
+        for i in range(1, len(channels) - 1):
             c_prev = channels[-i]
             c_cur = channels[-i-1]
             c_next = channels[-i-2];print(i, len(channels), c_prev, c_cur, c_next)
