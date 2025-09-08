@@ -423,13 +423,16 @@ class ConsistencyDecoderUNetV2(nn.Module):
         for down in self.down:
             for block in down:
                 x = block(x, t)
+                print(x.shape)
                 skips.append(x)
 
         for mid in self.mid:
             x = mid(x, t)
+            print(x.shape)
 
         for up in self.up[::-1]:
             for block in up:
+                print(x.shape)
                 if isinstance(block, ConvResblock):
                     x = torch.concat([x, skips.pop()], dim=1)
                 x = block(x, t)
