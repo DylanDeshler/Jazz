@@ -267,3 +267,171 @@ class ConsistencyDecoderUNet(nn.Module):
                 x = block(x, t)
 
         return self.output(x)
+
+class ConsistencyDecoderUNetV2(nn.Module):
+    def __init__(self, in_channels=3, z_dec_channels=None, channels=[320, 640, 1024], pe_dim=320, t_dim=1280, ratios=[8, 5, 4]) -> None:
+        super().__init__()
+        if z_dec_channels is not None:
+            in_channels += z_dec_channels
+        self.embed_image = ImageEmbedding(in_channels=in_channels, out_channels=channels[0])
+        self.embed_time = PositionalEmbedding(pe_dim=pe_dim, out_dim=t_dim)
+
+        assert len(channels) == len(ratios), f'{len(channels)} != {len(ratios)}'
+
+        self.down = nn.ModuleList([])
+        self.down.append(nn.ModuleList([
+            ConvResblock(channels[0], channels[0], t_dim),
+            ConvResblock(channels[0], channels[0], t_dim),
+            ConvResblock(channels[0], channels[0], t_dim),
+            Downsample(channels[0], t_dim, ratios[0]),
+        ]))
+
+        # Levels 1..N-1
+        for i in range(1, len(channels)):
+            c_prev = channels[i - 1]
+            c_cur = channels[i]
+            self.down.append(nn.ModuleList([
+                ConvResblock(c_prev, c_cur, t_dim),
+                ConvResblock(c_cur, c_cur, t_dim),
+                ConvResblock(c_cur, c_cur, t_dim),
+                Downsample(c_cur, t_dim, ratios[i]),
+            ]))
+
+        # Bottom (no downsample), uses last channel again
+        c_bot = channels[-1]
+        self.down.append(nn.ModuleList([
+            ConvResblock(c_bot, c_bot, t_dim),
+            ConvResblock(c_bot, c_bot, t_dim),
+            ConvResblock(c_bot, c_bot, t_dim),
+        ]))
+        
+        self.mid = nn.ModuleList([
+            ConvResblock(channels[-1], channels[-1], t_dim),
+            ConvResblock(channels[-1], channels[-1], t_dim),
+        ])
+
+        # up_3 = nn.ModuleList([
+        #     ConvResblock(c2 * 2, c2, t_dim),
+        #     ConvResblock(c2 * 2, c2, t_dim),
+        #     ConvResblock(c2 * 2, c2, t_dim),
+        #     ConvResblock(c2 * 2, c2, t_dim),
+        #     Upsample(c2, t_dim, ratios[2]),
+        # ])
+        # up_2 = nn.ModuleList([
+        #     ConvResblock(c2 * 2, c2, t_dim),
+        #     ConvResblock(c2 * 2, c2, t_dim),
+        #     ConvResblock(c2 * 2, c2, t_dim),
+        #     ConvResblock(c2 + c1, c2, t_dim),
+        #     Upsample(c2, t_dim, ratios[1]),
+        # ])
+        # up_1 = nn.ModuleList([
+        #     ConvResblock(c2 + c1, c1, t_dim),
+        #     ConvResblock(c1 * 2, c1, t_dim),
+        #     ConvResblock(c1 * 2, c1, t_dim),
+        #     ConvResblock(c0 + c1, c1, t_dim),
+        #     Upsample(c1, t_dim, ratios[0]),
+        # ])
+        # up_0 = nn.ModuleList([
+        #     ConvResblock(c0 + c1, c0, t_dim),
+        #     ConvResblock(c0 * 2, c0, t_dim),
+        #     ConvResblock(c0 * 2, c0, t_dim),
+        #     ConvResblock(c0 * 2, c0, t_dim),
+        # ])
+
+        self.up = nn.ModuleList([])
+        self.up.append(nn.ModuleList([
+            ConvResblock(channels[-1] * 2, channels[-1], t_dim),
+            ConvResblock(channels[-1] * 2, channels[-1], t_dim),
+            ConvResblock(channels[-1] * 2, channels[-1], t_dim),
+            ConvResblock(channels[-1] * 2, channels[-1], t_dim),
+            Upsample(channels[-1], t_dim, ratios[-1]),
+        ]))
+        self.up.append(up_2 = nn.ModuleList([
+            ConvResblock(channels[-1] * 2, channels[-1], t_dim),
+            ConvResblock(channels[-1] * 2, channels[-1], t_dim),
+            ConvResblock(channels[-1] * 2, channels[-1], t_dim),
+            ConvResblock(channels[-1] + channels[-2], channels[-1], t_dim),
+            Upsample(channels[-1], t_dim, ratios[-2]),
+        ]))
+
+        for i in range(2, len(channels)):
+            c_prev = channels[-i]
+            c_cur = channels[-i-1]
+            c_next = channels[-i-2]
+            self.up.append(nn.ModuleList([
+                ConvResblock(c_prev + c_cur, c_cur, t_dim),
+                ConvResblock(c_cur * 2, c_cur, t_dim),
+                ConvResblock(c_cur * 2, c_cur, t_dim),
+                ConvResblock(c_next + c_cur, c_cur, t_dim),
+                Upsample(c_cur, t_dim, ratios[-i-2]),
+            ]))
+        
+        self.up.append(nn.ModuleList([
+            ConvResblock(channels[0] + channels[1], channels[0], t_dim),
+            ConvResblock(channels[0] * 2, channels[0], t_dim),
+            ConvResblock(channels[0] * 2, channels[0], t_dim),
+            ConvResblock(channels[0] * 2, channels[0], t_dim),
+        ]))
+
+        # for i in range(n_levels):
+        #     j = -(i + 1)
+        #     if i == 0:
+        #         self.up.append(nn.ModuleList([
+        #             ConvResblock(channels[j] * 2, channels[j], t_dim),
+        #             ConvResblock(channels[j] * 2, channels[j], t_dim),
+        #             ConvResblock(channels[j] * 2, channels[j], t_dim),
+        #             ConvResblock(channels[j] * 2, channels[j], t_dim),
+        #             Upsample(channels[j], t_dim, ratios[j]),
+        #         ]))
+        #     elif i == n_levels - 1:
+        #          self.up.append(nn.ModuleList([
+        #             ConvResblock(channels[0] + channels[1], channels[0], t_dim),
+        #             ConvResblock(channels[0] * 2, channels[0], t_dim),
+        #             ConvResblock(channels[0] * 2, channels[0], t_dim),
+        #             ConvResblock(channels[0] * 2, channels[0], t_dim),
+        #         ]))
+        #     else:
+        #         self.up.append(nn.ModuleList([
+        #             ConvResblock(c2 + c1, c1, t_dim),
+        #             ConvResblock(c1 * 2, c1, t_dim),
+        #             ConvResblock(c1 * 2, c1, t_dim),
+        #             ConvResblock(channels[0] + c1, c1, t_dim),
+        #             Upsample(c1, t_dim, ratios[0]),
+        #         ]))
+
+        self.output = ImageUnembedding(in_channels=channels[0], out_channels=1)
+    
+    def get_last_layer_weight(self):
+        return self.output.f.weight
+
+    def forward(self, x, t=None, z_dec=None) -> torch.Tensor:
+        if z_dec is not None:
+            # if z_dec.shape[-2] != x.shape[-2] or z_dec.shape[-1] != x.shape[-1]:
+            if z_dec.shape[-1] != x.shape[-1]:
+                # assert x.shape[-2] // z_dec.shape[-2] == x.shape[-1] // z_dec.shape[-1]
+                # z_dec = F.upsample_nearest(z_dec, scale_factor=x.shape[-2] // z_dec.shape[-2])
+                z_dec = F.interpolate(z_dec, scale_factor=x.shape[-1] // z_dec.shape[-1], mode='nearest')
+            x = torch.cat([x, z_dec], dim=1)
+        
+        x = self.embed_image(x)
+
+        if t is None:
+            t = torch.zeros(x.shape[0], device=x.device)        
+        t = self.embed_time(t)
+
+        skips = [x]
+        for down in self.down:
+            for block in down:
+                x = block(x, t)
+                skips.append(x)
+
+        for mid in self.mid:
+            x = mid(x, t)
+
+        for up in self.up[::-1]:
+            for block in up:
+                if isinstance(block, ConvResblock):
+                    x = torch.concat([x, skips.pop()], dim=1)
+                x = block(x, t)
+
+        return self.output(x)
