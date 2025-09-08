@@ -340,10 +340,18 @@ class ConsistencyDecoderUNetV2(nn.Module):
 
         self.up = nn.ModuleList([])
         self.up.append(nn.ModuleList([
-            ConvResblock(channels[0] + channels[1], channels[0], t_dim),
-            ConvResblock(channels[0] * 2, channels[0], t_dim),
-            ConvResblock(channels[0] * 2, channels[0], t_dim),
-            ConvResblock(channels[0] * 2, channels[0], t_dim),
+            ConvResblock(channels[-1] * 2, channels[-1], t_dim),
+            ConvResblock(channels[-1] * 2, channels[-1], t_dim),
+            ConvResblock(channels[-1] * 2, channels[-1], t_dim),
+            ConvResblock(channels[-1] * 2, channels[-1], t_dim),
+            Upsample(channels[-1], t_dim, ratios[-1]),
+        ]))
+        self.up.append(nn.ModuleList([
+            ConvResblock(channels[-1] * 2, channels[-1], t_dim),
+            ConvResblock(channels[-1] * 2, channels[-1], t_dim),
+            ConvResblock(channels[-1] * 2, channels[-1], t_dim),
+            ConvResblock(channels[-1] + channels[-2], channels[-1], t_dim),
+            Upsample(channels[-1], t_dim, ratios[-2]),
         ]))
 
         for i in range(1, len(channels) - 1):
@@ -357,21 +365,13 @@ class ConsistencyDecoderUNetV2(nn.Module):
                 ConvResblock(c_next + c_cur, c_cur, t_dim),
                 Upsample(c_cur, t_dim, ratios[-i-2]),
             ]))
-        self.up.append(nn.ModuleList([
-            ConvResblock(channels[-1] * 2, channels[-1], t_dim),
-            ConvResblock(channels[-1] * 2, channels[-1], t_dim),
-            ConvResblock(channels[-1] * 2, channels[-1], t_dim),
-            ConvResblock(channels[-1] + channels[-2], channels[-1], t_dim),
-            Upsample(channels[-1], t_dim, ratios[-2]),
-        ]))
-        self.up.append(nn.ModuleList([
-            ConvResblock(channels[-1] * 2, channels[-1], t_dim),
-            ConvResblock(channels[-1] * 2, channels[-1], t_dim),
-            ConvResblock(channels[-1] * 2, channels[-1], t_dim),
-            ConvResblock(channels[-1] * 2, channels[-1], t_dim),
-            Upsample(channels[-1], t_dim, ratios[-1]),
-        ]))
         
+        self.up.append(nn.ModuleList([
+            ConvResblock(channels[0] + channels[1], channels[0], t_dim),
+            ConvResblock(channels[0] * 2, channels[0], t_dim),
+            ConvResblock(channels[0] * 2, channels[0], t_dim),
+            ConvResblock(channels[0] * 2, channels[0], t_dim),
+        ]))
 
         # for i in range(n_levels):
         #     j = -(i + 1)
@@ -430,12 +430,12 @@ class ConsistencyDecoderUNetV2(nn.Module):
             x = mid(x, t)
             print('mid: ', x.shape)
 
-        for up in self.up[::-1]:
+        for up in self.up:
             for block in up:
                 if isinstance(block, ConvResblock):
                     print('up: ', x.shape, skips[-1].shape)
                     x = torch.concat([x, skips.pop()], dim=1)
                 x = block(x, t)
-                print('up: ', x.shape)
+                print('up: ', x)
 
         return self.output(x)
