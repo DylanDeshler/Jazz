@@ -432,8 +432,8 @@ class ConsistencyDecoderUNetV2(nn.Module):
 
         for up in self.up[::-1]:
             for block in up:
-                print('up: ', x.shape)
                 if isinstance(block, ConvResblock):
+                    print('up: ', x.shape, skips[-1].shape)
                     x = torch.concat([x, skips.pop()], dim=1)
                 x = block(x, t)
 
