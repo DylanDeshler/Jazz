@@ -357,7 +357,7 @@ class ConsistencyDecoderUNetV2(nn.Module):
         for i in range(2, len(channels)):
             c_prev = channels[-i]
             c_cur = channels[-i-1]
-            c_next = channels[-i-2];print(c_prev, c_cur, c_next)
+            c_next = channels[-i-2];print(i, len(channels), c_prev, c_cur, c_next)
             self.up.append(nn.ModuleList([
                 ConvResblock(c_prev + c_cur, c_cur, t_dim),
                 ConvResblock(c_cur * 2, c_cur, t_dim),
