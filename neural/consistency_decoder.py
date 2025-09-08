@@ -310,34 +310,6 @@ class ConsistencyDecoderUNetV2(nn.Module):
             ConvResblock(channels[-1], channels[-1], t_dim),
         ])
 
-        # up_3 = nn.ModuleList([
-        #     ConvResblock(c2 * 2, c2, t_dim),
-        #     ConvResblock(c2 * 2, c2, t_dim),
-        #     ConvResblock(c2 * 2, c2, t_dim),
-        #     ConvResblock(c2 * 2, c2, t_dim),
-        #     Upsample(c2, t_dim, ratios[2]),
-        # ])
-        # up_2 = nn.ModuleList([
-        #     ConvResblock(c2 * 2, c2, t_dim),
-        #     ConvResblock(c2 * 2, c2, t_dim),
-        #     ConvResblock(c2 * 2, c2, t_dim),
-        #     ConvResblock(c2 + c1, c2, t_dim),
-        #     Upsample(c2, t_dim, ratios[1]),
-        # ])
-        # up_1 = nn.ModuleList([
-        #     ConvResblock(c2 + c1, c1, t_dim),
-        #     ConvResblock(c1 * 2, c1, t_dim),
-        #     ConvResblock(c1 * 2, c1, t_dim),
-        #     ConvResblock(c0 + c1, c1, t_dim),
-        #     Upsample(c1, t_dim, ratios[0]),
-        # ])
-        # up_0 = nn.ModuleList([
-        #     ConvResblock(c0 + c1, c0, t_dim),
-        #     ConvResblock(c0 * 2, c0, t_dim),
-        #     ConvResblock(c0 * 2, c0, t_dim),
-        #     ConvResblock(c0 * 2, c0, t_dim),
-        # ])
-
         self.up = nn.ModuleList([])
         self.up.append(nn.ModuleList([
             ConvResblock(channels[-1] * 2, channels[-1], t_dim),
@@ -357,7 +329,7 @@ class ConsistencyDecoderUNetV2(nn.Module):
         for i in range(1, len(channels) - 1):
             c_prev = channels[-i]
             c_cur = channels[-i-1]
-            c_next = channels[-i-2];print(i, len(channels), c_prev, c_cur, c_next)
+            c_next = channels[-i-2]
             self.up.append(nn.ModuleList([
                 ConvResblock(c_prev + c_cur, c_cur, t_dim),
                 ConvResblock(c_cur * 2, c_cur, t_dim),
@@ -372,32 +344,6 @@ class ConsistencyDecoderUNetV2(nn.Module):
             ConvResblock(channels[0] * 2, channels[0], t_dim),
             ConvResblock(channels[0] * 2, channels[0], t_dim),
         ]))
-
-        # for i in range(n_levels):
-        #     j = -(i + 1)
-        #     if i == 0:
-        #         self.up.append(nn.ModuleList([
-        #             ConvResblock(channels[j] * 2, channels[j], t_dim),
-        #             ConvResblock(channels[j] * 2, channels[j], t_dim),
-        #             ConvResblock(channels[j] * 2, channels[j], t_dim),
-        #             ConvResblock(channels[j] * 2, channels[j], t_dim),
-        #             Upsample(channels[j], t_dim, ratios[j]),
-        #         ]))
-        #     elif i == n_levels - 1:
-        #          self.up.append(nn.ModuleList([
-        #             ConvResblock(channels[0] + channels[1], channels[0], t_dim),
-        #             ConvResblock(channels[0] * 2, channels[0], t_dim),
-        #             ConvResblock(channels[0] * 2, channels[0], t_dim),
-        #             ConvResblock(channels[0] * 2, channels[0], t_dim),
-        #         ]))
-        #     else:
-        #         self.up.append(nn.ModuleList([
-        #             ConvResblock(c2 + c1, c1, t_dim),
-        #             ConvResblock(c1 * 2, c1, t_dim),
-        #             ConvResblock(c1 * 2, c1, t_dim),
-        #             ConvResblock(channels[0] + c1, c1, t_dim),
-        #             Upsample(c1, t_dim, ratios[0]),
-        #         ]))
 
         self.output = ImageUnembedding(in_channels=channels[0], out_channels=1)
     
@@ -423,19 +369,15 @@ class ConsistencyDecoderUNetV2(nn.Module):
         for down in self.down:
             for block in down:
                 x = block(x, t)
-                print('down: ', x.shape)
                 skips.append(x)
 
         for mid in self.mid:
             x = mid(x, t)
-            print('mid: ', x.shape)
 
         for up in self.up:
             for block in up:
                 if isinstance(block, ConvResblock):
-                    print('up: ', x.shape, skips[-1].shape)
                     x = torch.concat([x, skips.pop()], dim=1)
                 x = block(x, t)
-                print('up: ', x)
 
         return self.output(x)
