@@ -436,5 +436,6 @@ class ConsistencyDecoderUNetV2(nn.Module):
                     print('up: ', x.shape, skips[-1].shape)
                     x = torch.concat([x, skips.pop()], dim=1)
                 x = block(x, t)
+                print('up: ', x.shape)
 
         return self.output(x)
