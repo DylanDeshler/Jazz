@@ -235,6 +235,26 @@ class ConsistencyDecoderUNet(nn.Module):
     
     def get_last_layer_weight(self):
         return self.output.f.weight
+    
+    def initialize_weights(self):
+        # Initialize transformer layers:
+        def _basic_init(module):
+            if isinstance(module, nn.Linear):
+                torch.nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+        self.apply(_basic_init)
+
+        # Zero-out adaLN modulation layers in DiT blocks:
+        # for block in self.blocks:
+        #     nn.init.constant_(block.adaLN_modulation[-1].weight, 0)
+        #     nn.init.constant_(block.adaLN_modulation[-1].bias, 0)
+
+        # Zero-out output layers:
+        nn.init.constant_(self.output.gn.weight, 0)
+        nn.init.constant_(self.output.gn.bias, 0)
+        nn.init.constant_(self.output.f.weight, 0)
+        nn.init.constant_(self.output.f.bias, 0)
 
     def forward(self, x, t=None, z_dec=None) -> torch.Tensor:
         if z_dec is not None:
