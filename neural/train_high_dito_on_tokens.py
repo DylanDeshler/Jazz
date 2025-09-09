@@ -342,6 +342,8 @@ while True:
         model.eval()
         with ctx:
             logits = raw_model.reconstruct(X, n_steps=50)
+        print(X.min(), X.mean(), X.std(), X.max())
+        print(logits.min(), logits.mean(), logits.std(), logits.max())
         model.train()
         save_samples(X, logits, iter_num)
         losses = estimate_loss()
