@@ -54,12 +54,12 @@ wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
-batch_size = 128 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 256 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
 max_seq_len = 50 * 8
 # adamw optimizer
-learning_rate = 1e-3 # max learning rate
+learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
@@ -183,7 +183,7 @@ def average_checkpoints(paths):
             acc[k] = acc[k].to(dtypes0[k])
     return acc
 
-model_args = dict(z_shape=(256, 50), n_residual_layers=2, lstm=0, transformer=1, down_proj=768, in_channels=128, dimension=256, n_filters=128, ratios=[1, 2, 2, 1], dilation_base=2, c0=192, c1=384, c2=768)
+model_args = dict(z_shape=(256, 50), n_residual_layers=3, lstm=0, transformer=1, down_proj=768, in_channels=128, dimension=256, n_filters=128, ratios=[1, 2, 2, 1], dilation_base=2, c0=192, c1=384, c2=768, timescale=400)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
