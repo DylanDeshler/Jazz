@@ -49,7 +49,7 @@ class DiTo(nn.Module):
         self.z_shape = z_shape
         self.encoder = SEANetEncoder(channels=in_channels, dimension=dimension, n_filters=n_filters, ratios=ratios, n_residual_layers=n_residual_layers, lstm=lstm, transformer=transformer, dilation_base=dilation_base, down_proj=down_proj)
         self.z_norm = nn.LayerNorm(self.z_shape[0], elementwise_affine=False)
-        self.unet = ConsistencyDecoderUNetV2(in_channels=in_channels, z_dec_channels=dimension, c0=c0, c1=c1, c2=c2, ratios=ratios[:3])
+        self.unet = ConsistencyDecoderUNet(in_channels=in_channels, z_dec_channels=dimension, c0=c0, c1=c1, c2=c2, ratios=ratios[:3])
 
         self.diffusion = FM(timescale=1000.0)
         self.sampler = FMEulerSampler(self.diffusion)
