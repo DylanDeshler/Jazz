@@ -41,7 +41,7 @@ import glob
 # I/O
 out_dir = 'tokenizer_high_tokens1'
 eval_interval = 1000
-log_interval = 10
+log_interval = 100
 save_interval = eval_interval * 10
 eval_iters = 100
 eval_only = False # if True, script exits right after the first eval
