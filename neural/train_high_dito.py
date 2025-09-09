@@ -42,7 +42,7 @@ import glob
 # I/O
 out_dir = 'tokenizer_high3'
 eval_interval = 1000
-log_interval = 10
+log_interval = 100
 save_interval = eval_interval * 10
 eval_iters = 100
 eval_only = False # if True, script exits right after the first eval
@@ -325,8 +325,8 @@ while True:
         batch_size = 32
     if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
         gradient_accumulation_steps *= 2
-    if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
-        gradient_accumulation_steps *= 2
+    # if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
+    #     gradient_accumulation_steps *= 2
     # if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
     #     gradient_accumulation_steps *= 2
 
