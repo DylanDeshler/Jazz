@@ -44,14 +44,14 @@ class DiToV2(nn.Module):
         return self.sampler.sample(self.unet, (z.shape[0], *shape[-2:]), n_steps, net_kwargs={'z_dec': z})
 
 class DiTo(nn.Module):
-    def __init__(self, z_shape, n_residual_layers, lstm, transformer, down_proj=None, in_channels=1, dimension=128, n_filters=32, ratios=[8, 5, 4, 2], dilation_base=2, c0=128, c1=256, c2=512):
+    def __init__(self, z_shape, n_residual_layers, lstm, transformer, down_proj=None, in_channels=1, dimension=128, n_filters=32, ratios=[8, 5, 4, 2], dilation_base=2, c0=128, c1=256, c2=512, timescale=1000.0):
         super().__init__()
         self.z_shape = z_shape
         self.encoder = SEANetEncoder(channels=in_channels, dimension=dimension, n_filters=n_filters, ratios=ratios, n_residual_layers=n_residual_layers, lstm=lstm, transformer=transformer, dilation_base=dilation_base, down_proj=down_proj)
         self.z_norm = nn.LayerNorm(self.z_shape[0], elementwise_affine=False)
         self.unet = ConsistencyDecoderUNet(in_channels=in_channels, z_dec_channels=dimension, c0=c0, c1=c1, c2=c2, ratios=ratios[:3])
 
-        self.diffusion = FM(timescale=1000.0)
+        self.diffusion = FM(timescale=timescale)
         self.sampler = FMEulerSampler(self.diffusion)
     
     def forward(self, x):
