@@ -47,7 +47,7 @@ save_interval = eval_interval * 10
 eval_iters = 100
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -55,7 +55,7 @@ wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
-batch_size = 16 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 24 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
 n_samples = 5 * rate
@@ -322,8 +322,8 @@ while True:
     
     if iter_num == step1 or local_iter_num == 0 and iter_num >= step1:
         gradient_accumulation_steps *= 2
-    if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
-        gradient_accumulation_steps *= 2
+    # if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
+    #     gradient_accumulation_steps *= 2
     # if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
     #     gradient_accumulation_steps *= 2
 
