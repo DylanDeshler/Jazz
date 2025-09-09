@@ -55,7 +55,7 @@ wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
-batch_size = 16 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 48 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
 n_samples = rate * 2 # 5
@@ -187,7 +187,7 @@ def average_checkpoints(paths):
             acc[k] = acc[k].to(dtypes0[k])
     return acc
 
-model_args = dict(z_shape=(256, 50), n_residual_layers=3, lstm=0, transformer=1, dimension=256, n_filters=32, ratios=[8, 5, 5, 2, 2, 2], channels=[128, 192, 256, 384, 512], dilation_base=3, down_proj=1024)
+model_args = dict(z_shape=(256, 50), n_residual_layers=3, lstm=0, transformer=1, dimension=256, n_filters=32, ratios=[8, 5, 5, 2, 2, 2], channels=[128, 256, 512, 640, 768], dilation_base=3, down_proj=1024)
 # model_args = dict(z_shape=(256, 50), n_residual_layers=2, lstm=0, transformer=1, dimension=256, n_filters=64, ratios=[8, 5, 5, 4, 2], c0=192, c1=384, c2=768)
 if init_from == 'scratch':
     # init a new model from scratch
