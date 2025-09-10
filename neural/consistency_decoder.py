@@ -596,11 +596,11 @@ class DylanDecoderUNet(nn.Module):
                 if module.bias is not None:
                     nn.init.constant_(module.bias, 0)
             # Initialize like nn.Linear (instead of nn.Conv1d):
-            if isinstance(module, nn.Conv1d):
-                w = module.weight.data
-                nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
-                if module.bias is not None:
-                    nn.init.constant_(module.bias, 0)
+            # if isinstance(module, nn.Conv1d):
+            #     w = module.weight.data
+            #     nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
+            #     if module.bias is not None:
+            #         nn.init.constant_(module.bias, 0)
         self.apply(_basic_init)
 
         # Initialize timestep embedding MLP:
