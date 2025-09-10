@@ -329,10 +329,10 @@ class PixelUnshuffle1D(torch.nn.Module):
 
         short_channel_len = long_channel_len * self.downscale_factor
         short_width = long_width // self.downscale_factor
-
+        print('unshuffle: ', x.shape)
         x = x.contiguous().view([batch_size, long_channel_len, short_width, self.downscale_factor])
         x = x.permute(0, 3, 1, 2).contiguous()
-        x = x.view([batch_size, short_channel_len, short_width])
+        x = x.view([batch_size, short_channel_len, short_width]);print(x.shape)
         return x
 
 class ConvPixelUnshuffleDownSampleLayer(nn.Module):
