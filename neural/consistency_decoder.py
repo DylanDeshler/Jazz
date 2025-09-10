@@ -411,7 +411,7 @@ class DownsampleV2(nn.Module):
         t_2 = t_2.unsqueeze(2)
 
         gn_1 = F.silu(self.gn_1(x))
-        avg_pool1d = self.conv(gn_1)
+        avg_pool1d = self.conv(gn_1);print(gn_1.shape, avg_pool1d.shape)
         f_1 = self.f_1(avg_pool1d)
         gn_2 = self.gn_2(f_1)
 
