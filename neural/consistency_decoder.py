@@ -631,19 +631,21 @@ class DylanDecoderUNet(nn.Module):
             t = torch.zeros(x.shape[0], device=x.device)        
         t = self.embed_time(t)
 
+        skips = [x]
         for down in self.down:
             for block in down:
                 x = block(x, t)
-            print('down: ', x.shape)
+            skips.append(x)
 
         for mid in self.mid:
             x = mid(x, t)
 
+        skips.pop()
         for up in reversed(self.up):
             for block in up:
                 if isinstance(block, UpsampleV3):
                     x = block(x, t)
-                    print('up: ', x.shape)
+                    print('up: ', x.shape, skips.pop().shape)
                 else:
                     x = block(x, t)
 
