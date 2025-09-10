@@ -564,14 +564,14 @@ class DylanDecoderUNet(nn.Module):
 
         depths = [4] * len(channels)
         self.up = nn.ModuleList([])
-        for i, (channel, depth, ratio) in enumerate(zip(channels, depths, ratios)):
+        for i, (channel, depth, ratio) in reversed(list(enumerate(zip(channels, depths, ratios)))):
+            print(i, channel, depth, ratio)
             blocks = nn.ModuleList([])
-            for _ in range(depth):
-                blocks.append(AdaLNConvBlock(channel, t_dim))
             if i < len(channels) - 1:
                 blocks.append(UpsampleV3(channel, channels[i + 1], ratio))
-            self.up.append(blocks)
-        self.up = self.up[::-1]
+            for _ in range(depth):
+                blocks.append(AdaLNConvBlock(channel, t_dim))
+            self.up.insert(0, blocks)
 
         self.output = ImageUnembedding(in_channels=channels[0], out_channels=1)
     
