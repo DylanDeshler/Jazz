@@ -649,6 +649,7 @@ class DylanDecoderUNet(nn.Module):
                     print(x.shape, skips[-1].shape)
                     x = torch.cat([x, skips.pop()], dim=1)
                     x = proj(x)
+                    print(x.shape)
                 else:
                     x = block(x, t)
 
