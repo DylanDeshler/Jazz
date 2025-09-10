@@ -358,9 +358,7 @@ class ConvPixelUnshuffleDownSampleLayer(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.norm(x)
-        print(x.shape)
         x = self.conv(x)
-        print(x.shape)
         x = self.pixel_unshuffle(x)
         return x
 
@@ -392,9 +390,6 @@ class DownsampleV3(nn.Module):
         self.shortcut = PixelUnshuffleChannelAveragingDownSampleLayer(in_channels, out_channels, ratio)
     
     def forward(self, x):
-        print(x.shape)
-        print(self.conv(x).shape)
-        print(self.shortcut(x).shape)
         x = self.conv(x) + self.shortcut(x)
         return x
 
@@ -519,6 +514,7 @@ class UpsampleV2(nn.Module):
         return f_2 + self.shortcut(x_skip)
 
 def modulate(x, shift, scale):
+    print(x.shape, shift.shape, scale.shape)
     return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
 
 class AdaLNConvBlock(nn.Module):
