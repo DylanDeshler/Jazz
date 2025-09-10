@@ -18,7 +18,7 @@ class DiToV3(nn.Module):
         self.sampler = FMEulerSampler(self.diffusion)
 
     def forward(self, x):
-        z = self.encode(x)
+        x, z = self.encode(x)
         
         # noise synchronization
         t = torch.rand(z.shape[0], device=z.device)
@@ -39,10 +39,10 @@ class DiToV3(nn.Module):
 
         z = self.encoder(x)
         z = self.z_norm(z.transpose(1, 2)).transpose(1, 2)
-        return z
+        return x, z
 
     def reconstruct(self, x, n_steps=50):
-        z = self.encode(x)
+        x, z = self.encode(x)
         return self.decode(z, shape=x.shape, n_steps=n_steps)
     
     def decode(self, z, shape=(1, 16000), n_steps=50):
