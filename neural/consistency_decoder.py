@@ -358,7 +358,9 @@ class ConvPixelUnshuffleDownSampleLayer(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.norm(x)
+        print(x.shape)
         x = self.conv(x)
+        print(x.shape)
         x = self.pixel_unshuffle(x)
         return x
 
