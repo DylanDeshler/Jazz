@@ -640,8 +640,7 @@ class DylanDecoderUNet(nn.Module):
         for down in self.down:
             for block in down:
                 x = block(x, t)
-                if isinstance(block, AdaLNConvBlock):
-                    skips.append(x)
+                skips.append(x)
 
         for mid in self.mid:
             x = mid(x, t)
@@ -652,6 +651,8 @@ class DylanDecoderUNet(nn.Module):
                 if isinstance(block, AdaLNConvBlock):
                     x = torch.concat([x, skips.pop()], dim=1)
                     print('concat: ', x.shape)
+                else:
+                    skips.pop()
                 x = block(x, t)
 
         return self.output(x)
