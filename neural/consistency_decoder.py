@@ -568,16 +568,18 @@ class DylanDecoderUNet(nn.Module):
 
         depths = [3] * len(channels)
         self.up = nn.ModuleList([])
+        self.up.append(nn.ModuleList([AdaLNConvBlock(channels[-1], t_dim)]))
         for i, (channel, depth, ratio) in reversed(list(enumerate(zip(channels, depths, ratios)))):
             print(i, channel, depth, ratio)
             blocks = nn.ModuleList([])
+            if ratio > 1:
+                # if i == 0:
+                blocks.append(UpsampleV3(channel, channel, ratio))
+                # else:
+                #     blocks.append(UpsampleV3(channel, channels[i-1], ratio))
             for _ in range(depth):
                 blocks.append(AdaLNConvBlock(channel, t_dim))
-            if ratio > 1:
-                if i == 0:
-                    blocks.append(UpsampleV3(channel, channel, ratio))
-                else:
-                    blocks.append(UpsampleV3(channel, channels[i-1], ratio))
+            
             self.up.insert(0, blocks)
         self.up.insert(0, nn.ModuleList([AdaLNConvBlock(channel, t_dim) for _ in range(depth)]))
 
