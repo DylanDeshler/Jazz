@@ -34,8 +34,8 @@ class DiToV3(nn.Module):
     def encode(self, x):
         B, C, L = x.shape
         n_seconds = L // 16000
-        half_pad = (16384 * n_seconds - L) // 2;print(x.shape)
-        x = F.pad(x, (half_pad, half_pad), 'reflect');print(x.shape)
+        half_pad = (16384 * n_seconds - L) // 2
+        x = F.pad(x, (half_pad, half_pad), 'reflect')
 
         z = self.encoder(x)
         z = self.z_norm(z.transpose(1, 2)).transpose(1, 2)
