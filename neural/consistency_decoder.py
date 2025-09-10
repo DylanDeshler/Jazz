@@ -567,7 +567,7 @@ class DylanDecoderUNet(nn.Module):
         for i, (channel, depth, ratio) in reversed(list(enumerate(zip(channels, depths, ratios)))):
             print(i, channel, depth, ratio)
             blocks = nn.ModuleList([])
-            if i < len(channels) - 1:
+            if i > 0:
                 blocks.append(UpsampleV3(channel, channels[i - 1], ratio))
             for _ in range(depth):
                 blocks.append(AdaLNConvBlock(channels[i - 1], t_dim))
