@@ -586,6 +586,43 @@ class DylanDecoderUNet(nn.Module):
 
         self.output = ImageUnembedding(in_channels=channels[0], out_channels=1)
     
+        self.initialize_weights()
+
+    def initialize_weights(self):
+        # Initialize transformer layers:
+        def _basic_init(module):
+            if isinstance(module, nn.Linear):
+                torch.nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+            # Initialize like nn.Linear (instead of nn.Conv1d):
+            if isinstance(module, nn.Conv1d):
+                w = module.weight.data
+                nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+        self.apply(_basic_init)
+
+        # Initialize timestep embedding MLP:
+        nn.init.normal_(self.embed_time.f_1.weight, std=0.02)
+        nn.init.normal_(self.embed_time.f_2.weight, std=0.02)
+
+        # Zero-out adaLN modulation layers:
+        for blocks in self.up:
+            for block in blocks:
+                try:
+                    nn.init.constant_(block.adaLN_modulation[-1].weight, 0)
+                    nn.init.constant_(block.adaLN_modulation[-1].bias, 0)
+                except:
+                    continue
+
+        # Zero-out output layers:
+        # nn.init.constant_(self.final_layer.adaLN_modulation[-1].weight, 0)
+        # nn.init.constant_(self.final_layer.adaLN_modulation[-1].bias, 0)
+        nn.init.constant_(self.output.f.weight, 0)
+        nn.init.constant_(self.output.f.bias, 0)
+
+    
     def forward(self, x, t=None, z_dec=None) -> torch.Tensor:
         if z_dec is not None:
             if z_dec.shape[-1] != x.shape[-1]:
