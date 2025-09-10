@@ -434,7 +434,7 @@ class ConvPixelShuffleUpSampleLayer(nn.Module):
         #     act_func=None,
         # )
         self.norm = nn.GroupNorm(32, in_channels)
-        self.conv = nn.Conv1d(in_channels, out_channels // factor, kernel_size=3, padding=1)
+        self.conv = nn.Conv1d(in_channels, out_channels * factor, kernel_size=3, padding=1)
         self.pixel_shuffle = PixelShuffle1D(factor)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
