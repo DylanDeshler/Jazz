@@ -644,8 +644,8 @@ class DylanDecoderUNet(nn.Module):
         for up in reversed(self.up):
             for block in up:
                 if isinstance(block, UpsampleV3):
-                    print(x.shape, skips.pop().shape)
                     x = block(x, t)
+                    print(x.shape, skips.pop().shape)
                     # x = torch.cat([x, skips.pop()], dim=1)
                 else:
                     x = block(x, t)
