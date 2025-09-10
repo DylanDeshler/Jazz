@@ -568,7 +568,7 @@ class DylanDecoderUNet(nn.Module):
         depths = [3] * len(channels)
         self.skip_projs = nn.ModuleList([])
         self.up = nn.ModuleList([])
-        # self.up.append(nn.ModuleList([AdaLNConvBlock(channels[-1], t_dim)]))
+        self.up.append(nn.ModuleList([AdaLNConvBlock(channels[-1], t_dim)]))
         for i, (channel, depth, ratio) in reversed(list(enumerate(zip(channels, depths, ratios)))):
             blocks = nn.ModuleList([])
             if ratio > 1:
