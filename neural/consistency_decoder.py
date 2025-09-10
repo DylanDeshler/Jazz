@@ -567,11 +567,12 @@ class DylanDecoderUNet(nn.Module):
         for i, (channel, depth, ratio) in reversed(list(enumerate(zip(channels, depths, ratios)))):
             print(i, channel, depth, ratio)
             blocks = nn.ModuleList([])
-            if i > 0:
-                blocks.append(UpsampleV3(channel, channels[i - 1], ratio))
+            if i < len(channels) - 1:
+                blocks.append(UpsampleV3(channel, channels[i + 1], ratio))
+                channel = channels[i + 1]
             for _ in range(depth):
-                blocks.append(AdaLNConvBlock(channels[i - 1], t_dim))
-            self.up.append(blocks)
+                blocks.append(AdaLNConvBlock(channel, t_dim))
+            self.up.insert(0, blocks)
 
         self.output = ImageUnembedding(in_channels=channels[0], out_channels=1)
     
@@ -598,7 +599,7 @@ class DylanDecoderUNet(nn.Module):
             x = mid(x, t)
             print('mid: ', x.shape)
 
-        for up in self.up:
+        for up in reversed(self.up):
             for block in up:
                 if isinstance(block, ConvResblock):
                     x = torch.concat([x, skips.pop()], dim=1)
