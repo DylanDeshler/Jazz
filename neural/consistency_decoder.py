@@ -576,12 +576,12 @@ class DylanDecoderUNet(nn.Module):
             blocks = nn.ModuleList([])
             if ratio > 1:
                 if i == 0:
-                    blocks.append(UpsampleV3(channel + skips.pop(), channel, ratio))
+                    blocks.append(UpsampleV3(channel, channel, ratio))
                 else:
-                    blocks.append(UpsampleV3(channel + skips.pop(), channels[i-1], ratio))
+                    blocks.append(UpsampleV3(channel, channels[i-1], ratio))
                     channel = channels[i - 1]
             for _ in range(depth):
-                blocks.append(AdaLNConvBlock(channel + skips.pop(), t_dim))
+                blocks.append(AdaLNConvBlock(channel, t_dim))
             self.up.insert(0, blocks)
 
         self.output = ImageUnembedding(in_channels=channels[0], out_channels=1)
