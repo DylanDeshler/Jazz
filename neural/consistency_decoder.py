@@ -550,15 +550,19 @@ class DylanDecoderUNet(nn.Module):
         depths = [3] * len(channels)
 
         self.down = nn.ModuleList([])
+        skips = []
         for i, (channel, depth, ratio) in enumerate(zip(channels, depths, ratios)):
             blocks = nn.ModuleList([])
             for _ in range(depth):
                 blocks.append(AdaLNConvBlock(channel, t_dim))
+                skips.append(channel)
             if ratio > 1:
                 if i == len(channels) - 1:
                     blocks.append(DownsampleV3(channel, channel, ratio))
+                    skips.append(channel)
                 else:
                     blocks.append(DownsampleV3(channel, channels[i+1], ratio))
+                    skips.append(channels[i+1])
             self.down.append(blocks)
         
         self.mid = nn.ModuleList([
@@ -566,19 +570,18 @@ class DylanDecoderUNet(nn.Module):
         ])
 
         depths = [3] * len(channels)
-        channels.append(channels[-1])
         self.up = nn.ModuleList([])
         self.up.append(nn.ModuleList([AdaLNConvBlock(channels[-1], t_dim)]))
         for i, (channel, depth, ratio) in reversed(list(enumerate(zip(channels, depths, ratios)))):
             blocks = nn.ModuleList([])
             if ratio > 1:
                 if i == 0:
-                    blocks.append(UpsampleV3(channel, channel, ratio))
+                    blocks.append(UpsampleV3(channel + skips.pop(), channel, ratio))
                 else:
-                    blocks.append(UpsampleV3(channel, channels[i-1], ratio))
+                    blocks.append(UpsampleV3(channel + skips.pop(), channels[i-1], ratio))
                     channel = channels[i - 1]
             for _ in range(depth):
-                blocks.append(AdaLNConvBlock(channel, t_dim))
+                blocks.append(AdaLNConvBlock(channel + skips.pop(), t_dim))
             self.up.insert(0, blocks)
 
         self.output = ImageUnembedding(in_channels=channels[0], out_channels=1)
