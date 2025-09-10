@@ -288,6 +288,53 @@ class ConsistencyDecoderUNet(nn.Module):
 
         return self.output(x)
 
+class PixelShuffle1D(torch.nn.Module):
+    """
+    1D pixel shuffler. https://arxiv.org/pdf/1609.05158.pdf
+    Upscales sample length, downscales channel length
+    "short" is input, "long" is output
+    """
+    def __init__(self, upscale_factor):
+        super(PixelShuffle1D, self).__init__()
+        self.upscale_factor = upscale_factor
+
+    def forward(self, x):
+        batch_size = x.shape[0]
+        short_channel_len = x.shape[1]
+        short_width = x.shape[2]
+
+        long_channel_len = short_channel_len // self.upscale_factor
+        long_width = self.upscale_factor * short_width
+
+        x = x.contiguous().view([batch_size, self.upscale_factor, long_channel_len, short_width])
+        x = x.permute(0, 2, 3, 1).contiguous()
+        x = x.view(batch_size, long_channel_len, long_width)
+
+        return x
+
+class PixelUnshuffle1D(torch.nn.Module):
+    """
+    Inverse of 1D pixel shuffler
+    Upscales channel length, downscales sample length
+    "long" is input, "short" is output
+    """
+    def __init__(self, downscale_factor):
+        super(PixelUnshuffle1D, self).__init__()
+        self.downscale_factor = downscale_factor
+
+    def forward(self, x):
+        batch_size = x.shape[0]
+        long_channel_len = x.shape[1]
+        long_width = x.shape[2]
+
+        short_channel_len = long_channel_len * self.downscale_factor
+        short_width = long_width // self.downscale_factor
+
+        x = x.contiguous().view([batch_size, long_channel_len, short_width, self.downscale_factor])
+        x = x.permute(0, 3, 1, 2).contiguous()
+        x = x.view([batch_size, short_channel_len, short_width])
+        return x
+
 class ConvPixelUnshuffleDownSampleLayer(nn.Module):
     def __init__(
         self,
@@ -309,11 +356,12 @@ class ConvPixelUnshuffleDownSampleLayer(nn.Module):
         # )
         self.norm = nn.GroupNorm(32, in_channels)
         self.conv = nn.Conv1d(in_channels, out_channels // out_ratio, kernel_size=3, padding=1)
+        self.pixel_unshuffle = PixelUnshuffle1D(factor)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.norm(x)
         x = self.conv(x)
-        x = F.pixel_unshuffle(x, self.factor)
+        x = self.pixel_unshuffle(x)
         return x
 
 class PixelUnshuffleChannelAveragingDownSampleLayer(nn.Module):
@@ -329,9 +377,10 @@ class PixelUnshuffleChannelAveragingDownSampleLayer(nn.Module):
         self.factor = factor
         assert in_channels * factor**2 % out_channels == 0, f'{in_channels} {factor ** 2} {out_channels}'
         self.group_size = in_channels * factor**2 // out_channels
+        self.pixel_unshuffle = PixelUnshuffle1D(factor)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = F.pixel_unshuffle(x, self.factor)
+        x = self.pixel_unshuffle(x)
         B, C, H, W = x.shape
         x = x.view(B, self.out_channels, self.group_size, H, W)
         x = x.mean(dim=2)
@@ -390,11 +439,12 @@ class ConvPixelShuffleUpSampleLayer(nn.Module):
         # )
         self.norm = nn.GroupNorm(32, in_channels)
         self.conv = nn.Conv1d(in_channels, out_channels // out_ratio, kernel_size=3, padding=1)
+        self.pixel_shuffle = PixelShuffle1D(factor)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.norm(x)
         x = self.conv(x)
-        x = F.pixel_shuffle(x, self.factor)
+        x = self.pixel_shuffle(x)
         return x
 
 class ChannelDuplicatingPixelUnshuffleUpSampleLayer(nn.Module):
@@ -410,10 +460,11 @@ class ChannelDuplicatingPixelUnshuffleUpSampleLayer(nn.Module):
         self.factor = factor
         assert out_channels * factor**2 % in_channels == 0, f'{out_channels} {factor ** 2} {in_channels}'
         self.repeats = out_channels * factor**2 // in_channels
+        self.pixel_shuffle = PixelShuffle1D(factor)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x.repeat_interleave(self.repeats, dim=1)
-        x = F.pixel_shuffle(x, self.factor)
+        x = self.pixel_shuffle(x)
         return x
 
 class UpsampleV2(nn.Module):
