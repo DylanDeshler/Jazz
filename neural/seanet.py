@@ -631,7 +631,7 @@ class DylanSEANetEncoder(nn.Module):
             # Add downsampling layers
             model += [
                 act(**activation_params),
-                DownsampleV3(mult * n_filters, mult * n_filters * 2, ratio, ratio * 2)
+                DownsampleV3(mult * n_filters, mult * n_filters * 2, ratio)
                 # SConv1d(mult * n_filters, mult * n_filters * 2,
                 #         kernel_size=ratio * 2, stride=ratio,
                 #         norm=norm, norm_kwargs=norm_params,
