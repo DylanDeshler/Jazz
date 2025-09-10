@@ -638,7 +638,8 @@ class DylanDecoderUNet(nn.Module):
         for down in self.down:
             for block in down:
                 x = block(x, t)
-                skips.append(x)
+                if isinstance(block, AdaLNConvBlock):
+                    skips.append(x)
 
         for mid in self.mid:
             x = mid(x, t)
