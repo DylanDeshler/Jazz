@@ -571,11 +571,11 @@ class DylanDecoderUNet(nn.Module):
         for i, (channel, depth, ratio) in reversed(list(enumerate(zip(channels, depths, ratios)))):
             blocks = nn.ModuleList([])
             if ratio > 1:
-                if i == 0:
+                if i == len(channels) - 1:
                     blocks.append(UpsampleV3(channel, channel, ratio))
                 else:
-                    blocks.append(UpsampleV3(channel, channels[i-1], ratio))
-                    channel = channels[i - 1]
+                    blocks.append(UpsampleV3(channels[i+1], channel, ratio))
+            # self.skip_projs.insert(0, nn.Conv1d(channel, channel, kernel_size=1))
             for _ in range(depth):
                 blocks.append(AdaLNConvBlock(channel, t_dim, dilation=2 ** _))
             self.up.insert(0, blocks)
@@ -645,7 +645,7 @@ class DylanDecoderUNet(nn.Module):
             for block in up:
                 if isinstance(block, UpsampleV3):
                     x = block(x, t)
-                    print('up: ', x.shape, skips.pop().shape)
+                    x = torch.cat([x, skips.pop()], dim=1)
                 else:
                     x = block(x, t)
 
