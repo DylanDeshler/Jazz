@@ -638,8 +638,9 @@ class DylanDecoderUNet(nn.Module):
         for down in self.down:
             for block in down:
                 x = block(x, t)
-                if isinstance(block, AdaLNConvBlock):
-                    skips.append(x)
+                # if isinstance(block, AdaLNConvBlock):
+                #     skips.append(x)
+                skips.append(x)
 
         for mid in self.mid:
             x = mid(x, t)
@@ -652,8 +653,9 @@ class DylanDecoderUNet(nn.Module):
                 #     print('concat: ', x.shape)
                 # else:
                 #     skips.pop()
-                if isinstance(block, AdaLNConvBlock):
-                    print(x.shape, self.skips.pop(), skips.pop().shape)
+                # if isinstance(block, AdaLNConvBlock):
+                #     print(x.shape, self.skips.pop(), skips.pop().shape)
+                print(x.shape, skips.pop().shape)
                 x = block(x, t)
 
         return self.output(x)
