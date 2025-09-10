@@ -645,9 +645,10 @@ class DylanDecoderUNet(nn.Module):
 
         for up in reversed(self.up):
             for block in up:
+                print(x.shape)
                 if isinstance(block, AdaLNConvBlock):
                     x = torch.concat([x, skips.pop()], dim=1)
-                    print(x.shape)
+                    print('concat: ', x.shape)
                 x = block(x, t)
 
         return self.output(x)
