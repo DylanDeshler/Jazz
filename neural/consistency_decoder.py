@@ -288,6 +288,256 @@ class ConsistencyDecoderUNet(nn.Module):
 
         return self.output(x)
 
+class ConvPixelUnshuffleDownSampleLayer(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        factor: int,
+    ):
+        super().__init__()
+        self.factor = factor
+        out_ratio = factor**2
+        assert out_channels % out_ratio == 0
+        # self.conv = ConvLayer(
+        #     in_channels=in_channels,
+        #     out_channels=out_channels // out_ratio,
+        #     kernel_size=kernel_size,
+        #     use_bias=True,
+        #     norm=None,
+        #     act_func=None,
+        # )
+        self.norm = nn.GroupNorm(32, in_channels)
+        self.conv = nn.Conv1d(in_channels, out_channels // out_ratio, kernel_size=3, padding=1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.norm(x)
+        x = self.conv(x)
+        x = F.pixel_unshuffle(x, self.factor)
+        return x
+
+class PixelUnshuffleChannelAveragingDownSampleLayer(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        factor: int,
+    ):
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.factor = factor
+        assert in_channels * factor**2 % out_channels == 0
+        self.group_size = in_channels * factor**2 // out_channels
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = F.pixel_unshuffle(x, self.factor)
+        B, C, H, W = x.shape
+        x = x.view(B, self.out_channels, self.group_size, H, W)
+        x = x.mean(dim=2)
+        return x
+
+class DownsampleV2(nn.Module):
+    def __init__(self, in_channels, t_dim, ratio=2) -> None:
+        super().__init__()
+        self.ratio = ratio
+
+        self.conv = ConvPixelUnshuffleDownSampleLayer(in_channels, ratio)
+        self.shortcut = PixelUnshuffleChannelAveragingDownSampleLayer(in_channels, ratio)
+
+        self.f_t = nn.Linear(t_dim, in_channels * 2)
+
+        self.gn_1 = nn.GroupNorm(32, in_channels)
+        self.f_1 = nn.Conv1d(in_channels, in_channels, kernel_size=3, padding=1)
+        self.gn_2 = nn.GroupNorm(32, in_channels)
+
+        self.f_2 = nn.Conv1d(in_channels, in_channels, kernel_size=3, padding=1)
+
+    def forward(self, x, t) -> torch.Tensor:
+        x_skip = x
+
+        t = self.f_t(F.silu(t))
+        t_1, t_2 = t.chunk(2, dim=1)
+        t_1 = t_1.unsqueeze(2) + 1
+        t_2 = t_2.unsqueeze(2)
+
+        gn_1 = F.silu(self.gn_1(x))
+        avg_pool1d = self.conv(gn_1)
+        f_1 = self.f_1(avg_pool1d)
+        gn_2 = self.gn_2(f_1)
+
+        f_2 = self.f_2(F.silu(t_2 + (t_1 * gn_2)))
+
+        return f_2 + self.shortcut(x_skip)
+
+class ConvPixelShuffleUpSampleLayer(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        factor: int,
+    ):
+        super().__init__()
+        self.factor = factor
+        out_ratio = factor**2
+        # self.conv = ConvLayer(
+        #     in_channels=in_channels,
+        #     out_channels=out_channels * out_ratio,
+        #     kernel_size=kernel_size,
+        #     use_bias=True,
+        #     norm=None,
+        #     act_func=None,
+        # )
+        self.norm = nn.GroupNorm(32, in_channels)
+        self.conv = nn.Conv1d(in_channels, out_channels // out_ratio, kernel_size=3, padding=1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.norm(x)
+        x = self.conv(x)
+        x = F.pixel_shuffle(x, self.factor)
+        return x
+
+class ChannelDuplicatingPixelUnshuffleUpSampleLayer(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        factor: int,
+    ):
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.factor = factor
+        assert out_channels * factor**2 % in_channels == 0
+        self.repeats = out_channels * factor**2 // in_channels
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x.repeat_interleave(self.repeats, dim=1)
+        x = F.pixel_shuffle(x, self.factor)
+        return x
+
+class UpsampleV2(nn.Module):
+    def __init__(self, in_channels, t_dim, ratio=2) -> None:
+        super().__init__()
+        self.ratio = ratio
+        self.f_t = nn.Linear(t_dim, in_channels * 2)
+
+        self.gn_1 = nn.GroupNorm(32, in_channels)
+        self.f_1 = nn.Conv1d(in_channels, in_channels, kernel_size=3, padding=1)
+        self.gn_2 = nn.GroupNorm(32, in_channels)
+
+        self.f_2 = nn.Conv1d(in_channels, in_channels, kernel_size=3, padding=1)
+        
+        self.conv = ConvPixelShuffleUpSampleLayer(in_channels, in_channels, ratio)
+        self.shortcut = ChannelDuplicatingPixelUnshuffleUpSampleLayer(in_channels, in_channels, ratio)
+
+    def forward(self, x, t) -> torch.Tensor:
+        x_skip = x
+
+        t = self.f_t(F.silu(t))
+        t_1, t_2 = t.chunk(2, dim=1)
+        t_1 = t_1.unsqueeze(2) + 1
+        t_2 = t_2.unsqueeze(2)
+
+        gn_1 = F.silu(self.gn_1(x))
+        upsample = self.conv(gn_1)
+        f_1 = self.f_1(upsample)
+        gn_2 = self.gn_2(f_1)
+        f_2 = self.f_2(F.silu(t_2 + (t_1 * gn_2)))
+
+        return f_2 + self.shortcut(x_skip)
+
+def modulate(x, shift, scale):
+    return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
+
+class AdaLNConvBlock(nn.Module):
+    def __init__(self, hidden_features, t_dim) -> None:
+        super().__init__()
+        self.norm = nn.GroupNorm(32, hidden_features)
+        self.conv1 = nn.Conv1d(hidden_features, hidden_features, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv1d(hidden_features, hidden_features, kernel_size=3, padding=1)
+
+        self.adaLN_modulation = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(t_dim, 3 * hidden_features, bias=True)
+        )
+
+    def forward(self, x, t):
+        x_skip = x
+        gate, shift, scale = self.adaLN_modulation(t).chunk(3, dim=-1)
+
+        x = modulate(self.norm(x), shift, scale)
+        x = F.silu(self.conv1(x))
+        x = gate.unsqueeze(1) * self.conv2(x)
+
+        return x_skip + x
+
+class DylanDecoderUNet(nn.Module):
+    def __init__(self, in_channels=3, z_dec_channels=None, channels=[320, 640, 1024], pe_dim=320, t_dim=1280, ratios=[8, 5, 4]) -> None:
+        super().__init__()
+        if z_dec_channels is not None:
+            in_channels += z_dec_channels
+        self.embed_image = ImageEmbedding(in_channels=in_channels, out_channels=channels[0])
+        self.embed_time = PositionalEmbedding(pe_dim=pe_dim, out_dim=t_dim)
+
+        assert len(channels) == len(ratios), f'{len(channels)} != {len(ratios)}'
+        depths = [3] * len(channels)
+
+        self.down = nn.ModuleList([])
+        for i, (channel, depth, ratio) in enumerate(zip(channels, depths, ratios)):
+            blocks = nn.ModuleList([])
+            for _ in range(depth):
+                blocks.append(AdaLNConvBlock(channel, t_dim))
+            if i < len(channels) - 1:
+                blocks.append(DownsampleV2(channel, channels[i + 1], t_dim, ratio))
+            self.down.append(blocks)
+        
+        self.mid = nn.ModuleList([
+            AdaLNConvBlock(channels[-1], t_dim) for _ in range(depths[-1])
+        ])
+
+        depths = [4] * len(channels)
+        self.up = nn.ModuleList([])
+        for i, (channel, depth, ratio) in enumerate(zip(channels, depths, ratios)):
+            blocks = nn.ModuleList([])
+            for _ in range(depth):
+                blocks.append(AdaLNConvBlock(channel, t_dim))
+            if i < len(channels) - 1:
+                blocks.append(UpsampleV2(channel, channels[i + 1], t_dim, ratio))
+            self.up.append(blocks)
+        self.up = self.up[::-1]
+
+        self.output = ImageUnembedding(in_channels=channels[0], out_channels=1)
+    
+    def forward(self, x, t=None, z_dec=None) -> torch.Tensor:
+        if z_dec is not None:
+            if z_dec.shape[-1] != x.shape[-1]:
+                z_dec = F.interpolate(z_dec, scale_factor=x.shape[-1] // z_dec.shape[-1], mode='nearest')
+            x = torch.cat([x, z_dec], dim=1)
+        
+        x = self.embed_image(x)
+
+        if t is None:
+            t = torch.zeros(x.shape[0], device=x.device)        
+        t = self.embed_time(t)
+
+        skips = [x]
+        for down in self.down:
+            for block in down:
+                x = block(x, t)
+                skips.append(x)
+
+        for mid in self.mid:
+            x = mid(x, t)
+
+        for up in self.up:
+            for block in up:
+                if isinstance(block, ConvResblock):
+                    x = torch.concat([x, skips.pop()], dim=1)
+                x = block(x, t)
+
+        return self.output(x)
+
 class ConsistencyDecoderUNetV2(nn.Module):
     def __init__(self, in_channels=3, z_dec_channels=None, channels=[320, 640, 1024], pe_dim=320, t_dim=1280, ratios=[8, 5, 4]) -> None:
         super().__init__()
@@ -303,7 +553,7 @@ class ConsistencyDecoderUNetV2(nn.Module):
             ConvResblock(channels[0], channels[0], t_dim),
             ConvResblock(channels[0], channels[0], t_dim),
             ConvResblock(channels[0], channels[0], t_dim),
-            Downsample(channels[0], t_dim, ratios[0]),
+            DownsampleV2(channels[0], t_dim, ratios[0]),
         ]))
 
         # Levels 1..N-1
@@ -314,7 +564,7 @@ class ConsistencyDecoderUNetV2(nn.Module):
                 ConvResblock(c_prev, c_cur, t_dim),
                 ConvResblock(c_cur, c_cur, t_dim),
                 ConvResblock(c_cur, c_cur, t_dim),
-                Downsample(c_cur, t_dim, ratios[i]),
+                DownsampleV2(c_cur, t_dim, ratios[i]),
             ]))
 
         # Bottom (no downsample), uses last channel again
@@ -336,14 +586,14 @@ class ConsistencyDecoderUNetV2(nn.Module):
             ConvResblock(channels[-1] * 2, channels[-1], t_dim),
             ConvResblock(channels[-1] * 2, channels[-1], t_dim),
             ConvResblock(channels[-1] * 2, channels[-1], t_dim),
-            Upsample(channels[-1], t_dim, ratios[-1]),
+            UpsampleV2(channels[-1], t_dim, ratios[-1]),
         ]))
         self.up.append(nn.ModuleList([
             ConvResblock(channels[-1] * 2, channels[-1], t_dim),
             ConvResblock(channels[-1] * 2, channels[-1], t_dim),
             ConvResblock(channels[-1] * 2, channels[-1], t_dim),
             ConvResblock(channels[-1] + channels[-2], channels[-1], t_dim),
-            Upsample(channels[-1], t_dim, ratios[-2]),
+            UpsampleV2(channels[-1], t_dim, ratios[-2]),
         ]))
 
         for i in range(1, len(channels) - 1):
@@ -355,7 +605,7 @@ class ConsistencyDecoderUNetV2(nn.Module):
                 ConvResblock(c_cur * 2, c_cur, t_dim),
                 ConvResblock(c_cur * 2, c_cur, t_dim),
                 ConvResblock(c_next + c_cur, c_cur, t_dim),
-                Upsample(c_cur, t_dim, ratios[-i-2]),
+                UpsampleV2(c_cur, t_dim, ratios[-i-2]),
             ]))
         
         self.up.append(nn.ModuleList([
