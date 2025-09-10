@@ -577,6 +577,7 @@ class DylanDecoderUNet(nn.Module):
                 else:
                     blocks.append(UpsampleV3(channels[i+1], channel, ratio))
             self.skip_projs.insert(0, nn.Conv1d(channel * 2, channel, kernel_size=1))
+            print(channel * 2, channel)
             for _ in range(depth):
                 blocks.append(AdaLNConvBlock(channel, t_dim, dilation=2 ** _))
             self.up.insert(0, blocks)
