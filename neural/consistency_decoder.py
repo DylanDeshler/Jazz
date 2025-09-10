@@ -643,14 +643,14 @@ class DylanDecoderUNet(nn.Module):
             x = mid(x, t)
 
         skips.pop()
-        for up, proj in zip(reversed(self.up), reversed(self.skip_projs)):
+        for i, up in reversed(enumerate(self.up)):
             for block in up:
                 if isinstance(block, UpsampleV3):
                     x = block(x, t)
                     print(x.shape, skips[-1].shape)
                     x = torch.cat([x, skips.pop()], dim=1)
-                    print(x.shape)
-                    x = proj(x)
+                    print(x.shape, i)
+                    x = self.skip_projs[i](x)
                     print(x.shape)
                 else:
                     x = block(x, t)
