@@ -550,7 +550,7 @@ class DylanDecoderUNet(nn.Module):
         depths = [3] * len(channels)
 
         self.down = nn.ModuleList([])
-        skips = []
+        skips = [channels[0]]
         for i, (channel, depth, ratio) in enumerate(zip(channels, depths, ratios)):
             blocks = nn.ModuleList([])
             for _ in range(depth):
