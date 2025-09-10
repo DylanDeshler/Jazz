@@ -646,6 +646,7 @@ class DylanDecoderUNet(nn.Module):
             for block in up:
                 if isinstance(block, UpsampleV3):
                     x = block(x, t)
+                    print(x.shape, skips[-1].shape)
                     x = torch.cat([x, skips.pop()], dim=1)
                     x = proj(x)
                 else:
