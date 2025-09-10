@@ -517,11 +517,11 @@ def modulate(x, shift, scale):
     return x * (1 + scale.unsqueeze(-1)) + shift.unsqueeze(-1)
 
 class AdaLNConvBlock(nn.Module):
-    def __init__(self, hidden_features, t_dim) -> None:
+    def __init__(self, hidden_features, t_dim, dilation=1) -> None:
         super().__init__()
         self.norm = nn.GroupNorm(32, hidden_features)
-        self.conv1 = nn.Conv1d(hidden_features, hidden_features, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv1d(hidden_features, hidden_features, kernel_size=3, padding=1)
+        self.conv1 = nn.Conv1d(hidden_features, hidden_features, kernel_size=3, dilation=dilation, padding=1 * dilation)
+        self.conv2 = nn.Conv1d(hidden_features, hidden_features, kernel_size=3, dilation=dilation, padding=1 * dilation)
 
         self.adaLN_modulation = nn.Sequential(
             nn.SiLU(),
@@ -554,7 +554,7 @@ class DylanDecoderUNet(nn.Module):
         for i, (channel, depth, ratio) in enumerate(zip(channels, depths, ratios)):
             blocks = nn.ModuleList([])
             for _ in range(depth):
-                blocks.append(AdaLNConvBlock(channel, t_dim))
+                blocks.append(AdaLNConvBlock(channel, t_dim, dilation=2 ** _))
                 skips.append(channel)
             if ratio > 1:
                 if i == len(channels) - 1:
@@ -581,7 +581,7 @@ class DylanDecoderUNet(nn.Module):
                     blocks.append(UpsampleV3(channel, channels[i-1], ratio))
                     channel = channels[i - 1]
             for _ in range(depth):
-                blocks.append(AdaLNConvBlock(channel, t_dim))
+                blocks.append(AdaLNConvBlock(channel, t_dim, dilation=2 ** _))
             self.up.insert(0, blocks)
 
         self.output = ImageUnembedding(in_channels=channels[0], out_channels=1)
