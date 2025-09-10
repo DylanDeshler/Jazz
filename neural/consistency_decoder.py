@@ -576,7 +576,7 @@ class DylanDecoderUNet(nn.Module):
                 if i == 0:
                     blocks.append(UpsampleV3(channel, channel, ratio))
                 else:
-                    blocks.append(UpsampleV3(channel, channels[i-1], ratio))
+                    blocks.append(UpsampleV3(channel, channel, ratio))
             for _ in range(depth):
                 blocks.append(AdaLNConvBlock(channel, t_dim))
             
