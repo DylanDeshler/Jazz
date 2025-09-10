@@ -550,12 +550,10 @@ class DylanDecoderUNet(nn.Module):
         depths = [3] * len(channels)
 
         self.down = nn.ModuleList([])
-        skips = [channels[0]]
         for i, (channel, depth, ratio) in enumerate(zip(channels, depths, ratios)):
             blocks = nn.ModuleList([])
             for _ in range(depth):
                 blocks.append(AdaLNConvBlock(channel, t_dim, dilation=2 ** _))
-                skips.append(channel)
             if ratio > 1:
                 if i == len(channels) - 1:
                     blocks.append(DownsampleV3(channel, channel, ratio))
@@ -567,7 +565,6 @@ class DylanDecoderUNet(nn.Module):
             AdaLNConvBlock(channels[-1], t_dim) for _ in range(depths[-1])
         ])
 
-        self.skips = skips
         depths = [3] * len(channels)
         self.up = nn.ModuleList([])
         self.up.append(nn.ModuleList([AdaLNConvBlock(channels[-1], t_dim)]))
@@ -634,28 +631,19 @@ class DylanDecoderUNet(nn.Module):
             t = torch.zeros(x.shape[0], device=x.device)        
         t = self.embed_time(t)
 
-        skips = [x]
         for down in self.down:
             for block in down:
                 x = block(x, t)
-                # if isinstance(block, AdaLNConvBlock):
-                #     skips.append(x)
-                skips.append(x)
+            print(x.shape)
 
         for mid in self.mid:
             x = mid(x, t)
 
-        print(len(self.skips), len(skips))
         for up in reversed(self.up):
             for block in up:
-                # if isinstance(block, AdaLNConvBlock):
-                #     x = torch.concat([x, skips.pop()], dim=1)
-                #     print('concat: ', x.shape)
-                # else:
-                #     skips.pop()
-                # if isinstance(block, AdaLNConvBlock):
-                #     print(x.shape, self.skips.pop(), skips.pop().shape)
-                print(x.shape, skips.pop().shape)
+                if isinstance(block, UpsampleV3):
+                    x = block(x, t)
+                    print(x.shape)
                 x = block(x, t)
 
         return self.output(x)
