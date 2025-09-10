@@ -571,7 +571,7 @@ class DylanDecoderUNet(nn.Module):
                 blocks.append(UpsampleV3(channel, channels[i - 1], ratio))
             for _ in range(depth):
                 blocks.append(AdaLNConvBlock(channels[i - 1], t_dim))
-            self.up.insert(0, blocks)
+            self.up.append(blocks)
 
         self.output = ImageUnembedding(in_channels=channels[0], out_channels=1)
     
