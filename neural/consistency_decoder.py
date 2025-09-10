@@ -306,10 +306,9 @@ class PixelShuffle1D(torch.nn.Module):
         long_channel_len = short_channel_len // self.upscale_factor
         long_width = self.upscale_factor * short_width
 
-        print('shuffle: ', x.shape)
         x = x.contiguous().view([batch_size, self.upscale_factor, long_channel_len, short_width])
         x = x.permute(0, 2, 3, 1).contiguous()
-        x = x.view(batch_size, long_channel_len, long_width);print(x.shape)
+        x = x.view(batch_size, long_channel_len, long_width)
 
         return x
 
@@ -330,10 +329,9 @@ class PixelUnshuffle1D(torch.nn.Module):
 
         short_channel_len = long_channel_len * self.downscale_factor
         short_width = long_width // self.downscale_factor
-        print('unshuffle: ', x.shape)
         x = x.contiguous().view([batch_size, long_channel_len, short_width, self.downscale_factor])
         x = x.permute(0, 3, 1, 2).contiguous()
-        x = x.view([batch_size, short_channel_len, short_width]);print(x.shape)
+        x = x.view([batch_size, short_channel_len, short_width])
         return x
 
 class ConvPixelUnshuffleDownSampleLayer(nn.Module):
@@ -342,6 +340,7 @@ class ConvPixelUnshuffleDownSampleLayer(nn.Module):
         in_channels: int,
         out_channels: int,
         factor: int,
+        kernel_size: int = 3
     ):
         super().__init__()
         assert out_channels % factor == 0, f'{out_channels}, {factor}'
@@ -354,13 +353,13 @@ class ConvPixelUnshuffleDownSampleLayer(nn.Module):
         #     act_func=None,
         # )
         self.norm = nn.GroupNorm(32, in_channels)
-        self.conv = nn.Conv1d(in_channels, out_channels // factor, kernel_size=3, padding=1)
+        self.conv = nn.Conv1d(in_channels, out_channels // factor, kernel_size=kernel_size, padding=kernel_size // 2)
         self.pixel_unshuffle = PixelUnshuffle1D(factor)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.norm(x);print(x.shape)
-        x = self.conv(x);print(x.shape)
-        x = self.pixel_unshuffle(x);print(x.shape)
+        x = self.norm(x)
+        x = self.conv(x)
+        x = self.pixel_unshuffle(x)
         return x
 
 class PixelUnshuffleChannelAveragingDownSampleLayer(nn.Module):
@@ -382,6 +381,16 @@ class PixelUnshuffleChannelAveragingDownSampleLayer(nn.Module):
         B, C, L = x.shape
         x = x.view(B, self.out_channels, self.group_size, L)
         x = x.mean(dim=2)
+        return x
+
+class DownsampleV3(nn.Module):
+    def __init__(self, in_channels, out_channels, ratio):
+        super().__init__()
+        self.conv = ConvPixelUnshuffleDownSampleLayer(in_channels, out_channels, ratio, ratio * 2)
+        self.shortcut = PixelUnshuffleChannelAveragingDownSampleLayer(in_channels, out_channels, ratio)
+    
+    def forward(self, x):
+        x = self.conv(x) + self.shortcut(x)
         return x
 
 class DownsampleV2(nn.Module):
@@ -423,6 +432,7 @@ class ConvPixelShuffleUpSampleLayer(nn.Module):
         in_channels: int,
         out_channels: int,
         factor: int,
+        kernel_size: int = 3
     ):
         super().__init__()
         # self.conv = ConvLayer(
@@ -434,7 +444,7 @@ class ConvPixelShuffleUpSampleLayer(nn.Module):
         #     act_func=None,
         # )
         self.norm = nn.GroupNorm(32, in_channels)
-        self.conv = nn.Conv1d(in_channels, out_channels * factor, kernel_size=3, padding=1)
+        self.conv = nn.Conv1d(in_channels, out_channels * factor, kernel_size=kernel_size, padding=kernel_size // 2)
         self.pixel_shuffle = PixelShuffle1D(factor)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -460,6 +470,16 @@ class ChannelDuplicatingPixelUnshuffleUpSampleLayer(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x.repeat_interleave(self.repeats, dim=1)
         x = self.pixel_shuffle(x)
+        return x
+
+class UpsampleV3(nn.Module):
+    def __init__(self, in_channels, out_channels, ratio):
+        super().__init__()
+        self.conv = ConvPixelShuffleUpSampleLayer(in_channels, out_channels, ratio, ratio * 2)
+        self.shortcut = ChannelDuplicatingPixelUnshuffleUpSampleLayer(in_channels, out_channels, ratio)
+    
+    def forward(self, x):
+        x = self.conv(x) + self.shortcut(x)
         return x
 
 class UpsampleV2(nn.Module):
@@ -535,7 +555,7 @@ class DylanDecoderUNet(nn.Module):
             for _ in range(depth):
                 blocks.append(AdaLNConvBlock(channel, t_dim))
             if i < len(channels) - 1:
-                blocks.append(DownsampleV2(channel, channels[i + 1], t_dim, ratio))
+                blocks.append(DownsampleV3(channel, channels[i + 1], ratio))
             self.down.append(blocks)
         
         self.mid = nn.ModuleList([
@@ -549,7 +569,7 @@ class DylanDecoderUNet(nn.Module):
             for _ in range(depth):
                 blocks.append(AdaLNConvBlock(channel, t_dim))
             if i < len(channels) - 1:
-                blocks.append(UpsampleV2(channel, channels[i + 1], t_dim, ratio))
+                blocks.append(UpsampleV3(channel, channels[i + 1], ratio))
             self.up.append(blocks)
         self.up = self.up[::-1]
 
@@ -583,6 +603,9 @@ class DylanDecoderUNet(nn.Module):
                 x = block(x, t)
 
         return self.output(x)
+
+if __name__ == '__main__':
+    model = DylanDecoderUNet(in_channels=1, z_dec_channels=None, channels=[128, 192, 256, 512, 1024], ratios=[8, 4, 4, 4, 2, 2])
 
 class ConsistencyDecoderUNetV2(nn.Module):
     def __init__(self, in_channels=3, z_dec_channels=None, channels=[320, 640, 1024], pe_dim=320, t_dim=1280, ratios=[8, 5, 4]) -> None:
