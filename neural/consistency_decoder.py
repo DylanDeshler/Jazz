@@ -531,6 +531,7 @@ class AdaLNConvBlock(nn.Module):
     def forward(self, x, t):
         x_skip = x
         gate, shift, scale = self.adaLN_modulation(t).chunk(3, dim=-1)
+        print(x.shape, gate.shape, shift.shape, scale.shape)
 
         x = modulate(self.norm(x), shift, scale)
         x = F.silu(self.conv1(x))
