@@ -390,6 +390,7 @@ class DownsampleV3(nn.Module):
         self.shortcut = PixelUnshuffleChannelAveragingDownSampleLayer(in_channels, out_channels, ratio)
     
     def forward(self, x):
+        print(x.shape, self.conv(x).shape, self.shortcut(x).shape)
         x = self.conv(x) + self.shortcut(x)
         return x
 
