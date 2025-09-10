@@ -298,7 +298,7 @@ class ConvPixelUnshuffleDownSampleLayer(nn.Module):
         super().__init__()
         self.factor = factor
         out_ratio = factor**2
-        assert out_channels % out_ratio == 0
+        assert out_channels % out_ratio == 0, f'{out_channels, out_ratio}'
         # self.conv = ConvLayer(
         #     in_channels=in_channels,
         #     out_channels=out_channels // out_ratio,
@@ -327,7 +327,7 @@ class PixelUnshuffleChannelAveragingDownSampleLayer(nn.Module):
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.factor = factor
-        assert in_channels * factor**2 % out_channels == 0
+        assert in_channels * factor**2 % out_channels == 0, f'{in_channels} {factor ** 2} {out_channels}'
         self.group_size = in_channels * factor**2 // out_channels
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -408,7 +408,7 @@ class ChannelDuplicatingPixelUnshuffleUpSampleLayer(nn.Module):
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.factor = factor
-        assert out_channels * factor**2 % in_channels == 0
+        assert out_channels * factor**2 % in_channels == 0, f'{out_channels} {factor ** 2} {in_channels}'
         self.repeats = out_channels * factor**2 // in_channels
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
