@@ -614,7 +614,9 @@ class DylanDecoderUNet(nn.Module):
                 if isinstance(block, ConvResblock):
                     x = torch.concat([x, skips.pop()], dim=1)
                 x = block(x, t)
-                print('up: ', x.shape, skips.pop().shape)
+                print('up: ', x.shape)
+                if len(skips) > 0:
+                    print(skips.pop().shape)
 
         return self.output(x)
 
