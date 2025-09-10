@@ -359,9 +359,9 @@ class ConvPixelUnshuffleDownSampleLayer(nn.Module):
         self.pixel_unshuffle = PixelUnshuffle1D(factor)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.norm(x)
-        x = self.conv(x)
-        x = self.pixel_unshuffle(x)
+        x = self.norm(x);print(x.shape)
+        x = self.conv(x);print(x.shape)
+        x = self.pixel_unshuffle(x);print(x.shape)
         return x
 
 class PixelUnshuffleChannelAveragingDownSampleLayer(nn.Module):
