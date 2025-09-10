@@ -644,7 +644,8 @@ class DylanDecoderUNet(nn.Module):
                 if isinstance(block, UpsampleV3):
                     x = block(x, t)
                     print(x.shape)
-                x = block(x, t)
+                else:
+                    x = block(x, t)
 
         return self.output(x)
 
