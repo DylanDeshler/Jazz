@@ -602,21 +602,16 @@ class DylanDecoderUNet(nn.Module):
         for down in self.down:
             for block in down:
                 x = block(x, t)
-                print('down: ', x.shape)
                 skips.append(x)
 
         for mid in self.mid:
             x = mid(x, t)
-            print('mid: ', x.shape)
 
         for up in reversed(self.up):
             for block in up:
                 if isinstance(block, ConvResblock):
                     x = torch.concat([x, skips.pop()], dim=1)
                 x = block(x, t)
-                print('up: ', x.shape)
-                if len(skips) > 0:
-                    print(skips.pop().shape)
 
         return self.output(x)
 
