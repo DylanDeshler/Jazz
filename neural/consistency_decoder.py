@@ -342,8 +342,8 @@ class DownsampleV2(nn.Module):
         super().__init__()
         self.ratio = ratio
 
-        self.conv = ConvPixelUnshuffleDownSampleLayer(in_channels, ratio)
-        self.shortcut = PixelUnshuffleChannelAveragingDownSampleLayer(in_channels, ratio)
+        self.conv = ConvPixelUnshuffleDownSampleLayer(in_channels, in_channels, ratio)
+        self.shortcut = PixelUnshuffleChannelAveragingDownSampleLayer(in_channels, in_channels, ratio)
 
         self.f_t = nn.Linear(t_dim, in_channels * 2)
 
