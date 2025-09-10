@@ -634,7 +634,7 @@ class DylanDecoderUNet(nn.Module):
         for down in self.down:
             for block in down:
                 x = block(x, t)
-            print(x.shape)
+            print('down: ', x.shape)
 
         for mid in self.mid:
             x = mid(x, t)
@@ -643,7 +643,7 @@ class DylanDecoderUNet(nn.Module):
             for block in up:
                 if isinstance(block, UpsampleV3):
                     x = block(x, t)
-                    print(x.shape)
+                    print('up: ', x.shape)
                 else:
                     x = block(x, t)
 
