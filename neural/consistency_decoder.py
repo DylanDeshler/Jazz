@@ -306,9 +306,10 @@ class PixelShuffle1D(torch.nn.Module):
         long_channel_len = short_channel_len // self.upscale_factor
         long_width = self.upscale_factor * short_width
 
+        print('shuffle: ', x.shape)
         x = x.contiguous().view([batch_size, self.upscale_factor, long_channel_len, short_width])
         x = x.permute(0, 2, 3, 1).contiguous()
-        x = x.view(batch_size, long_channel_len, long_width)
+        x = x.view(batch_size, long_channel_len, long_width);print(x.shape)
 
         return x
 
