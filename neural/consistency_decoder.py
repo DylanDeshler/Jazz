@@ -580,6 +580,7 @@ class DylanDecoderUNet(nn.Module):
                     blocks.append(UpsampleV3(channel, channels[i-1], ratio))
                     channel = channels[i - 1]
             for _ in range(depth):
+                print(channel, skips[-1])
                 blocks.append(AdaLNConvBlock(channel + skips.pop(), t_dim, dilation=2 ** _))
             self.up.insert(0, blocks)
 
