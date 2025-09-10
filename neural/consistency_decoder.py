@@ -514,8 +514,7 @@ class UpsampleV2(nn.Module):
         return f_2 + self.shortcut(x_skip)
 
 def modulate(x, shift, scale):
-    print(x.shape, shift.shape, scale.shape)
-    return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
+    return x * (1 + scale.unsqueeze(-1)) + shift.unsqueeze(-1)
 
 class AdaLNConvBlock(nn.Module):
     def __init__(self, hidden_features, t_dim) -> None:
@@ -535,7 +534,7 @@ class AdaLNConvBlock(nn.Module):
 
         x = modulate(self.norm(x), shift, scale)
         x = F.silu(self.conv1(x))
-        x = gate.unsqueeze(1) * self.conv2(x)
+        x = gate.unsqueeze(-1) * self.conv2(x)
 
         return x_skip + x
 
