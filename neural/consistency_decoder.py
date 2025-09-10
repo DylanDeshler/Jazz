@@ -566,7 +566,7 @@ class DylanDecoderUNet(nn.Module):
             AdaLNConvBlock(channels[-1], t_dim) for _ in range(depths[-1])
         ])
 
-        depths = [3] * len(channels)
+        depths = [4] * len(channels)
         self.up = nn.ModuleList([])
         for i, (channel, depth, ratio) in reversed(list(enumerate(zip(channels, depths, ratios)))):
             print(i, channel, depth, ratio)
