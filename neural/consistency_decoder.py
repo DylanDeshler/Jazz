@@ -388,7 +388,7 @@ class PixelUnshuffleChannelAveragingDownSampleLayer(nn.Module):
 class DownsampleV3(nn.Module):
     def __init__(self, in_channels, out_channels, ratio):
         super().__init__()
-        self.conv = ConvPixelUnshuffleDownSampleLayer(in_channels, out_channels, ratio, ratio * 2)
+        self.conv = ConvPixelUnshuffleDownSampleLayer(in_channels, out_channels, ratio, ratio * 2 + 1)
         self.shortcut = PixelUnshuffleChannelAveragingDownSampleLayer(in_channels, out_channels, ratio)
     
     def forward(self, x):
@@ -480,7 +480,7 @@ class ChannelDuplicatingPixelUnshuffleUpSampleLayer(nn.Module):
 class UpsampleV3(nn.Module):
     def __init__(self, in_channels, out_channels, ratio):
         super().__init__()
-        self.conv = ConvPixelShuffleUpSampleLayer(in_channels, out_channels, ratio, ratio * 2)
+        self.conv = ConvPixelShuffleUpSampleLayer(in_channels, out_channels, ratio, ratio * 2 + 1)
         self.shortcut = ChannelDuplicatingPixelUnshuffleUpSampleLayer(in_channels, out_channels, ratio)
     
     def forward(self, x):
