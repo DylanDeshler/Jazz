@@ -560,7 +560,7 @@ class DylanDecoderUNet(nn.Module):
                 else:
                     blocks.append(DownsampleV3(channel, channels[i+1], ratio))
             self.down.append(blocks)
-        self.down.append(nn.ModuleList([AdaLNConvBlock(channel, t_dim) for _ in range(depth)]))
+        # self.down.append(nn.ModuleList([AdaLNConvBlock(channel, t_dim) for _ in range(depth)]))
         
         self.mid = nn.ModuleList([
             AdaLNConvBlock(channels[-1], t_dim) for _ in range(depths[-1])
