@@ -531,7 +531,6 @@ class AdaLNConvBlock(nn.Module):
     def forward(self, x, t):
         x_skip = x
         gate, shift, scale = self.adaLN_modulation(t).chunk(3, dim=-1)
-        print(x.shape, gate.shape, shift.shape, scale.shape)
 
         x = modulate(self.norm(x), shift, scale)
         x = F.silu(self.conv1(x))
@@ -646,13 +645,13 @@ class DylanDecoderUNet(nn.Module):
 
         for up in reversed(self.up):
             for block in up:
-                print(x.shape)
                 # if isinstance(block, AdaLNConvBlock):
                 #     x = torch.concat([x, skips.pop()], dim=1)
                 #     print('concat: ', x.shape)
                 # else:
                 #     skips.pop()
-                print(x.shape, self.skips.pop(), skips.pop().shape)
+                if isinstance(block, AdaLNConvBlock):
+                    print(x.shape, self.skips.pop(), skips.pop().shape)
                 x = block(x, t)
 
         return self.output(x)
