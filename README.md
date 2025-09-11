@@ -19,11 +19,11 @@ From a conceptual POV I am anti quantization of continuous signals in tokenizers
 
 | Original | Reconstruction |
 |----------|----------------|
-| <audio controls><source src="audio/0_real.wav" type="audio/wav"></audio> | <audio controls><source src="audio/0_recon.wav" type="audio/wav"></audio> |
-| <audio controls><source src="audio/1_real.wav" type="audio/wav"></audio> | <audio controls><source src="audio/1_recon.wav" type="audio/wav"></audio> |
-| <audio controls><source src="audio/2_real.wav" type="audio/wav"></audio> | <audio controls><source src="audio/2_recon.wav" type="audio/wav"></audio> |
-| <audio controls><source src="audio/3_real.wav" type="audio/wav"></audio> | <audio controls><source src="audio/3_recon.wav" type="audio/wav"></audio> |
-| <audio controls><source src="audio/5_real.wav" type="audio/wav"></audio> | <audio controls><source src="audio/5_recon.wav" type="audio/wav"></audio> |
+| <audio controls><source src="samples/0_real.wav" type="audio/wav"></audio> | <audio controls><source src="samples/0_recon.wav" type="audio/wav"></audio> |
+| <audio controls><source src="samples/1_real.wav" type="audio/wav"></audio> | <audio controls><source src="samples/1_recon.wav" type="audio/wav"></audio> |
+| <audio controls><source src="samples/2_real.wav" type="audio/wav"></audio> | <audio controls><source src="samples/2_recon.wav" type="audio/wav"></audio> |
+| <audio controls><source src="samples/3_real.wav" type="audio/wav"></audio> | <audio controls><source src="samples/3_recon.wav" type="audio/wav"></audio> |
+| <audio controls><source src="samples/5_real.wav" type="audio/wav"></audio> | <audio controls><source src="samples/5_recon.wav" type="audio/wav"></audio> |
 
 Unfortunately naively extending this approach to higher levels of compression failed miserably. So did training a hierarchical tokenizer on top of the tokenized latents. [DC-AE](https://arxiv.org/pdf/2410.10733) to the rescue! The most insightful point in this paper is the realization that tokenizers have competing optimization targets that make learning difficult.
   1. Move information from the sequence to channels, which is not an easy task for convolution filters, and even for mlps/attention it has large gradients
