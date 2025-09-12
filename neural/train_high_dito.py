@@ -299,6 +299,7 @@ step1 = 3001
 step2 = 5001
 step3 = 8001
 step4 = 15001
+step5 = 35001
 
 if eval_only:
     gradient_accumulation_steps *= 2
@@ -326,8 +327,8 @@ while True:
         batch_size = 48
     if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
         batch_size = 64
-    # if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
-    #     gradient_accumulation_steps *= 2
+    if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
+        gradient_accumulation_steps *= 2
 
     tokens_trained += batch_size * gradient_accumulation_steps
 
