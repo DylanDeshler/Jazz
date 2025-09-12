@@ -298,8 +298,7 @@ if wandb_log and master_process:
 step1 = 3001
 step2 = 5001
 step3 = 8001
-step4 = 15001
-step5 = 35001
+step4 = 35001
 
 if eval_only:
     gradient_accumulation_steps *= 2
