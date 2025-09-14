@@ -58,7 +58,7 @@ gradient_accumulation_steps = 2 # used to simulate larger batch sizes
 batch_size = 16 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
-n_samples = rate * 3
+n_samples = rate * 2
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
@@ -329,8 +329,8 @@ while True:
         batch_size = 64
     if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
         gradient_accumulation_steps *= 2
-    if iter_num == step5 or local_iter_num == 0 and iter_num >= step5:
-        batch_size = 1
+    # if iter_num == step5 or local_iter_num == 0 and iter_num >= step5:
+    #     batch_size = 1
 
     tokens_trained += batch_size * gradient_accumulation_steps
 
