@@ -330,7 +330,7 @@ while True:
     if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
         gradient_accumulation_steps *= 2
     if iter_num == step5 or local_iter_num == 0 and iter_num >= step5:
-        batch_size = 16
+        batch_size = 2
 
     tokens_trained += batch_size * gradient_accumulation_steps
 
