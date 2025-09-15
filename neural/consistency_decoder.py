@@ -520,21 +520,32 @@ def modulate(x, shift, scale):
         return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
 
 class AdaLNConvBlock(nn.Module):
-    def __init__(self, hidden_features, t_dim, dilation=1) -> None:
+    def __init__(self, hidden_features, t_dim, dilation=1, type='linear') -> None:
         super().__init__()
         self.norm = nn.GroupNorm(32, hidden_features)
         self.conv1 = nn.Conv1d(hidden_features, hidden_features, kernel_size=3, dilation=dilation, padding=1 * dilation)
         self.conv2 = nn.Conv1d(hidden_features, hidden_features, kernel_size=3, dilation=dilation, padding=1 * dilation)
 
-        self.adaLN_modulation = nn.Sequential(
-            nn.SiLU(),
-            # nn.Linear(t_dim, 3 * hidden_features, bias=True)
-            nn.Conv1d(t_dim, 3 * hidden_features, kernel_size=3, dilation=dilation, padding=1 * dilation)
-        )
+        if type == 'linear':
+            self.adaLN_modulation = nn.Sequential(
+                nn.SiLU(),
+                nn.Linear(t_dim, 3 * hidden_features, bias=True)
+            )
+        elif type == 'conv':
+            self.adaLN_modulation = nn.Sequential(
+                nn.SiLU(),
+                nn.Conv1d(t_dim, 3 * hidden_features, kernel_size=3, dilation=dilation, padding=1 * dilation)
+            )
+        else:
+            raise NotImplementedError()
+        self.type = type
 
     def forward(self, x, t):
         x_skip = x
-        gate, shift, scale = self.adaLN_modulation(t).chunk(3, dim=1)
+        if self.type == 'linear':
+            gate, shift, scale = self.adaLN_modulation(t).chunk(3, dim=-1)
+        elif self.type == 'conv':
+            gate, shift, scale = self.adaLN_modulation(t).chunk(3, dim=1)
 
         x = modulate(self.norm(x), shift, scale)
         x = F.silu(self.conv1(x))
@@ -671,7 +682,7 @@ class DylanDecoderUNet2(nn.Module):
         for i, (channel, depth, ratio) in enumerate(zip(channels, depths, ratios)):
             blocks = nn.ModuleList([])
             for _ in range(depth):
-                blocks.append(AdaLNConvBlock(channel, t_dim, dilation=2 ** _))
+                blocks.append(AdaLNConvBlock(channel, t_dim, dilation=2 ** _, type='conv'))
             if ratio > 1:
                 if i == len(channels) - 1:
                     blocks.append(DownsampleV3(channel, channel, ratio))
@@ -680,13 +691,13 @@ class DylanDecoderUNet2(nn.Module):
             self.down.append(blocks)
         
         self.mid = nn.ModuleList([
-            AdaLNConvBlock(channels[-1], t_dim) for _ in range(depths[-1])
+            AdaLNConvBlock(channels[-1], t_dim, type='conv') for _ in range(depths[-1])
         ])
 
         depths = [3] * len(channels)
         self.skip_projs = nn.ModuleList([])
         self.up = nn.ModuleList([])
-        self.up.append(nn.ModuleList([AdaLNConvBlock(channels[-1], t_dim)]))
+        self.up.append(nn.ModuleList([AdaLNConvBlock(channels[-1], t_dim, type='conv')]))
         for i, (channel, depth, ratio) in reversed(list(enumerate(zip(channels, depths, ratios)))):
             blocks = nn.ModuleList([])
             if ratio > 1:
@@ -696,7 +707,7 @@ class DylanDecoderUNet2(nn.Module):
                     blocks.append(UpsampleV3(channels[i+1], channel, ratio))
             self.skip_projs.insert(0, nn.Conv1d(channel * 2, channel, kernel_size=1))
             for _ in range(depth):
-                blocks.append(AdaLNConvBlock(channel, t_dim, dilation=2 ** _))
+                blocks.append(AdaLNConvBlock(channel, t_dim, dilation=2 ** _, type='conv'))
             self.up.insert(0, blocks)
 
         self.output = ImageUnembedding(in_channels=channels[0], out_channels=1)
@@ -737,7 +748,7 @@ class DylanDecoderUNet2(nn.Module):
         nn.init.constant_(self.output.f.weight, 0)
         nn.init.constant_(self.output.f.bias, 0)
 
-    def interpolate(self, x, z):
+    def interpolate(self, x, z_dec):
         if z_dec is not None:
             z_dec = self.embed_z(z_dec)
             if z_dec.shape[-1] != x.shape[-1]:
