@@ -322,8 +322,8 @@ while True:
         param_group['lr'] = lr
     
     if iter_num == step1 or local_iter_num == 0 and iter_num >= step1:
-        # batch_size = 32
-        gradient_accumulation_steps *= 2
+        batch_size = 32
+        # gradient_accumulation_steps *= 2
     # if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
     #     batch_size = 48
     # if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
