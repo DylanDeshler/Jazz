@@ -791,10 +791,10 @@ class DylanDecoderUNet2(nn.Module):
         for i, up in enumerate(reversed(self.up)):
             for block in up:
                 if isinstance(block, UpsampleV3):
-                    c = t + self.interpolate(x, z_dec)
                     x = block(x, c)
                     x = torch.cat([x, skips.pop()], dim=1)
                     x = self.skip_projs[-i](x)
+                    c = t + self.interpolate(x, z_dec)
                     print('upsample: ', x.shape, c.shape)
                 else:
                     print('block: ', x.shape, c.shape)
