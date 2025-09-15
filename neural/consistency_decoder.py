@@ -795,8 +795,9 @@ class DylanDecoderUNet2(nn.Module):
                     x = block(x, c)
                     x = torch.cat([x, skips.pop()], dim=1)
                     x = self.skip_projs[-i](x)
+                    print('upsample: ', x.shape, c.shape)
                 else:
-                    print(x.shape, c.shape)
+                    print('block: ', x.shape, c.shape)
                     x = block(x, c)
 
         return self.output(x)
