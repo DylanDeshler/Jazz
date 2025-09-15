@@ -756,6 +756,8 @@ class DylanDecoderUNet2(nn.Module):
         if z_dec is not None:
             if z_dec.shape[-1] != x.shape[-1]:
                 z_dec = F.interpolate(z_dec, scale_factor=x.shape[-1] // z_dec.shape[-1], mode='nearest')
+            if self.type == 'linear':
+                z_dec = z_dec.permute(0, 2, 1)
             return z_dec
         return None
 
@@ -775,38 +777,24 @@ class DylanDecoderUNet2(nn.Module):
 
         skips = [x]
         for down in self.down:
+            c = t + self.interpolate(x, z_dec)
             for block in down:
-                # print(t.shape, self.interpolate(x, z_dec).permute(1,2).shape)
-                if self.type == 'linear':
-                    c = t + self.interpolate(x, z_dec).permute(0, 2, 1)
-                else:
-                    c = t + self.interpolate(x, z_dec)
                 x = block(x, c)
             skips.append(x)
 
+        c = t + self.interpolate(x, z_dec)
         for mid in self.mid:
-            if self.type == 'linear':
-                c = t + self.interpolate(x, z_dec).permute(0, 2, 1)
-            else:
-                c = t + self.interpolate(x, z_dec)
             x = mid(x, c)
 
         skips.pop()
         for i, up in enumerate(reversed(self.up)):
             for block in up:
                 if isinstance(block, UpsampleV3):
-                    if self.type == 'linear':
-                        c = t + self.interpolate(x, z_dec).permute(0, 2, 1)
-                    else:
-                        c = t + self.interpolate(x, z_dec)
+                    c = t + self.interpolate(x, z_dec)
                     x = block(x, c)
                     x = torch.cat([x, skips.pop()], dim=1)
                     x = self.skip_projs[-i](x)
                 else:
-                    if self.type == 'linear':
-                        c = t + self.interpolate(x, z_dec).permute(0, 2, 1)
-                    else:
-                        c = t + self.interpolate(x, z_dec)
                     x = block(x, c)
 
         return self.output(x)
