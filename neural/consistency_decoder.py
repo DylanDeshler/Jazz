@@ -549,6 +549,7 @@ class AdaLNConvBlock(nn.Module):
 
         x = modulate(self.norm(x), shift, scale)
         x = F.silu(self.conv1(x))
+        print(x.shape, gate.shape)
         x = gate.unsqueeze(-1) * self.conv2(x)
 
         return x_skip + x
