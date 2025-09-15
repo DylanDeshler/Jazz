@@ -30,7 +30,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from dito import DiToV4 as Transformer
+from dito import DiToV3 as Transformer
 
 import matplotlib.pyplot as plt
 import soundfile as sf
