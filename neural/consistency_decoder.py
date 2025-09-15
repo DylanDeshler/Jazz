@@ -630,7 +630,7 @@ class DylanDecoderUNet(nn.Module):
 
         if t is None:
             t = torch.zeros(x.shape[0], device=x.device)        
-        t = self.embed_time(t)
+        t = self.embed_time(t);print(t.shape, z_dec.shape)
 
         skips = [x]
         for down in self.down:
