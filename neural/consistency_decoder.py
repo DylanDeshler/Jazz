@@ -514,7 +514,10 @@ class UpsampleV2(nn.Module):
         return f_2 + self.shortcut(x_skip)
 
 def modulate(x, shift, scale):
-    return x * (1 + scale.unsqueeze(-1)) + shift.unsqueeze(-1)
+    if scale.ndim == 3:
+        return x * (1 + scale) + shift
+    else:
+        return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
 
 class AdaLNConvBlock(nn.Module):
     def __init__(self, hidden_features, t_dim, dilation=1) -> None:
@@ -525,12 +528,13 @@ class AdaLNConvBlock(nn.Module):
 
         self.adaLN_modulation = nn.Sequential(
             nn.SiLU(),
-            nn.Linear(t_dim, 3 * hidden_features, bias=True)
+            # nn.Linear(t_dim, 3 * hidden_features, bias=True)
+            nn.Conv1d(t_dim, 3 * hidden_features, kernel_size=3, dilation=dilation, padding=1 * dilation)
         )
 
     def forward(self, x, t):
         x_skip = x
-        gate, shift, scale = self.adaLN_modulation(t).chunk(3, dim=-1)
+        gate, shift, scale = self.adaLN_modulation(t).chunk(3, dim=1)
 
         x = modulate(self.norm(x), shift, scale)
         x = F.silu(self.conv1(x))
@@ -630,7 +634,7 @@ class DylanDecoderUNet(nn.Module):
 
         if t is None:
             t = torch.zeros(x.shape[0], device=x.device)        
-        t = self.embed_time(t);print(t.shape, z_dec.shape)
+        t = self.embed_time(t)
 
         skips = [x]
         for down in self.down:
@@ -650,6 +654,125 @@ class DylanDecoderUNet(nn.Module):
                     x = self.skip_projs[-i](x)
                 else:
                     x = block(x, t)
+
+        return self.output(x)
+
+class DylanDecoderUNet2(nn.Module):
+    def __init__(self, in_channels=3, z_dec_channels=None, channels=[320, 640, 1024], pe_dim=320, t_dim=1280, ratios=[8, 5, 4]) -> None:
+        super().__init__()
+        self.embed_image = ImageEmbedding(in_channels=in_channels, out_channels=channels[0])
+        self.embed_time = PositionalEmbedding(pe_dim=pe_dim, out_dim=t_dim)
+        self.embed_z = ImageEmbedding(in_channels=z_dec_channels, out_channels=t_dim)
+
+        assert len(channels) == len(ratios), f'{len(channels)} != {len(ratios)}'
+        depths = [3] * len(channels)
+
+        self.down = nn.ModuleList([])
+        for i, (channel, depth, ratio) in enumerate(zip(channels, depths, ratios)):
+            blocks = nn.ModuleList([])
+            for _ in range(depth):
+                blocks.append(AdaLNConvBlock(channel, t_dim, dilation=2 ** _))
+            if ratio > 1:
+                if i == len(channels) - 1:
+                    blocks.append(DownsampleV3(channel, channel, ratio))
+                else:
+                    blocks.append(DownsampleV3(channel, channels[i+1], ratio))
+            self.down.append(blocks)
+        
+        self.mid = nn.ModuleList([
+            AdaLNConvBlock(channels[-1], t_dim) for _ in range(depths[-1])
+        ])
+
+        depths = [3] * len(channels)
+        self.skip_projs = nn.ModuleList([])
+        self.up = nn.ModuleList([])
+        self.up.append(nn.ModuleList([AdaLNConvBlock(channels[-1], t_dim)]))
+        for i, (channel, depth, ratio) in reversed(list(enumerate(zip(channels, depths, ratios)))):
+            blocks = nn.ModuleList([])
+            if ratio > 1:
+                if i == len(channels) - 1:
+                    blocks.append(UpsampleV3(channel, channel, ratio))
+                else:
+                    blocks.append(UpsampleV3(channels[i+1], channel, ratio))
+            self.skip_projs.insert(0, nn.Conv1d(channel * 2, channel, kernel_size=1))
+            for _ in range(depth):
+                blocks.append(AdaLNConvBlock(channel, t_dim, dilation=2 ** _))
+            self.up.insert(0, blocks)
+
+        self.output = ImageUnembedding(in_channels=channels[0], out_channels=1)
+    
+        self.initialize_weights()
+
+    def initialize_weights(self):
+        # Initialize transformer layers:
+        def _basic_init(module):
+            if isinstance(module, nn.Linear):
+                torch.nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+            # Initialize like nn.Linear (instead of nn.Conv1d):
+            # if isinstance(module, nn.Conv1d):
+            #     w = module.weight.data
+            #     nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
+            #     if module.bias is not None:
+            #         nn.init.constant_(module.bias, 0)
+        self.apply(_basic_init)
+
+        # Initialize timestep embedding MLP:
+        nn.init.normal_(self.embed_time.f_1.weight, std=0.02)
+        nn.init.normal_(self.embed_time.f_2.weight, std=0.02)
+
+        # Zero-out adaLN modulation layers:
+        for blocks in self.up:
+            for block in blocks:
+                try:
+                    nn.init.constant_(block.adaLN_modulation[-1].weight, 0)
+                    nn.init.constant_(block.adaLN_modulation[-1].bias, 0)
+                except:
+                    continue
+
+        # Zero-out output layers:
+        # nn.init.constant_(self.final_layer.adaLN_modulation[-1].weight, 0)
+        # nn.init.constant_(self.final_layer.adaLN_modulation[-1].bias, 0)
+        nn.init.constant_(self.output.f.weight, 0)
+        nn.init.constant_(self.output.f.bias, 0)
+
+    def interpolate(self, x, z):
+        if z_dec is not None:
+            z_dec = self.embed_z(z_dec)
+            if z_dec.shape[-1] != x.shape[-1]:
+                z_dec = F.interpolate(z_dec, scale_factor=x.shape[-1] // z_dec.shape[-1], mode='nearest')
+            return z_dec
+        return None
+
+    def forward(self, x, t=None, z_dec=None) -> torch.Tensor:
+        x = self.embed_image(x)
+
+        if t is None:
+            t = torch.zeros(x.shape[0], device=x.device)        
+        t = self.embed_time(t);print(t.shape, z_dec.shape)
+
+        skips = [x]
+        for down in self.down:
+            for block in down:
+                c = t.unsqueeze(1) + self.interpolate(x, z_dec)
+                x = block(x, c)
+            skips.append(x)
+
+        for mid in self.mid:
+            x = mid(x, t)
+
+        skips.pop()
+        for i, up in enumerate(reversed(self.up)):
+            for block in up:
+                if isinstance(block, UpsampleV3):
+                    c = t.unsqueeze(1) + self.interpolate(x, z_dec)
+                    x = block(x, c)
+                    x = torch.cat([x, skips.pop()], dim=1)
+                    x = self.skip_projs[-i](x)
+                else:
+                    c = t.unsqueeze(1) + self.interpolate(x, z_dec)
+                    x = block(x, c)
 
         return self.output(x)
 
