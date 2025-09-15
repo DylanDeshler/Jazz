@@ -768,6 +768,7 @@ class DylanDecoderUNet2(nn.Module):
         skips = [x]
         for down in self.down:
             for block in down:
+                print(t.unsqueeze(1).shape, self.interpolate(x, z_dec).shape)
                 c = t.unsqueeze(1) + self.interpolate(x, z_dec)
                 x = block(x, c)
             skips.append(x)
