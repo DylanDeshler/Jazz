@@ -543,7 +543,7 @@ class AdaLNConvBlock(nn.Module):
     def forward(self, x, t):
         x_skip = x
         if self.type == 'linear':
-            gate, shift, scale = self.adaLN_modulation(t).chunk(3, dim=-1)
+            gate, shift, scale = self.adaLN_modulation(t).permute(0, 2, 1).chunk(3, dim=1)
         elif self.type == 'conv':
             gate, shift, scale = self.adaLN_modulation(t).chunk(3, dim=1)
         
