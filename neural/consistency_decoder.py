@@ -552,7 +552,6 @@ class AdaLNConvBlock(nn.Module):
 
         x = modulate(self.norm(x), shift, scale)
         x = F.silu(self.conv1(x))
-        print(x.shape, gate.shape)
         x = gate * self.conv2(x)
 
         return x_skip + x
@@ -777,7 +776,8 @@ class DylanDecoderUNet2(nn.Module):
             skips.append(x)
 
         for mid in self.mid:
-            x = mid(x, t)
+            c = t.unsqueeze(-1) + self.interpolate(x, z_dec)
+            x = mid(x, c)
 
         skips.pop()
         for i, up in enumerate(reversed(self.up)):
