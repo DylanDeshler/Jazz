@@ -323,15 +323,12 @@ while True:
     
     if iter_num == step1 or local_iter_num == 0 and iter_num >= step1:
         batch_size = 32
-        # gradient_accumulation_steps *= 2
-    # if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
-    #     batch_size = 48
-    # if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
-    #     batch_size = 64
+    if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
+        batch_size = 48
+    if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
+        batch_size = 64
     if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
         gradient_accumulation_steps *= 2
-    # if iter_num == step5 or local_iter_num == 0 and iter_num >= step5:
-    #     batch_size = 1
 
     tokens_trained += batch_size * gradient_accumulation_steps
 
