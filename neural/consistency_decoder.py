@@ -750,13 +750,15 @@ class DylanDecoderUNet2(nn.Module):
 
     def interpolate(self, x, z_dec):
         if z_dec is not None:
-            z_dec = self.embed_z(z_dec)
             if z_dec.shape[-1] != x.shape[-1]:
                 z_dec = F.interpolate(z_dec, scale_factor=x.shape[-1] // z_dec.shape[-1], mode='nearest')
             return z_dec
         return None
 
     def forward(self, x, t=None, z_dec=None) -> torch.Tensor:
+        if z_dec is not None:
+            z_dec = self.embed_z(z_dec)
+        
         x = self.embed_image(x)
 
         if t is None:
