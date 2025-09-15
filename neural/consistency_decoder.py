@@ -776,9 +776,9 @@ class DylanDecoderUNet2(nn.Module):
         skips = [x]
         for down in self.down:
             for block in down:
-                print(t.shape, self.interpolate(x, z_dec).permute(1,2).shape)
+                # print(t.shape, self.interpolate(x, z_dec).permute(1,2).shape)
                 if self.type == 'linear':
-                    c = t + self.interpolate(x, z_dec).permute(1, 2)
+                    c = t + self.interpolate(x, z_dec).permute(0, 2, 1)
                 else:
                     c = t + self.interpolate(x, z_dec)
                 x = block(x, c)
@@ -786,7 +786,7 @@ class DylanDecoderUNet2(nn.Module):
 
         for mid in self.mid:
             if self.type == 'linear':
-                c = t + self.interpolate(x, z_dec).permute(1, 2)
+                c = t + self.interpolate(x, z_dec).permute(0, 2, 1)
             else:
                 c = t + self.interpolate(x, z_dec)
             x = mid(x, c)
@@ -796,7 +796,7 @@ class DylanDecoderUNet2(nn.Module):
             for block in up:
                 if isinstance(block, UpsampleV3):
                     if self.type == 'linear':
-                        c = t + self.interpolate(x, z_dec).permute(1, 2)
+                        c = t + self.interpolate(x, z_dec).permute(0, 2, 1)
                     else:
                         c = t + self.interpolate(x, z_dec)
                     x = block(x, c)
@@ -804,7 +804,7 @@ class DylanDecoderUNet2(nn.Module):
                     x = self.skip_projs[-i](x)
                 else:
                     if self.type == 'linear':
-                        c = t + self.interpolate(x, z_dec).permute(1, 2)
+                        c = t + self.interpolate(x, z_dec).permute(0, 2, 1)
                     else:
                         c = t + self.interpolate(x, z_dec)
                     x = block(x, c)
