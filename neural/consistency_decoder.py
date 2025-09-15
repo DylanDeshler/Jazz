@@ -685,7 +685,7 @@ class DylanDecoderUNet2(nn.Module):
         for i, (channel, depth, ratio) in enumerate(zip(channels, depths, ratios)):
             blocks = nn.ModuleList([])
             for _ in range(depth):
-                blocks.append(AdaLNConvBlock(channel, t_dim, dilation=2 ** _, type='conv'))
+                blocks.append(AdaLNConvBlock(channel, t_dim, dilation=2 ** _, type='linear'))
             if ratio > 1:
                 if i == len(channels) - 1:
                     blocks.append(DownsampleV3(channel, channel, ratio))
@@ -694,13 +694,13 @@ class DylanDecoderUNet2(nn.Module):
             self.down.append(blocks)
         
         self.mid = nn.ModuleList([
-            AdaLNConvBlock(channels[-1], t_dim, type='conv') for _ in range(depths[-1])
+            AdaLNConvBlock(channels[-1], t_dim, type='linear') for _ in range(depths[-1])
         ])
 
         depths = [3] * len(channels)
         self.skip_projs = nn.ModuleList([])
         self.up = nn.ModuleList([])
-        self.up.append(nn.ModuleList([AdaLNConvBlock(channels[-1], t_dim, type='conv')]))
+        self.up.append(nn.ModuleList([AdaLNConvBlock(channels[-1], t_dim, type='linear')]))
         for i, (channel, depth, ratio) in reversed(list(enumerate(zip(channels, depths, ratios)))):
             blocks = nn.ModuleList([])
             if ratio > 1:
@@ -710,7 +710,7 @@ class DylanDecoderUNet2(nn.Module):
                     blocks.append(UpsampleV3(channels[i+1], channel, ratio))
             self.skip_projs.insert(0, nn.Conv1d(channel * 2, channel, kernel_size=1))
             for _ in range(depth):
-                blocks.append(AdaLNConvBlock(channel, t_dim, dilation=2 ** _, type='conv'))
+                blocks.append(AdaLNConvBlock(channel, t_dim, dilation=2 ** _, type='linear'))
             self.up.insert(0, blocks)
 
         self.output = ImageUnembedding(in_channels=channels[0], out_channels=1)
