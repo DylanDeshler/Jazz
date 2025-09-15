@@ -768,8 +768,7 @@ class DylanDecoderUNet2(nn.Module):
         skips = [x]
         for down in self.down:
             for block in down:
-                print(t.unsqueeze(1).shape, self.interpolate(x, z_dec).shape)
-                c = t.unsqueeze(1) + self.interpolate(x, z_dec)
+                c = t.unsqueeze(-1) + self.interpolate(x, z_dec)
                 x = block(x, c)
             skips.append(x)
 
@@ -780,12 +779,12 @@ class DylanDecoderUNet2(nn.Module):
         for i, up in enumerate(reversed(self.up)):
             for block in up:
                 if isinstance(block, UpsampleV3):
-                    c = t.unsqueeze(1) + self.interpolate(x, z_dec)
+                    c = t.unsqueeze(-1) + self.interpolate(x, z_dec)
                     x = block(x, c)
                     x = torch.cat([x, skips.pop()], dim=1)
                     x = self.skip_projs[-i](x)
                 else:
-                    c = t.unsqueeze(1) + self.interpolate(x, z_dec)
+                    c = t.unsqueeze(-1) + self.interpolate(x, z_dec)
                     x = block(x, c)
 
         return self.output(x)
