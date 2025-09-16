@@ -90,7 +90,7 @@ class DiToV3(nn.Module):
     def decode(self, z, shape=(1, 16000), n_steps=50, guidance=1):
         full_shape = (z.shape[0], *shape[-2:])
         if guidance > 1:
-            uncond_net_kwargs = {'z_dec': torch.randn(full_shape)}
+            uncond_net_kwargs = {'z_dec': torch.randn(full_shape).to(z.device)}
         else:
             uncond_net_kwargs = None
         return self.sampler.sample(self.unet, full_shape, n_steps, net_kwargs={'z_dec': z}, uncond_net_kwargs=uncond_net_kwargs, guidance=guidance)
