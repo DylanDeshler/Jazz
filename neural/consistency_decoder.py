@@ -550,6 +550,7 @@ class AdaLNConvBlock(nn.Module):
         if gate.ndim == 2:
             gate = gate.unsqueeze(-1)
 
+        print(gate.shape, shift.shape, scale.shape, self.norm(x).shape)
         x = modulate(self.norm(x), shift, scale)
         x = F.silu(self.conv1(x))
         x = gate * self.conv2(x)
