@@ -337,7 +337,7 @@ while True:
         X = get_batch('test')
         model.eval()
         with ctx:
-            logits = raw_model.reconstruct(X, n_steps=100, guidance=1)
+            logits = raw_model.reconstruct(X, n_steps=100)
         model.train()
         save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
         losses = estimate_loss()
