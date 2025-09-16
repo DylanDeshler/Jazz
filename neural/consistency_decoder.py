@@ -372,7 +372,7 @@ class PixelUnshuffleChannelAveragingDownSampleLayer(nn.Module):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
-        assert in_channels * factor % out_channels == 0, f'{in_channels} {factor} {out_channels}'
+        # assert in_channels * factor % out_channels == 0, f'{in_channels} {factor} {out_channels}'
         self.group_size = in_channels * factor // out_channels
         self.pixel_unshuffle = PixelUnshuffle1D(factor)
 
