@@ -549,7 +549,7 @@ class AdaLNConvBlock(nn.Module):
         else:
             gate, shift, scale = self.adaLN_modulation(t).chunk(3, dim=1)
 
-        # print(gate.shape, shift.shape, scale.shape, self.norm(x).shape)
+        print(gate.shape, shift.shape, scale.shape, self.norm(x).shape)
         x = modulate(self.norm(x), shift, scale)
         x = F.silu(self.conv1(x))
         x = gate * self.conv2(x)
