@@ -517,7 +517,7 @@ def modulate(x, shift, scale):
     if scale.ndim == 3:
         return x * (1 + scale) + shift
     else:
-        return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
+        return x * (1 + scale.unsqueeze(-1)) + shift.unsqueeze(-1)
 
 class AdaLNConvBlock(nn.Module):
     def __init__(self, hidden_features, t_dim, dilation=1, type='linear') -> None:
