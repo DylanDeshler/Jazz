@@ -675,7 +675,7 @@ class DylanDecoderUNet2(nn.Module):
     def __init__(self, in_channels=3, z_dec_channels=None, channels=[320, 640, 1024], pe_dim=320, t_dim=1280, ratios=[8, 5, 4], type='linear') -> None:
         super().__init__()
         self.embed_image = ImageEmbedding(in_channels=in_channels, out_channels=channels[0])
-        self.embed_time = PositionalEmbedding(pe_dim=pe_dim, out_dim=t_dim)
+        self.embed_time = PositionalEmbedding(pe_dim=pe_dim, out_dim=z_dec_channels)
         self.embed_z = ImageEmbedding(in_channels=z_dec_channels, out_channels=t_dim)
         self.type = type
 
@@ -781,8 +781,10 @@ class DylanDecoderUNet2(nn.Module):
 
         skips = [x]
         for i, down in enumerate(self.down):
-            print(t.shape, self.c_projs[i](t).shape)
-            print(z_dec.shape, self.c_projs[i](z_dec).shape)
+            print(t.shape)
+            print(self.c_projs[i](t).shape)
+            print(z_dec.shape)
+            print(self.c_projs[i](z_dec).shape)
             print(x.shape)
             c = self.c_projs[i](t) + self.interpolate(x, self.c_projs[i](z_dec))
             for block in down:
