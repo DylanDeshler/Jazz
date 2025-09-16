@@ -786,7 +786,7 @@ class DylanDecoderUNet2(nn.Module):
             print(z_dec.shape)
             print(self.c_projs[i](z_dec).shape)
             print(x.shape)
-            c = self.c_projs[i](t) + self.interpolate(x, self.c_projs[i](z_dec))
+            c = self.c_projs[i](t) + self.c_projs[i](self.interpolate(x, z_dec))
             for block in down:
                 x = block(x, c)
             skips.append(x)
