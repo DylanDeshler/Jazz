@@ -683,7 +683,7 @@ class DylanDecoderUNet2(nn.Module):
         depths = [3] * len(channels)
 
         self.c_projs = nn.ModuleList([
-            nn.Linear(t_dim, channel) for channel in channels
+            nn.Linear(z_dec_channels, channel) for channel in channels
         ])
 
         self.down = nn.ModuleList([])
@@ -781,12 +781,12 @@ class DylanDecoderUNet2(nn.Module):
 
         skips = [x]
         for i, down in enumerate(self.down):
-            c = t + self.interpolate(x, self.c_projs[i](z_dec))
+            c = self.c_projs[i](t) + self.interpolate(x, self.c_projs[i](z_dec))
             for block in down:
                 x = block(x, c)
             skips.append(x)
 
-        c = t + self.interpolate(x, self.c_projs[-1](z_dec))
+        c = self.c_projs[-1](t) + self.interpolate(x, self.c_projs[-1](z_dec))
         for mid in self.mid:
             x = mid(x, c)
 
@@ -797,7 +797,7 @@ class DylanDecoderUNet2(nn.Module):
                     x = block(x, c)
                     x = torch.cat([x, skips.pop()], dim=1)
                     x = self.skip_projs[-i](x)
-                    c = t + self.interpolate(x, self.c_projs[i](z_dec))
+                    c = self.c_projs[-i](t) + self.interpolate(x, self.c_projs[-i](z_dec))
                 else:
                     x = block(x, c)
 
