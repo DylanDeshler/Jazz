@@ -88,7 +88,12 @@ class DiToV3(nn.Module):
         return self.decode(z, shape=x.shape, n_steps=n_steps, guidance=guidance)
     
     def decode(self, z, shape=(1, 16000), n_steps=50, guidance=1):
-        return self.sampler.sample(self.unet, (z.shape[0], *shape[-2:]), n_steps, net_kwargs={'z_dec': z}, guidance=guidance)
+        full_shape = (z.shape[0], *shape[-2:])
+        if guidance > 1:
+            uncond_net_kwargs = {'z_dec': torch.randn(full_shape)}
+        else:
+            uncond_net_kwargs = None
+        return self.sampler.sample(self.unet, full_shape, n_steps, net_kwargs={'z_dec': z}, uncond_net_kwargs=uncond_net_kwargs, guidance=guidance)
 
 class DiToV2(nn.Module):
     def __init__(self, z_shape, n_residual_layers, lstm, transformer, down_proj=None, in_channels=1, dimension=128, n_filters=32, ratios=[8, 5, 4, 2], dilation_base=2, channels=[128, 256, 512]):
