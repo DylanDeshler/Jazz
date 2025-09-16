@@ -326,9 +326,9 @@ while True:
     if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
         # batch_size = 48
         gradient_accumulation_steps *= 2
-    if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
-        # batch_size = 64
-        gradient_accumulation_steps *= 2
+    # if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
+    #     # batch_size = 64
+    #     gradient_accumulation_steps *= 2
     if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
         gradient_accumulation_steps *= 2
 
