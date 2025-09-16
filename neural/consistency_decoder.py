@@ -781,6 +781,9 @@ class DylanDecoderUNet2(nn.Module):
 
         skips = [x]
         for i, down in enumerate(self.down):
+            print(t.shape, self.c_projs[i](t).shape)
+            print(z_dec.shape, self.c_projs[i](z_dec).shape)
+            print(x.shape)
             c = self.c_projs[i](t) + self.interpolate(x, self.c_projs[i](z_dec))
             for block in down:
                 x = block(x, c)
