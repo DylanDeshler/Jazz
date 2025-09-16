@@ -676,7 +676,7 @@ class DylanDecoderUNet2(nn.Module):
         super().__init__()
         self.embed_image = ImageEmbedding(in_channels=in_channels, out_channels=channels[0])
         self.embed_time = PositionalEmbedding(pe_dim=pe_dim, out_dim=z_dec_channels)
-        self.embed_z = ImageEmbedding(in_channels=z_dec_channels, out_channels=t_dim)
+        self.embed_z = ImageEmbedding(in_channels=z_dec_channels, out_channels=z_dec_channels)
         self.type = type
 
         assert len(channels) == len(ratios), f'{len(channels)} != {len(ratios)}'
