@@ -53,7 +53,7 @@ class ImageEmbedding(nn.Module):
 class ImageUnembedding(nn.Module):
     def __init__(self, in_channels=320, out_channels=3) -> None:
         super().__init__()
-        self.gn = nn.GroupNorm(24, in_channels)
+        self.gn = nn.GroupNorm(32, in_channels)
         self.f = nn.Conv1d(in_channels, out_channels, kernel_size=3, padding=1)
 
     def forward(self, x) -> torch.Tensor:
@@ -65,10 +65,10 @@ class ConvResblock(nn.Module):
         super().__init__()
         self.f_t = nn.Linear(t_dim, out_features * 2)
 
-        self.gn_1 = nn.GroupNorm(24, in_features)
+        self.gn_1 = nn.GroupNorm(32, in_features)
         self.f_1 = nn.Conv1d(in_features, out_features, kernel_size=3, padding=1)
 
-        self.gn_2 = nn.GroupNorm(24, out_features)
+        self.gn_2 = nn.GroupNorm(32, out_features)
         self.f_2 = nn.Conv1d(out_features, out_features, kernel_size=3, padding=1)
 
         skip_conv = in_features != out_features
@@ -100,9 +100,9 @@ class Downsample(nn.Module):
         self.ratio = ratio
         self.f_t = nn.Linear(t_dim, in_channels * 2)
 
-        self.gn_1 = nn.GroupNorm(24, in_channels)
+        self.gn_1 = nn.GroupNorm(32, in_channels)
         self.f_1 = nn.Conv1d(in_channels, in_channels, kernel_size=3, padding=1)
-        self.gn_2 = nn.GroupNorm(24, in_channels)
+        self.gn_2 = nn.GroupNorm(32, in_channels)
 
         self.f_2 = nn.Conv1d(in_channels, in_channels, kernel_size=3, padding=1)
 
@@ -131,9 +131,9 @@ class Upsample(nn.Module):
         self.ratio = ratio
         self.f_t = nn.Linear(t_dim, in_channels * 2)
 
-        self.gn_1 = nn.GroupNorm(24, in_channels)
+        self.gn_1 = nn.GroupNorm(32, in_channels)
         self.f_1 = nn.Conv1d(in_channels, in_channels, kernel_size=3, padding=1)
-        self.gn_2 = nn.GroupNorm(24, in_channels)
+        self.gn_2 = nn.GroupNorm(32, in_channels)
 
         self.f_2 = nn.Conv1d(in_channels, in_channels, kernel_size=3, padding=1)
 
@@ -352,7 +352,7 @@ class ConvPixelUnshuffleDownSampleLayer(nn.Module):
         #     norm=None,
         #     act_func=None,
         # )
-        self.norm = nn.GroupNorm(24, in_channels)
+        self.norm = nn.GroupNorm(32, in_channels)
         self.conv = nn.Conv1d(in_channels, out_channels // factor, kernel_size=kernel_size, padding=kernel_size // 2)
         self.pixel_unshuffle = PixelUnshuffle1D(factor)
 
@@ -403,9 +403,9 @@ class DownsampleV2(nn.Module):
 
         self.f_t = nn.Linear(t_dim, in_channels * 2)
 
-        self.gn_1 = nn.GroupNorm(24, in_channels)
+        self.gn_1 = nn.GroupNorm(32, in_channels)
         self.f_1 = nn.Conv1d(in_channels, in_channels, kernel_size=3, padding=1)
-        self.gn_2 = nn.GroupNorm(24, in_channels)
+        self.gn_2 = nn.GroupNorm(32, in_channels)
 
         self.f_2 = nn.Conv1d(in_channels, in_channels, kernel_size=3, padding=1)
 
@@ -443,7 +443,7 @@ class ConvPixelShuffleUpSampleLayer(nn.Module):
         #     norm=None,
         #     act_func=None,
         # )
-        self.norm = nn.GroupNorm(24, in_channels)
+        self.norm = nn.GroupNorm(32, in_channels)
         self.conv = nn.Conv1d(in_channels, out_channels * factor, kernel_size=kernel_size, padding=kernel_size // 2)
         self.pixel_shuffle = PixelShuffle1D(factor)
 
@@ -488,9 +488,9 @@ class UpsampleV2(nn.Module):
         self.ratio = ratio
         self.f_t = nn.Linear(t_dim, in_channels * 2)
 
-        self.gn_1 = nn.GroupNorm(24, in_channels)
+        self.gn_1 = nn.GroupNorm(32, in_channels)
         self.f_1 = nn.Conv1d(in_channels, in_channels, kernel_size=3, padding=1)
-        self.gn_2 = nn.GroupNorm(24, in_channels)
+        self.gn_2 = nn.GroupNorm(32, in_channels)
 
         self.f_2 = nn.Conv1d(in_channels, in_channels, kernel_size=3, padding=1)
         
@@ -522,7 +522,7 @@ def modulate(x, shift, scale):
 class AdaLNConvBlock(nn.Module):
     def __init__(self, hidden_features, t_dim, dilation=1, type='linear') -> None:
         super().__init__()
-        self.norm = nn.GroupNorm(24, hidden_features)
+        self.norm = nn.GroupNorm(32, hidden_features)
         self.conv1 = nn.Conv1d(hidden_features, hidden_features, kernel_size=3, dilation=dilation, padding=1 * dilation)
         self.conv2 = nn.Conv1d(hidden_features, hidden_features, kernel_size=3, dilation=dilation, padding=1 * dilation)
 

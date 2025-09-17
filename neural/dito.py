@@ -7,10 +7,10 @@ from seanet import SEANetEncoder, DylanSEANetEncoder
 from fm import FM, FMEulerSampler
 
 class DiToV4(nn.Module):
-    def __init__(self, z_shape, n_residual_layers, lstm, transformer, down_proj=None, in_channels=1, dimension=128, n_filters=32, ratios=[8, 5, 4, 2], dilation_base=2, channels=[128, 256, 512], max_channels=2048):
+    def __init__(self, z_shape, n_residual_layers, lstm, transformer, down_proj=None, in_channels=1, dimension=128, n_filters=32, ratios=[8, 5, 4, 2], dilation_base=2, channels=[128, 256, 512]):
         super().__init__()
         self.z_shape = z_shape
-        self.encoder = DylanSEANetEncoder(channels=in_channels, dimension=dimension, n_filters=n_filters, ratios=ratios, n_residual_layers=n_residual_layers, lstm=lstm, transformer=transformer, dilation_base=dilation_base, down_proj=down_proj, max_channels=max_channels)
+        self.encoder = DylanSEANetEncoder(channels=in_channels, dimension=dimension, n_filters=n_filters, ratios=ratios, n_residual_layers=n_residual_layers, lstm=lstm, transformer=transformer, dilation_base=dilation_base, down_proj=down_proj)
         self.z_norm = nn.LayerNorm(self.z_shape[0], elementwise_affine=False)
         self.unet = DylanDecoderUNet2(in_channels=in_channels, z_dec_channels=dimension, channels=channels, ratios=ratios[:len(channels)])
 
