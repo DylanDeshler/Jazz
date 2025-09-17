@@ -15,6 +15,7 @@ Conceptually I follow the same approach as the initial Genie paper. I train an a
 
 
 ### Audio Tokenizer
+#### Architectures
 From a conceptual POV I am anti quantization of continuous signals in tokenizers, why are we restricting the continuous nature of our data to some dumb integers in high dimensional space?? Why not use that continuous structure to our advantage?? He says yelling at no one in particular. An annoying looking man begins to say something about digital sensors being discrete by conception before he is pumbled by the audience, everyone applauds. So anyway I just don't like them, but they are the most performant tokenizers, so I understand why they are commonly used. At the onset of this project I spent some time fooling around with pretrained tokenziers and trying to build my own continuous tokenizers. It took a fair few failed attempts and bad results before I realized the main issue was that I was bad at googling and the solution already existed on ArXiv. Boom! [Diffusion Tokenizers](https://arxiv.org/pdf/2501.18593v1) why predict the entire latent space in one go when you can do it iteratively instead? A simple and profound idea that happened to be what I was messing with, just better and with many of the kinks worked out. I adjusted the architecture to work with 1D audio signals instead of 2D images, which mostly involved baking in the recent advances in audio tokenizers, and it pretty much worked out of the box! I love it when that happens. I highly recommend reading the Diffusion Tokenizers paper because it requires no specialized losses. Yes you heard me right, no collection of STFT losses, no GAN losses, no LIPSIS losses, or anything domain specific. Simply a diffusion objective that scales better than anyother image tokenizer. This worked quite well for low compression (16000hz -> 50 tokens). Below are some sample reconstructions.
 
 | Original | Reconstruction |
@@ -25,20 +26,25 @@ From a conceptual POV I am anti quantization of continuous signals in tokenizers
 | <audio controls><source src="samples/3_real.wav" type="audio/wav"></audio> | <audio controls><source src="samples/3_recon.wav" type="audio/wav"></audio> |
 | <audio controls><source src="samples/5_real.wav" type="audio/wav"></audio> | <audio controls><source src="samples/5_recon.wav" type="audio/wav"></audio> |
 
-Unfortunately naively extending this approach to higher levels of compression failed miserably. So did training a hierarchical tokenizer on top of the tokenized latents. [DC-AE](https://arxiv.org/pdf/2410.10733) to the rescue! The most insightful point in this paper is the realization that tokenizers have competing optimization targets that make learning difficult.
-  1. Move information from the sequence to channels, which is not an easy task for convolution filters, and even for mlps/attention it has large gradients
-  2. Compress the information, which typically has small gradients
+Unfortunately naively extending this approach to higher levels of compression failed miserably. Training a hierarchical tokenizer on top of the lower level tokenized latents also failed. [DC-AE](https://arxiv.org/pdf/2410.10733) to the rescue! The most insightful point in this paper is the realization that tokenizers have competing optimization processes that make learning difficult.
+  Process 1: Move information from the sequence to channels, which is a difficult task for convolutional filters (large gradients)
+  Process 2: Compress salient information and ditch noise (small gradients)
+The different gradient magnitudes is an explanation for why adding additional blocks to enocders does not simply give better compression. The gradient signal is dominated by moving information around rather than better compression. DC-AE proposes to solve this problem by handling Process 1 with [Pixel Shuffle](https://docs.pytorch.org/docs/stable/generated/torch.nn.PixelShuffle.html), a technique that has been around a few years for better upsampling. There are no learned parameters in this process, so the large gradients disappear. Then the compression is handled by a similar but learned transformation with small gradients. They are combined in residual style with the non-parametric pixel shuffle transformation being the shortcut connection.
+
+#### Latent Dimensions
+Taking advantage of the architectural modifications from DC-AE makes trading compression for latent dimension more tractable. The next question becomes what latent dimension has the best trade-off between compression and generation. Lets define what I mean by each of those terms in this specific context.
+  Compression: How much salient information is conserved as the sequence length is compressed.
+  Generation: The downstream latent diffusion model (LDM) that is trained to generate these representations. Higher latent dimension makes this process more difficult.
 
 ### Latent Action Model
 Questions to consider:
-  1. Causal or no?
-  2. Latents or raw waveform?
-  3. How granular?
-  4. How many actions?
+  1. Enforce causality or block masking?
+  2. Input tokenized latents or the raw waveform?
+  3. Latent action cardinality?
 
-Because I am compute poor I decided to train my Latent Action Model on the continuous tokenized latents from the previous step, instead of the raw waveform (which is what Genie did). I am likely leaving some performance on the floor by doing this, but for the sake of speed and progress, I think its a fair tradeoff. Plus, because of my somewhat narrow scope, the tokenizer is actually quite good, so hopefully the information being lost isn't crucial to this step.
+Because I am compute poor I decided to train my Latent Action Model on the continuous tokenized latents from the previous step, instead of the raw waveform (which is what Genie did). I am likely leaving some performance on the floor by doing this, but for the sake of speed and progress, I think its a fair tradeoff. Plus, because of my somewhat narrow scope, the tokenizer is actually quite good, so hopefully the information being lost isn't crucial to this step. It also brings a substantial win for the sequence length. Training the model over 10s of data would be 160,000 samples using the waveform but only 80 - 500 for the different tokenizers.
 
-Since I'm not going for real-time action controlled generation, causality isn't strictly necessary anywhere in the model. I plan on using this primarily for editing, which points to random/segmented masking instead of causal masking.
+Since I'm not going for real-time action controlled generation, causality isn't strictly necessary anywhere in the model. I plan on using this primarily for editing and inpainting, which corresponds better to random/segmented masking instead of causal masking. Causal masking has also been empirically shown to make generation more difficult. However some form of masking is required to ensure the latent actions provide important information to the model that it cannot get from peaking ahead.
 
 ### Dynamics Model
 
