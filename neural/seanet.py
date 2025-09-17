@@ -601,7 +601,7 @@ class DylanSEANetEncoder(nn.Module):
                  ratios: tp.List[int] = [8, 5, 4, 2], activation: str = 'ELU', activation_params: dict = {'alpha': 1.0},
                  norm: str = 'weight_norm', norm_params: tp.Dict[str, tp.Any] = {}, kernel_size: int = 7,
                  last_kernel_size: int = 7, residual_kernel_size: int = 3, dilation_base: int = 2, causal: bool = False,
-                 pad_mode: str = 'reflect', true_skip: bool = False, compress: int = 2, lstm: int = 2, transformer: int = 1, down_proj: int = None):
+                 pad_mode: str = 'reflect', true_skip: bool = False, compress: int = 2, lstm: int = 2, transformer: int = 1, down_proj: int = None, max_channels=2048):
         super().__init__()
         self.channels = channels
         self.dimension = dimension
@@ -637,7 +637,8 @@ class DylanSEANetEncoder(nn.Module):
                 #         norm=norm, norm_kwargs=norm_params,
                 #         causal=causal, pad_mode=pad_mode),
             ]
-            mult *= 2
+            if n_filters * mult * 2 <= max_channels:
+                mult *= 2
 
         if lstm:
             model += [SLSTM(mult * n_filters, num_layers=lstm)]
