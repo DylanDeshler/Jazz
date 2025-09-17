@@ -47,7 +47,7 @@ save_interval = eval_interval * 10
 eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -226,6 +226,9 @@ elif init_from.startswith('gpt2'):
 
 model.to(device)
 summary(model)
+print('Encoder # params: ', sum(param.numel() for param in model.encoder.parameters()))
+print('Decoder # params: ', sum(param.numel() for param in model.unet.parameters()))
+
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
