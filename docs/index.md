@@ -25,7 +25,7 @@ Here is an example of the difference in audio quality, the crackaling is a chara
 
 Here are the Mel Spectrograms for the first 5 seconds of each song that were used to generate the features for the quality classifier. The probability predicted by the classifier is in the title of each image. Notice how there is more color and blurred pixels in the second image, some of this comes from the crackle in the recording.
 
-| <img src="samples/mel/good.png" width="45%"/> | <img src="samples/mel/bad.png" width="45%"/> |
+| <img src="samples/mel/good.png" width="95%"/> | <img src="samples/mel/bad.png" width="95%"/> |
 
 # Audio Tokenizer
 ## Architectures
