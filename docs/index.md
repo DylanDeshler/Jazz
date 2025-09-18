@@ -23,7 +23,7 @@ Here is an example of the difference in audio quality, the crackaling is a chara
 |------|-----|
 | <audio controls><source src="samples/mel/JV-36144-1957-QmbSPzr8VX8LUrnatKVGRK9G9wZuVxah5VdMBgXVTpNBDn.wav-TS485813.wav" type="audio/wav"></audio> | <audio controls><source src="samples/mel/JV-12-1916-QmYZJNDBn5WPRNakbBi9UujN8dMrJo3n8vpaHo8RNon4xt.wav-JV-12-1916-QmYZJNDBn5WPRNakbBi9UujN8dMrJo3n8vpaHo8RNon4xt.wav" type="audio/wav"></audio> |
 
-Here are the Mel Spectrograms for the first 5 seconds of each song that were used to generate the features for the quality classifier. The probability predicted by the classifier is in the title of each image.
+Here are the Mel Spectrograms for the first 5 seconds of each song that were used to generate the features for the quality classifier. The probability predicted by the classifier is in the title of each image. Notice how there is more color and blurred pixels in the second image, some of this comes from the crackle in the recording.
 
 | <img src="samples/mel/good.png" width="45%"/> | <img src="samples/mel/bad.png" width="45%"/> |
 |-----------------------------------------------|----------------------------------------------|
