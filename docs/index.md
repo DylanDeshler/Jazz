@@ -25,8 +25,9 @@ Here is an example of the difference in audio quality, the crackaling is a chara
 
 Here are the Mel Spectrograms for the first 5 seconds of each song that were used to generate the features for the quality classifier.
 
-| ![Good](samples/mel/good.png) | ![Bad](samples/mel/bad.png) |
-|-----------------|-----------------|
+| <img src="samples/mel/good.png" width="500"/> | <img src="samples/mel/bad.png" width="500"/> |
+|-------------------------------------|-------------------------------------|
+
 
 
 # Audio Tokenizer
