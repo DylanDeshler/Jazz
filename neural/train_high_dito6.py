@@ -40,7 +40,7 @@ import glob
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'tokenizer_high7'
+out_dir = 'tokenizer_high8'
 eval_interval = 1000
 log_interval = 100
 save_interval = eval_interval * 10
@@ -187,7 +187,7 @@ def average_checkpoints(paths):
             acc[k] = acc[k].to(dtypes0[k])
     return acc
 
-model_args = dict(z_shape=(128, 50), n_residual_layers=3, lstm=0, transformer=1, dimension=128, n_filters=32, ratios=[8, 4, 4, 4, 2, 2], channels=[64, 128, 256, 256, 512, 512], dilation_base=3, down_proj=1024)
+model_args = dict(z_shape=(128, 50), n_residual_layers=3, lstm=0, transformer=1, dimension=64, n_filters=32, ratios=[8, 4, 4, 4, 2, 2], channels=[64, 128, 256, 256, 512, 512], dilation_base=3, down_proj=1024)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
