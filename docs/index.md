@@ -40,7 +40,7 @@ The different gradient magnitudes is an explanation for why adding additional bl
 | <audio controls><source src="samples/high/3_real.wav" type="audio/wav"></audio> | <audio controls><source src="samples/high/3_recon.wav" type="audio/wav"></audio> |
 | <audio controls><source src="samples/high/7_real.wav" type="audio/wav"></audio> | <audio controls><source src="samples/high/7_recon.wav" type="audio/wav"></audio> |
 
-Scaling up the model and training will improve audio quality which would likely improve downstream learning. However, I have limitied compute and time, and these reconstructions maintain the most salient information which is what is required for the next stage.
+To force the model to learn higher level and more longterm features, I doubled the inpute sequence length to 2 seconds and then later increased it to 5 seconds. This was faster and more computationally efficient for my setup than starting training with 5 second segments. Scaling up the model and training will improve audio quality which would likely improve downstream learning. However, I have limitied compute and time, and these reconstructions maintain the most salient information which is what is required for the next stage.
 
 ## Latent Shape
 Taking advantage of the architectural modifications from DC-AE makes trading compression for latent dimension more tractable. The next question becomes what latent dimension has the best trade-off between compression and generation. Lets define what I mean by each of those terms in this specific context.
