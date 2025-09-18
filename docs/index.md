@@ -18,11 +18,13 @@ I found an incredible dataset of Jazz recordings called [JazzSet](https://www.re
 I resampled all of the recordings to 16000hz to reduce the computational training burden while maintaining reasonable peak audio quality. I randomly sampled ~200 songs, took the first 5 seconds from each, and labeled the quality as good or bad. The sampling was biased by age of the recording, anything somewhat recent had high quality so I didn't want to fill my training set with good quality recordings and bias the model accordingly. I trained an ExtraTrees model on simple statistics calculated over frequency bands from the Mel Spectrogram of the 5 second cuts. After training the model had ~80% accuracy which I deemed good enough for filtering. To filter, I calculated the same feature set over the entire dataset, predicted the probability of each 5 second segment being good, applied a gaussian filter to the probabilities, and passed a song through if the average probability was above 55%. I decided to pass/fail entire songs instead of their segments because I didn't want to deal with stitching segments together (despite this being common in NLP pre-training) and I didn't know what the final generative models context length would be (i.e. how much stitching would impact training). In hindsight maintaining sufficiently long (>30s) clips that were high quality likely would have increased my dataset size without too much overhead.
 
 Here is an example of the difference in audio quality, the crackaling is a characateristic of old recording equipment and should be excluded from the training set.
+
 | Good | Bad |
 |------|-----|
 | <audio controls><source src="samples/mel/JV-36144-1957-QmbSPzr8VX8LUrnatKVGRK9G9wZuVxah5VdMBgXVTpNBDn.wav-TS485813.wav" type="audio/wav"></audio> | <audio controls><source src="samples/mel/JV-12-1916-QmYZJNDBn5WPRNakbBi9UujN8dMrJo3n8vpaHo8RNon4xt.wav-JV-12-1916-QmYZJNDBn5WPRNakbBi9UujN8dMrJo3n8vpaHo8RNon4xt.wav" type="audio/wav"></audio> |
 
 Here are the Mel Spectrograms for the first 5 seconds of each song that were used to generate the features for the quality classifier.
+
 | ![Good](samples/mel/good.png) | ![Bad](samples/mel/bad.png) |
 |-----------------|-----------------|
 
