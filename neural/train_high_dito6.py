@@ -301,7 +301,7 @@ if wandb_log and master_process:
 step1 = 3001
 step2 = 5001
 step3 = 8001
-step4 = 35001
+step4 = 25001
 step5 = 67001
 
 if eval_only:
