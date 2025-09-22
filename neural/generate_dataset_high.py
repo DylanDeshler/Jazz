@@ -141,36 +141,40 @@ import glob
 # write_paths.append((filename, len(all_codes)))
 # all_codes = []
 
+write_paths = []
 paths = [f'high_{str(i).zfill(2)}.bin' for i in range(49)]
 for path in paths:
     data = np.memmap(path, dtype=np.float32, mode='r')
     data = data.reshape((-1, 64))
-    print(data.shape)
+    write_paths.append((path, len(data)))
 
-# # write to train.bin
-# cur_idx = 0
-# filename = os.path.join(os.path.dirname(__file__), f'high_train.bin')
-# dtype = np.float32
-# train_length = np.sum([length for path, length in write_paths[:-1]])
-# arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, 64))
-# print(arr.shape)
+# write to train.bin
+cur_idx = 0
+filename = os.path.join(os.path.dirname(__file__), f'high_train.bin')
+dtype = np.float32
+train_length = np.sum([length for path, length in write_paths[:-2]])
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, 64))
+print(arr.shape)
 
-# for path, length in write_paths[:-1]:
-#     data = np.memmap(path, dtype=np.float32, mode='r', shape=(length, 64))
+for path, length in write_paths[:-2]:
+    data = np.memmap(path, dtype=np.float32, mode='r', shape=(length, 64))
 
-#     arr[cur_idx:cur_idx+length] = data
-#     arr.flush()
+    arr[cur_idx:cur_idx+length] = data
+    arr.flush()
 
-#     cur_idx += length
+    cur_idx += length
 
-# # write to val.bin
-# filename = os.path.join(os.path.dirname(__file__), f'high_val.bin')
-# dtype = np.float32
-# val_length = write_paths[-1][1]
-# arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length, 64))
-# print(arr.shape)
+# write to val.bin
+filename = os.path.join(os.path.dirname(__file__), f'high_val.bin')
+dtype = np.float32
+val_length = np.sum([length for path, length in write_paths[-2:]])
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length, 64))
+print(arr.shape)
 
-# data = np.memmap(write_paths[-1][0], dtype=np.float32, mode='r', shape=(val_length, 64))
+for path, length in write_paths[-2:]:
+    data = np.memmap(path, dtype=np.float32, mode='r', shape=(length, 64))
 
-# arr[:] = data
-# arr.flush()
+    arr[cur_idx:cur_idx+length] = data
+    arr.flush()
+
+    cur_idx += length
