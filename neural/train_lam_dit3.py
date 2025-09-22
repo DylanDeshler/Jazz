@@ -263,7 +263,9 @@ def generate_lam_vs_random_actions(x, y, step):
     batches = []
     for cut in tqdm(range(min(n_cuts, 8)), desc='Decoding'):
         batch = torch.cat([x[:, cut * cut_len: (cut + 1) * cut_len], recon[:, cut * cut_len: (cut + 1) * cut_len], random_recon[:, cut * cut_len: (cut + 1) * cut_len], y[:, cut * cut_len: (cut + 1) * cut_len]], dim=0).permute(0, 2, 1)
+        print(batch.shape)
         batches.append(tokenizer.decode(batch, shape=(1, 16384 * cut_seconds)))
+        print(batches[-1].shape)
     x, recon, random_recon, y = [res.cpu().detach().numpy().squeeze(1) for res in torch.cat(batches, dim=-1).split(B, dim=0)]
 
     recon_psnr = psnr(y[:, 4 * 16000:], recon[:, 4 * 16000:])
