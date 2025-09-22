@@ -92,7 +92,6 @@ with torch.no_grad():
 
         this_codes = np.concatenate(this_codes, axis=0)
         all_codes.append(this_codes)
-        print(this_codes.shape, np.concatenate(all_codes, axis=0).shape)
 
         # for testing
         if test:
@@ -103,25 +102,25 @@ with torch.no_grad():
             sf.write('recon.wav', this_samples, rate)
 
 
-        all_codes = np.concatenate(all_codes, axis=0)
-        print(all_codes.shape)
-        train_codes = all_codes[:int(0.98 * len(all_codes))]
-        val_codes = all_codes[int(0.98 * len(all_codes)):]
+all_codes = np.concatenate(all_codes, axis=0)
+print(all_codes.shape)
+train_codes = all_codes[:int(0.98 * len(all_codes))]
+val_codes = all_codes[int(0.98 * len(all_codes)):]
 
-        train_codes = train_codes.reshape(train_codes.shape[0] * train_codes.shape[1], train_codes.shape[2])
-        val_codes = val_codes.reshape(val_codes.shape[0] * val_codes.shape[1], val_codes.shape[2])
-        print(train_codes.shape, val_codes.shape)
+train_codes = train_codes.reshape(train_codes.shape[0] * train_codes.shape[1], train_codes.shape[2])
+val_codes = val_codes.reshape(val_codes.shape[0] * val_codes.shape[1], val_codes.shape[2])
+print(train_codes.shape, val_codes.shape)
 
-        filename = os.path.join(os.path.dirname(__file__), f'high_train.bin')
-        dtype = np.float32
-        arr = np.memmap(filename, dtype=dtype, mode='w+', shape=train_codes.shape)
-        arr[:] = train_codes
-        arr.flush()
+filename = os.path.join(os.path.dirname(__file__), f'high_train.bin')
+dtype = np.float32
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=train_codes.shape)
+arr[:] = train_codes
+arr.flush()
 
-        filename = os.path.join(os.path.dirname(__file__), f'high_val.bin')
-        dtype = np.float32
-        arr = np.memmap(filename, dtype=dtype, mode='w+', shape=val_codes.shape)
-        arr[:] = val_codes
-        arr.flush()
+filename = os.path.join(os.path.dirname(__file__), f'high_val.bin')
+dtype = np.float32
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=val_codes.shape)
+arr[:] = val_codes
+arr.flush()
 
-        # (64696714, 8)
+# (64696714, 8)
