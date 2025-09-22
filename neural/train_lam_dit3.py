@@ -317,7 +317,7 @@ if wandb_log and master_process:
 # training loop
 step1 = 3001
 step2 = 5001
-step3 = 20001
+step3 = 8001
 step4 = 35001
 
 X, Y = get_batch('train') # fetch the very first batch
@@ -345,7 +345,7 @@ while True:
     if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
         batch_size = 128
     if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
-        gradient_accumulation_steps *= 2
+        batch_size = 256
     if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
         gradient_accumulation_steps *= 2
     
