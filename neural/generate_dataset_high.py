@@ -40,7 +40,7 @@ model.eval()
 paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
 print(len(paths))
 
-test = False
+test = True
 
 all_codes = []
 with torch.no_grad():
