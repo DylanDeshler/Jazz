@@ -144,7 +144,7 @@ import glob
 paths = [f'high_{str(i).zfill(2)}.bin' for i in range(49)]
 for path in paths:
     data = np.memmap(path, dtype=np.float32, mode='r')
-    data = data.view(-1, 64)
+    data = data.reshape((-1, 64))
     print(data.shape)
 
 # # write to train.bin
