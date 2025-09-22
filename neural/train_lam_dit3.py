@@ -246,7 +246,7 @@ def generate_lam_vs_random_actions(x, y, step):
     os.makedirs(batch_dir, exist_ok=True)
 
     B, L, D = x.shape
-    recon, random_recon = raw_model.lam_vs_random_actions(x, guidance=2)
+    recon, random_recon = raw_model.lam_vs_random_actions(x)
 
     fig, axs = plt.subplots(B, 1, figsize=(20, 20))
     for i in range(B):
@@ -288,7 +288,7 @@ def generate_samples_with_all_local_actions(step):
 
     actions = torch.arange(0, raw_model.local_vq.codebook_size, device=device).long()
     # actions = torch.randint(0, raw_model.local_vq.codebook_size, (32,), device=device).long()
-    samples = raw_model.sample_with_actions((actions.shape[0], max_seq_len, vae_embed_dim), actions, guidance=2)
+    samples = raw_model.sample_with_actions((actions.shape[0], max_seq_len, vae_embed_dim), actions)
     
     B, L, D = samples.shape
 

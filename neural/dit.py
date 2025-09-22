@@ -451,9 +451,12 @@ class CausalLAM(nn.Module):
         local_codebook_size=64,
         codebook_dim=32,
         local_window=1,
+        action_dropout=0.1
         ):
         super().__init__()
         assert max_input_size % local_window == 0
+
+        self.action_dropout = action_dropout
 
         self.encoder = Transformer(max_input_size=max_input_size, depth=depth, in_channels=in_channels, hidden_size=hidden_size, num_heads=num_heads, local_window=1)
         self.decoder = DiTWrapper(max_input_size=max_input_size, depth=depth, in_channels=in_channels, hidden_size=hidden_size, num_heads=num_heads, conditional=True, local_window=1)
@@ -487,11 +490,11 @@ class CausalLAM(nn.Module):
         self.sampler = FMEulerSampler(self.diffusion)
 
         t = self.max_input_size // self.local_window
-        # self.causal_plus_1_mask = self.register_buffer('causal_plus_1_mask', torch.tril(torch.ones((t, t), dtype=torch.bool), diagonal=1))
-        # self.causal_mask = self.register_buffer('causal_mask', torch.tril(torch.ones((t, t), dtype=torch.bool), diagonal=0))
+        self.causal_plus_1_mask = self.register_buffer('causal_plus_1_mask', torch.tril(torch.ones((t, t), dtype=torch.bool), diagonal=1))
+        self.causal_mask = self.register_buffer('causal_mask', torch.tril(torch.ones((t, t), dtype=torch.bool), diagonal=0))
 
-        self.causal_plus_1_mask = self.register_buffer('causal_plus_1_mask', self.block_causal_mask(diag=1))
-        self.causal_mask = self.register_buffer('causal_mask', self.block_causal_mask(diag=0))
+        # self.causal_plus_1_mask = self.register_buffer('causal_plus_1_mask', self.block_causal_mask(diag=1))
+        # self.causal_mask = self.register_buffer('causal_mask', self.block_causal_mask(diag=0))
     
     def configure_optimizer(self, learning_rate, betas):
         def seperate_weights_and_biases(module):
@@ -572,7 +575,7 @@ class CausalLAM(nn.Module):
         local_tokens = self.to_local_action_emb(z)
         local_tokens, local_indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
         if self.training:
-            mask = torch.rand(z.shape[0], z.shape[1]) < 0.1
+            mask = torch.rand(z.shape[0], z.shape[1]) < self.action_dropout
             local_tokens[mask.long()] = self.null_tokens.weight[0].to(local_tokens.dtype)
         local_tokens = repeat(local_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
 
