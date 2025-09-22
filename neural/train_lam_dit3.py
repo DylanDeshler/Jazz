@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
 from dit import CausalLAM_B as dit
-from dito import DiTo as Tokenizer
+from dito import DiToV4 as Tokenizer
 
 import matplotlib.pyplot as plt
 import soundfile as sf
@@ -38,7 +38,7 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'lam_dit7'
+out_dir = 'lam_dit8'
 eval_interval = 1000
 sample_interval = 1000
 log_interval = 100
@@ -54,13 +54,15 @@ wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
-batch_size = 48# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 32# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
-local_window = 10
-max_seq_len = 50 * 5
+local_window = 1
+cut_seconds = 4
+cut_len = 8 * cut_seconds
+max_seq_len = 4 * cut_len
 codebook_size = 16
 codebook_dim = 32
-vae_embed_dim = 128
+vae_embed_dim = 64
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
@@ -74,7 +76,7 @@ warmup_iters = 10000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
-backend = 'nccl' # 'nccl', 'gloo', etc.
+backend = 'gloo' # 'nccl', 'gloo', etc.
 # system
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
@@ -123,24 +125,24 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 # poor man's data loader
 def get_batch(split='train'):
     if split == 'train':
-        data = np.memmap('/home/dylan.d/research/music/Jazz/latents/train.bin', dtype=np.float32, mode='r', shape=(318575607, 128))
+        data = np.memmap('/home/dylan.d/research/music/Jazz/latents/high_train.bin', dtype=np.float32, mode='r', shape=(51548736, vae_embed_dim))
         idxs = torch.randint(len(data) - max_seq_len - local_window, (batch_size,))
-        x = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).to(device)
-        y = torch.from_numpy(np.stack([data[idx+local_window:idx+local_window+max_seq_len] for idx in idxs], axis=0)).to(device)
+        x = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+        y = torch.from_numpy(np.stack([data[idx+local_window:idx+local_window+max_seq_len] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
         return x, y
     
     else:
-        data = np.memmap('/home/dylan.d/research/music/Jazz/latents/val.bin', dtype=np.float32, mode='r', shape=(6501543, 128))
+        data = np.memmap('/home/dylan.d/research/music/Jazz/latents/high_val.bin', dtype=np.float32, mode='r', shape=(1119840, vae_embed_dim))
         idxs = torch.randint(len(data) - max_seq_len - local_window, (batch_size,))
-        x = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).to(device)
-        y = torch.from_numpy(np.stack([data[idx+local_window:idx+local_window+max_seq_len] for idx in idxs], axis=0)).to(device)
+        x = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+        y = torch.from_numpy(np.stack([data[idx+local_window:idx+local_window+max_seq_len] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
         return x, y
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
 best_val_loss = 1e9
 
-ckpt_path = os.path.join('tokenizer10', 'ckpt.pt')
+ckpt_path = os.path.join('tokenizer_high8_long', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 tokenizer_args = checkpoint['model_args']
 
@@ -257,11 +259,11 @@ def generate_lam_vs_random_actions(x, y, step):
     
     recon = recon['latents']
     random_recon = random_recon['latents']
-    n_cuts = L // 50
+    n_cuts = L // cut_len
     batches = []
     for cut in tqdm(range(min(n_cuts, 8)), desc='Decoding'):
-        batch = torch.cat([x[:, cut * 50: (cut + 1) * 50], recon[:, cut * 50: (cut + 1) * 50], random_recon[:, cut * 50: (cut + 1) * 50], y[:, cut * 50: (cut + 1) * 50]], dim=0).permute(0, 2, 1)
-        batches.append(tokenizer.decode(batch))
+        batch = torch.cat([x[:, cut * cut_len: (cut + 1) * cut_len], recon[:, cut * cut_len: (cut + 1) * cut_len], random_recon[:, cut * cut_len: (cut + 1) * cut_len], y[:, cut * cut_len: (cut + 1) * cut_len]], dim=0).permute(0, 2, 1)
+        batches.append(tokenizer.decode(batch, shape=(1, 16384 * cut_seconds)))
     x, recon, random_recon, y = [res.cpu().detach().numpy().squeeze(1) for res in torch.cat(batches, dim=-1).split(B, dim=0)]
 
     recon_psnr = psnr(y[:, 4 * 16000:], recon[:, 4 * 16000:])
@@ -291,10 +293,10 @@ def generate_samples_with_all_local_actions(step):
     B, L, D = samples.shape
 
     # reconstruct wavform in series (could be smart and reshape into a batch for speed)
-    n_cuts = L // 50
+    n_cuts = L // cut_len
     sample_cuts = []
     for cut in tqdm(range(min(n_cuts, 5)), desc='Decoding'):
-        sample_cuts.append(tokenizer.decode(samples[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
+        sample_cuts.append(tokenizer.decode(samples[:, cut * cut_len: (cut + 1) * cut_len].permute(0, 2, 1), shape=(1, 16384 * cut_seconds)))
     samples = torch.cat(sample_cuts, dim=-1).cpu().detach().numpy()
 
     for i in range(B):
@@ -313,8 +315,8 @@ if wandb_log and master_process:
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
-step1 = 5001
-step2 = 10001
+step1 = 3001
+step2 = 5001
 step3 = 20001
 step4 = 35001
 
@@ -339,7 +341,7 @@ while True:
         param_group['lr'] = lr
     
     if iter_num == step1 or local_iter_num == 0 and iter_num >= step1:
-        batch_size *= 2
+        batch_size = 64
     if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
         batch_size = 128
     if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
