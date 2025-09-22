@@ -50,7 +50,7 @@ class DiToV4(nn.Module):
         B, C, L = x.shape
         n_seconds = L // 16384
         half_pad = (L - 16000 * n_seconds) // 2
-        x = x[half_pad:-half_pad]
+        x = x[..., half_pad:-half_pad]
         return x
 
 class DiToV3(nn.Module):
