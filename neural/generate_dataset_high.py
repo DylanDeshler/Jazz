@@ -44,7 +44,7 @@ test = False
 
 write_idx = 0
 write_paths = []
-total_write_batches = 16
+total_write_batches = 48
 
 all_codes = []
 with torch.no_grad():
