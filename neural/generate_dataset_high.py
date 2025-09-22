@@ -40,7 +40,7 @@ model.eval()
 paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
 print(len(paths))
 
-test = True
+test = False
 
 all_codes = []
 with torch.no_grad():
@@ -57,6 +57,7 @@ with torch.no_grad():
             _, codes = model.encode(batch)
             codes = codes.cpu().detach().numpy()
             if test:
+                # will introduce padding but thats fine for encode only
                 x_, z = model.encode(batch)
                 y = model.decode(z, x_.shape)
                 this_samples.append(y.cpu().detach().numpy())
@@ -95,6 +96,7 @@ with torch.no_grad():
         # print(this_codes.shape, len(x) / n_samples * 160, len(this_codes) - len(x) / n_samples * 160)
 
         all_codes.append(this_codes)
+        print(this_codes.shape, np.concatenate(all_codes, axis=0).shape)
 
         # for testing
         if test:
@@ -103,7 +105,6 @@ with torch.no_grad():
 
             sf.write('real.wav', x, rate)
             sf.write('recon.wav', this_samples, rate)
-        
 
 
 all_codes = np.concatenate(all_codes, axis=0)
