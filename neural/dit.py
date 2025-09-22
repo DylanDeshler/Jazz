@@ -451,7 +451,7 @@ class CausalLAM(nn.Module):
         local_codebook_size=64,
         codebook_dim=32,
         local_window=1,
-        action_dropout=0.1
+        action_dropout=0
         ):
         super().__init__()
         assert max_input_size % local_window == 0
