@@ -78,7 +78,7 @@ with torch.no_grad():
             # print(len(x), ' - ', (i * batch_size + remainder) * n_samples, ' == ', len(x) - (i * batch_size + remainder) * n_samples)
             batch = np.zeros((1, n_samples), dtype=np.float32)
             batch[0, :len(x) - (i * batch_size + remainder) * n_samples] = x[(i * batch_size + remainder) * n_samples:]
-            batch = torch.from_numpy(batch).to(device)
+            batch = torch.from_numpy(batch).unsqueeze(1).to(device)
             _, codes = model.encode(batch)
             codes = codes.cpu().detach().numpy()
             if test:
