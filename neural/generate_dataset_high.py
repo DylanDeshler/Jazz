@@ -57,7 +57,9 @@ with torch.no_grad():
             _, codes = model.encode(batch)
             codes = codes.cpu().detach().numpy()
             if test:
-                this_samples.append(model.decode(model.encode(batch)[1]).cpu().detach().numpy())
+                x_, z = model.encode(batch)
+                y = model.decode(z, x_.shape)
+                this_samples.append(y.cpu().detach().numpy())
             this_codes.append(codes)
         
         # remainder = len(x) - n_cuts * n_samples
@@ -70,7 +72,9 @@ with torch.no_grad():
             _, codes = model.encode(batch)
             codes = codes.cpu().detach().numpy()
             if test:
-                this_samples.append(model.decode(model.encode(batch)[1]).cpu().detach().numpy())
+                x_, z = model.encode(batch)
+                y = model.decode(z, x_.shape)
+                this_samples.append(y.cpu().detach().numpy())
             this_codes.append(codes)
 
         # pad with 0s for last section
@@ -82,7 +86,9 @@ with torch.no_grad():
             _, codes = model.encode(batch)
             codes = codes.cpu().detach().numpy()
             if test:
-                this_samples.append(model.decode(model.encode(batch)[1]).cpu().detach().numpy())
+                x_, z = model.encode(batch)
+                y = model.decode(z, x_.shape)
+                this_samples.append(y.cpu().detach().numpy())
             this_codes.append(codes)
 
         this_codes = np.concatenate(this_codes, axis=0)
