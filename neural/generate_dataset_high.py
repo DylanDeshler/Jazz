@@ -165,6 +165,7 @@ for path, length in write_paths[:-2]:
     cur_idx += length
 
 # write to val.bin
+cur_idx = 0
 filename = os.path.join(os.path.dirname(__file__), f'high_val.bin')
 dtype = np.float32
 val_length = np.sum([length for path, length in write_paths[-2:]])
