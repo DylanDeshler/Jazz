@@ -104,13 +104,24 @@ with torch.no_grad():
 
 
 all_codes = np.concatenate(all_codes, axis=0)
-all_codes = np.moveaxis(all_codes, )
 print(all_codes.shape)
-# all_codes = all_codes.reshape(all_codes.shape[0] * all_codes.shape[1], all_codes.shape[2]);print(all_codes.shape)
-filename = os.path.join(os.path.dirname(__file__), f'high_jazz.bin')
-dtype = np.uint16 # (can do since enc.max_token_value == 50256 is < 2**16)
-arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_codes.shape)
-arr[:] = all_codes
+train_codes = all_codes[:int(0.98 * len(all_codes))]
+val_codes = all_codes[int(0.98 * len(all_codes)):]
+
+train_codes = train_codes.reshape(train_codes.shape[0] * train_codes.shape[1], train_codes.shape[2])
+val_codes = val_codes.reshape(val_codes.shape[0] * val_codes.shape[1], val_codes.shape[2])
+print(train_codes.shape, val_codes.shape)
+
+filename = os.path.join(os.path.dirname(__file__), f'high_train.bin')
+dtype = np.float32
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=train_codes.shape)
+arr[:] = train_codes
+arr.flush()
+
+filename = os.path.join(os.path.dirname(__file__), f'high_val.bin')
+dtype = np.float32
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=val_codes.shape)
+arr[:] = val_codes
 arr.flush()
 
 # (64696714, 8)
