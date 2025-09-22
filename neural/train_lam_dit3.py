@@ -263,9 +263,7 @@ def generate_lam_vs_random_actions(x, y, step):
     batches = []
     for cut in tqdm(range(min(n_cuts, 8)), desc='Decoding'):
         batch = torch.cat([x[:, cut * cut_len: (cut + 1) * cut_len], recon[:, cut * cut_len: (cut + 1) * cut_len], random_recon[:, cut * cut_len: (cut + 1) * cut_len], y[:, cut * cut_len: (cut + 1) * cut_len]], dim=0).permute(0, 2, 1)
-        print(batch.shape)
         batches.append(tokenizer.decode(batch, shape=(1, 16384 * cut_seconds)))
-        print(batches[-1].shape)
     x, recon, random_recon, y = [res.cpu().detach().numpy().squeeze(1) for res in torch.cat(batches, dim=-1).split(B, dim=0)]
 
     recon_psnr = psnr(y[:, 4 * 16000:], recon[:, 4 * 16000:])
@@ -288,8 +286,8 @@ def generate_samples_with_all_local_actions(step):
     batch_dir = os.path.join(batch_dir, 'local_actions')
     os.makedirs(batch_dir, exist_ok=True)
 
-    # actions = torch.arange(0, raw_model.local_vq.codebook_size, device=device).long()
-    actions = torch.randint(0, raw_model.local_vq.codebook_size, (32,), device=device).long()
+    actions = torch.arange(0, raw_model.local_vq.codebook_size, device=device).long()
+    # actions = torch.randint(0, raw_model.local_vq.codebook_size, (32,), device=device).long()
     samples = raw_model.sample_with_actions((actions.shape[0], max_seq_len, 128), actions, guidance=2)
     
     B, L, D = samples.shape
