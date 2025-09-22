@@ -46,7 +46,12 @@ class DiToV4(nn.Module):
         return self.decode(z, shape=x.shape, n_steps=n_steps)
     
     def decode(self, z, shape=(1, 16000), n_steps=50):
-        return self.sampler.sample(self.unet, (z.shape[0], *shape[-2:]), n_steps, net_kwargs={'z_dec': z})
+        x = self.sampler.sample(self.unet, (z.shape[0], *shape[-2:]), n_steps, net_kwargs={'z_dec': z})
+        B, C, L = x.shape
+        n_seconds = L // 16384
+        half_pad = (L - 16000 * n_seconds) // 2
+        x = x[half_pad:-half_pad]
+        return x
 
 class DiToV3(nn.Module):
     def __init__(self, z_shape, n_residual_layers, lstm, transformer, down_proj=None, in_channels=1, dimension=128, n_filters=32, ratios=[8, 5, 4, 2], dilation_base=2, channels=[128, 256, 512]):
