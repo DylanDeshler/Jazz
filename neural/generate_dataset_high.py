@@ -42,9 +42,13 @@ print(len(paths))
 
 test = False
 
+write_idx = 0
+write_paths = []
+total_write_batches = 16
+
 all_codes = []
 with torch.no_grad():
-    for path in tqdm(paths):
+    for idx, path in enumerate(tqdm(paths)):
         this_codes = []
         if test:
             this_samples = []
@@ -52,7 +56,7 @@ with torch.no_grad():
 
         n_cuts = len(x) // n_samples
         for i in range(n_cuts // batch_size):
-            batch = torch.from_numpy(np.stack([x[(i*batch_size+j)*n_samples:(i*batch_size+j+1)*n_samples] for j in range(batch_size)], axis=0)).unsqueeze(1).to(device)
+            batch = torch.from_numpy(np.stack([x[(i*batch_size+j)*n_samples:(i*batch_size+j+1)*n_samples] for j in range(batch_size)], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
             _, codes = model.encode(batch)
             codes = codes.permute(0, 2, 1).cpu().detach().numpy()
             if test:
@@ -67,7 +71,7 @@ with torch.no_grad():
         remainder = n_cuts - i * batch_size
         # print(i, remainder, n_cuts, i * batch_size)
         if remainder > 0:
-            batch = torch.from_numpy(np.stack([x[(i*batch_size+j)*n_samples:(i*batch_size+j+1)*n_samples] for j in range(remainder)], axis=0)).unsqueeze(1).to(device)
+            batch = torch.from_numpy(np.stack([x[(i*batch_size+j)*n_samples:(i*batch_size+j+1)*n_samples] for j in range(remainder)], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
             _, codes = model.encode(batch)
             codes = codes.permute(0, 2, 1).cpu().detach().numpy()
             if test:
@@ -81,7 +85,7 @@ with torch.no_grad():
             # print(len(x), ' - ', (i * batch_size + remainder) * n_samples, ' == ', len(x) - (i * batch_size + remainder) * n_samples)
             batch = np.zeros((1, n_samples), dtype=np.float32)
             batch[0, :len(x) - (i * batch_size + remainder) * n_samples] = x[(i * batch_size + remainder) * n_samples:]
-            batch = torch.from_numpy(batch).unsqueeze(1).to(device)
+            batch = torch.from_numpy(batch).unsqueeze(1).pin_memory().to(device, non_blocking=True)
             _, codes = model.encode(batch)
             codes = codes.permute(0, 2, 1).cpu().detach().numpy()
             if test:
@@ -100,27 +104,67 @@ with torch.no_grad():
 
             sf.write('real.wav', x, rate)
             sf.write('recon.wav', this_samples, rate)
+        
+        if (idx + 1) % (len(paths) // total_write_batches) == 0:
+            print(f'Writing batch {write_idx}...')
+            all_codes = np.concatenate(all_codes, axis=0)
+            print(all_codes.shape)
 
+            all_codes = all_codes.reshape(all_codes.shape[0] * all_codes.shape[1], all_codes.shape[2])
+            print(all_codes.shape)
 
+            filename = os.path.join(os.path.dirname(__file__), f'high_{str(write_idx).zfill(2)}.bin')
+            dtype = np.float32
+            arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_codes.shape)
+            arr[:] = all_codes
+            arr.flush()
+
+            write_idx += 1
+            write_paths.append((filename, len(all_codes)))
+            all_codes = []
+
+# write the remaining batch
+print(f'Writing batch {write_idx}...')
 all_codes = np.concatenate(all_codes, axis=0)
 print(all_codes.shape)
-train_codes = all_codes[:int(0.98 * len(all_codes))]
-val_codes = all_codes[int(0.98 * len(all_codes)):]
 
-train_codes = train_codes.reshape(train_codes.shape[0] * train_codes.shape[1], train_codes.shape[2])
-val_codes = val_codes.reshape(val_codes.shape[0] * val_codes.shape[1], val_codes.shape[2])
-print(train_codes.shape, val_codes.shape)
+all_codes = all_codes.reshape(all_codes.shape[0] * all_codes.shape[1], all_codes.shape[2])
+print(all_codes.shape)
 
+filename = os.path.join(os.path.dirname(__file__), f'high_{str(write_idx).zfill(2)}.bin')
+dtype = np.float32
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_codes.shape)
+arr[:] = all_codes
+arr.flush()
+
+write_idx += 1
+write_paths.append((filename, len(all_codes)))
+all_codes = []
+
+# write to train.bin
+cur_idx = 0
 filename = os.path.join(os.path.dirname(__file__), f'high_train.bin')
 dtype = np.float32
-arr = np.memmap(filename, dtype=dtype, mode='w+', shape=train_codes.shape)
-arr[:] = train_codes
-arr.flush()
+train_length = np.sum([length for path, length in write_paths[:-1]])
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, 64))
+print(arr.shape)
 
+for path, length in write_paths[:-1]:
+    data = np.memmap(path, dtype=np.float32, mode='r', shape=(length, 64))
+
+    arr[cur_idx:cur_idx+length] = data
+    arr.flush()
+
+    cur_idx += length
+
+# write to val.bin
 filename = os.path.join(os.path.dirname(__file__), f'high_val.bin')
 dtype = np.float32
-arr = np.memmap(filename, dtype=dtype, mode='w+', shape=val_codes.shape)
-arr[:] = val_codes
-arr.flush()
+val_length = write_paths[-1][1]
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=val_length)
+print(arr.shape)
 
-# (64696714, 8)
+data = np.memmap(write_paths[-1][0], dtype=np.float32, mode='r', shape=(val_length, 64))
+
+arr[:] = data
+arr.flush()
