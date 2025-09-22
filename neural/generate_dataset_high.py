@@ -53,9 +53,8 @@ with torch.no_grad():
         n_cuts = len(x) // n_samples
         for i in range(n_cuts // batch_size):
             batch = torch.from_numpy(np.stack([x[(i*batch_size+j)*n_samples:(i*batch_size+j+1)*n_samples] for j in range(batch_size)], axis=0)).unsqueeze(1).to(device)
-            print(batch.shape)
             _, codes = model.encode(batch)
-            codes = codes.cpu().detach().numpy()
+            codes = codes.permute(0, 2, 1).cpu().detach().numpy()
             if test:
                 # will introduce padding but thats fine for encode only
                 x_, z = model.encode(batch)
@@ -69,9 +68,8 @@ with torch.no_grad():
         # print(i, remainder, n_cuts, i * batch_size)
         if remainder > 0:
             batch = torch.from_numpy(np.stack([x[(i*batch_size+j)*n_samples:(i*batch_size+j+1)*n_samples] for j in range(remainder)], axis=0)).unsqueeze(1).to(device)
-            print(batch.shape)
             _, codes = model.encode(batch)
-            codes = codes.cpu().detach().numpy()
+            codes = codes.permute(0, 2, 1).cpu().detach().numpy()
             if test:
                 x_, z = model.encode(batch)
                 y = model.decode(z, x_.shape)
@@ -85,7 +83,7 @@ with torch.no_grad():
             batch[0, :len(x) - (i * batch_size + remainder) * n_samples] = x[(i * batch_size + remainder) * n_samples:]
             batch = torch.from_numpy(batch).unsqueeze(1).to(device)
             _, codes = model.encode(batch)
-            codes = codes.cpu().detach().numpy()
+            codes = codes.permute(0, 2, 1).cpu().detach().numpy()
             if test:
                 x_, z = model.encode(batch)
                 y = model.decode(z, x_.shape)
@@ -93,8 +91,6 @@ with torch.no_grad():
             this_codes.append(codes)
 
         this_codes = np.concatenate(this_codes, axis=0)
-        # print(this_codes.shape, len(x) / n_samples * 160, len(this_codes) - len(x) / n_samples * 160)
-
         all_codes.append(this_codes)
         print(this_codes.shape, np.concatenate(all_codes, axis=0).shape)
 
@@ -108,6 +104,7 @@ with torch.no_grad():
 
 
 all_codes = np.concatenate(all_codes, axis=0)
+all_codes = np.moveaxis(all_codes, )
 print(all_codes.shape)
 # all_codes = all_codes.reshape(all_codes.shape[0] * all_codes.shape[1], all_codes.shape[2]);print(all_codes.shape)
 filename = os.path.join(os.path.dirname(__file__), f'high_jazz.bin')
