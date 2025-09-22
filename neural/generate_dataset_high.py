@@ -52,7 +52,7 @@ with torch.no_grad():
 
         n_cuts = len(x) // n_samples
         for i in range(n_cuts // batch_size):
-            batch = torch.from_numpy(np.stack([x[(i*batch_size+j)*n_samples:(i*batch_size+j+1)*n_samples] for j in range(batch_size)], axis=0)).to(device)
+            batch = torch.from_numpy(np.stack([x[(i*batch_size+j)*n_samples:(i*batch_size+j+1)*n_samples] for j in range(batch_size)], axis=0)).unsqueeze(1).to(device)
             print(batch.shape)
             _, codes = model.encode(batch)
             codes = codes.cpu().detach().numpy()
@@ -87,7 +87,6 @@ with torch.no_grad():
 
         this_codes = np.concatenate(this_codes, axis=0)
         # print(this_codes.shape, len(x) / n_samples * 160, len(this_codes) - len(x) / n_samples * 160)
-        this_scales = torch.cat([torch.stack([t1, t2], dim=1) for t1, t2 in this_scales], dim=0)
 
         all_codes.append(this_codes)
 
@@ -101,13 +100,13 @@ with torch.no_grad():
         
 
 
-# all_codes = np.concatenate(all_codes, axis=0)
-# print(all_codes.shape)
-# # all_codes = all_codes.reshape(all_codes.shape[0] * all_codes.shape[1], all_codes.shape[2]);print(all_codes.shape)
-# filename = os.path.join(os.path.dirname(__file__), f'jazz.bin')
-# dtype = np.uint16 # (can do since enc.max_token_value == 50256 is < 2**16)
-# arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_codes.shape)
-# arr[:] = all_codes
-# arr.flush()
+all_codes = np.concatenate(all_codes, axis=0)
+print(all_codes.shape)
+# all_codes = all_codes.reshape(all_codes.shape[0] * all_codes.shape[1], all_codes.shape[2]);print(all_codes.shape)
+filename = os.path.join(os.path.dirname(__file__), f'high_jazz.bin')
+dtype = np.uint16 # (can do since enc.max_token_value == 50256 is < 2**16)
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_codes.shape)
+arr[:] = all_codes
+arr.flush()
 
 # (64696714, 8)
