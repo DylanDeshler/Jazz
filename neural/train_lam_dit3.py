@@ -266,8 +266,8 @@ def generate_lam_vs_random_actions(x, y, step):
         batches.append(tokenizer.decode(batch, shape=(1, 16384 * cut_seconds)))
     x, recon, random_recon, y = [res.cpu().detach().numpy().squeeze(1) for res in torch.cat(batches, dim=-1).split(B, dim=0)]
 
-    recon_psnr = psnr(y[:, 4 * 16000:], recon[:, 4 * 16000:])
-    random_psnr = psnr(y[:, 4 * 16000:], random_recon[:, 4 * 16000:])
+    recon_psnr = psnr(y[:, cut_seconds * 16000:], recon[:, cut_seconds * 16000:])
+    random_psnr = psnr(y[:, cut_seconds * 16000:], random_recon[:, cut_seconds * 16000:])
 
     for i in range(B):
         og, y, random_y = x[i], recon[i], random_recon[i]
