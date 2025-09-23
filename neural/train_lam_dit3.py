@@ -377,8 +377,8 @@ while True:
     #     batch_size = 128
     # if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
     #     batch_size = 256
-    if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
-        gradient_accumulation_steps *= 2
+    # if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
+    #     gradient_accumulation_steps *= 2
     
     tokens_trained += batch_size * gradient_accumulation_steps * max_seq_len
 
