@@ -46,7 +46,7 @@ save_interval = 10000
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -281,6 +281,36 @@ def generate_lam_vs_random_actions(x, y, step):
     return np.mean(recon_psnr - random_psnr).item()
 
 @torch.no_grad()
+def generate_inpainting_samples(x, step):
+    batch_dir = os.path.join(out_dir, str(step))
+    os.makedirs(batch_dir, exist_ok=True)
+    batch_dir = os.path.join(batch_dir, 'inpainting')
+    os.makedirs(batch_dir, exist_ok=True)
+
+    raw_model.encode_actions(x, attn_mask=None)
+
+    mask = torch.from_numpy(np.concatenate([np.zeros((x.shape[0], cut_len)), np.ones((x.shape[0], max_seq_len - cut_len))], axis=1)).long().to(device)
+    inpaints = raw_model.inpaint(x, mask)
+
+    B, L, D = x.shape
+
+    # reconstruct wavform in series (could be smart and reshape into a batch for speed)
+    n_cuts = L // cut_len
+    x_cuts, inpaint_cuts = [], []
+    for cut in tqdm(range(n_cuts), desc='Decoding'):
+        inpaint_cuts.append(tokenizer.decode(inpaints[:, cut * cut_len: (cut + 1) * cut_len].permute(0, 2, 1)))
+        x_cuts.append(tokenizer.decode(x[:, cut * cut_len: (cut + 1) * cut_len].permute(0, 2, 1)))
+    inpaints = torch.cat(inpaint_cuts, dim=-1).cpu().detach().numpy()
+    x = torch.cat(x_cuts, dim=-1).cpu().detach().numpy()
+
+    for i in range(B):
+        inpaint, x_ = inpaints[i].squeeze(), x[i].squeeze()
+
+        # save .wavs
+        sf.write(os.path.join(batch_dir, f'{i}_inpaint.wav'), inpaint, 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x_, 16000)
+
+@torch.no_grad()
 def generate_samples_with_all_local_actions(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
@@ -362,10 +392,8 @@ while True:
             model.eval()
             with ctx:
                 delta_psnr = generate_lam_vs_random_actions(X, Y, iter_num)
-                # generate_inpainting_samples(X, iter_num)
-                # generate_samples_with_all_global_actions(iter_num)
+                generate_inpainting_samples(X, iter_num)
                 generate_samples_with_all_local_actions(iter_num)
-                # generate_samples_with_global_and_local_actions(iter_num)
             model.train()
             print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, delta PSNR {delta_psnr:.3f}")
         else:

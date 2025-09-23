@@ -641,6 +641,33 @@ class CausalLAM(nn.Module):
 
         return {'latents': recon_latents, 'local_actions': local_action_indices}, {'latents': random_recon_latents, 'local_actions': random_local_actions_indices}
     
+    def inpaint_lam_vs_random_actions(self, latents, mask, n_steps=50, guidance=1):
+        assert latents.ndim == 3
+
+        b, c, f, device = *latents.shape, latents.device
+        # t = self.max_input_size // self.local_window
+        t = self.max_input_size
+        
+        local_tokens, local_action_indices, _ = self.encode_actions(latents, attn_mask=self.causal_plus_1_mask)
+
+        noise = torch.randn(latents.shape, device=next(self.parameters()).device)
+
+        # generate random actions
+        random_local_actions_indices = self.generate_random_different_actions(local_action_indices, self.local_vq.codebook_size, device)
+        if self.use_fsq:
+            random_local_action_tokens = self.local_vq.indices_to_codes(random_local_actions_indices)
+        else:
+            random_local_action_tokens = self.local_vq.get_output_from_indices(random_local_actions_indices)
+        random_local_action_tokens = repeat(random_local_action_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
+
+        # decode actions
+        recon_latents = self.sampler.inpaint(self.decoder.model, latents, mask, net_kwargs={'y': local_tokens, 'attn_mask': self.causal_mask}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight[0].to(latents.dtype), "d -> b t d", b=latents.shape[0], t=t), 'attn_mask': self.causal_mask}, n_steps=n_steps, guidance=guidance, noise=noise)
+        
+        # decode random actions
+        random_recon_latents = self.sampler.inpaint(self.decoder.model, latents, mask, net_kwargs={'y': random_local_action_tokens, 'attn_mask': self.causal_mask}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=t), 'attn_mask': self.causal_mask}, n_steps=n_steps, guidance=guidance, noise=noise)
+
+        return {'latents': recon_latents, 'local_actions': local_action_indices}, {'latents': random_recon_latents, 'local_actions': random_local_actions_indices}
+    
     def sample_with_actions(self, shape, local_action_indices=None, n_step=50, guidance=1):
         assert local_action_indices is not None
 
