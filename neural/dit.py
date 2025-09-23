@@ -666,7 +666,7 @@ class CausalLAM(nn.Module):
         # decode random actions
         random_recon_latents = self.sampler.inpaint(self.decoder.model, latents, mask, net_kwargs={'y': random_local_action_tokens, 'attn_mask': self.causal_mask}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=t), 'attn_mask': self.causal_mask}, n_steps=n_steps, guidance=guidance, noise=noise)
 
-        return {'latents': recon_latents, 'local_actions': local_action_indices}, {'latents': random_recon_latents, 'local_actions': random_local_actions_indices}
+        return recon_latents, random_recon_latents
     
     def sample_with_actions(self, shape, local_action_indices=None, n_step=50, guidance=1):
         assert local_action_indices is not None

@@ -290,24 +290,27 @@ def generate_inpainting_samples(x, step):
     raw_model.encode_actions(x, attn_mask=None)
 
     mask = torch.from_numpy(np.concatenate([np.zeros((x.shape[0], cut_len)), np.ones((x.shape[0], max_seq_len - cut_len))], axis=1)).long().to(device)
-    inpaints = raw_model.inpaint_lam_vs_random_actions(x, mask)
+    recon_inpaints, random_inpaints = raw_model.inpaint_lam_vs_random_actions(x, mask)
 
     B, L, D = x.shape
 
     # reconstruct wavform in series (could be smart and reshape into a batch for speed)
     n_cuts = L // cut_len
-    x_cuts, inpaint_cuts = [], []
+    x_cuts, inpaint_cuts, random_cuts = [], [], []
     for cut in tqdm(range(n_cuts), desc='Decoding'):
-        inpaint_cuts.append(tokenizer.decode(inpaints[:, cut * cut_len: (cut + 1) * cut_len].permute(0, 2, 1)))
-        x_cuts.append(tokenizer.decode(x[:, cut * cut_len: (cut + 1) * cut_len].permute(0, 2, 1)))
-    inpaints = torch.cat(inpaint_cuts, dim=-1).cpu().detach().numpy()
+        inpaint_cuts.append(tokenizer.decode(recon_inpaints[:, cut * cut_len: (cut + 1) * cut_len].permute(0, 2, 1), shape=(1, 16384 * cut_seconds)))
+        random_cuts.append(tokenizer.decode(random_inpaints[:, cut * cut_len: (cut + 1) * cut_len].permute(0, 2, 1), shape=(1, 16384 * cut_seconds)))
+        x_cuts.append(tokenizer.decode(x[:, cut * cut_len: (cut + 1) * cut_len].permute(0, 2, 1), shape=(1, 16384 * cut_seconds)))
+    recon_inpaints = torch.cat(inpaint_cuts, dim=-1).cpu().detach().numpy()
+    random_inpaints = torch.cat(random_cuts, dim=-1).cpu().detach().numpy()
     x = torch.cat(x_cuts, dim=-1).cpu().detach().numpy()
 
     for i in range(B):
-        inpaint, x_ = inpaints[i].squeeze(), x[i].squeeze()
+        inpaint, random, x_ = recon_inpaints[i].squeeze(), random_inpaints[i].squeeze(), x[i].squeeze()
 
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_inpaint.wav'), inpaint, 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_random.wav'), inpaint, 16000)
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x_, 16000)
 
 @torch.no_grad()
