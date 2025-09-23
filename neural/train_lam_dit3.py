@@ -38,7 +38,7 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'lam_dit8'
+out_dir = 'lam_dit9'
 eval_interval = 1000
 sample_interval = 1000
 log_interval = 100
@@ -46,7 +46,7 @@ save_interval = 10000
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -54,7 +54,7 @@ wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
-batch_size = 32# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 256# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 local_window = 1
 cut_seconds = 4
@@ -340,12 +340,12 @@ while True:
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
     
-    if iter_num == step1 or local_iter_num == 0 and iter_num >= step1:
-        batch_size = 64
-    if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
-        batch_size = 128
-    if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
-        batch_size = 256
+    # if iter_num == step1 or local_iter_num == 0 and iter_num >= step1:
+    #     batch_size = 64
+    # if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
+    #     batch_size = 128
+    # if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
+    #     batch_size = 256
     if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
         gradient_accumulation_steps *= 2
     

@@ -441,6 +441,7 @@ class Transformer(nn.Module):
         x = self.final_layer(x)               # (N, T, patch_size ** 2 * out_channels)
         return x
 
+from vector_quantize_pytorch import FSQ
 class CausalLAM(nn.Module):
     def __init__(self, 
         max_input_size=250,
@@ -470,15 +471,16 @@ class CausalLAM(nn.Module):
             nn.Linear(local_window * in_channels, in_channels),
             nn.LayerNorm(in_channels)
         )
-        self.local_vq = VectorQuantize(
-            dim=in_channels,
-            codebook_size=local_codebook_size,
-            learnable_codebook=True,
-            ema_update=False,
-            use_cosine_sim=True,
-            commitment_weight=0.25,
-            codebook_dim=codebook_dim,
-        )
+        # self.local_vq = VectorQuantize(
+        #     dim=in_channels,
+        #     codebook_size=local_codebook_size,
+        #     learnable_codebook=True,
+        #     ema_update=False,
+        #     use_cosine_sim=True,
+        #     commitment_weight=0.25,
+        #     codebook_dim=codebook_dim,
+        # )
+        self.local_vq = FSQ(levels=[5, 5])
 
         self.null_tokens = nn.Embedding(1, in_channels)
 
@@ -564,7 +566,8 @@ class CausalLAM(nn.Module):
         z = self.encoder(x)
 
         local_tokens = self.to_local_action_emb(z)
-        local_tokens, local_indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
+        # local_tokens, local_indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
+        local_tokens, local_indices = self.local_vq(local_tokens)
 
         return local_indices
     
@@ -573,13 +576,14 @@ class CausalLAM(nn.Module):
 
         # action embeddings
         local_tokens = self.to_local_action_emb(z)
-        local_tokens, local_indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
+        # local_tokens, local_indices, local_vq_loss = self.local_vq(local_tokens, mask=None)
+        local_tokens, local_indices = self.local_vq(local_tokens)
         if self.training:
             mask = torch.rand(z.shape[0], z.shape[1]) < self.action_dropout
             local_tokens[mask.long()] = self.null_tokens.weight[0].to(local_tokens.dtype)
         local_tokens = repeat(local_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
 
-        return local_tokens, local_indices, local_vq_loss
+        return local_tokens, local_indices, 0
 
     def forward(self, x, targets):
         local_tokens, _, local_vq_loss = self.encode_actions(x, attn_mask=self.causal_plus_1_mask)
@@ -614,7 +618,8 @@ class CausalLAM(nn.Module):
 
         # generate random actions
         random_local_actions_indices = self.generate_random_different_actions(local_action_indices, self.local_vq.codebook_size, device)
-        random_local_action_tokens = self.local_vq.get_output_from_indices(random_local_actions_indices)
+        # random_local_action_tokens = self.local_vq.get_output_from_indices(random_local_actions_indices)
+        random_local_action_tokens = self.local_vq.indices_to_codes(random_local_actions_indices)
         random_local_action_tokens = repeat(random_local_action_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
 
         # decode actions
@@ -632,7 +637,8 @@ class CausalLAM(nn.Module):
         t = self.max_input_size
         device = next(self.parameters()).device
         noise = torch.randn(shape, device=device)
-        local_tokens = repeat(self.local_vq.get_output_from_indices(local_action_indices), "b d -> b t d", t=t)
+        # local_tokens = repeat(self.local_vq.get_output_from_indices(local_action_indices), "b d -> b t d", t=t)
+        local_tokens = repeat(self.local_vq.indices_to_codes(local_action_indices), "b d -> b t d", t=t)
 
         samples = self.sampler.sample(self.decoder.model, shape, n_steps=n_step, net_kwargs={'y': local_tokens, 'attn_mask': self.causal_mask}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(next(self.parameters()).dtype), "d -> b t d", b=shape[0], t=t), 'attn_mask': self.causal_mask}, guidance=guidance, noise=noise)
 
