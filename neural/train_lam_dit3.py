@@ -43,7 +43,7 @@ eval_interval = 1000
 sample_interval = 1000
 log_interval = 100
 save_interval = 10000
-eval_iters = 100
+eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
@@ -318,7 +318,7 @@ if wandb_log and master_process:
 step1 = 3001
 step2 = 5001
 step3 = 8001
-step4 = 35001
+step4 = 40001
 
 X, Y = get_batch('train') # fetch the very first batch
 t0 = time.time()
