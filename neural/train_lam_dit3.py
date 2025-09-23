@@ -56,6 +56,7 @@ dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
 batch_size = 256# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
+use_fsq = True
 local_window = 1
 cut_seconds = 4
 cut_len = 8 * cut_seconds
@@ -157,7 +158,7 @@ for k,v in list(state_dict.items()):
 tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 
-model_args = dict(in_channels=vae_embed_dim, max_input_size=max_seq_len, local_codebook_size=codebook_size, codebook_dim=codebook_dim, local_window=local_window)
+model_args = dict(in_channels=vae_embed_dim, max_input_size=max_seq_len, local_codebook_size=codebook_size, codebook_dim=codebook_dim, local_window=local_window, use_fsq=use_fsq)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
