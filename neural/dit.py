@@ -18,6 +18,7 @@ import numpy as np
 from einops import repeat, pack
 from einops.layers.torch import Rearrange
 
+from tqdm import tqdm
 from fm import FM, FMEulerSampler
 from vector_quantize import VectorQuantize
 
@@ -607,12 +608,10 @@ class CausalLAM(nn.Module):
         return loss
     
     def generate(self, x, local_tokens, keep_tokens, max_new_tokens, n_steps=50):
-        for i in range(keep_tokens, max_new_tokens):
+        for i in tqdm(range(keep_tokens, max_new_tokens), desc='Generating'):
             mask = torch.ones(*x.shape[:2]).to(x.device)
             
             logits = self.sampler.inpaint(self.decoder.model, x, mask, net_kwargs={'y': local_tokens, 'attn_mask': self.causal_mask}, n_steps=n_steps)
-            
-            print(x.shape, logits.shape)
             x[:, i] = logits[:, -1]
         
         return x
