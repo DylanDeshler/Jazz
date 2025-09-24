@@ -257,7 +257,6 @@ class PatchEmbed(nn.Module):
         self.norm = nn.LayerNorm(hidden_size)
     
     def forward(self, x):
-        print(x.shape)
         x = self.reshape(x)
         x = self.proj(x)
         x = self.norm(x)
@@ -463,7 +462,7 @@ class CausalLAM(nn.Module):
         self.use_fsq = use_fsq
 
         self.encoder = Transformer(max_input_size=max_input_size, depth=depth, in_channels=in_channels, hidden_size=hidden_size, num_heads=num_heads, local_window=1)
-        self.decoder = DiTWrapper(max_input_size=max_input_size, depth=depth, in_channels=in_channels, hidden_size=hidden_size, num_heads=num_heads, conditional=True, local_window=1)
+        self.decoder = DiTWrapper(max_input_size=max_input_size-1, depth=depth, in_channels=in_channels, hidden_size=hidden_size, num_heads=num_heads, conditional=True, local_window=1)
 
         self.max_input_size = max_input_size
         self.local_window = local_window
