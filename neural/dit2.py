@@ -611,7 +611,7 @@ class CausalLAM(nn.Module):
             mask = torch.from_numpy(np.concatenate([np.zeros((x.shape[0], i)), np.ones((x.shape[0], max_new_tokens - i))], axis=1)).long().to(x.device)
             
             logits = self.sampler.inpaint(self.decoder.model, x.clone(), mask, net_kwargs={'y': local_tokens, 'attn_mask': self.causal_mask}, n_steps=n_steps)
-            x[:, i+1] = logits[:, i]
+            x[:, i+1-1] = logits[:, i-1]
         
         return x
     
