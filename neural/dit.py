@@ -627,6 +627,7 @@ class CausalLAM(nn.Module):
         
         local_tokens, local_action_indices, _ = self.encode_actions(latents, attn_mask=self.causal_plus_1_mask)
 
+        local_action_indices = local_action_indices[:, 1:]
         local_tokens = local_tokens[:, 1:]
         latents = latents[:, :-1]
 
@@ -657,6 +658,7 @@ class CausalLAM(nn.Module):
         
         local_tokens, local_action_indices, _ = self.encode_actions(latents, attn_mask=self.causal_plus_1_mask)
 
+        local_action_indices = local_action_indices[:, 1:]
         local_tokens = local_tokens[:, 1:]
         latents = latents[:, :-1]
 
