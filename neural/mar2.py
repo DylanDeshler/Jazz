@@ -285,6 +285,7 @@ class MAR(nn.Module):
         x[:, :self.buffer_size] = class_embedding.unsqueeze(1)
 
         # encoder position embedding
+        print(x.shape, self.encoder_pos_embed_learned.shape)
         x = x + self.encoder_pos_embed_learned
         x = self.z_proj_ln(x)
 
