@@ -125,15 +125,13 @@ def get_batch(split='train'):
         data = np.memmap('/home/dylan.d/research/music/Jazz/latents/high_train.bin', dtype=np.float32, mode='r', shape=(51548736, vae_embed_dim))
         idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
         x = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-        y = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-        return x, y
+        return x
     
     else:
         data = np.memmap('/home/dylan.d/research/music/Jazz/latents/high_val.bin', dtype=np.float32, mode='r', shape=(1119840, vae_embed_dim))
         idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
         x = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-        y = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-        return x, y
+        return x
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
@@ -214,9 +212,9 @@ def estimate_loss():
     for split in ['train', 'val']:
         losses = torch.zeros(eval_iters * gradient_accumulation_steps)
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
-            X, Y = get_batch(split)
+            X = get_batch(split)
             with ctx:
-                loss = model(X, Y)
+                loss = model(X)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -288,7 +286,7 @@ step2 = 5001
 step3 = 8001
 step4 = 70001
 
-X, Y = get_batch('train') # fetch the very first batch
+X = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
@@ -323,7 +321,7 @@ while True:
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
-            X, Y = get_batch('test')
+            X = get_batch('test')
             X, Y = X[:10], Y[:10] 
             model.eval()
             with ctx:
@@ -371,10 +369,10 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            loss = model(X, Y)
+            loss = model(X)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
-        X, Y = get_batch('train')
+        X = get_batch('train')
         # backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
     # clip the gradient
