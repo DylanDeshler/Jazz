@@ -10,6 +10,7 @@ from torch.utils.checkpoint import checkpoint
 
 from diffloss import DiffLoss
 
+import torch.nn.functional as F
 
 def mask_by_order(mask_len, order, bsz, seq_len):
     masking = torch.zeros(bsz, seq_len).cuda()
