@@ -144,7 +144,7 @@ class MAR(nn.Module):
         self.patch_size = patch_size
         self.seq_h = self.seq_w = img_size // vae_stride // patch_size
         self.seq_len = self.seq_h * self.seq_w
-        self.token_embed_dim = vae_embed_dim * patch_size**2;print(vae_embed_dim, patch_size, self.token_embed_dim)
+        self.token_embed_dim = vae_embed_dim * patch_size**2
         self.grad_checkpointing = grad_checkpointing
 
         # --------------------------------------------------------------------------
@@ -261,8 +261,8 @@ class MAR(nn.Module):
         mask_rate = self.mask_ratio_generator.rvs(1)[0]
         num_masked_tokens = int(np.ceil(seq_len * mask_rate))
         mask = torch.zeros(bsz, seq_len, device=x.device)
-        mask = torch.scatter(mask, dim=-1, index=orders[:, :num_masked_tokens],
-                             src=torch.ones(bsz, seq_len, device=x.device))
+        # mask = torch.scatter(mask, dim=-1, index=orders[:, :num_masked_tokens],
+        #                      src=torch.ones(bsz, seq_len, device=x.device))
         return mask
 
     def forward_mae_encoder(self, x, mask, class_embedding):
@@ -339,7 +339,6 @@ class MAR(nn.Module):
     def forward(self, imgs, labels=None):
 
         # class embed
-        print(labels)
         if labels is not None:
             class_embedding = self.class_emb(labels)
         else:
