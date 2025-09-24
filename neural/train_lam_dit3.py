@@ -40,7 +40,7 @@ import soundfile as sf
 # I/O
 out_dir = 'lam_dit9'
 eval_interval = 1000
-sample_interval = 1000
+sample_interval = 5000
 log_interval = 100
 save_interval = 10000
 eval_iters = 400
@@ -387,7 +387,7 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        # losses = estimate_loss()
+        losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
             X, Y = get_batch('test')
             X, Y = X[:10], Y[:10] 
