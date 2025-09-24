@@ -623,7 +623,7 @@ class CausalLAM(nn.Module):
 
         b, c, f, device = *latents.shape, latents.device
         # t = self.max_input_size // self.local_window
-        t = self.max_input_size
+        t = self.max_input_size - 1
         
         local_tokens, local_action_indices, _ = self.encode_actions(latents, attn_mask=self.causal_plus_1_mask)
 
@@ -653,7 +653,7 @@ class CausalLAM(nn.Module):
 
         b, c, f, device = *latents.shape, latents.device
         # t = self.max_input_size // self.local_window
-        t = self.max_input_size
+        t = self.max_input_size - 1
         
         local_tokens, local_action_indices, _ = self.encode_actions(latents, attn_mask=self.causal_plus_1_mask)
 
@@ -682,7 +682,7 @@ class CausalLAM(nn.Module):
         assert local_action_indices is not None
 
         # t = self.max_input_size // self.local_window
-        t = self.max_input_size
+        t = self.max_input_size - 1
         device = next(self.parameters()).device
         noise = torch.randn(shape, device=device)
         if self.use_fsq:
