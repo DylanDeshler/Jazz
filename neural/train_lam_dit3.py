@@ -352,7 +352,7 @@ if wandb_log and master_process:
 step1 = 3001
 step2 = 5001
 step3 = 8001
-step4 = 40001
+step4 = 70001
 
 X, Y = get_batch('train') # fetch the very first batch
 t0 = time.time()
@@ -380,8 +380,8 @@ while True:
     #     batch_size = 128
     # if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
     #     batch_size = 256
-    # if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
-    #     gradient_accumulation_steps *= 2
+    if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
+        gradient_accumulation_steps *= 4
     
     tokens_trained += batch_size * gradient_accumulation_steps * max_seq_len
 
