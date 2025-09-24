@@ -144,7 +144,7 @@ class MAR(nn.Module):
         self.patch_size = patch_size
         self.seq_h = self.seq_w = img_size // vae_stride // patch_size
         self.seq_len = self.seq_h * self.seq_w
-        self.token_embed_dim = vae_embed_dim * patch_size**2
+        self.token_embed_dim = vae_embed_dim * patch_size**2;print(self.token_embed_dim)
         self.grad_checkpointing = grad_checkpointing
 
         # --------------------------------------------------------------------------
