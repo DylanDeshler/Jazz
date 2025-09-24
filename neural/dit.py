@@ -285,6 +285,7 @@ class DiT(nn.Module):
         self.out_channels = in_channels * 2 if learn_sigma else in_channels
         self.num_heads = num_heads
         self.conditional = conditional
+        self.max_input_size = max_input_size
 
         self.x_embedder = PatchEmbed(in_channels, hidden_size, max_input_size, local_window)
         self.t_embedder = TimestepEmbedder(hidden_size)
@@ -361,7 +362,7 @@ class DiT(nn.Module):
         x = self.final_layer(x, c)               # (N, T, patch_size ** 2 * out_channels)
         x = self.unpatchify(x)                   # (N, out_channels, H, W)
         return x
-    
+
     def forward_with_cfg(self, x, t, y, cfg_scale):
         """
         Forward pass of DiT, but also batches the unconditional forward pass for classifier-free guidance.
@@ -605,6 +606,18 @@ class CausalLAM(nn.Module):
 
         return loss
     
+    def generate(self, x, local_tokens, keep_tokens, max_new_tokens, n_steps=50):
+        x = x[:, :keep_tokens]
+        for _ in range(max_new_tokens):
+            t = x.shape[1]
+            mask = torch.ones(*x.shape[:2])
+            logits = self.sampler.inpaint(self.decoder.model, x, mask, net_kwargs={'y': local_tokens[:t], 'attn_mask': self.causal_mask[:t, :t]}, n_steps=n_steps)
+
+            logits = logits[:, [-1]]
+            x = torch.cat([x, logits], dim=1)
+        
+        return x
+    
     def generate_random_different_actions(self, actions_indices, codebook_size, device):
         shape = actions_indices.shape
         random_actions = torch.randint(0, codebook_size, shape, device=device)
@@ -618,7 +631,7 @@ class CausalLAM(nn.Module):
 
         return random_actions
     
-    def lam_vs_random_actions(self, latents, n_steps=50, guidance=1):
+    def lam_vs_random_actions(self, latents, keep_tokens, max_new_tokens, n_steps=50):
         assert latents.ndim == 3
 
         b, c, f, device = *latents.shape, latents.device
@@ -642,14 +655,16 @@ class CausalLAM(nn.Module):
         random_local_action_tokens = repeat(random_local_action_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
 
         # decode actions
-        recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': local_tokens, 'attn_mask': self.causal_mask}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight[0].to(latents.dtype), "d -> b t d", b=latents.shape[0], t=t), 'attn_mask': self.causal_mask}, n_steps=n_steps, guidance=guidance, noise=noise)
+        recon_latents = self.generate(latents, local_tokens, keep_tokens, max_new_tokens, n_steps=n_steps)
+        # recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': local_tokens, 'attn_mask': self.causal_mask}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight[0].to(latents.dtype), "d -> b t d", b=latents.shape[0], t=t), 'attn_mask': self.causal_mask}, n_steps=n_steps, guidance=guidance, noise=noise)
         
         # decode random actions
-        random_recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': random_local_action_tokens, 'attn_mask': self.causal_mask}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=t), 'attn_mask': self.causal_mask}, n_steps=n_steps, guidance=guidance, noise=noise)
+        random_recon_latents = self.generate(latents, random_local_action_tokens, keep_tokens, max_new_tokens, n_steps=n_steps)
+        # random_recon_latents = self.sampler.sample(self.decoder.model, latents.shape, net_kwargs={'y': random_local_action_tokens, 'attn_mask': self.causal_mask}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=t), 'attn_mask': self.causal_mask}, n_steps=n_steps, guidance=guidance, noise=noise)
 
         return {'latents': recon_latents, 'local_actions': local_action_indices}, {'latents': random_recon_latents, 'local_actions': random_local_actions_indices}
     
-    def inpaint_lam_vs_random_actions(self, latents, mask, n_steps=50, guidance=1):
+    def inpaint_lam_vs_random_actions(self, latents, mask, max_new_tokens, n_steps=50):
         assert latents.ndim == 3
 
         b, c, f, device = *latents.shape, latents.device
@@ -673,10 +688,12 @@ class CausalLAM(nn.Module):
         random_local_action_tokens = repeat(random_local_action_tokens, "b t1 d -> b (t1 t2) d", t2=self.local_window)
 
         # decode actions
-        recon_latents = self.sampler.inpaint(self.decoder.model, latents, mask, net_kwargs={'y': local_tokens, 'attn_mask': self.causal_mask}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight[0].to(latents.dtype), "d -> b t d", b=latents.shape[0], t=t), 'attn_mask': self.causal_mask}, n_steps=n_steps, guidance=guidance, noise=noise)
+        recon_latents = self.generate(latents, local_tokens, max_new_tokens, n_steps=n_steps)
+        # recon_latents = self.sampler.inpaint(self.decoder.model, latents, mask, net_kwargs={'y': local_tokens, 'attn_mask': self.causal_mask}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight[0].to(latents.dtype), "d -> b t d", b=latents.shape[0], t=t), 'attn_mask': self.causal_mask}, n_steps=n_steps, guidance=guidance, noise=noise)
         
         # decode random actions
-        random_recon_latents = self.sampler.inpaint(self.decoder.model, latents, mask, net_kwargs={'y': random_local_action_tokens, 'attn_mask': self.causal_mask}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=t), 'attn_mask': self.causal_mask}, n_steps=n_steps, guidance=guidance, noise=noise)
+        random_recon_latents = self.generate(latents, local_tokens, max_new_tokens, n_steps=n_steps)
+        # random_recon_latents = self.sampler.inpaint(self.decoder.model, latents, mask, net_kwargs={'y': random_local_action_tokens, 'attn_mask': self.causal_mask}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(latents.dtype), "d -> b t d", b=latents.shape[0], t=t), 'attn_mask': self.causal_mask}, n_steps=n_steps, guidance=guidance, noise=noise)
 
         return recon_latents, random_recon_latents
     
@@ -692,6 +709,7 @@ class CausalLAM(nn.Module):
         else:
             local_tokens = repeat(self.local_vq.get_output_from_indices(local_action_indices), "b d -> b t d", t=t)
 
+        samples = self.generate()
         samples = self.sampler.sample(self.decoder.model, shape, n_steps=n_step, net_kwargs={'y': local_tokens, 'attn_mask': self.causal_mask}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(next(self.parameters()).dtype), "d -> b t d", b=shape[0], t=t), 'attn_mask': self.causal_mask}, guidance=guidance, noise=noise)
 
         return samples

@@ -38,7 +38,7 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'lam_dit10'
+out_dir = 'lam_dit9'
 eval_interval = 1000
 sample_interval = 1000
 log_interval = 100
@@ -46,7 +46,7 @@ save_interval = 10000
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -60,7 +60,7 @@ use_fsq = True
 local_window = 1
 cut_seconds = 4
 cut_len = 8 * cut_seconds
-max_seq_len = 4 * cut_len + 1
+max_seq_len = 4 * cut_len
 codebook_size = 16
 codebook_dim = 32
 vae_embed_dim = 64
@@ -129,14 +129,14 @@ def get_batch(split='train'):
         data = np.memmap('/home/dylan.d/research/music/Jazz/latents/high_train.bin', dtype=np.float32, mode='r', shape=(51548736, vae_embed_dim))
         idxs = torch.randint(len(data) - max_seq_len - local_window, (batch_size,))
         x = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-        y = torch.from_numpy(np.stack([data[idx+local_window:idx+local_window+max_seq_len-1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+        y = torch.from_numpy(np.stack([data[idx+local_window:idx+local_window+max_seq_len] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
         return x, y
     
     else:
         data = np.memmap('/home/dylan.d/research/music/Jazz/latents/high_val.bin', dtype=np.float32, mode='r', shape=(1119840, vae_embed_dim))
         idxs = torch.randint(len(data) - max_seq_len - local_window, (batch_size,))
         x = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-        y = torch.from_numpy(np.stack([data[idx+local_window:idx+local_window+max_seq_len-1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+        y = torch.from_numpy(np.stack([data[idx+local_window:idx+local_window+max_seq_len] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
         return x, y
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
@@ -289,7 +289,7 @@ def generate_inpainting_samples(x, step):
 
     raw_model.encode_actions(x, attn_mask=None)
 
-    mask = torch.from_numpy(np.concatenate([np.zeros((x.shape[0], cut_len)), np.ones((x.shape[0], max_seq_len - cut_len - 1))], axis=1)).long().to(device)
+    mask = torch.from_numpy(np.concatenate([np.zeros((x.shape[0], cut_len)), np.ones((x.shape[0], max_seq_len - cut_len))], axis=1)).long().to(device)
     recon_inpaints, random_inpaints = raw_model.inpaint_lam_vs_random_actions(x, mask)
 
     B, L, D = x.shape
@@ -322,7 +322,7 @@ def generate_samples_with_all_local_actions(step):
 
     actions = torch.arange(0, raw_model.local_vq.codebook_size, device=device).long()
     # actions = torch.randint(0, raw_model.local_vq.codebook_size, (32,), device=device).long()
-    samples = raw_model.sample_with_actions((actions.shape[0], max_seq_len - 1, vae_embed_dim), actions)
+    samples = raw_model.sample_with_actions((actions.shape[0], max_seq_len, vae_embed_dim), actions)
     
     B, L, D = samples.shape
 
@@ -387,6 +387,7 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
+        # pass
         losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
             X, Y = get_batch('test')
