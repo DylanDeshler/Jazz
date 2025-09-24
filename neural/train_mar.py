@@ -235,45 +235,23 @@ def get_lr(it):
     return min_lr + coeff * (learning_rate - min_lr)
 
 @torch.no_grad()
-def generate_lam_vs_random_actions(x, y, step):
+def save_samples(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
-    batch_dir = os.path.join(batch_dir, 'lam_vs_random')
-    os.makedirs(batch_dir, exist_ok=True)
 
-    B, L, D = x.shape
-    recon, random_recon = raw_model.lam_vs_random_actions(x.clone(), cut_len, max_seq_len, n_steps=100)
+    samples = raw_model.sample_tokens(10, num_iter=64, cfg=1.0, cfg_schedule="linear", labels=None, temperature=1.0, progress=True)
+    print(samples.shape)
 
-    fig, axs = plt.subplots(B, 1, figsize=(20, 20))
-    for i in range(B):
-        axs.ravel()[i].plot(recon['local_actions'][i].cpu().detach().numpy())
-    plt.title('Local Action Indicies')
-    plt.ylabel('Local Action Index')
-    plt.xlabel('Time (1/10)s')
-    plt.savefig(os.path.join(batch_dir, f'local_actions.png'))
-    plt.close('all')
-    
-    recon = recon['latents']
-    random_recon = random_recon['latents']
+    B, L, D = samples.shape
+
     n_cuts = L // cut_len
-    batches = []
-    for cut in tqdm(range(min(n_cuts, 8)), desc='Decoding'):
-        batch = torch.cat([x[:, cut * cut_len: (cut + 1) * cut_len], recon[:, cut * cut_len: (cut + 1) * cut_len], random_recon[:, cut * cut_len: (cut + 1) * cut_len], y[:, cut * cut_len: (cut + 1) * cut_len]], dim=0).permute(0, 2, 1)
-        batches.append(tokenizer.decode(batch, shape=(1, 16384 * cut_seconds)))
-    x, recon, random_recon, y = [res.cpu().detach().numpy().squeeze(1) for res in torch.cat(batches, dim=-1).split(B, dim=0)]
-
-    recon_psnr = psnr(y[:, cut_seconds * 16000:], recon[:, cut_seconds * 16000:])
-    random_psnr = psnr(y[:, cut_seconds * 16000:], random_recon[:, cut_seconds * 16000:])
+    cuts = []
+    for cut in tqdm(range(n_cuts), desc='Decoding'):
+        cuts.append(tokenizer.decode(samples[:, cut * cut_len: (cut + 1) * cut_len].permute(0, 2, 1), shape=(1, 16384 * cut_seconds)))
+    samples = torch.cat(cuts, dim=-1).cpu().detach().numpy()
 
     for i in range(B):
-        og, y, random_y = x[i], recon[i], random_recon[i]
-
-        # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), og, 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_y, 16000)
-    
-    return np.mean(recon_psnr - random_psnr).item()
+        sf.write(os.path.join(batch_dir, f'{i}_gen.wav'), samples[i].squeeze(), 16000)
 
 # logging
 if wandb_log and master_process:
@@ -321,15 +299,11 @@ while True:
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
-            X = get_batch('test')
-            X, Y = X[:10], Y[:10] 
             model.eval()
             with ctx:
-                pass
+                save_samples(iter_num)
             model.train()
-            print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, delta PSNR {delta_psnr:.3f}")
-        else:
-            print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
