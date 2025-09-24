@@ -601,7 +601,7 @@ class CausalLAM(nn.Module):
         local_tokens = local_tokens[:, 1:]
         x = x[:, :-1]
 
-        loss = self.diffusion.causal_loss(self.decoder.model, x, targets, net_kwargs={'y': local_tokens, 'attn_mask': self.causal_mask}) + local_vq_loss
+        loss = self.diffusion.causal_loss(self.decoder.model, x, targets[:, :-1], net_kwargs={'y': local_tokens, 'attn_mask': self.causal_mask}) + local_vq_loss
 
         return loss
     
