@@ -604,8 +604,8 @@ class CausalLAM(nn.Module):
     
     def generate(self, x, local_tokens, keep_tokens, max_new_tokens, n_steps=50):
         for i in tqdm(range(keep_tokens, max_new_tokens), desc='Generating'):
-            mask = torch.ones(*x.shape[:2]).to(x.device)
-            # mask = torch.from_numpy(np.concatenate([np.zeros((x.shape[0], i)), np.ones((x.shape[0], max_new_tokens - i))], axis=1)).long().to(x.device)
+            # mask = torch.ones(*x.shape[:2]).to(x.device)
+            mask = torch.from_numpy(np.concatenate([np.zeros((x.shape[0], i)), np.ones((x.shape[0], max_new_tokens - i))], axis=1)).long().to(x.device)
             
             logits = self.sampler.inpaint(self.decoder.model, x.clone(), mask, net_kwargs={'y': local_tokens, 'attn_mask': self.causal_mask}, n_steps=n_steps)
             x[:, i] = logits[:, -1]
