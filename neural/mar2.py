@@ -266,6 +266,8 @@ class MAR(nn.Module):
         return mask
 
     def forward_mae_encoder(self, x, mask, class_embedding):
+        print(x.shape, x.dtype)
+        print(mask.shape, mask.dtype)
         x = self.z_proj(x)
         bsz, seq_len, embed_dim = x.shape
 
