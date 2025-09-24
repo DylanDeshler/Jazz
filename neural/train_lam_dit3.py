@@ -289,7 +289,7 @@ def generate_inpainting_samples(x, step):
 
     raw_model.encode_actions(x, attn_mask=None)
 
-    mask = torch.from_numpy(np.concatenate([np.zeros((x.shape[0], cut_len)), np.ones((x.shape[0], max_seq_len - cut_len))], axis=1)).long().to(device)
+    mask = torch.from_numpy(np.concatenate([np.zeros((x.shape[0], cut_len)), np.ones((x.shape[0], max_seq_len - cut_len - 1))], axis=1)).long().to(device)
     recon_inpaints, random_inpaints = raw_model.inpaint_lam_vs_random_actions(x, mask)
 
     B, L, D = x.shape
@@ -394,7 +394,7 @@ while True:
             X, Y = X[:10], Y[:10] 
             model.eval()
             with ctx:
-                delta_psnr = generate_lam_vs_random_actions(X, Y, iter_num)
+                # delta_psnr = generate_lam_vs_random_actions(X, Y, iter_num)
                 generate_inpainting_samples(X, iter_num)
                 generate_samples_with_all_local_actions(iter_num)
             model.train()
