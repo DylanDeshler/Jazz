@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
 
-from models.diffloss import DiffLoss
+from diffloss import DiffLoss
 
 
 def mask_by_order(mask_len, order, bsz, seq_len):
