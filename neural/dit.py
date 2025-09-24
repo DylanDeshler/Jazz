@@ -496,7 +496,8 @@ class CausalLAM(nn.Module):
         self.sampler = FMEulerSampler(self.diffusion)
 
         t = self.max_input_size // self.local_window
-        self.causal_plus_1_mask = self.register_buffer('causal_plus_1_mask', torch.tril(torch.ones((t, t), dtype=torch.bool), diagonal=1))
+        # self.causal_plus_1_mask = self.register_buffer('causal_plus_1_mask', torch.tril(torch.ones((t, t), dtype=torch.bool), diagonal=1))
+        self.causal_plus_1_mask = self.register_buffer('causal_plus_1_mask', torch.tril(torch.ones((t, t), dtype=torch.bool), diagonal=0))
         self.causal_mask = self.register_buffer('causal_mask', torch.tril(torch.ones((t, t), dtype=torch.bool), diagonal=0))
 
         # self.causal_plus_1_mask = self.register_buffer('causal_plus_1_mask', self.block_causal_mask(diag=1))
@@ -597,6 +598,9 @@ class CausalLAM(nn.Module):
     def forward(self, x, targets):
         local_tokens, _, local_vq_loss = self.encode_actions(x, attn_mask=self.causal_plus_1_mask)
 
+        local_tokens = local_tokens[:, 1:]
+        x = x[:, :-1]
+
         loss = self.diffusion.causal_loss(self.decoder.model, x, targets, net_kwargs={'y': local_tokens, 'attn_mask': self.causal_mask}) + local_vq_loss
 
         return loss
@@ -622,6 +626,9 @@ class CausalLAM(nn.Module):
         t = self.max_input_size
         
         local_tokens, local_action_indices, _ = self.encode_actions(latents, attn_mask=self.causal_plus_1_mask)
+
+        local_tokens = local_tokens[:, 1:]
+        latents = latents[:, :-1]
 
         noise = torch.randn(latents.shape, device=next(self.parameters()).device)
 
@@ -649,6 +656,9 @@ class CausalLAM(nn.Module):
         t = self.max_input_size
         
         local_tokens, local_action_indices, _ = self.encode_actions(latents, attn_mask=self.causal_plus_1_mask)
+
+        local_tokens = local_tokens[:, 1:]
+        latents = latents[:, :-1]
 
         noise = torch.randn(latents.shape, device=next(self.parameters()).device)
 
