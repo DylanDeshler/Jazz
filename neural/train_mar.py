@@ -240,8 +240,7 @@ def save_samples(step):
     os.makedirs(batch_dir, exist_ok=True)
 
     samples = raw_model.sample_tokens(10, num_iter=64, cfg=1.0, cfg_schedule="linear", labels=None, temperature=1.0, progress=True)
-    print(samples.shape)
-
+    
     B, L, D = samples.shape
 
     n_cuts = L // cut_len

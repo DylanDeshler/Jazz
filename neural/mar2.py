@@ -366,7 +366,7 @@ class MAR(nn.Module):
 
         indices = list(range(num_iter))
         if progress:
-            indices = tqdm(indices)
+            indices = tqdm(indices, desc='Generating')
         # generate latents
         for step in indices:
             cur_tokens = tokens.clone()
