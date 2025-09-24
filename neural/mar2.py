@@ -167,7 +167,7 @@ class MAR(nn.Module):
         self.encoder_pos_embed_learned = nn.Parameter(torch.zeros(1, self.seq_len + self.buffer_size, encoder_embed_dim))
 
         self.encoder_blocks = nn.ModuleList([
-            Block(encoder_embed_dim, encoder_num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer,
+            Block(encoder_embed_dim, encoder_num_heads, mlp_ratio, qkv_bias=True,
                   proj_drop=proj_dropout, attn_drop=attn_dropout) for _ in range(encoder_depth)])
         self.encoder_norm = norm_layer(encoder_embed_dim)
 
@@ -178,7 +178,7 @@ class MAR(nn.Module):
         self.decoder_pos_embed_learned = nn.Parameter(torch.zeros(1, self.seq_len + self.buffer_size, decoder_embed_dim))
 
         self.decoder_blocks = nn.ModuleList([
-            Block(decoder_embed_dim, decoder_num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer,
+            Block(decoder_embed_dim, decoder_num_heads, mlp_ratio, qkv_bias=True,
                   proj_drop=proj_dropout, attn_drop=attn_dropout) for _ in range(decoder_depth)])
 
         self.decoder_norm = norm_layer(decoder_embed_dim)
