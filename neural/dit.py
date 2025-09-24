@@ -611,7 +611,7 @@ class CausalLAM(nn.Module):
         for i in tqdm(range(keep_tokens, max_new_tokens), desc='Generating'):
             if i + 1 >= x.shape[1]:
                 break
-            
+
             # mask = torch.ones(*x.shape[:2]).to(x.device)
             mask = torch.from_numpy(np.concatenate([np.zeros((x.shape[0], i)), np.ones((x.shape[0], max_new_tokens - i))], axis=1)).long().to(x.device)
             
@@ -1434,6 +1434,9 @@ def DiT_L_8(**kwargs):
 
 def DiT_B_2(**kwargs):
     return DiTWrapper(depth=12, hidden_size=768, patch_size=2, num_heads=12, **kwargs)
+
+def DiT_M(**kwargs):
+    return DiTWrapper(depth=20, hidden_size=768, patch_size=1, num_heads=12, **kwargs)
 
 def MaskedDiT_B_2(**kwargs):
     return MaskedDiTWrapper(depth=12, hidden_size=768, patch_size=2, num_heads=12, **kwargs)
