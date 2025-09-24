@@ -247,7 +247,7 @@ def generate_lam_vs_random_actions(x, y, step):
     os.makedirs(batch_dir, exist_ok=True)
 
     B, L, D = x.shape
-    recon, random_recon = raw_model.lam_vs_random_actions(x.clone(), cut_len, max_seq_len)
+    recon, random_recon = raw_model.lam_vs_random_actions(x.clone(), cut_len, max_seq_len, n_steps=100)
 
     fig, axs = plt.subplots(B, 1, figsize=(20, 20))
     for i in range(B):
@@ -387,8 +387,7 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        # pass
-        # losses = estimate_loss()
+        losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
             X, Y = get_batch('test')
             X, Y = X[:10], Y[:10] 
