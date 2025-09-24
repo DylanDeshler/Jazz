@@ -153,7 +153,7 @@ tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 
 
-model_args = dict(img_size=max_seq_len, vae_stride=1, patch_size=1, vae_embed_dim=vae_embed_dim, buffer_size=32, class_num=1, label_drop_prob=1)
+model_args = dict(seq_len=max_seq_len, vae_stride=1, patch_size=1, vae_embed_dim=vae_embed_dim, buffer_size=32, class_num=1, label_drop_prob=1)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")

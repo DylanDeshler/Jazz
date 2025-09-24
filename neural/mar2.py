@@ -116,7 +116,7 @@ class Block(nn.Module):
 class MAR(nn.Module):
     """ Masked Autoencoder with VisionTransformer backbone
     """
-    def __init__(self, img_size=256, vae_stride=16, patch_size=1,
+    def __init__(self, seq_len=256, vae_stride=16, patch_size=1,
                  encoder_embed_dim=1024, encoder_depth=16, encoder_num_heads=16,
                  decoder_embed_dim=1024, decoder_depth=16, decoder_num_heads=16,
                  mlp_ratio=4., norm_layer=nn.LayerNorm,
@@ -139,11 +139,9 @@ class MAR(nn.Module):
         # VAE and patchify specifics
         self.vae_embed_dim = vae_embed_dim
 
-        self.img_size = img_size
         self.vae_stride = vae_stride
         self.patch_size = patch_size
-        self.seq_h = self.seq_w = img_size // vae_stride // patch_size
-        self.seq_len = self.seq_h * self.seq_w
+        self.seq_len = seq_len
         self.token_embed_dim = vae_embed_dim * patch_size**2
         self.grad_checkpointing = grad_checkpointing
 
