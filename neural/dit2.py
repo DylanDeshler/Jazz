@@ -603,12 +603,13 @@ class CausalLAM(nn.Module):
         return loss
     
     def generate(self, x, local_tokens, keep_tokens, max_new_tokens, n_steps=50):
+        # TODO: AR causal generation/inpainting may require z_t being the target not input
         for i in tqdm(range(keep_tokens, max_new_tokens), desc='Generating'):
             # if i + 1 >= x.shape[1]:
             #     break
             
             # mask = torch.ones(*x.shape[:2]).to(x.device)
-            mask = torch.from_numpy(np.concatenate([np.zeros((x.shape[0], i - 1)), np.ones((x.shape[0], max_new_tokens - i - 1))], axis=1)).long().to(x.device)
+            mask = torch.from_numpy(np.concatenate([np.zeros((x.shape[0], i - 1)), np.ones((x.shape[0], max_new_tokens - i + 1))], axis=1)).long().to(x.device)
             
             logits = self.sampler.inpaint(self.decoder.model, x.clone(), mask, net_kwargs={'y': local_tokens, 'attn_mask': self.causal_mask}, n_steps=n_steps)
             x[:, i] = logits[:, i - 1]
