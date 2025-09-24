@@ -247,7 +247,7 @@ def generate_lam_vs_random_actions(x, y, step):
     os.makedirs(batch_dir, exist_ok=True)
 
     B, L, D = x.shape
-    recon, random_recon = raw_model.lam_vs_random_actions(x, cut_len, max_seq_len - cut_len - 1)
+    recon, random_recon = raw_model.lam_vs_random_actions(x, cut_len, max_seq_len - 1)
 
     fig, axs = plt.subplots(B, 1, figsize=(20, 20))
     for i in range(B):
