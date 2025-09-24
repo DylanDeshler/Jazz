@@ -387,14 +387,13 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        # pass
-        # losses = estimate_loss()
+        losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
             X, Y = get_batch('test')
             X, Y = X[:10], Y[:10] 
             model.eval()
             with ctx:
-                # delta_psnr = generate_lam_vs_random_actions(X, Y, iter_num)
+                delta_psnr = generate_lam_vs_random_actions(X, Y, iter_num)
                 generate_inpainting_samples(X, iter_num)
                 generate_samples_with_all_local_actions(iter_num)
             model.train()
