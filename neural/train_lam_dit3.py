@@ -129,14 +129,14 @@ def get_batch(split='train'):
         data = np.memmap('/home/dylan.d/research/music/Jazz/latents/high_train.bin', dtype=np.float32, mode='r', shape=(51548736, vae_embed_dim))
         idxs = torch.randint(len(data) - max_seq_len - local_window, (batch_size,))
         x = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-        y = torch.from_numpy(np.stack([data[idx+local_window:idx+local_window+max_seq_len] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+        y = torch.from_numpy(np.stack([data[idx+local_window:idx+local_window+max_seq_len-1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
         return x, y
     
     else:
         data = np.memmap('/home/dylan.d/research/music/Jazz/latents/high_val.bin', dtype=np.float32, mode='r', shape=(1119840, vae_embed_dim))
         idxs = torch.randint(len(data) - max_seq_len - local_window, (batch_size,))
         x = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-        y = torch.from_numpy(np.stack([data[idx+local_window:idx+local_window+max_seq_len] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+        y = torch.from_numpy(np.stack([data[idx+local_window:idx+local_window+max_seq_len-1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
         return x, y
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
