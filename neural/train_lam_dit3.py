@@ -322,7 +322,7 @@ def generate_samples_with_all_local_actions(step):
 
     actions = torch.arange(0, raw_model.local_vq.codebook_size, device=device).long()
     # actions = torch.randint(0, raw_model.local_vq.codebook_size, (32,), device=device).long()
-    samples = raw_model.sample_with_actions((actions.shape[0], max_seq_len, vae_embed_dim), actions)
+    samples = raw_model.sample_with_actions((actions.shape[0], max_seq_len - 1, vae_embed_dim), actions)
     
     B, L, D = samples.shape
 
@@ -388,7 +388,7 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         # pass
-        losses = estimate_loss()
+        # losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
             X, Y = get_batch('test')
             X, Y = X[:10], Y[:10] 
