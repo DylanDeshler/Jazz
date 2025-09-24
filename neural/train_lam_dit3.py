@@ -29,7 +29,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from dit import CausalLAM_B as dit
+from dit2 import CausalLAM_B as dit
 from dito import DiToV4 as Tokenizer
 
 import matplotlib.pyplot as plt
@@ -247,7 +247,7 @@ def generate_lam_vs_random_actions(x, y, step):
     os.makedirs(batch_dir, exist_ok=True)
 
     B, L, D = x.shape
-    recon, random_recon = raw_model.lam_vs_random_actions(x)
+    recon, random_recon = raw_model.lam_vs_random_actions(x.clone(), cut_len, max_seq_len)
 
     fig, axs = plt.subplots(B, 1, figsize=(20, 20))
     for i in range(B):
@@ -395,8 +395,8 @@ while True:
             model.eval()
             with ctx:
                 delta_psnr = generate_lam_vs_random_actions(X, Y, iter_num)
-                generate_inpainting_samples(X, iter_num)
-                generate_samples_with_all_local_actions(iter_num)
+                # generate_inpainting_samples(X, iter_num)
+                # generate_samples_with_all_local_actions(iter_num)
             model.train()
             print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, delta PSNR {delta_psnr:.3f}")
         else:
