@@ -268,6 +268,7 @@ class MAR(nn.Module):
     def forward_mae_encoder(self, x, mask, class_embedding):
         print(x.shape, x.dtype)
         print(mask.shape, mask.dtype)
+        print(class_embedding.shape, class_embedding.dtype)
         x = self.z_proj(x)
         bsz, seq_len, embed_dim = x.shape
 
@@ -338,6 +339,7 @@ class MAR(nn.Module):
     def forward(self, imgs, labels=None):
 
         # class embed
+        print(labels)
         if labels is not None:
             class_embedding = self.class_emb(labels)
         else:
