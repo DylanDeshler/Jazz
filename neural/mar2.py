@@ -149,7 +149,7 @@ class MAR(nn.Module):
         # --------------------------------------------------------------------------
         # Class Embedding
         self.num_classes = class_num
-        self.class_emb = nn.Embedding(class_num, encoder_embed_dim)
+        # self.class_emb = nn.Embedding(class_num, encoder_embed_dim)
         self.label_drop_prob = label_drop_prob
         # Fake class embedding for CFG's unconditional generation
         self.fake_latent = nn.Parameter(torch.zeros(1, encoder_embed_dim))
@@ -199,7 +199,7 @@ class MAR(nn.Module):
 
     def initialize_weights(self):
         # parameters
-        torch.nn.init.normal_(self.class_emb.weight, std=.02)
+        # torch.nn.init.normal_(self.class_emb.weight, std=.02)
         torch.nn.init.normal_(self.fake_latent, std=.02)
         torch.nn.init.normal_(self.mask_token, std=.02)
         torch.nn.init.normal_(self.encoder_pos_embed_learned, std=.02)
