@@ -611,9 +611,8 @@ class CausalLAM(nn.Module):
         for _ in range(max_new_tokens):
             t = x.shape[1]
             mask = torch.ones(*x.shape[:2])
-            print(local_tokens.shape)
-            print(self.causal_mask.shape)
-            logits = self.sampler.inpaint(self.decoder.model, x, mask, net_kwargs={'y': local_tokens[:, :t], 'attn_mask': self.causal_mask[:t, :t]}, n_steps=n_steps)
+            
+            logits = self.sampler.inpaint(self.decoder.model, x, mask, net_kwargs={'y': local_tokens[:, :t], 'attn_mask': self.causal_mask}, n_steps=n_steps)
 
             logits = logits[:, [-1]]
             x = torch.cat([x, logits], dim=1)
