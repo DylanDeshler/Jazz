@@ -465,9 +465,5 @@ while True:
     iter_num += 1
     local_iter_num += 1
 
-    # termination conditions
-    if iter_num > max_iters:
-        break
-
 if ddp:
     destroy_process_group()
