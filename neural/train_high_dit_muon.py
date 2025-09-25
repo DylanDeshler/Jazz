@@ -363,7 +363,7 @@ optimizer = raw_model.model.configure_muon(muon_lr, adam_lr, (beta1, beta2), wei
 # optimizer = torch.optim.AdamW(model.parameters(), lr=adam_lr, betas=(beta1, beta2))
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
-scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+# scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 checkpoint = None # free up memory
 while True:
 
