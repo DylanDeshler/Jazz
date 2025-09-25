@@ -233,6 +233,62 @@ def get_lr(it):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
 
+def interpolate_latents(z1, z2, num_steps):
+    """
+    Linearly interpolate between two latent vectors.
+    Args:
+        z1: Tensor, latent at frame t, shape (C,)
+        z2: Tensor, latent at frame t+1, shape (C,)
+        num_steps: int, number of interpolated frames to generate between z1 and z2
+    Returns:
+        Tensor of shape (num_steps, C)
+    """
+    alphas = torch.linspace(0, 1, num_steps + 1, device=z1.device)[1:]  # exclude z1
+    return torch.stack([alpha * z2 + (1 - alpha) * z1 for alpha in alphas], dim=0)
+
+def decode_latents_with_overlap(latents, decoder, hop_ratio=0.5, frame_length_samples=16000//8):
+    """
+    Decode continuous latent vectors to waveform using smaller hop and overlap-add.
+    
+    Args:
+        latents: Tensor of shape (num_latents, latent_dim)
+        decoder: function or nn.Module that decodes a latent to waveform of shape (frame_length_samples,)
+        hop_ratio: float, fraction of latent duration to use as hop (0 < hop_ratio <= 1)
+        frame_length_samples: int, number of samples each latent decodes to
+    
+    Returns:
+        Tensor of shape (total_samples,) containing reconstructed waveform
+    """
+    device = latents.device
+    hop_size = int(frame_length_samples * hop_ratio)
+    window = torch.hann_window(frame_length_samples, device=device)
+    
+    num_latents, latent_dim = latents.shape
+    total_length = hop_size * (num_latents - 1) + frame_length_samples
+    waveform = torch.zeros(total_length, device=device)
+    norm = torch.zeros_like(waveform)
+    
+    for i in range(num_latents - 1):
+        # Optional interpolation between consecutive latents
+        interp_latents = interpolate_latents(latents[i], latents[i+1], int(1/hop_ratio) - 1)
+        all_latents = torch.vstack([latents[i:i+1], interp_latents])
+        
+        for j, z in enumerate(all_latents):
+            start = i * hop_size + j * hop_size
+            end = start + frame_length_samples
+            decoded = decoder.decode(z.permute(0, 2, 1), shape=(1, 16384 * cut_seconds))  # shape: (frame_length_samples,)
+            waveform[start:end] += decoded * window
+            norm[start:end] += window
+
+    # Add last latent
+    decoded = decoder(latents[-1])
+    waveform[-frame_length_samples:] += decoded * window
+    norm[-frame_length_samples:] += window
+
+    # Normalize by window sum to avoid amplitude scaling
+    waveform /= norm + 1e-8
+    return waveform
+
 @torch.no_grad()
 def save_samples(X, step):
     batch_dir = os.path.join(out_dir, str(step))
@@ -241,7 +297,7 @@ def save_samples(X, step):
     samples = raw_model.sample((10, max_seq_len, vae_embed_dim), n_steps=50)
     # inpaint the middle half
     mask = torch.zeros((X.shape[0], X.shape[1])).to(device)
-    mask[int(X.shape[1]//4):int(3*X.shape[1]//4)] = 1
+    mask[:, int(X.shape[1]//4):int(3*X.shape[1]//4)] = 1
     inpaints = raw_model.inpaint(X, mask, n_steps=50)
     
     B, L, D = samples.shape
