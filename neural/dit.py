@@ -308,7 +308,7 @@ class DiT(nn.Module):
         from muon import MuonWithAuxAdam
         hidden_weights = [p for p in self.blocks.parameters() if p.ndim >= 2]
         hidden_gains_biases = [p for p in self.blocks.parameters() if p.ndim < 2]
-        nonhidden_params = [*self.x_embedder.parameters(), *self.t_embedder.parameters(), *self.y_embedder, *self.final_layer]
+        nonhidden_params = [*self.x_embedder.parameters(), *self.t_embedder.parameters(), *self.final_layer]
         if self.conditional:
             nonhidden_params += [*self.y_embedder.parameters()]
         
