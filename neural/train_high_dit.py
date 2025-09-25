@@ -54,16 +54,16 @@ wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
-batch_size = 256# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 512# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 cut_seconds = 4
 cut_len = 8 * cut_seconds
-max_seq_len = 4 * cut_len
+max_seq_len = 2 * cut_len
 vae_embed_dim = 64
 # adamw optimizer
-learning_rate = 5e-5 # max learning rate
+learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
-weight_decay = 1e-2
+weight_decay = 1e-1
 beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
