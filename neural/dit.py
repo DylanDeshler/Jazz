@@ -302,6 +302,24 @@ class DiT(nn.Module):
         self.final_layer = FinalLayer(hidden_size, self.out_channels, local_window=local_window)
         self.unpatchify = Rearrange("b t1 (t2 d) -> b (t1 t2) d", t2=local_window)
         self.initialize_weights()
+    
+    def configure_muon(self, muon_lr, adam_lr, betas, weight_decay):
+        # how shoudl FinalLayer be decomposed (or not) into Muon and AdamW?
+        from muon import MuonWithAuxAdam
+        hidden_weights = [p for p in self.blocks.parameters() if p.ndim >= 2]
+        hidden_gains_biases = [p for p in self.blocks.parameters() if p.ndim < 2]
+        nonhidden_params = [*self.x_embedder.parameters(), *self.t_embedder.parameters(), *self.y_embedder, *self.final_layer]
+        if self.conditional:
+            nonhidden_params += [*self.y_embedder.parameters()]
+        
+        param_groups = [
+            dict(params=hidden_weights, use_muon=True,
+                lr=muon_lr, weight_decay=weight_decay),
+            dict(params=hidden_gains_biases+nonhidden_params, use_muon=False,
+                lr=adam_lr, betas=betas, weight_decay=weight_decay),
+        ]
+        optimizer = MuonWithAuxAdam(param_groups)
+        return optimizer
 
     def initialize_weights(self):
         # Initialize transformer layers:
@@ -1443,6 +1461,9 @@ def DiT_L(**kwargs):
 
 def DiT_M(**kwargs):
     return DiTWrapper(depth=20, hidden_size=768, patch_size=1, num_heads=12, **kwargs)
+
+def DiT_B(**kwargs):
+    return DiTWrapper(depth=12, hidden_size=768, patch_size=1, num_heads=16, **kwargs)
 
 def MaskedDiT_B_2(**kwargs):
     return MaskedDiTWrapper(depth=12, hidden_size=768, patch_size=2, num_heads=12, **kwargs)

@@ -29,7 +29,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from dit import DiT_M as dit
+from dit import DiT_B as dit
 from dito import DiToV4 as Tokenizer
 
 import matplotlib.pyplot as plt
@@ -38,7 +38,7 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'high_dit'
+out_dir = 'high_dit_B'
 eval_interval = 1000
 sample_interval = 5000
 log_interval = 100
@@ -46,11 +46,11 @@ save_interval = 10000
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
-wandb_run_name = 'llama' + str(time.time())
+wandb_run_name = 'high_dit_muon' + str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
@@ -58,20 +58,17 @@ batch_size = 256# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micr
 # model
 cut_seconds = 4
 cut_len = 8 * cut_seconds
-max_seq_len = 4 * cut_len
+max_seq_len = 2 * cut_len
 vae_embed_dim = 64
 # adamw optimizer
-learning_rate = 1e-4 # max learning rate
-max_iters = 1000000 # total number of training iterations
+muon_lr = 2e-2
+adam_lr = 1e-4 # max learning rate
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
-decay_lr = False # whether to decay the learning rate
-warmup_iters = 10000 # how many steps to warm up for
-lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
-min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
+warmup_iters = 2000 # how many steps to warm up for
 # DDP settings
 backend = 'gloo' # 'nccl', 'gloo', etc.
 # system
@@ -219,19 +216,12 @@ def estimate_loss():
     model.train()
     return out
 
-# learning rate decay scheduler (cosine with warmup)
-def get_lr(it):
-    # 1) linear warmup for warmup_iters steps
-    if it < warmup_iters:
-        return learning_rate * (it + 1) / (warmup_iters + 1)
-    # 2) if it > lr_decay_iters, return min learning rate
-    if it > lr_decay_iters:
-        return min_lr
-    # 3) in between, use cosine decay down to min learning rate
-    decay_ratio = (it - warmup_iters) / (lr_decay_iters - warmup_iters)
-    assert 0 <= decay_ratio <= 1
-    coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
-    return min_lr + coeff * (learning_rate - min_lr)
+# learning scheduler (warmup + constant)
+def lr_lambda(step):
+    if step < warmup_iters:
+        return step / warmup_iters   # linear ramp 0 → 1
+    else:
+        return 1.0                   # constant afterward
 
 def interpolate_latents(z1, z2, num_steps):
     """
@@ -294,11 +284,11 @@ def save_samples(X, step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
 
-    samples = raw_model.sample((10, max_seq_len, vae_embed_dim), n_steps=50)
+    samples = ema_model.ema.sample((10, max_seq_len, vae_embed_dim), n_steps=50)
     # inpaint the middle half
     mask = torch.zeros((X.shape[0], X.shape[1])).to(device)
     mask[:, int(X.shape[1]//4):int(3*X.shape[1]//4)] = 1
-    inpaints = raw_model.inpaint(X, mask, n_steps=50)
+    inpaints = ema_model.ema.inpaint(X, mask, n_steps=50)
     
     B, L, D = samples.shape
 
@@ -313,6 +303,41 @@ def save_samples(X, step):
     for i in range(B):
         sf.write(os.path.join(batch_dir, f'{i}_gen.wav'), samples[i].squeeze(), 16000)
         sf.write(os.path.join(batch_dir, f'{i}_inpaint.wav'), inpaints[i].squeeze(), 16000)
+
+import copy
+
+class ModelEMA:
+    def __init__(self, model, decay=0.9999, device=None):
+        """
+        Maintains an EMA of the model weights.
+        
+        Args:
+            model: nn.Module, the model being trained
+            decay: float, EMA decay factor
+            device: torch.device, optional device to store EMA weights
+        """
+        self.ema = copy.deepcopy(model)
+        self.ema.eval()
+        self.decay = decay
+        self.device = device
+        if device is not None:
+            self.ema.to(device)
+        
+        # Disable gradient computation
+        for p in self.ema.parameters():
+            p.requires_grad_(False)
+
+    @torch.no_grad()
+    def update(self, model):
+        """
+        Update EMA weights using the current model weights.
+        """
+        msd = model.state_dict()
+        for k, ema_v in self.ema.state_dict().items():
+            model_v = msd[k].detach()
+            if self.device is not None:
+                model_v = model_v.to(self.device)
+            self.ema.state_dict()[k].copy_(ema_v * self.decay + (1. - self.decay) * model_v)
 
 # logging
 if wandb_log and master_process:
@@ -331,19 +356,20 @@ local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
 
+ema_model = ModelEMA(raw_model, decay=0.999, device=device)
+
 # optimizer
-# optimizer = raw_model.configure_optimizer(learning_rate, (beta1, beta2))
-# optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
-optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, betas=(beta1, beta2))
+optimizer = raw_model.model.configure_muon(muon_lr, adam_lr, (beta1, beta2), weight_decay)
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
+scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 checkpoint = None # free up memory
 while True:
 
     # determine and set the learning rate for this iteration
-    lr = get_lr(iter_num) if decay_lr else learning_rate
     for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
+        param_group['lr'] = param_group['initial_lr'] * lr_lambda(iter_num)
+
     
     # if iter_num == step1 or local_iter_num == 0 and iter_num >= step1:
     #     batch_size = 64
@@ -360,18 +386,17 @@ while True:
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
-            model.eval()
             X = get_batch('test')[:10]
             with ctx:
                 save_samples(X, iter_num)
-            model.train()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
                 "train/loss": losses['train'],
                 "val/loss": losses['val'],
-                "lr": lr,
+                "adam_lr": adam_lr,
+                "muon_lr": muon_lr,
                 "mfu": running_mfu*100, # convert to percentage
                 "tokens": tokens_trained,
             })
@@ -380,6 +405,7 @@ while True:
             if iter_num > 0:
                 checkpoint = {
                     'model': raw_model.state_dict(),
+                    'ema': ema_model.ema.state_dict(),
                     'optimizer': optimizer.state_dict(),
                     'model_args': model_args,
                     'iter_num': iter_num,
@@ -420,6 +446,9 @@ while True:
     scaler.update()
     # flush the gradients as soon as we can, no need for this memory anymore
     optimizer.zero_grad(set_to_none=True)
+
+    if master_process:
+        ema_model.update(raw_model)
 
     # timing and logging
     t1 = time.time()
