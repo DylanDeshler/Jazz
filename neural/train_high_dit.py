@@ -38,7 +38,7 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'high_dit'
+out_dir = 'high_dit_L'
 eval_interval = 1000
 sample_interval = 5000
 log_interval = 100
@@ -46,7 +46,7 @@ save_interval = 10000
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -58,7 +58,7 @@ batch_size = 256# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micr
 # model
 cut_seconds = 4
 cut_len = 8 * cut_seconds
-max_seq_len = 4 * cut_len
+max_seq_len = 2 * cut_len
 vae_embed_dim = 64
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
