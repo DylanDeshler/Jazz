@@ -359,7 +359,8 @@ running_mfu = -1.0
 ema_model = ModelEMA(raw_model, decay=0.999, device=device)
 
 # optimizer
-optimizer = raw_model.model.configure_muon(muon_lr, adam_lr, (beta1, beta2), weight_decay)
+# optimizer = raw_model.model.configure_muon(muon_lr, adam_lr, (beta1, beta2), weight_decay)
+optimizer = torch.optim.AdamW(model.parameters(), lr=adam_lr, betas=(beta1, beta2))
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
 scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
