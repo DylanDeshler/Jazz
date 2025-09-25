@@ -74,7 +74,7 @@ backend = 'gloo' # 'nccl', 'gloo', etc.
 # system
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
-compile = False # use PyTorch 2.0 to compile the model to be faster
+compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 # exec(open('configurator.py').read()) # overrides from command line or config file
@@ -359,8 +359,8 @@ running_mfu = -1.0
 ema_model = ModelEMA(raw_model, decay=0.999, device=device)
 
 # optimizer
-# optimizer = raw_model.model.configure_muon(muon_lr, adam_lr, (beta1, beta2), weight_decay)
-optimizer = torch.optim.AdamW(model.parameters(), lr=adam_lr, betas=(beta1, beta2))
+optimizer = raw_model.model.configure_muon(muon_lr, adam_lr, (beta1, beta2), weight_decay)
+# optimizer = torch.optim.AdamW(model.parameters(), lr=adam_lr, betas=(beta1, beta2))
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
 scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
