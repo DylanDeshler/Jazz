@@ -335,8 +335,8 @@ class ModelEMA:
         msd = model.state_dict()
         for k, ema_v in self.ema.state_dict().items():
             model_v = msd[k].detach()
-            if self.device is not None:
-                model_v = model_v.to(self.device)
+            # if self.device is not None:
+            #     model_v = model_v.to(self.device)
             self.ema.state_dict()[k].copy_(ema_v * self.decay + (1. - self.decay) * model_v)
 
 # logging
