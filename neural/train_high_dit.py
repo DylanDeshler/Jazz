@@ -239,7 +239,7 @@ def save_samples(X, step):
     os.makedirs(batch_dir, exist_ok=True)
 
     samples = raw_model.sample((10, max_seq_len, vae_embed_dim), n_steps=50)
-    mask = torch.zeros((X.shape[0], X.shape[1]))
+    mask = torch.zeros((X.shape[0], X.shape[1])).to(device)
     mask[int(X.shape[1]//4):int(3*X.shape[1]//4)] = 1
     inpaints = raw_model.inpaint(X, mask, n_steps=50)
     
