@@ -329,7 +329,7 @@ class DiT(nn.Module):
     #     optimizer = MuonWithAuxAdam(param_groups)
     #     return optimizer
 
-    def configure_muon(self, muon_lr, adam_lr, betas, weight_decay):
+    def configure_muon(self, muon_lr, adam_lr, betas, weight_decay, local_rank, world_size):
         from flash_muon import Muon
         hidden_weights = [p for p in self.blocks.parameters() if p.ndim >= 2]
         hidden_gains_biases = [p for p in self.blocks.parameters() if p.ndim < 2]
@@ -338,7 +338,7 @@ class DiT(nn.Module):
             nonhidden_params += [*self.y_embedder.parameters()]
         
         return Optimizers([
-            Muon(params=hidden_weights, lr=muon_lr, weight_decay=weight_decay),
+            Muon(params=hidden_weights, lr=muon_lr, weight_decay=weight_decay, rank=local_rank, world_size=world_size),
             torch.optim.AdamW(params=hidden_gains_biases+nonhidden_params,
                 lr=adam_lr, betas=betas, weight_decay=weight_decay)
         ])
