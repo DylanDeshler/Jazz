@@ -368,8 +368,8 @@ checkpoint = None # free up memory
 while True:
 
     # determine and set the learning rate for this iteration
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = param_group['initial_lr'] * lr_lambda(iter_num)
+    # for param_group in optimizer.param_groups:
+    #     param_group['lr'] = param_group['initial_lr'] * lr_lambda(iter_num)
 
     
     # if iter_num == step1 or local_iter_num == 0 and iter_num >= step1:

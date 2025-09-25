@@ -263,6 +263,15 @@ class PatchEmbed(nn.Module):
         x = self.norm(x)
         return x
 
+class Optimizers:
+    def __init__(self, optimizers):
+        super().__init__()
+        self.optimizers = optimizers
+    
+    def step(self):
+        for optimizer in self.optimizers:
+            optimizer.step()
+
 class DiT(nn.Module):
     """
     Diffusion model with a Transformer backbone.
@@ -303,23 +312,36 @@ class DiT(nn.Module):
         self.unpatchify = Rearrange("b t1 (t2 d) -> b (t1 t2) d", t2=local_window)
         self.initialize_weights()
     
+    # def configure_muon(self, muon_lr, adam_lr, betas, weight_decay):
+    #     from muon import MuonWithAuxAdam
+    #     hidden_weights = [p for p in self.blocks.parameters() if p.ndim >= 2]
+    #     hidden_gains_biases = [p for p in self.blocks.parameters() if p.ndim < 2]
+    #     nonhidden_params = [*self.x_embedder.parameters(), *self.t_embedder.parameters(), *self.final_layer.parameters()]
+    #     if self.conditional:
+    #         nonhidden_params += [*self.y_embedder.parameters()]
+        
+    #     param_groups = [
+    #         dict(params=hidden_weights, use_muon=True,
+    #             lr=muon_lr, weight_decay=weight_decay),
+    #         dict(params=hidden_gains_biases+nonhidden_params, use_muon=False,
+    #             lr=adam_lr, betas=betas, weight_decay=weight_decay),
+    #     ]
+    #     optimizer = MuonWithAuxAdam(param_groups)
+    #     return optimizer
+
     def configure_muon(self, muon_lr, adam_lr, betas, weight_decay):
-        # how shoudl FinalLayer be decomposed (or not) into Muon and AdamW?
-        from muon import MuonWithAuxAdam
+        from flash_muon import Muon
         hidden_weights = [p for p in self.blocks.parameters() if p.ndim >= 2]
         hidden_gains_biases = [p for p in self.blocks.parameters() if p.ndim < 2]
         nonhidden_params = [*self.x_embedder.parameters(), *self.t_embedder.parameters(), *self.final_layer.parameters()]
         if self.conditional:
             nonhidden_params += [*self.y_embedder.parameters()]
         
-        param_groups = [
-            dict(params=hidden_weights, use_muon=True,
-                lr=muon_lr, weight_decay=weight_decay),
-            dict(params=hidden_gains_biases+nonhidden_params, use_muon=False,
-                lr=adam_lr, betas=betas, weight_decay=weight_decay),
-        ]
-        optimizer = MuonWithAuxAdam(param_groups)
-        return optimizer
+        return Optimizers([
+            Muon(params=hidden_weights, lr=muon_lr, weight_decay=weight_decay),
+            torch.optim.AdamW(params=hidden_gains_biases+nonhidden_params,
+                lr=adam_lr, betas=betas, weight_decay=weight_decay)
+        ])
 
     def initialize_weights(self):
         # Initialize transformer layers:
