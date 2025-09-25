@@ -61,7 +61,7 @@ cut_len = 8 * cut_seconds
 max_seq_len = 4 * cut_len
 vae_embed_dim = 64
 # adamw optimizer
-learning_rate = 1e-4 # max learning rate
+learning_rate = 5e-5 # max learning rate
 max_iters = 1000000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
@@ -332,8 +332,6 @@ raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
 
 # optimizer
-# optimizer = raw_model.configure_optimizer(learning_rate, (beta1, beta2))
-# optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, betas=(beta1, beta2))
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
