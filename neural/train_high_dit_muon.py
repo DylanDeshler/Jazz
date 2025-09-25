@@ -29,7 +29,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from dit import DiT_B as dit
+from dit import DiT_M as dit
 from dito import DiToV4 as Tokenizer
 
 import matplotlib.pyplot as plt
@@ -38,7 +38,7 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'high_dit_B'
+out_dir = 'high_dit_M'
 eval_interval = 1000
 sample_interval = 5000
 log_interval = 100
