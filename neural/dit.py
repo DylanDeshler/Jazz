@@ -1321,6 +1321,9 @@ class DiTWrapper(nn.Module):
     
     def sample(self, shape, n_steps=50):
         return self.sampler.sample(self.model, shape, n_steps)
+    
+    def inpaint(self, z, mask, n_steps=50):
+        return self.sampler.inpaint(self.model, z, mask, n_steps)
 
 class MaskedDiTWrapper(nn.Module):
     def __init__(self, *args, **kwargs):

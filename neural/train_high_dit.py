@@ -46,7 +46,7 @@ save_interval = 10000
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -234,22 +234,28 @@ def get_lr(it):
     return min_lr + coeff * (learning_rate - min_lr)
 
 @torch.no_grad()
-def save_samples(step):
+def save_samples(X, step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
 
     samples = raw_model.sample((10, max_seq_len, vae_embed_dim), n_steps=50)
+    mask = torch.zeros((X.shape[0], X.shape[1]))
+    mask[int(X.shape[1]//4):int(3*X.shape[1]//4)] = 1
+    inpaints = raw_model.inpaint(X, mask, n_steps=50)
     
     B, L, D = samples.shape
 
     n_cuts = L // cut_len
-    cuts = []
+    cuts, inpaint_cuts = [], []
     for cut in tqdm(range(n_cuts), desc='Decoding'):
         cuts.append(tokenizer.decode(samples[:, cut * cut_len: (cut + 1) * cut_len].permute(0, 2, 1), shape=(1, 16384 * cut_seconds)))
+        inpaint_cuts.append(tokenizer.decode(inpaints[:, cut * cut_len: (cut + 1) * cut_len].permute(0, 2, 1), shape=(1, 16384 * cut_seconds)))
     samples = torch.cat(cuts, dim=-1).cpu().detach().numpy()
+    inpaints = torch.cat(inpaint_cuts, dim=-1).cpu().detach().numpy()
 
     for i in range(B):
         sf.write(os.path.join(batch_dir, f'{i}_gen.wav'), samples[i].squeeze(), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_inpaint.wav'), inpaints[i].squeeze(), 16000)
 
 # logging
 if wandb_log and master_process:
