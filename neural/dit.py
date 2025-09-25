@@ -1438,6 +1438,9 @@ def DiT_L_8(**kwargs):
 def DiT_B_2(**kwargs):
     return DiTWrapper(depth=12, hidden_size=768, patch_size=2, num_heads=12, **kwargs)
 
+def DiT_L(**kwargs):
+    return DiTWrapper(depth=24, hidden_size=1024, patch_size=1, num_heads=16, **kwargs)
+
 def DiT_M(**kwargs):
     return DiTWrapper(depth=20, hidden_size=768, patch_size=1, num_heads=12, **kwargs)
 
