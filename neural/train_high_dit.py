@@ -304,8 +304,9 @@ while True:
         losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
+            X = get_batch('test')[:10]
             with ctx:
-                save_samples(iter_num)
+                save_samples(X, iter_num)
             model.train()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
