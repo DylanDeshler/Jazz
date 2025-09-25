@@ -40,7 +40,7 @@ import soundfile as sf
 # I/O
 out_dir = 'high_dit'
 eval_interval = 1000
-sample_interval = 1000
+sample_interval = 5000
 log_interval = 100
 save_interval = 10000
 eval_iters = 400
@@ -239,6 +239,7 @@ def save_samples(X, step):
     os.makedirs(batch_dir, exist_ok=True)
 
     samples = raw_model.sample((10, max_seq_len, vae_embed_dim), n_steps=50)
+    # inpaint the middle half
     mask = torch.zeros((X.shape[0], X.shape[1])).to(device)
     mask[int(X.shape[1]//4):int(3*X.shape[1]//4)] = 1
     inpaints = raw_model.inpaint(X, mask, n_steps=50)
