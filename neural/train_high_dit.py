@@ -40,7 +40,7 @@ import soundfile as sf
 # I/O
 out_dir = 'high_dit'
 eval_interval = 1000
-sample_interval = 5000
+sample_interval = 1000
 log_interval = 100
 save_interval = 10000
 eval_iters = 400
