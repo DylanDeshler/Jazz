@@ -385,10 +385,10 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
-        if iter_num % sample_interval == 0 and master_process:
-            X = get_batch('test')[:10]
-            with ctx:
-                save_samples(X, iter_num)
+        # if iter_num % sample_interval == 0 and master_process:
+        #     X = get_batch('test')[:10]
+        #     with ctx:
+        #         save_samples(X, iter_num)
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
             wandb.log({
@@ -447,8 +447,8 @@ while True:
     # flush the gradients as soon as we can, no need for this memory anymore
     optimizer.zero_grad(set_to_none=True)
 
-    if master_process:
-        ema_model.update(raw_model)
+    # if master_process:
+    #     ema_model.update(raw_model)
 
     # timing and logging
     t1 = time.time()
