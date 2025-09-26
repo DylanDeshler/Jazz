@@ -239,8 +239,6 @@ def get_lr(it):
 def generate_lam_vs_random_actions(x, step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
-    batch_dir = os.path.join(batch_dir, 'lam_vs_random')
-    os.makedirs(batch_dir, exist_ok=True)
 
     B, L, D = x.shape
 
