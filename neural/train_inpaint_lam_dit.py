@@ -244,7 +244,7 @@ def generate_lam_vs_random_actions(x, step):
 
     B, L, D = x.shape
 
-    mask = torch.zeros(B, L, dtype=torch.bool, device=device)
+    mask = torch.zeros(B, L, 1, dtype=torch.bool, device=device)
     mask[:, L//4:3*L//4] = True
     recon, random_recon = raw_model.lam_vs_random_actions(x.clone(), mask, n_steps=50)
     
