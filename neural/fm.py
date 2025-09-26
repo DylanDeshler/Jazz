@@ -68,6 +68,7 @@ class FM:
         
         target = self.A(t) * x + self.B(t) * noise # -dxt/dt
         if return_loss_unreduced:
+            raise NotImplementedError()
             loss = ((pred.float() - target.float()) ** 2)
             loss = loss * mask
             loss = loss.sum(dim=[1, 2]) / mask.sum(dim=1)
@@ -77,8 +78,7 @@ class FM:
                 return loss, t
         else:
             loss = ((pred.float() - target.float()) ** 2)
-            loss = loss * mask
-            loss = loss.sum() / mask.sum()
+            loss = loss[mask].mean()
             if return_all:
                 return loss, x_t, pred
             else:
