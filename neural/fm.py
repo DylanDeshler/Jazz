@@ -65,20 +65,18 @@ class FM:
         x_t = x * (1 - mask) + x_t * mask
         
         pred = net(x_t, t=t * self.timescale, **net_kwargs)
+        pred = x * (1 - mask) + pred * mask
         
         target = self.A(t) * x + self.B(t) * noise # -dxt/dt
+        target = x * (1 - mask) + target * mask
         if return_loss_unreduced:
-            raise NotImplementedError()
-            loss = ((pred.float() - target.float()) ** 2)
-            loss = loss * mask
-            loss = loss.sum(dim=[1, 2]) / mask.sum(dim=1)
+            loss = ((pred.float() - target.float()) ** 2).mean(dim=[1, 2])
             if return_all:
                 return loss, t, x_t, pred
             else:
                 return loss, t
         else:
-            loss = ((pred.float() - target.float()) ** 2)
-            loss = loss[mask].mean()
+            loss = ((pred.float() - target.float()) ** 2).mean()
             if return_all:
                 return loss, x_t, pred
             else:

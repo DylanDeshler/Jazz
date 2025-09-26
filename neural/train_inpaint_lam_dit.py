@@ -29,7 +29,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from dit import InpaintingLAM_B as dit
+from dit import InpaintingLAM_M as dit
 from dito import DiToV4 as Tokenizer
 
 import matplotlib.pyplot as plt
@@ -58,9 +58,11 @@ batch_size = 384 # if gradient_accumulation_steps > 1, this is the micro-batch s
 # model
 tokens_per_second = 8
 window_size = 2 * tokens_per_second
+min_block_size = window_size
+max_block_size = 4 * tokens_per_second
 seconds_per_tokenizer_window = 4
 tokens_per_tokenizer_window = tokens_per_second * seconds_per_tokenizer_window
-max_seq_len = 4 * tokens_per_tokenizer_window
+max_seq_len = 2 * tokens_per_tokenizer_window
 # recommended levels for codebook size (https://arxiv.org/pdf/2309.15505)
 # 2^4       2^6     2^8         2^9         2^10            2^11            2^12            2^14                2^16
 # [5, 3]    [8, 8] [8, 6, 5]    [8, 8, 8]   [8, 5, 5, 5]    [8, 8, 6, 5]    [7, 5, 5, 5]    [8, 8, 8, 6, 5]     [8, 8, 8, 5, 5, 5]
@@ -158,7 +160,7 @@ for k,v in list(state_dict.items()):
 tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 
-model_args = dict(in_channels=vae_embed_dim, max_input_size=max_seq_len, levels=levels, window_size=window_size)
+model_args = dict(in_channels=vae_embed_dim, max_input_size=max_seq_len, levels=levels, window_size=window_size, min_block_size=min_block_size, max_block_size=max_block_size)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")

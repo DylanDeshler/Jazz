@@ -954,19 +954,26 @@ class InpaintingLAM(nn.Module):
     def __init__(self, 
         max_input_size=250,
         in_channels=128, 
-        hidden_size=1152,
-        depth=12,
-        num_heads=12,
+        encoder_hidden_size=1152,
+        decoder_hidden_size=1152,
+        encoder_depth=12,
+        decoder_depth=12,
+        encoder_num_heads=12,
+        decoder_num_heads=12,
         levels=[5, 5],
         window_size=8,
+        min_block_size=None,
+        max_block_size=None,
         ):
         super().__init__()
 
-        self.encoder = Transformer(max_input_size=max_input_size, depth=depth, in_channels=in_channels, hidden_size=hidden_size, num_heads=num_heads, local_window=1)
-        self.decoder = CrossDiT(max_input_size=max_input_size, depth=depth, in_channels=in_channels, hidden_size=hidden_size, num_heads=num_heads)
+        self.encoder = Transformer(max_input_size=max_input_size, depth=encoder_depth, in_channels=in_channels, hidden_size=encoder_hidden_size, num_heads=encoder_num_heads, local_window=1)
+        self.decoder = CrossDiT(max_input_size=max_input_size, depth=decoder_depth, in_channels=in_channels, hidden_size=decoder_hidden_size, num_heads=decoder_num_heads)
 
         self.max_input_size = max_input_size
         self.window_size = window_size
+        self.min_block_size = min_block_size if min_block_size is not None else window_size
+        self.max_block_size = max_block_size if max_block_size is not None else max_input_size
         
         self.to_action_emb = nn.Sequential(
             Rearrange("b (t1 t2) d -> b t1 (t2 d)", t1=max_input_size // window_size, t2=window_size),
@@ -1041,7 +1048,7 @@ class InpaintingLAM(nn.Module):
         tokens, _ = self.encode_actions(x)
         
         mask = torch.zeros(B, L, 1, dtype=torch.bool, device=x.device)
-        lens = np.random.randint(self.window_size, L + 1, (B,))
+        lens = np.random.randint(self.min_block_size, self.max_block_size + 1, (B,))
 
         for i in range(B):
             start = np.random.randint(0, L - lens[i] + 1)
@@ -1866,7 +1873,7 @@ def InpaintingLAM_L(**kwargs):
     return InpaintingLAM(depth=24, hidden_size=1024, num_heads=16, **kwargs)
 
 def InpaintingLAM_M(**kwargs):
-    return InpaintingLAM(depth=20, hidden_size=768, num_heads=12, **kwargs)
+    return InpaintingLAM(encoder_depth=12, encoder_hidden_size=768, encoder_num_heads=12, decoder_depth=20, decpder_hidden_size=768, decoder_num_heads=12, **kwargs)
 
 def InpaintingLAM_B(**kwargs):
     return InpaintingLAM(depth=12, hidden_size=768, num_heads=12, **kwargs)
