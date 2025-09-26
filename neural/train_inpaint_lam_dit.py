@@ -61,7 +61,10 @@ window_size = 2 * tokens_per_second
 seconds_per_tokenizer_window = 4
 tokens_per_tokenizer_window = tokens_per_second * seconds_per_tokenizer_window
 max_seq_len = 4 * tokens_per_tokenizer_window
-levels = [5, 5]
+# recommended levels for codebook size (https://arxiv.org/pdf/2309.15505)
+# 2^4       2^6     2^8         2^9         2^10            2^11            2^12            2^14                2^16
+# [5, 3]    [8, 8] [8, 6, 5]    [8, 8, 8]   [8, 5, 5, 5]    [8, 8, 6, 5]    [7, 5, 5, 5]    [8, 8, 8, 6, 5]     [8, 8, 8, 5, 5, 5]
+levels = [8, 8]
 vae_embed_dim = 64
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
