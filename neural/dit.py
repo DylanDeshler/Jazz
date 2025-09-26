@@ -1037,7 +1037,7 @@ class InpaintingLAM(nn.Module):
         return random_actions
     
     def lam_vs_random_actions(self, latents, mask, n_steps=50):
-        action_tokens, action_indices, _ = self.encode_actions(latents)
+        action_tokens, action_indices = self.encode_actions(latents)
 
         # generate random actions
         random_actions_indices = self.generate_random_different_actions(action_indices, self.vq.codebook_size, latents.device)
