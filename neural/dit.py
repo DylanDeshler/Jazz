@@ -931,7 +931,7 @@ class CrossDiT(nn.Module):
         nn.init.constant_(self.final_layer.linear.weight, 0)
         nn.init.constant_(self.final_layer.linear.bias, 0)
 
-    def forward(self, x, t, y, attn_mask=None):
+    def forward(self, x, t, y):
         """
         Forward pass of DiT.
         x: (N, C, H, W) tensor of spatial inputs (images or latent representations of images)
@@ -943,7 +943,7 @@ class CrossDiT(nn.Module):
         y = self.y_embedder(y)
         
         for block in self.blocks:
-            x = block(x, t, y, attn_mask=attn_mask)                      # (N, T, D)
+            x = block(x, t, y)                      # (N, T, D)
         
         x = self.final_layer(x, t)               # (N, T, patch_size ** 2 * out_channels)
         x = self.unpatchify(x)                   # (N, out_channels, H, W)
