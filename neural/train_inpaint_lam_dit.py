@@ -213,7 +213,7 @@ def estimate_loss():
     for split in ['train', 'val']:
         losses = torch.zeros(eval_iters * gradient_accumulation_steps)
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
-            X, Y = get_batch(split)
+            X = get_batch(split)
             with ctx:
                 loss = model(X, Y)
             losses[k] = loss.item()
@@ -285,7 +285,7 @@ step2 = 5001
 step3 = 8001
 step4 = 70001
 
-X, Y = get_batch('train') # fetch the very first batch
+X = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
