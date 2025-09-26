@@ -158,6 +158,78 @@ class Attention(nn.Module):
         x = self.proj_drop(x)
         return x
 
+class CrossAttention(nn.Module):
+    """
+    Multi-head cross-attention module.
+    Query: x
+    Key/Value: context
+    """
+    def __init__(
+            self,
+            dim: int,
+            num_heads: int = 8,
+            qkv_bias: bool = False,
+            proj_bias: bool = True,
+            attn_drop: float = 0.,
+            proj_drop: float = 0.,
+    ) -> None:
+        super().__init__()
+        assert dim % num_heads == 0, 'dim should be divisible by num_heads'
+        self.num_heads = num_heads
+        self.head_dim = dim // num_heads
+        self.scale = self.head_dim ** -0.5
+        self.fused_attn = True
+
+        # Separate linear layers for query (from x) and key/value (from context)
+        self.q = nn.Linear(dim, dim, bias=qkv_bias)
+        self.kv = nn.Linear(dim, dim * 2, bias=qkv_bias)
+
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(dim, dim, bias=proj_bias)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+    def forward(
+            self,
+            x: torch.Tensor,
+            context: torch.Tensor,
+            attn_mask = None,
+    ) -> torch.Tensor:
+        """
+        x: [B, N, C] query sequence
+        context: [B, M, C] key/value sequence
+        attn_mask: optional [B, N, M] mask
+        """
+        B, N, C = x.shape
+        _, M, _ = context.shape
+
+        # Linear projections
+        q = self.q(x).reshape(B, N, self.num_heads, self.head_dim).permute(0, 2, 1, 3)  # [B, H, N, D]
+        kv = self.kv(context).reshape(B, M, 2, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+        k, v = kv.unbind(0)  # [B, H, M, D]
+
+        if self.fused_attn:
+            # PyTorch 2.1+ scaled_dot_product_attention supports cross-attention
+            x = F.scaled_dot_product_attention(
+                q, k, v,
+                attn_mask=attn_mask,
+                dropout_p=self.attn_drop.p if self.training else 0.,
+            )
+        else:
+            raise NotImplementedError()
+            # fallback: manual attention
+            q = q * self.scale
+            attn = q @ k.transpose(-2, -1)  # [B, H, N, M]
+            if attn_mask is not None:
+                attn = attn.masked_fill(attn_mask.bool(), float('-inf'))
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x = attn @ v  # [B, H, N, D]
+
+        x = x.transpose(1, 2).reshape(B, N, C)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        return x
+
 class Mlp(nn.Module):
     def __init__(
             self,
@@ -228,6 +300,37 @@ class DiTBlock(nn.Module):
         else:
             x = x + gate_msa.unsqueeze(1) * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), attn_mask=attn_mask)
             x = x + gate_mlp.unsqueeze(1) * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
+        return x
+
+class CrossDiTBlock(nn.Module):
+    """
+    A DiT block with adaptive layer norm zero (adaLN-Zero) conditioning.
+    """
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
+        super().__init__()
+        self.norm1 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
+        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
+        self.norm2 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
+        self.cross_attn = CrossAttention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
+        mlp_hidden_dim = int(hidden_size * mlp_ratio)
+        approx_gelu = lambda: nn.GELU(approximate="tanh")
+        self.norm3 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
+        self.mlp = Mlp(in_features=hidden_size, hidden_features=mlp_hidden_dim, act_layer=approx_gelu, drop=0)
+        self.adaLN_modulation = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(hidden_size, 9 * hidden_size, bias=True)
+        )
+
+    def forward(self, x, t, context, attn_mask=None):
+        shift_msa, scale_msa, gate_msa, shift_mca, scale_mca, gate_mca, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(t).chunk(6, dim=-1)
+        if t.ndim == 3:
+            x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), attn_mask=attn_mask)
+            x = x + gate_mca * self.cross_attn(modulate(self.norm2(x), shift_mca, scale_mca), context, attn_mask=attn_mask)
+            x = x + gate_mlp * self.mlp(modulate(self.norm3(x), shift_mlp, scale_mlp))
+        else:
+            x = x + gate_msa.unsqueeze(1) * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), attn_mask=attn_mask)
+            x = x + gate_mca.unsqueeze(1) * self.cross_attn(modulate(self.norm2(x), shift_mca, scale_mca), context, attn_mask=attn_mask)
+            x = x + gate_mlp.unsqueeze(1) * self.mlp(modulate(self.norm3(x), shift_mlp, scale_mlp))
         return x
 
 
@@ -755,6 +858,198 @@ class CausalLAM(nn.Module):
         samples = self.sampler.sample(self.decoder.model, shape, n_steps=n_step, net_kwargs={'y': local_tokens, 'attn_mask': self.causal_mask}, uncond_net_kwargs={'y': repeat(self.null_tokens.weight.sum(0).to(next(self.parameters()).dtype), "d -> b t d", b=shape[0], t=t), 'attn_mask': self.causal_mask}, guidance=guidance, noise=noise)
 
         return samples
+
+class CrossDiT(nn.Module):
+    """
+    Diffusion model with a Transformer backbone and cross attention for conditioning.
+    """
+    def __init__(
+        self,
+        max_input_size=250,
+        in_channels=128,
+        hidden_size=1152,
+        depth=28,
+        num_heads=16,
+        mlp_ratio=4.0,
+        learn_sigma=False,
+        **kwargs,
+    ):
+        super().__init__()
+        self.learn_sigma = learn_sigma
+        self.in_channels = in_channels
+        self.out_channels = in_channels * 2 if learn_sigma else in_channels
+        self.num_heads = num_heads
+        self.max_input_size = max_input_size
+
+        self.x_embedder = PatchEmbed(in_channels, hidden_size, max_input_size, 1)
+        self.t_embedder = TimestepEmbedder(hidden_size)
+        self.y_embedder = nn.Sequential(nn.Linear(in_channels, hidden_size, bias=True), nn.LayerNorm(hidden_size, eps=1e-6))
+        # Will use fixed sin-cos embedding:
+        self.pos_embed = nn.Parameter(torch.zeros(1, max_input_size, hidden_size), requires_grad=False)
+
+        self.blocks = nn.ModuleList([
+            CrossDiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+        ])
+        self.final_layer = FinalLayer(hidden_size, self.out_channels, local_window=1)
+        self.unpatchify = Rearrange("b t1 (t2 d) -> b (t1 t2) d", t2=1)
+        self.initialize_weights()
+
+    def initialize_weights(self):
+        # Initialize transformer layers:
+        def _basic_init(module):
+            if isinstance(module, nn.Linear):
+                torch.nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+        self.apply(_basic_init)
+
+        # Initialize (and freeze) pos_embed by sin-cos embedding:
+        pos_embed = get_1d_sincos_pos_embed(self.pos_embed.shape[-1], self.pos_embed.shape[-2])
+        self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
+
+        # Initialize patch_embed like nn.Linear (instead of nn.Conv2d):
+        nn.init.xavier_uniform_(self.x_embedder.proj.weight.data)
+        nn.init.constant_(self.x_embedder.proj.bias, 0)
+
+        # Initialize label embedding table:
+        if self.conditional:
+            nn.init.normal_(self.y_embedder.weight, std=0.02)
+            nn.init.constant_(self.y_embedder.bias, 0)
+
+        # Initialize timestep embedding MLP:
+        nn.init.normal_(self.t_embedder.mlp[0].weight, std=0.02)
+        nn.init.normal_(self.t_embedder.mlp[2].weight, std=0.02)
+
+        # Zero-out adaLN modulation layers in DiT blocks:
+        for block in self.blocks:
+            nn.init.constant_(block.adaLN_modulation[-1].weight, 0)
+            nn.init.constant_(block.adaLN_modulation[-1].bias, 0)
+
+        # Zero-out output layers:
+        nn.init.constant_(self.final_layer.adaLN_modulation[-1].weight, 0)
+        nn.init.constant_(self.final_layer.adaLN_modulation[-1].bias, 0)
+        nn.init.constant_(self.final_layer.linear.weight, 0)
+        nn.init.constant_(self.final_layer.linear.bias, 0)
+
+    def forward(self, x, t, y, attn_mask=None):
+        """
+        Forward pass of DiT.
+        x: (N, C, H, W) tensor of spatial inputs (images or latent representations of images)
+        t: (N,) tensor of diffusion timesteps
+        y: (N,) tensor of class labels
+        """
+        x = self.x_embedder(x) + self.pos_embed[:, :x.shape[1]]  # (N, T, D), where T = H * W / patch_size ** 2
+        t = self.t_embedder(t)                   # (N, D)
+        y = self.y_embedder(y)
+        
+        for block in self.blocks:
+            x = block(x, t, t, attn_mask=attn_mask)                      # (N, T, D)
+        
+        x = self.final_layer(x, t)               # (N, T, patch_size ** 2 * out_channels)
+        x = self.unpatchify(x)                   # (N, out_channels, H, W)
+        return x
+
+class InpaintingLAM(nn.Module):
+
+    def __init__(self, 
+        max_input_size=250,
+        in_channels=128, 
+        hidden_size=1152,
+        depth=12,
+        num_heads=12,
+        levels=[5, 5],
+        window_size=8,
+        ):
+        super().__init__()
+
+        self.encoder = Transformer(max_input_size=max_input_size, depth=depth, in_channels=in_channels, hidden_size=hidden_size, num_heads=num_heads, local_window=1)
+        self.decoder = CrossDiT(max_input_size=max_input_size, depth=depth, in_channels=in_channels, hidden_size=hidden_size, num_heads=num_heads)
+
+        self.max_input_size = max_input_size
+        self.window_size = window_size
+        
+        self.to_action_emb = nn.Sequential(
+            Rearrange("b (t1 t2) d -> b t1 (t2 d)", t1=max_input_size // window_size, t2=window_size),
+            nn.Linear(window_size * in_channels, in_channels),
+            nn.LayerNorm(in_channels)
+        )
+        self.vq = FSQ(levels=levels, dim=in_channels)
+
+        self.diffusion = FM(timescale=1000.0)
+        self.sampler = FMEulerSampler(self.diffusion)
+        
+        self.initialize_weights()
+    
+    def initialize_weights(self):
+        # Initialize transformer layers:
+        def _basic_init(module):
+            if isinstance(module, nn.Linear):
+                torch.nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+        self.apply(_basic_init)
+        self.encoder.initialize_weights()
+        self.decoder.initialize_weights()
+
+    @torch.no_grad()
+    def encode_action_indices(self, x):
+        z = self.encoder(x)
+
+        tokens = self.to_action_emb(z)
+        tokens, indices = self.vq(tokens)
+
+        return indices
+    
+    def encode_actions(self, x):
+        z = self.encoder(x)
+
+        # action embeddings
+        tokens = self.to_action_emb(z)
+        tokens, indices = self.vq(tokens)
+
+        return tokens, indices
+
+    def forward(self, x):
+        B, L, _ = x.shape
+
+        tokens, _ = self.encode_actions(x)
+        
+        mask = torch.zeros(B, L, dtype=torch.bool, device=x.device)
+        lens = np.random.randint(self.window_size, L + 1, (B,))
+
+        for i in range(B):
+            start = np.random.randint(0, L - lens[i] + 1)
+            mask[i, start:start + lens[i]] = True
+
+        return self.diffusion.mask_loss(self.decoder, x, mask, net_kwargs={'y': tokens})
+    
+    def generate_random_different_actions(self, actions_indices, codebook_size, device):
+        shape = actions_indices.shape
+        random_actions = torch.randint(0, codebook_size, shape, device=device)
+
+        while torch.any(random_actions == actions_indices):
+            random_actions = torch.where(
+                random_actions == actions_indices,
+                torch.randint(0, codebook_size, shape, device=device),
+                random_actions,
+            )
+
+        return random_actions
+    
+    def lam_vs_random_actions(self, latents, mask, n_steps=50):
+        action_tokens, action_indices, _ = self.encode_actions(latents)
+
+        # generate random actions
+        random_actions_indices = self.generate_random_different_actions(action_indices, self.vq.codebook_size, latents.device)
+        random_action_tokens = self.vq.indices_to_codes(random_actions_indices)
+
+        # decode actions
+        recon_latents = self.sampler.inpaint(self.decoder, latents, mask, n_steps=n_steps, net_kwargs={'y': action_tokens}, clean=True)
+        # decode random actions
+        random_recon_latents = self.sampler.inpaint(self.decoder, latents, mask, n_steps=n_steps, net_kwargs={'y': random_action_tokens}, clean=True)
+
+        return recon_latents, random_recon_latents
+
 
 from collections import defaultdict
 stats = defaultdict(list)
@@ -1365,6 +1660,24 @@ class DiTWrapper(nn.Module):
     def inpaint(self, z, mask, n_steps=50):
         return self.sampler.inpaint(self.model, z, mask, n_steps)
 
+class CrossDiTWrapper(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        self.model = CrossDiT(*args, **kwargs)
+
+        self.diffusion = FM(timescale=1000.0)
+        self.sampler = FMEulerSampler(self.diffusion)
+    
+    def forward(self, x):
+        loss = self.diffusion.loss(self.model, x)
+        return loss
+    
+    def sample(self, shape, n_steps=50):
+        return self.sampler.sample(self.model, shape, n_steps)
+    
+    def inpaint(self, z, mask, n_steps=50):
+        return self.sampler.inpaint(self.model, z, mask, n_steps)
+
 class MaskedDiTWrapper(nn.Module):
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -1523,6 +1836,14 @@ def DiT_S_4(**kwargs):
 def DiT_S_8(**kwargs):
     return DiTWrapper(depth=12, hidden_size=384, patch_size=8, num_heads=6, **kwargs)
 
+def InpaintingLAM_L(**kwargs):
+    return InpaintingLAM(depth=24, hidden_size=1024, num_heads=16, **kwargs)
+
+def InpaintingLAM_M(**kwargs):
+    return InpaintingLAM(depth=20, hidden_size=768, num_heads=12, **kwargs)
+
+def InpaintingLAM_B(**kwargs):
+    return InpaintingLAM(depth=12, hidden_size=768, num_heads=12, **kwargs)
 
 DiT_models = {
     'DiT-XL/2': DiT_XL_2,  'DiT-XL/4': DiT_XL_4,  'DiT-XL/8': DiT_XL_8,

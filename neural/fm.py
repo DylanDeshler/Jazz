@@ -52,6 +52,35 @@ class FM:
                 return loss, x_t, pred
             else:
                 return loss
+
+    def mask_loss(self, net, x, mask, t=None, net_kwargs=None, return_loss_unreduced=False, return_all=False):
+        if net_kwargs is None:
+            net_kwargs = {}
+        
+        if t is None:
+            t = torch.rand(x.shape[0], device=x.device)
+        x_t, noise = self.add_noise(x, t)
+        x_t = x * (1 - mask) + x_t * mask
+        
+        pred = net(x_t, t=t * self.timescale, **net_kwargs)
+        
+        target = self.A(t) * x + self.B(t) * noise # -dxt/dt
+        if return_loss_unreduced:
+            loss = ((pred.float() - target.float()) ** 2)
+            loss = loss * mask
+            loss = loss.sum(dim=[1, 2]) / mask.sum(dim=1)
+            if return_all:
+                return loss, t, x_t, pred
+            else:
+                return loss, t
+        else:
+            loss = ((pred.float() - target.float()) ** 2)
+            loss = loss * mask
+            loss = loss.sum() / mask.sum()
+            if return_all:
+                return loss, x_t, pred
+            else:
+                return loss
     
     def causal_loss(self, net, x, targets, t=None, net_kwargs=None, return_loss_unreduced=False, return_all=False):
         if net_kwargs is None:
@@ -147,6 +176,7 @@ class FMEulerSampler:
         uncond_net_kwargs=None,
         guidance=1.0,
         noise=None,
+        clean=False,
     ):
         if mask.ndim == 2:
             mask = mask.unsqueeze(-1)
@@ -157,8 +187,11 @@ class FMEulerSampler:
         with torch.no_grad():
             for i in range(n_steps):
                 t = t_steps[i].repeat(x_t.shape[0])
-                z_t, _ = self.diffusion.add_noise(z, t)
-                x_t = z_t * (1 - mask) + x_t * mask
+                if clean:
+                    x_t = z * (1 - mask) + x_t * mask
+                else:
+                    z_t, _ = self.diffusion.add_noise(z, t)
+                    x_t = z_t * (1 - mask) + x_t * mask
                 neg_v = self.diffusion.get_prediction(
                     net,
                     x_t,
@@ -168,6 +201,9 @@ class FMEulerSampler:
                     guidance=guidance,
                 )
                 x_t = x_t + neg_v * (t_steps[i] - t_steps[i + 1])
+        
+        # final add back in clean context
+        x_t = z * (1 - mask) + x_t * mask
         return x_t
     
     def masked_sample(
