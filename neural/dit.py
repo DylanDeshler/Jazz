@@ -912,8 +912,8 @@ class CrossDiT(nn.Module):
         nn.init.constant_(self.x_embedder.proj.bias, 0)
 
         # Initialize label embedding table:
-        nn.init.normal_(self.y_embedder.weight, std=0.02)
-        nn.init.constant_(self.y_embedder.bias, 0)
+        nn.init.normal_(self.y_embedder.1.weight, std=0.02)
+        nn.init.constant_(self.y_embedder.1.bias, 0)
 
         # Initialize timestep embedding MLP:
         nn.init.normal_(self.t_embedder.mlp[0].weight, std=0.02)
