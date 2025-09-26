@@ -975,10 +975,36 @@ class InpaintingLAM(nn.Module):
         )
         self.vq = FSQ(levels=levels, dim=in_channels)
 
+        self.attn_mask = self.register_buffer('attn_mask', self.block_attention_mask())
         self.diffusion = FM(timescale=1000.0)
         self.sampler = FMEulerSampler(self.diffusion)
         
         self.initialize_weights()
+    
+    def block_attention_mask(self) -> torch.Tensor:
+        """
+        Create a block-diagonal attention mask.
+        Each block of `window_size` allows full attention internally,
+        but no attention across blocks.
+
+        Args:
+            seq_len (int): total sequence length
+            window_size (int): block size
+
+        Returns:
+            mask (torch.Tensor): (seq_len, seq_len) boolean mask
+                                True = keep, False = mask
+        """
+        assert self.max_input_size % self.window_size == 0, "Sequence length must be divisible by window_size"
+        n_blocks = self.max_input_size // self.window_size
+
+        # Identity matrix of blocks (n_blocks x n_blocks)
+        block_mask = torch.eye(n_blocks, dtype=torch.bool)
+
+        # Expand to (seq_len, seq_len) by Kronecker product
+        full_mask = torch.kron(block_mask, torch.ones((self.window_size, self.window_size), dtype=torch.bool))
+        
+        return full_mask
     
     def initialize_weights(self):
         # Initialize transformer layers:
@@ -993,7 +1019,7 @@ class InpaintingLAM(nn.Module):
 
     @torch.no_grad()
     def encode_action_indices(self, x):
-        z = self.encoder(x)
+        z = self.encoder(x, attn_mask=self.attn_mask)
 
         tokens = self.to_action_emb(z)
         tokens, indices = self.vq(tokens)
@@ -1001,7 +1027,7 @@ class InpaintingLAM(nn.Module):
         return indices
     
     def encode_actions(self, x):
-        z = self.encoder(x)
+        z = self.encoder(x, attn_mask=self.attn_mask)
 
         # action embeddings
         tokens = self.to_action_emb(z)
