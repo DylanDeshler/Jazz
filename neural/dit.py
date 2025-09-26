@@ -1021,7 +1021,7 @@ class InpaintingLAM(nn.Module):
             start = np.random.randint(0, L - lens[i] + 1)
             mask[i, start:start + lens[i]] = True
 
-        return self.diffusion.mask_loss(self.decoder, x, mask, net_kwargs={'y': tokens})
+        return self.diffusion.mask_loss(self.decoder, x, mask.long(), net_kwargs={'y': tokens})
     
     def generate_random_different_actions(self, actions_indices, codebook_size, device):
         shape = actions_indices.shape
@@ -1044,9 +1044,9 @@ class InpaintingLAM(nn.Module):
         random_action_tokens = self.vq.indices_to_codes(random_actions_indices)
 
         # decode actions
-        recon_latents = self.sampler.inpaint(self.decoder, latents, mask, n_steps=n_steps, net_kwargs={'y': action_tokens}, clean=True)
+        recon_latents = self.sampler.inpaint(self.decoder, latents, mask.long(), n_steps=n_steps, net_kwargs={'y': action_tokens}, clean=True)
         # decode random actions
-        random_recon_latents = self.sampler.inpaint(self.decoder, latents, mask, n_steps=n_steps, net_kwargs={'y': random_action_tokens}, clean=True)
+        random_recon_latents = self.sampler.inpaint(self.decoder, latents, mask.long(), n_steps=n_steps, net_kwargs={'y': random_action_tokens}, clean=True)
 
         return recon_latents, random_recon_latents
 
