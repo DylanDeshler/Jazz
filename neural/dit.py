@@ -943,7 +943,7 @@ class CrossDiT(nn.Module):
         y = self.y_embedder(y)
         
         for block in self.blocks:
-            x = block(x, t, t, attn_mask=attn_mask)                      # (N, T, D)
+            x = block(x, t, y, attn_mask=attn_mask)                      # (N, T, D)
         
         x = self.final_layer(x, t)               # (N, T, patch_size ** 2 * out_channels)
         x = self.unpatchify(x)                   # (N, out_channels, H, W)
