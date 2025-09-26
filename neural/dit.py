@@ -1873,7 +1873,7 @@ def InpaintingLAM_L(**kwargs):
     return InpaintingLAM(depth=24, hidden_size=1024, num_heads=16, **kwargs)
 
 def InpaintingLAM_M(**kwargs):
-    return InpaintingLAM(encoder_depth=12, encoder_hidden_size=768, encoder_num_heads=12, decoder_depth=20, decpder_hidden_size=768, decoder_num_heads=12, **kwargs)
+    return InpaintingLAM(encoder_depth=12, encoder_hidden_size=768, encoder_num_heads=12, decoder_depth=20, decoder_hidden_size=768, decoder_num_heads=12, **kwargs)
 
 def InpaintingLAM_B(**kwargs):
     return InpaintingLAM(depth=12, hidden_size=768, num_heads=12, **kwargs)
