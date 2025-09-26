@@ -56,7 +56,8 @@ dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
 batch_size = 384 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
-window_size = tokens_per_second = 8
+tokens_per_second = 8
+window_size = 2 * tokens_per_second
 seconds_per_tokenizer_window = 4
 tokens_per_tokenizer_window = tokens_per_second * seconds_per_tokenizer_window
 max_seq_len = 4 * tokens_per_tokenizer_window
@@ -290,8 +291,6 @@ raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
 
 # optimizer
-# optimizer = raw_model.configure_optimizer(learning_rate, (beta1, beta2))
-# optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, betas=(beta1, beta2))
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
