@@ -322,7 +322,7 @@ class CrossDiTBlock(nn.Module):
         )
 
     def forward(self, x, t, context, attn_mask=None):
-        shift_msa, scale_msa, gate_msa, shift_mca, scale_mca, gate_mca, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(t).chunk(6, dim=-1)
+        shift_msa, scale_msa, gate_msa, shift_mca, scale_mca, gate_mca, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(t).chunk(9, dim=-1)
         if t.ndim == 3:
             x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), attn_mask=attn_mask)
             x = x + gate_mca * self.cross_attn(modulate(self.norm2(x), shift_mca, scale_mca), context, attn_mask=attn_mask)
