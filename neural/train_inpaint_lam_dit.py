@@ -256,9 +256,8 @@ def generate_lam_vs_random_actions(x, step):
     x, recon, random_recon = [res.cpu().detach().numpy().squeeze(1) for res in torch.cat(batches, dim=-1).split(B, dim=0)]
 
     total_seconds = max_seq_len // tokens_per_second
-    print(x.shape, recon.shape, random_recon.shape)
-    recon_psnr = psnr(x[:, total_seconds // 4 * 16000:], recon[:, 3 * 16000 * total_seconds // 4:])
-    random_psnr = psnr(x[:, total_seconds // 4 * 16000:], random_recon[:, 3 * 16000 * total_seconds // 4:])
+    recon_psnr = psnr(x[:, total_seconds // 4 * 16000:3 * 16000 * total_seconds // 4], recon[:, total_seconds // 4 * 16000:3 * 16000 * total_seconds // 4])
+    random_psnr = psnr(x[:, total_seconds // 4 * 16000:3 * 16000 * total_seconds // 4], random_recon[:, total_seconds // 4 * 16000:3 * 16000 * total_seconds // 4])
 
     for i in range(B):
         og, y, random_y = x[i], recon[i], random_recon[i]
@@ -319,7 +318,7 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        # losses = estimate_loss()
+        losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
             X = get_batch('test')[:10] 
             model.eval()
