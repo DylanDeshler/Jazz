@@ -1042,19 +1042,24 @@ class InpaintingLAM(nn.Module):
 
         return tokens, indices
 
-    def forward(self, x):
-        B, L, _ = x.shape
+    # def forward(self, x):
+    #     B, L, _ = x.shape
 
-        tokens, _ = self.encode_actions(x)
+    #     tokens, _ = self.encode_actions(x)
         
-        mask = torch.zeros(B, L, 1, dtype=torch.bool, device=x.device)
-        lens = np.random.randint(self.min_block_size, self.max_block_size + 1, (B,))
+    #     mask = torch.zeros(B, L, 1, dtype=torch.bool, device=x.device)
+    #     lens = np.random.randint(self.min_block_size, self.max_block_size + 1, (B,))
 
-        for i in range(B):
-            start = np.random.randint(0, L - lens[i] + 1)
-            mask[i, start:start + lens[i]] = True
+    #     for i in range(B):
+    #         start = np.random.randint(0, L - lens[i] + 1)
+    #         mask[i, start:start + lens[i]] = True
 
-        return self.diffusion.mask_loss(self.decoder, x, mask.long(), net_kwargs={'y': tokens})
+    #     return self.diffusion.mask_loss(self.decoder, x, mask.long(), net_kwargs={'y': tokens})
+    
+    def forward(self, x):
+        tokens, _ = self.encode_actions(x)
+
+        return self.diffusion.loss(self.decoder, x, net_kwargs={'y': tokens})
     
     def generate_random_different_actions(self, actions_indices, codebook_size, device):
         shape = actions_indices.shape
