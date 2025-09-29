@@ -1188,7 +1188,6 @@ class MaskLAM(nn.Module):
         B, L, _ = x.shape
 
         tokens, _ = self.encode_actions(x)
-        tokens = repeat(tokens, "b t1 d -> b (t1 t2) d", t2=self.window_size)
         
         mask = torch.zeros(B, L, 1, dtype=torch.bool, device=x.device)
         lens = np.random.randint(self.min_block_size, self.max_block_size + 1, (B,))
@@ -1197,7 +1196,7 @@ class MaskLAM(nn.Module):
             start = np.random.randint(0, L - lens[i] + 1)
             mask[i, start:start + lens[i]] = True
         
-        x[mask] = self.mask_token
+        x[mask] = self.mask_token.repeat(x.shape[0], x.shape[1], 1)
 
         return self.diffusion.mask_mae_loss(self.decoder, x, target, mask.long(), net_kwargs={'y': tokens})
     
