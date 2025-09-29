@@ -874,6 +874,7 @@ class CrossDiT(nn.Module):
         num_heads=16,
         mlp_ratio=4.0,
         learn_sigma=False,
+        y_channels=None,
         **kwargs,
     ):
         super().__init__()
@@ -885,7 +886,7 @@ class CrossDiT(nn.Module):
 
         self.x_embedder = PatchEmbed(in_channels, hidden_size, max_input_size, 1)
         self.t_embedder = TimestepEmbedder(hidden_size)
-        self.y_embedder = nn.Sequential(nn.Linear(in_channels, hidden_size, bias=True), nn.LayerNorm(hidden_size, eps=1e-6))
+        self.y_embedder = nn.Sequential(nn.Linear(in_channels if y_channels is None else y_channels, hidden_size, bias=True), nn.LayerNorm(hidden_size, eps=1e-6))
         # Will use fixed sin-cos embedding:
         self.pos_embed = nn.Parameter(torch.zeros(1, max_input_size, hidden_size), requires_grad=False)
 
