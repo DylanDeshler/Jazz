@@ -1201,10 +1201,10 @@ class MaskLAM(nn.Module):
 
         return self.diffusion.mask_mae_loss(self.decoder, x, target, mask.long(), net_kwargs={'y': tokens})
     
-    def forward(self, x):
-        tokens, _ = self.encode_actions(x)
+    # def forward(self, x):
+    #     tokens, _ = self.encode_actions(x)
 
-        return self.diffusion.loss(self.decoder, x, net_kwargs={'y': tokens})
+    #     return self.diffusion.loss(self.decoder, x, net_kwargs={'y': tokens})
     
     def generate_random_different_actions(self, actions_indices, codebook_size, device):
         shape = actions_indices.shape
