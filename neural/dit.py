@@ -1197,7 +1197,7 @@ class MaskLAM(nn.Module):
             mask[i, start:start + lens[i]] = True
         
         print(x.shape, mask.shape, self.mask_token.shape)
-        x[mask] = self.mask_token.repeat(x.shape[0], x.shape[1], 1)
+        x[mask] = self.mask_token#.repeat(x.shape[0], x.shape[1], 1)
 
         return self.diffusion.mask_mae_loss(self.decoder, x, target, mask.long(), net_kwargs={'y': tokens})
     
