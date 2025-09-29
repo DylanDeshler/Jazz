@@ -1198,7 +1198,7 @@ class MaskLAM(nn.Module):
             start = np.random.randint(0, L - lens[i] + 1)
             mask[i, start:start + lens[i]] = True
         
-        x[mask] = self.mask_token
+        x[mask] = self.mask_token;print(x.shape, target.shape, mask.shape)
 
         return self.diffusion.mask_target_loss(self.decoder, x, target, mask.long(), net_kwargs={'y': tokens})
     
