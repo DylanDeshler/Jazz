@@ -1042,19 +1042,164 @@ class InpaintingLAM(nn.Module):
 
         return tokens, indices
 
-    # def forward(self, x):
-    #     B, L, _ = x.shape
+    def forward(self, x):
+        B, L, _ = x.shape
 
-    #     tokens, _ = self.encode_actions(x)
+        tokens, _ = self.encode_actions(x)
         
-    #     mask = torch.zeros(B, L, 1, dtype=torch.bool, device=x.device)
-    #     lens = np.random.randint(self.min_block_size, self.max_block_size + 1, (B,))
+        mask = torch.zeros(B, L, 1, dtype=torch.bool, device=x.device)
+        lens = np.random.randint(self.min_block_size, self.max_block_size + 1, (B,))
 
-    #     for i in range(B):
-    #         start = np.random.randint(0, L - lens[i] + 1)
-    #         mask[i, start:start + lens[i]] = True
+        for i in range(B):
+            start = np.random.randint(0, L - lens[i] + 1)
+            mask[i, start:start + lens[i]] = True
 
-    #     return self.diffusion.mask_loss(self.decoder, x, mask.long(), net_kwargs={'y': tokens})
+        return self.diffusion.mask_loss(self.decoder, x, mask.long(), net_kwargs={'y': tokens})
+    
+    def forward(self, x):
+        tokens, _ = self.encode_actions(x)
+
+        return self.diffusion.loss(self.decoder, x, net_kwargs={'y': tokens})
+    
+    def generate_random_different_actions(self, actions_indices, codebook_size, device):
+        shape = actions_indices.shape
+        random_actions = torch.randint(0, codebook_size, shape, device=device)
+
+        while torch.any(random_actions == actions_indices):
+            random_actions = torch.where(
+                random_actions == actions_indices,
+                torch.randint(0, codebook_size, shape, device=device),
+                random_actions,
+            )
+
+        return random_actions
+    
+    def lam_vs_random_actions(self, latents, mask, n_steps=50):
+        action_tokens, action_indices = self.encode_actions(latents)
+
+        # generate random actions
+        random_actions_indices = self.generate_random_different_actions(action_indices, self.vq.codebook_size, latents.device)
+        random_action_tokens = self.vq.indices_to_codes(random_actions_indices)
+
+        # decode actions
+        recon_latents = self.sampler.inpaint(self.decoder, latents, mask.long(), n_steps=n_steps, net_kwargs={'y': action_tokens}, clean=True)
+        # decode random actions
+        random_recon_latents = self.sampler.inpaint(self.decoder, latents, mask.long(), n_steps=n_steps, net_kwargs={'y': random_action_tokens}, clean=True)
+
+        return recon_latents, random_recon_latents
+
+class MaskLAM(nn.Module):
+
+    def __init__(self, 
+        max_input_size=250,
+        in_channels=128, 
+        encoder_hidden_size=1152,
+        decoder_hidden_size=1152,
+        encoder_depth=12,
+        decoder_depth=12,
+        encoder_num_heads=12,
+        decoder_num_heads=12,
+        levels=[5, 5],
+        window_size=8,
+        min_block_size=None,
+        max_block_size=None,
+        ):
+        super().__init__()
+
+        self.encoder = Transformer(max_input_size=max_input_size, depth=encoder_depth, in_channels=in_channels, hidden_size=encoder_hidden_size, num_heads=encoder_num_heads, local_window=1)
+        self.decoder = CrossDiT(max_input_size=max_input_size, depth=decoder_depth, in_channels=in_channels, hidden_size=decoder_hidden_size, num_heads=decoder_num_heads)
+
+        self.max_input_size = max_input_size
+        self.window_size = window_size
+        self.min_block_size = min_block_size if min_block_size is not None else window_size
+        self.max_block_size = max_block_size if max_block_size is not None else max_input_size
+        
+        self.to_action_emb = nn.Sequential(
+            Rearrange("b (t1 t2) d -> b t1 (t2 d)", t1=max_input_size // window_size, t2=window_size),
+            nn.Linear(window_size * in_channels, in_channels),
+            nn.LayerNorm(in_channels)
+        )
+        self.vq = FSQ(levels=levels, dim=in_channels)
+        self.mask_token = nn.Parameter(torch.zeros(1, 1, decoder_hidden_size))
+
+        self.attn_mask = self.register_buffer('attn_mask', self.block_attention_mask())
+        self.diffusion = FM(timescale=1000.0)
+        self.sampler = FMEulerSampler(self.diffusion)
+        
+        self.initialize_weights()
+    
+    def block_attention_mask(self) -> torch.Tensor:
+        """
+        Create a block-diagonal attention mask.
+        Each block of `window_size` allows full attention internally,
+        but no attention across blocks.
+
+        Args:
+            seq_len (int): total sequence length
+            window_size (int): block size
+
+        Returns:
+            mask (torch.Tensor): (seq_len, seq_len) boolean mask
+                                True = keep, False = mask
+        """
+        assert self.max_input_size % self.window_size == 0, "Sequence length must be divisible by window_size"
+        n_blocks = self.max_input_size // self.window_size
+
+        # Identity matrix of blocks (n_blocks x n_blocks)
+        block_mask = torch.eye(n_blocks, dtype=torch.bool)
+
+        # Expand to (seq_len, seq_len) by Kronecker product
+        full_mask = torch.kron(block_mask, torch.ones((self.window_size, self.window_size), dtype=torch.bool))
+        
+        return full_mask
+    
+    def initialize_weights(self):
+        # Initialize transformer layers:
+        def _basic_init(module):
+            if isinstance(module, nn.Linear):
+                torch.nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+        self.apply(_basic_init)
+        nn.init.normal_(self.mask_token, std=0.02)
+        self.encoder.initialize_weights()
+        self.decoder.initialize_weights()
+
+    @torch.no_grad()
+    def encode_action_indices(self, x):
+        z = self.encoder(x, attn_mask=self.attn_mask)
+
+        tokens = self.to_action_emb(z)
+        tokens, indices = self.vq(tokens)
+
+        return indices
+    
+    def encode_actions(self, x):
+        z = self.encoder(x, attn_mask=self.attn_mask)
+
+        # action embeddings
+        tokens = self.to_action_emb(z)
+        tokens, indices = self.vq(tokens)
+
+        return tokens, indices
+
+    def forward(self, x):
+        target = x.clone()
+        B, L, _ = x.shape
+
+        tokens, _ = self.encode_actions(x)
+        tokens = repeat(tokens, "b t1 d -> b (t1 t2) d", t2=self.window_size)
+        
+        mask = torch.zeros(B, L, 1, dtype=torch.bool, device=x.device)
+        lens = np.random.randint(self.min_block_size, self.max_block_size + 1, (B,))
+
+        for i in range(B):
+            start = np.random.randint(0, L - lens[i] + 1)
+            mask[i, start:start + lens[i]] = True
+        
+        x[mask] = self.mask_token
+
+        return self.diffusion.mask_mae_loss(self.decoder, x, target, mask.long(), net_kwargs={'y': tokens})
     
     def forward(self, x):
         tokens, _ = self.encode_actions(x)
@@ -1873,6 +2018,9 @@ def DiT_S_4(**kwargs):
 
 def DiT_S_8(**kwargs):
     return DiTWrapper(depth=12, hidden_size=384, patch_size=8, num_heads=6, **kwargs)
+
+def MaskLAM_M(**kwargs):
+    return MaskLAM(encoder_depth=12, encoder_hidden_size=768, encoder_num_heads=12, decoder_depth=20, decoder_hidden_size=768, decoder_num_heads=12, **kwargs)
 
 def InpaintingLAM_L(**kwargs):
     return InpaintingLAM(depth=24, hidden_size=1024, num_heads=16, **kwargs)
