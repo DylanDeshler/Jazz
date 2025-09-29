@@ -1189,7 +1189,7 @@ class MaskLAM(nn.Module):
 
         tokens, _ = self.encode_actions(x)
         
-        mask = torch.zeros(B, L, 1, dtype=torch.bool, device=x.device)
+        mask = torch.zeros(B, L, dtype=torch.bool, device=x.device)
         lens = np.random.randint(self.min_block_size, self.max_block_size + 1, (B,))
 
         for i in range(B):
