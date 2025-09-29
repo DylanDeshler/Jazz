@@ -325,11 +325,11 @@ class CrossDiTBlock(nn.Module):
         shift_msa, scale_msa, gate_msa, shift_mca, scale_mca, gate_mca, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(t).chunk(9, dim=-1)
         if t.ndim == 3:
             x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), attn_mask=attn_mask)
-            x = x + gate_mca * self.cross_attn(modulate(self.norm2(x), shift_mca, scale_mca), context, attn_mask=attn_mask)
+            x = x + gate_mca * self.cross_attn(modulate(self.norm2(x), shift_mca, scale_mca), context)
             x = x + gate_mlp * self.mlp(modulate(self.norm3(x), shift_mlp, scale_mlp))
         else:
             x = x + gate_msa.unsqueeze(1) * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), attn_mask=attn_mask)
-            x = x + gate_mca.unsqueeze(1) * self.cross_attn(modulate(self.norm2(x), shift_mca, scale_mca), context, attn_mask=attn_mask)
+            x = x + gate_mca.unsqueeze(1) * self.cross_attn(modulate(self.norm2(x), shift_mca, scale_mca), context)
             x = x + gate_mlp.unsqueeze(1) * self.mlp(modulate(self.norm3(x), shift_mlp, scale_mlp))
         return x
 
@@ -530,6 +530,7 @@ class Transformer(nn.Module):
         self,
         max_input_size=250,
         in_channels=128,
+        out_channels=128,
         hidden_size=1152,
         depth=28,
         num_heads=16,
@@ -548,7 +549,7 @@ class Transformer(nn.Module):
             TransformerBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
         self.final_norm = nn.LayerNorm(hidden_size, eps=1e-6)
-        self.final_layer = nn.Linear(hidden_size, in_channels, bias=True)
+        self.final_layer = nn.Linear(hidden_size, out_channels, bias=True)
         self.initialize_weights()
 
     def initialize_weights(self):
@@ -867,6 +868,7 @@ class CrossDiT(nn.Module):
         self,
         max_input_size=250,
         in_channels=128,
+        out_channels=128,
         hidden_size=1152,
         depth=28,
         num_heads=16,
@@ -877,7 +879,7 @@ class CrossDiT(nn.Module):
         super().__init__()
         self.learn_sigma = learn_sigma
         self.in_channels = in_channels
-        self.out_channels = in_channels * 2 if learn_sigma else in_channels
+        self.out_channels = out_channels * 2 if learn_sigma else out_channels
         self.num_heads = num_heads
         self.max_input_size = max_input_size
 
@@ -1106,8 +1108,8 @@ class MaskLAM(nn.Module):
         ):
         super().__init__()
 
-        self.encoder = Transformer(max_input_size=max_input_size, depth=encoder_depth, in_channels=in_channels, hidden_size=encoder_hidden_size, num_heads=encoder_num_heads, local_window=1)
-        self.decoder = CrossDiT(max_input_size=max_input_size, depth=decoder_depth, in_channels=in_channels, hidden_size=decoder_hidden_size, num_heads=decoder_num_heads)
+        self.encoder = Transformer(max_input_size=max_input_size, depth=encoder_depth, in_channels=in_channels, out_channels=decoder_hidden_size, hidden_size=encoder_hidden_size, num_heads=encoder_num_heads, local_window=1)
+        self.decoder = CrossDiT(max_input_size=max_input_size, depth=decoder_depth, in_channels=decoder_hidden_size, out_channels=in_channels, hidden_size=decoder_hidden_size, num_heads=decoder_num_heads)
 
         self.max_input_size = max_input_size
         self.window_size = window_size
@@ -1116,11 +1118,11 @@ class MaskLAM(nn.Module):
         
         self.to_action_emb = nn.Sequential(
             Rearrange("b (t1 t2) d -> b t1 (t2 d)", t1=max_input_size // window_size, t2=window_size),
-            nn.Linear(window_size * in_channels, in_channels),
-            nn.LayerNorm(in_channels)
+            nn.Linear(window_size * decoder_hidden_size, decoder_hidden_size),
+            nn.LayerNorm(decoder_hidden_size)
         )
-        self.vq = FSQ(levels=levels, dim=in_channels)
-        self.mask_token = nn.Parameter(torch.zeros(1, 1, in_channels))
+        self.vq = FSQ(levels=levels, dim=decoder_hidden_size)
+        self.mask_token = nn.Parameter(torch.zeros(1, 1, decoder_hidden_size))
 
         self.attn_mask = self.register_buffer('attn_mask', self.block_attention_mask())
         self.diffusion = FM(timescale=1000.0)
@@ -1198,7 +1200,7 @@ class MaskLAM(nn.Module):
         
         x[mask] = self.mask_token
 
-        return self.diffusion.mask_mae_loss(self.decoder, x, target, mask.long(), net_kwargs={'y': tokens})
+        return self.diffusion.mask_target_loss(self.decoder, x, target, mask.long(), net_kwargs={'y': tokens})
     
     # def forward(self, x):
     #     tokens, _ = self.encode_actions(x)
