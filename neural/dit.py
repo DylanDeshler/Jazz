@@ -1225,10 +1225,12 @@ class MaskLAM(nn.Module):
         random_actions_indices = self.generate_random_different_actions(action_indices, self.vq.codebook_size, latents.device)
         random_action_tokens = self.vq.indices_to_codes(random_actions_indices)
 
+        latents[mask] = self.mask_token
+
         # decode actions
-        recon_latents = self.sampler.inpaint(self.decoder, latents, mask.long(), n_steps=n_steps, net_kwargs={'y': action_tokens}, clean=True)
+        recon_latents = self.sampler.inpaint(self.decoder, latents, mask.long(), n_steps=n_steps, net_kwargs={'y': action_tokens})
         # decode random actions
-        random_recon_latents = self.sampler.inpaint(self.decoder, latents, mask.long(), n_steps=n_steps, net_kwargs={'y': random_action_tokens}, clean=True)
+        random_recon_latents = self.sampler.inpaint(self.decoder, latents, mask.long(), n_steps=n_steps, net_kwargs={'y': random_action_tokens})
 
         return recon_latents, random_recon_latents
 
