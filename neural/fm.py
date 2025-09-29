@@ -98,13 +98,13 @@ class FM:
         
         dif_target = self.A(t) * target + self.B(t) * noise # -dxt/dt
         if return_loss_unreduced:
-            loss = ((pred.float() - dif_target.float()) ** 2)[~mask].mean(dim=[1, 2]) + 0.1 * ((pred.float() - self.add_noise(target).float()) ** 2)[mask].mean(dim=[1, 2])
+            loss = ((pred.float() - dif_target.float()) ** 2)[~mask].mean(dim=[1, 2]) + 0.1 * ((pred.float() - self.add_noise(target, t).float()) ** 2)[mask].mean(dim=[1, 2])
             if return_all:
                 return loss, t, x_t, pred
             else:
                 return loss, t
         else:
-            loss = ((pred.float() - dif_target.float()) ** 2)[~mask] + 0.1 * ((pred.float() - self.add_noise(target).float()) ** 2)[mask].mean()
+            loss = ((pred.float() - dif_target.float()) ** 2)[~mask] + 0.1 * ((pred.float() - self.add_noise(target, t).float()) ** 2)[mask].mean()
             if return_all:
                 return loss, x_t, pred
             else:
