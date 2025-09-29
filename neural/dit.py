@@ -1120,7 +1120,7 @@ class MaskLAM(nn.Module):
             nn.LayerNorm(in_channels)
         )
         self.vq = FSQ(levels=levels, dim=in_channels)
-        self.mask_token = nn.Parameter(torch.zeros(1, 1, decoder_hidden_size))
+        self.mask_token = nn.Parameter(torch.zeros(1, 1, in_channels))
 
         self.attn_mask = self.register_buffer('attn_mask', self.block_attention_mask())
         self.diffusion = FM(timescale=1000.0)
