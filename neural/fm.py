@@ -104,7 +104,7 @@ class FM:
             else:
                 return loss, t
         else:
-            loss = ((pred.float() - dif_target.float()) ** 2)[~mask] + 0.1 * ((pred.float() - self.add_noise(target, t)[0].float()) ** 2)[mask].mean()
+            loss = ((pred.float() - dif_target.float()) ** 2)[~mask].mean() + 0.1 * ((pred.float() - self.add_noise(target, t)[0].float()) ** 2)[mask].mean()
             if return_all:
                 return loss, x_t, pred
             else:
