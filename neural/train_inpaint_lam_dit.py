@@ -357,6 +357,13 @@ while True:
                 if iter_num % save_interval == 0 and master_process == 0:
                     torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
     if iter_num == 0 and eval_only:
+        delta_psnrs = []
+        for _ in range(5):
+            X = get_batch('test') 
+            model.eval()
+            with ctx:
+                delta_psnrs.append(generate_lam_vs_random_actions(X, iter_num))
+        print(f'Delta PSNR MEAN: {np.mean(delta_psnrs):.4f}, STD: {np.std(delta_psnrs):.4f}')
         break
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
