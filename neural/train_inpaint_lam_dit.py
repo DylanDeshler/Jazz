@@ -242,7 +242,7 @@ def get_lr(it):
     return min_lr + coeff * (learning_rate - min_lr)
 
 @torch.no_grad()
-def generate_lam_vs_random_actions(x, step):
+def generate_lam_vs_random_actions(x, step, save=True):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
 
@@ -263,13 +263,14 @@ def generate_lam_vs_random_actions(x, step):
     recon_psnr = psnr(x[:, total_seconds // 4 * 16000:3 * 16000 * total_seconds // 4], recon[:, total_seconds // 4 * 16000:3 * 16000 * total_seconds // 4])
     random_psnr = psnr(x[:, total_seconds // 4 * 16000:3 * 16000 * total_seconds // 4], random_recon[:, total_seconds // 4 * 16000:3 * 16000 * total_seconds // 4])
 
-    for i in range(B):
-        og, y, random_y = x[i], recon[i], random_recon[i]
+    if save:
+        for i in range(B):
+            og, y, random_y = x[i], recon[i], random_recon[i]
 
-        # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), og, 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_y, 16000)
+            # save .wavs
+            sf.write(os.path.join(batch_dir, f'{i}_real.wav'), og, 16000)
+            sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, 16000)
+            sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_y, 16000)
     
     return np.mean(recon_psnr - random_psnr).item()
 
