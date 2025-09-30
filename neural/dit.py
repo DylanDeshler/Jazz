@@ -1230,10 +1230,11 @@ class MaskLAM(nn.Module):
 
         latents[mask] = self.mask_token
 
+        noise = torch.randn(latents.shape, device=latents.device)
         # decode actions
-        recon_latents = self.sampler.inpaint(self.decoder, latents, mask.long(), n_steps=n_steps, net_kwargs={'y': action_tokens})
+        recon_latents = self.sampler.inpaint(self.decoder, latents, mask.long(), n_steps=n_steps, net_kwargs={'y': action_tokens}, noise=noise)
         # decode random actions
-        random_recon_latents = self.sampler.inpaint(self.decoder, latents, mask.long(), n_steps=n_steps, net_kwargs={'y': random_action_tokens})
+        random_recon_latents = self.sampler.inpaint(self.decoder, latents, mask.long(), n_steps=n_steps, net_kwargs={'y': random_action_tokens}, noise=noise)
 
         return recon_latents, random_recon_latents
 
