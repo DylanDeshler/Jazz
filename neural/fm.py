@@ -91,13 +91,13 @@ class FM:
         
         target = self.A(t) * target + self.B(t) * noise # -dxt/dt
         if return_loss_unreduced:
-            loss = (((pred.float() - target.float()) ** 2) * mask).sum(dim=[1, 2]) / mask.sum(dim=[1, 2])
+            loss = (((pred.float() - target.float()) ** 2) * mask).sum(dim=[1, 2]) / (target.shape[-1] * mask.sum(dim=[1, 2]))
             if return_all:
                 return loss, t, x_t, pred
             else:
                 return loss, t
         else:
-            loss = (((pred.float() - target.float()) ** 2) * mask).sum() / mask.sum()
+            loss = (((pred.float() - target.float()) ** 2) * mask).sum() / (target.shape[-1] * mask.sum())
             if return_all:
                 return loss, x_t, pred
             else:
