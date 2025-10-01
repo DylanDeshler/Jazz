@@ -1350,6 +1350,7 @@ class ConcatMaskLAM(nn.Module):
             start = np.random.randint(0, L - lens[i] + 1)
             mask[i, start:start + lens[i]] = True
 
+        print(x.shape, tokens.shape)
         x[mask] = self.mask_token
         x = torch.cat([x, tokens], dim=-1)
 
