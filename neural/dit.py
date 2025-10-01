@@ -1469,6 +1469,7 @@ class ConcatMaskLAM(nn.Module):
         # decode actions
         recon_latents = self.sampler.inpaint(self.decoder, latents, mask.long(), n_steps=n_steps, noise=noise, net_kwargs={'y': action_tokens})
         # decode random actions
+        print(latents.shape, noise.shape, random_action_tokens.shape)
         random_recon_latents = self.sampler.inpaint(self.decoder, latents, mask.long(), n_steps=n_steps, noise=noise, net_kwargs={'y': random_action_tokens})
 
         return recon_latents, random_recon_latents
