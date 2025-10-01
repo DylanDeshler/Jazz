@@ -80,6 +80,8 @@ class FM:
     def concat_loss(self, net, x, target, mask, t=None, net_kwargs=None, return_loss_unreduced=False, return_all=False):
         if net_kwargs is None:
             net_kwargs = {}
+        if mask.ndim == 2:
+            mask = mask.unsqueeze(-1)
         
         if t is None:
             t = torch.rand(x.shape[0], device=x.device)
