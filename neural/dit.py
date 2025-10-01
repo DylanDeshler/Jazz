@@ -1258,7 +1258,7 @@ class ConcatMaskLAM(nn.Module):
         super().__init__()
 
         self.encoder = Transformer(max_input_size=max_input_size, depth=encoder_depth, in_channels=in_channels, out_channels=decoder_hidden_size, hidden_size=encoder_hidden_size, num_heads=encoder_num_heads, local_window=1)
-        self.decoder = DiT(max_input_size=max_input_size + max_input_size // window_size, depth=decoder_depth, in_channels=2 * in_channels, out_channels=in_channels, hidden_size=decoder_hidden_size, num_heads=decoder_num_heads)
+        self.decoder = DiT(max_input_size=max_input_size, depth=decoder_depth, in_channels=2 * in_channels, out_channels=in_channels, hidden_size=decoder_hidden_size, num_heads=decoder_num_heads)
 
         self.max_input_size = max_input_size
         self.window_size = window_size
