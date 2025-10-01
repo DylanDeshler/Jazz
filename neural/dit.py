@@ -1353,6 +1353,7 @@ class ConcatMaskLAM(nn.Module):
         print(x.shape, tokens.shape)
         x[mask] = self.mask_token
         x = torch.cat([x, tokens], dim=-1)
+        print(x.shape)
 
         return self.diffusion.concat_loss(self.decoder, x, target, mask.long())
     
