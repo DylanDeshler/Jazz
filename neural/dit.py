@@ -527,6 +527,94 @@ class DiT(nn.Module):
         eps = torch.cat([half_eps, half_eps], dim=0)
         return torch.cat([eps, rest], dim=1)
 
+class ChannelDiT(nn.Module):
+    """
+    Diffusion model with a Transformer backbone.
+    """
+    def __init__(
+        self,
+        max_input_size=250,
+        in_channels=128,
+        hidden_size=1152,
+        depth=28,
+        num_heads=16,
+        mlp_ratio=4.0,
+        learn_sigma=False,
+        local_window=1,
+        out_channels=None,
+        **kwargs,
+    ):
+        super().__init__()
+        self.learn_sigma = learn_sigma
+        self.in_channels = in_channels
+        out_channels = in_channels if out_channels is None else out_channels
+        self.out_channels = out_channels * 2 if learn_sigma else out_channels
+        self.num_heads = num_heads
+        self.max_input_size = max_input_size
+
+        self.x_embedder = PatchEmbed(in_channels, hidden_size, max_input_size, local_window)
+        self.t_embedder = TimestepEmbedder(hidden_size)
+        # Will use fixed sin-cos embedding:
+        self.pos_embed = nn.Parameter(torch.zeros(1, max_input_size // local_window, hidden_size), requires_grad=False)
+
+        self.blocks = nn.ModuleList([
+            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+        ])
+        self.final_layer = FinalLayer(hidden_size, self.out_channels, local_window=local_window)
+        self.unpatchify = Rearrange("b t1 (t2 d) -> b (t1 t2) d", t2=local_window)
+        self.initialize_weights()
+    
+    def initialize_weights(self):
+        # Initialize transformer layers:
+        def _basic_init(module):
+            if isinstance(module, nn.Linear):
+                torch.nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+        self.apply(_basic_init)
+
+        # Initialize (and freeze) pos_embed by sin-cos embedding:
+        pos_embed = get_1d_sincos_pos_embed(self.pos_embed.shape[-1], self.pos_embed.shape[-2])
+        self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
+
+        # Initialize patch_embed like nn.Linear (instead of nn.Conv2d):
+        # w = self.x_embedder.proj.weight.data
+        # nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
+        # nn.init.constant_(self.x_embedder.proj.bias, 0)
+        nn.init.xavier_uniform_(self.x_embedder.proj.weight.data)
+        nn.init.constant_(self.x_embedder.proj.bias, 0)
+
+        # Initialize timestep embedding MLP:
+        nn.init.normal_(self.t_embedder.mlp[0].weight, std=0.02)
+        nn.init.normal_(self.t_embedder.mlp[2].weight, std=0.02)
+
+        # Zero-out adaLN modulation layers in DiT blocks:
+        for block in self.blocks:
+            nn.init.constant_(block.adaLN_modulation[-1].weight, 0)
+            nn.init.constant_(block.adaLN_modulation[-1].bias, 0)
+
+        # Zero-out output layers:
+        nn.init.constant_(self.final_layer.adaLN_modulation[-1].weight, 0)
+        nn.init.constant_(self.final_layer.adaLN_modulation[-1].bias, 0)
+        nn.init.constant_(self.final_layer.linear.weight, 0)
+        nn.init.constant_(self.final_layer.linear.bias, 0)
+
+    def forward(self, x, t, y, attn_mask=None):
+        """
+        Forward pass of DiT.
+        x: (N, C, H, W) tensor of spatial inputs (images or latent representations of images)
+        t: (N,) tensor of diffusion timesteps
+        y: (N,) tensor of class labels
+        """
+        x = torch.cat([x, y], dim=-1)
+        x = self.x_embedder(x) + self.pos_embed[:, :x.shape[1]]  # (N, T, D), where T = H * W / patch_size ** 2
+        t = self.t_embedder(t)                   # (N, D)
+        for block in self.blocks:
+            x = block(x, t, attn_mask=attn_mask)                      # (N, T, D)
+        x = self.final_layer(x, t)               # (N, T, patch_size ** 2 * out_channels)
+        x = self.unpatchify(x)                   # (N, out_channels, H, W)
+        return x
+
 class Transformer(nn.Module):
     def __init__(
         self,
@@ -1258,7 +1346,7 @@ class ConcatMaskLAM(nn.Module):
         super().__init__()
 
         self.encoder = Transformer(max_input_size=max_input_size, depth=encoder_depth, in_channels=in_channels, out_channels=decoder_hidden_size, hidden_size=encoder_hidden_size, num_heads=encoder_num_heads, local_window=1)
-        self.decoder = DiT(max_input_size=max_input_size, depth=decoder_depth, in_channels=in_channels, out_channels=in_channels, hidden_size=decoder_hidden_size, num_heads=decoder_num_heads)
+        self.decoder = ChannelDiT(max_input_size=max_input_size, depth=decoder_depth, in_channels=2*in_channels, out_channels=in_channels, hidden_size=decoder_hidden_size, num_heads=decoder_num_heads)
 
         self.max_input_size = max_input_size
         self.window_size = window_size
@@ -1271,8 +1359,8 @@ class ConcatMaskLAM(nn.Module):
             nn.LayerNorm(decoder_hidden_size)
         )
         self.vq = FSQ(levels=levels, dim=decoder_hidden_size)
-        self.action_proj = nn.Linear(decoder_hidden_size, in_channels // 2) # this bottleneck could pose a large problem...
-        self.mask_token = nn.Parameter(torch.zeros(1, 1, in_channels // 2))
+        self.action_proj = nn.Linear(decoder_hidden_size, in_channels) # this bottleneck could pose a large problem...
+        self.mask_token = nn.Parameter(torch.zeros(1, 1, in_channels))
 
         self.attn_mask = self.register_buffer('attn_mask', self.block_attention_mask())
         self.diffusion = FM(timescale=1000.0)
@@ -1351,9 +1439,8 @@ class ConcatMaskLAM(nn.Module):
             mask[i, start:start + lens[i]] = True
 
         x[mask] = self.mask_token
-        x = torch.cat([x, tokens], dim=-1)
 
-        return self.diffusion.concat_loss(self.decoder, x, target, mask.long())
+        return self.diffusion.concat_loss(self.decoder, x, target, mask.long(), net_kwargs={'y': tokens})
     
     def generate_random_different_actions(self, actions_indices, codebook_size, device):
         shape = actions_indices.shape
@@ -1379,11 +1466,9 @@ class ConcatMaskLAM(nn.Module):
         noise = torch.randn(latents.shape, device=latents.device)
 
         # decode actions
-        action_latents = torch.cat([latents, action_tokens], dim=-1)
-        recon_latents = self.sampler.inpaint(self.decoder, action_latents, mask.long(), n_steps=n_steps, noise=noise)
+        recon_latents = self.sampler.inpaint(self.decoder, latents, mask.long(), n_steps=n_steps, noise=noise, net_kwargs={'y': action_tokens})
         # decode random actions
-        random_latents = torch.cat([latents, random_action_tokens], dim=-1)
-        random_recon_latents = self.sampler.inpaint(self.decoder, random_latents, mask.long(), n_steps=n_steps, noise=noise)
+        random_recon_latents = self.sampler.inpaint(self.decoder, latents, mask.long(), n_steps=n_steps, noise=noise, net_kwargs={'y': random_action_tokens})
 
         return recon_latents, random_recon_latents
 
