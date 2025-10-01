@@ -321,7 +321,7 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        # losses = estimate_loss()
+        losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
             X = get_batch('test')[:10] 
             model.eval()
