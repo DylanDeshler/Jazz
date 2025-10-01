@@ -1405,14 +1405,14 @@ class ConcatMaskLAM(nn.Module):
         self.encoder.initialize_weights()
         self.decoder.initialize_weights()
 
-    @torch.no_grad()
-    def encode_action_indices(self, x):
-        z = self.encoder(x, attn_mask=self.attn_mask)
+    # @torch.no_grad()
+    # def encode_action_indices(self, x):
+    #     z = self.encoder(x, attn_mask=self.attn_mask)
 
-        tokens = self.to_action_emb(z)
-        tokens, indices = self.vq(tokens)
+    #     tokens = self.to_action_emb(z)
+    #     tokens, indices = self.vq(tokens)
 
-        return indices
+    #     return indices
     
     def encode_actions(self, x):
         z = self.encoder(x, attn_mask=self.attn_mask)
@@ -1422,6 +1422,7 @@ class ConcatMaskLAM(nn.Module):
         tokens, indices = self.vq(tokens)
         tokens = self.action_proj(tokens)
         tokens = repeat(tokens, "b t1 d -> b (t1 t2) d", t2=self.window_size)
+        indices = repeat(indices, "b t1 -> b (t1 t2)", t2=self.window_size)
 
         return tokens, indices
 
