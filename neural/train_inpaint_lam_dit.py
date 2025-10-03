@@ -38,7 +38,7 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'concat_mask_lam_dit'
+out_dir = 'class_concat_mask_lam_dit'
 eval_interval = 1000
 sample_interval = 5000
 log_interval = 100
@@ -46,7 +46,7 @@ save_interval = 10000
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -131,15 +131,19 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 def get_batch(split='train'):
     if split == 'train':
         data = np.memmap('/home/dylan.d/research/music/Jazz/latents/high_train.bin', dtype=np.float32, mode='r', shape=(51548736, vae_embed_dim))
+        labels = np.memmap('/home/dylan.d/research/music/Jazz/latents/high_instruments_train.bin', dtype=np.uint8, mode='r', shape=(51548736, 26))
         idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
         x = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-        return x
+        labels = torch.from_numpy(np.stack([labels[idx] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+        return x, labels
     
     else:
         data = np.memmap('/home/dylan.d/research/music/Jazz/latents/high_val.bin', dtype=np.float32, mode='r', shape=(1119840, vae_embed_dim))
+        labels = np.memmap('/home/dylan.d/research/music/Jazz/latents/high_instruments_val.bin', dtype=np.uint8, mode='r', shape=(1119840, 26))
         idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
         x = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-        return x
+        labels = torch.from_numpy(np.stack([labels[idx] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+        return x, labels
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
@@ -219,9 +223,9 @@ def estimate_loss():
     for split in ['train', 'val']:
         losses = torch.zeros(eval_iters * gradient_accumulation_steps)
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
-            X = get_batch(split)
+            X, y = get_batch(split)
             with ctx:
-                loss = model(X)
+                loss = model(X, y)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -290,7 +294,7 @@ step2 = 5001
 step3 = 8001
 step4 = 70001
 
-X = get_batch('train') # fetch the very first batch
+X, y = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
@@ -323,7 +327,7 @@ while True:
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
-            X = get_batch('test')[:10] 
+            X, y = get_batch('test')[:10] 
             model.eval()
             with ctx:
                 delta_psnr = generate_lam_vs_random_actions(X, iter_num)
@@ -360,7 +364,7 @@ while True:
     if iter_num == 0 and eval_only:
         delta_psnrs = []
         for _ in range(5):
-            X = get_batch('test') 
+            X, y = get_batch('test') 
             model.eval()
             with ctx:
                 delta_psnrs.append(generate_lam_vs_random_actions(X, iter_num))
@@ -377,10 +381,10 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            loss = model(X)
+            loss = model(X, y)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
-        X = get_batch('train')
+        X, y = get_batch('train')
         # backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
     # clip the gradient

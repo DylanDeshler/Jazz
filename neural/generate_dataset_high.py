@@ -103,7 +103,7 @@ with torch.no_grad():
         this_codes = np.concatenate(this_codes, axis=0)
         binary_instruments = np.zeros(26, dtype=np.uint8)
         binary_instruments[instruments] = 1
-        binary_instruments = np.tile(binary_instruments, (*this_codes.shape, 1))
+        binary_instruments = np.tile(binary_instruments, (this_codes[0], this_codes.shape[1], 1))
         print(this_codes.shape, binary_instruments.shape)
 
         all_codes.append(this_codes)
@@ -125,33 +125,52 @@ with torch.no_grad():
             all_codes = all_codes.reshape(all_codes.shape[0] * all_codes.shape[1], all_codes.shape[2])
             print(all_codes.shape)
 
-            filename = os.path.join(os.path.dirname(__file__), f'high_{str(write_idx).zfill(2)}.bin')
-            dtype = np.float32
-            arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_codes.shape)
+            # filename = os.path.join(os.path.dirname(__file__), f'high_{str(write_idx).zfill(2)}.bin')
+            # dtype = np.float32
+            # arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_codes.shape)
+            # arr[:] = all_codes
+            # arr.flush()
+
+            all_instruments = all_instruments.reshape(all_instruments.shape[0] * all_instruments.shape[1], all_instruments.shape[2])
+            print(all_instruments.shape)
+
+            filename = os.path.join(os.path.dirname(__file__), f'high_instruments_{str(write_idx).zfill(2)}.bin')
+            dtype = np.unit8
+            arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_instruments.shape)
             arr[:] = all_codes
             arr.flush()
 
             write_idx += 1
             write_paths.append((filename, len(all_codes)))
             all_codes = []
+            all_instruments = []
 
 # write the remaining batch
 print(f'Writing batch {write_idx}...')
 all_codes = np.concatenate(all_codes, axis=0)
-print(all_codes.shape)
+all_instruments = np.concatenate(all_instruments, axis=0)
+print(all_codes.shape, all_instruments.shape)
 
 all_codes = all_codes.reshape(all_codes.shape[0] * all_codes.shape[1], all_codes.shape[2])
-print(all_codes.shape)
+all_instruments = all_instruments.reshape(all_instruments.shape[0] * all_instruments.shape[1], all_instruments.shape[2])
+print(all_codes.shape, all_instruments.shape)
 
-filename = os.path.join(os.path.dirname(__file__), f'high_{str(write_idx).zfill(2)}.bin')
-dtype = np.float32
-arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_codes.shape)
+# filename = os.path.join(os.path.dirname(__file__), f'high_{str(write_idx).zfill(2)}.bin')
+# dtype = np.float32
+# arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_codes.shape)
+# arr[:] = all_codes
+# arr.flush()
+
+filename = os.path.join(os.path.dirname(__file__), f'high_instruments_{str(write_idx).zfill(2)}.bin')
+dtype = np.unit8
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_instruments.shape)
 arr[:] = all_codes
 arr.flush()
 
 write_idx += 1
 write_paths.append((filename, len(all_codes)))
 all_codes = []
+all_instruments = []
 
 ## uncomment if code breaks can rerun this
 # write_paths = []
@@ -162,15 +181,30 @@ all_codes = []
 #     write_paths.append((path, len(data)))
 
 # write to train.bin
+# cur_idx = 0
+# filename = os.path.join(os.path.dirname(__file__), f'high_train.bin')
+# dtype = np.float32
+# train_length = np.sum([length for path, length in write_paths[:-2]])
+# arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, 64))
+# print(arr.shape)
+
+# for path, length in write_paths[:-2]:
+#     data = np.memmap(path, dtype=dtype, mode='r', shape=(length, 64))
+
+#     arr[cur_idx:cur_idx+length] = data
+#     arr.flush()
+
+#     cur_idx += length
+
 cur_idx = 0
-filename = os.path.join(os.path.dirname(__file__), f'high_train.bin')
-dtype = np.float32
+filename = os.path.join(os.path.dirname(__file__), f'high_instruments_train.bin')
+dtype = np.uint8
 train_length = np.sum([length for path, length in write_paths[:-2]])
-arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, 64))
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, 26))
 print(arr.shape)
 
 for path, length in write_paths[:-2]:
-    data = np.memmap(path, dtype=np.float32, mode='r', shape=(length, 64))
+    data = np.memmap(path, dtype=dtype, mode='r', shape=(length, 26))
 
     arr[cur_idx:cur_idx+length] = data
     arr.flush()
@@ -178,15 +212,30 @@ for path, length in write_paths[:-2]:
     cur_idx += length
 
 # write to val.bin
+# cur_idx = 0
+# filename = os.path.join(os.path.dirname(__file__), f'high_val.bin')
+# dtype = np.float32
+# val_length = np.sum([length for path, length in write_paths[-2:]])
+# arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length, 64))
+# print(arr.shape)
+
+# for path, length in write_paths[-2:]:
+#     data = np.memmap(path, dtype=dtype, mode='r', shape=(length, 64))
+
+#     arr[cur_idx:cur_idx+length] = data
+#     arr.flush()
+
+#     cur_idx += length
+
 cur_idx = 0
-filename = os.path.join(os.path.dirname(__file__), f'high_val.bin')
+filename = os.path.join(os.path.dirname(__file__), f'high_instruments_val.bin')
 dtype = np.float32
 val_length = np.sum([length for path, length in write_paths[-2:]])
-arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length, 64))
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length, 26))
 print(arr.shape)
 
 for path, length in write_paths[-2:]:
-    data = np.memmap(path, dtype=np.float32, mode='r', shape=(length, 64))
+    data = np.memmap(path, dtype=dtype, mode='r', shape=(length, 26))
 
     arr[cur_idx:cur_idx+length] = data
     arr.flush()
