@@ -199,7 +199,6 @@ def write_instruments():
         mp3_url = card['URLS'][0]['FILE']
         out_url = '-'.join(mp3_url.split('/')[-2:])
         out_url = out_url.replace('.mp3', '.wav')
-        out_url = os.path.join(out_dir, out_url)
 
         song_instruments[out_url] = instruments
     

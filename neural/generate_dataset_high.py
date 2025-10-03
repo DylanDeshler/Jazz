@@ -1,6 +1,7 @@
 import os
 import time
 import math
+import json
 import pickle
 from contextlib import nullcontext
 from tqdm import tqdm
@@ -40,6 +41,9 @@ model.eval()
 paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
 print(len(paths))
 
+with open('/home/dylan.d/research/music/Jazz/song_instruments.json', 'r') as f:
+    song_instruments = json.load(f)
+
 test = False
 
 write_idx = 0
@@ -47,8 +51,10 @@ write_paths = []
 total_write_batches = 48
 
 all_codes = []
+all_instruments = []
 with torch.no_grad():
     for idx, path in enumerate(tqdm(paths)):
+        instruments = song_instruments[path.split('/')[-1]]
         this_codes = []
         if test:
             this_samples = []
@@ -95,7 +101,13 @@ with torch.no_grad():
             this_codes.append(codes)
 
         this_codes = np.concatenate(this_codes, axis=0)
+        binary_instruments = np.zeros(26, dtype=np.uint8)
+        binary_instruments[instruments] = 1
+        binary_instruments = np.tile(binary_instruments, (*this_codes.shape, 1))
+        print(this_codes.shape, binary_instruments.shape)
+
         all_codes.append(this_codes)
+        all_instruments.append(binary_instruments)
 
         # for testing
         if test:
