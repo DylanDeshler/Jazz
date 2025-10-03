@@ -104,7 +104,6 @@ with torch.no_grad():
         binary_instruments = np.zeros(26, dtype=np.uint8)
         binary_instruments[instruments] = 1
         binary_instruments = np.tile(binary_instruments, (this_codes.shape[0], this_codes.shape[1], 1))
-        print(this_codes.shape, binary_instruments.shape)
 
         all_codes.append(this_codes)
         all_instruments.append(binary_instruments)
