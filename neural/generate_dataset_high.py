@@ -138,7 +138,7 @@ with torch.no_grad():
             filename = os.path.join(os.path.dirname(__file__), f'high_instruments_{str(write_idx).zfill(2)}.bin')
             dtype = np.uint8
             arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_instruments.shape)
-            arr[:] = all_codes
+            arr[:] = all_instruments
             arr.flush()
 
             write_idx += 1
@@ -165,7 +165,7 @@ print(all_codes.shape, all_instruments.shape)
 filename = os.path.join(os.path.dirname(__file__), f'high_instruments_{str(write_idx).zfill(2)}.bin')
 dtype = np.uint8
 arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_instruments.shape)
-arr[:] = all_codes
+arr[:] = all_instruments
 arr.flush()
 
 write_idx += 1
