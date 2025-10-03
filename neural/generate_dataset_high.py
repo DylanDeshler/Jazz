@@ -130,6 +130,8 @@ with torch.no_grad():
             # arr[:] = all_codes
             # arr.flush()
 
+            all_instruments = np.concatenate(all_instruments, axis=0)
+            print(all_instruments.shape)
             all_instruments = all_instruments.reshape(all_instruments.shape[0] * all_instruments.shape[1], all_instruments.shape[2])
             print(all_instruments.shape)
 
@@ -228,7 +230,7 @@ for path, length in write_paths[:-2]:
 
 cur_idx = 0
 filename = os.path.join(os.path.dirname(__file__), f'high_instruments_val.bin')
-dtype = np.float32
+dtype = np.uint8
 val_length = np.sum([length for path, length in write_paths[-2:]])
 arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length, 26))
 print(arr.shape)
