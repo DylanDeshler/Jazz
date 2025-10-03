@@ -136,7 +136,7 @@ with torch.no_grad():
             print(all_instruments.shape)
 
             filename = os.path.join(os.path.dirname(__file__), f'high_instruments_{str(write_idx).zfill(2)}.bin')
-            dtype = np.unit8
+            dtype = np.uint8
             arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_instruments.shape)
             arr[:] = all_codes
             arr.flush()
@@ -163,7 +163,7 @@ print(all_codes.shape, all_instruments.shape)
 # arr.flush()
 
 filename = os.path.join(os.path.dirname(__file__), f'high_instruments_{str(write_idx).zfill(2)}.bin')
-dtype = np.unit8
+dtype = np.uint8
 arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_instruments.shape)
 arr[:] = all_codes
 arr.flush()
