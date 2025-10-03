@@ -1,6 +1,7 @@
 import requests
 from io import BytesIO
 import os
+import json
 import pickle
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -12,6 +13,38 @@ from scipy.stats import skew, kurtosis
 
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+
+instrument_name_map = {
+    "as": "Alto Saxophone",
+    "b": "Banjo or Bass (ambiguous)",
+    "b-cl": "Bass Clarinet",
+    "b-tb": "Bass Trombone",
+    "bar": "Baritone (likely Baritone Saxophone or Baritone Horn, depending on context)",
+    "bassax": "Bass Saxophone",
+    "bj": "Banjo",
+    "cello": "Cello",
+    "cl": "Clarinet",
+    "cnt": "Cornet",
+    "d": "Drums",
+    "dm": "Drums",
+    "fhr": "French Horn",
+    "fl": "Flute",
+    "g": "Guitar",
+    "p": "Piano",
+    "sb": "String Bass (Double Bass)",
+    "sop": "Soprano Saxophone",
+    "tb": "Trombone",
+    "tp": "Trumpet",
+    "ts": "Tenor Saxophone",
+    "tu": "Tuba",
+    "vcl": "Vocal (Sung voice)",
+    "vib": "Vibraphone",
+    "vln": "Violin",
+    "vo": "Vocal (possibly spoken or secondary vocal)"
+}
+
+name_class_map = {name: i + 1 for i, name in enumerate(list(set(instrument_name_map.values())))}    # + 1 so 0 is null embedding
+instrument_class_map = {instrument: name_class_map[instrument_name_map[instrument]] for instrument in instrument_name_map.keys()}
 
 def calc_features(y, sr, n_bands, cut_len, n_fft):
     S = librosa.stft(y, n_fft=n_fft)
@@ -93,13 +126,10 @@ cut_len = (rate // 512) * 5
 out_dir = f'/Users/dylan.d/Documents/research/music/jazz_data_{rate}_full_clean'
 os.makedirs(out_dir, exist_ok=True)
 
-n_samples = 5000
 counter = 0
 i = 0
 cards = pickle.load(open('/Users/dylan.d/Documents/research/music/JazzSet.0.9.pkl', "rb"))[6:]
-model = pickle.load(open('/Users/dylan.d/Documents/research/music/jazz_data_16000_noise/model.pkl', 'rb'))
-
-# cards = np.random.choice(cards, n_samples, replace=False)
+model = pickle.load(open('/Users/dylan.d/Documents/research/music/jazz_data_16000_train/model.pkl', 'rb'))
 
 def process_card(card):
     if card == False:
@@ -153,5 +183,29 @@ def run_parallel_processing(max_workers=4):
                 pbar.update(1)
                 pbar.set_postfix(pass_fraction=success_count / processed_count if processed_count else 0)
 
+def write_instruments():
+    song_instruments = {}
+    for card in cards:
+        if isinstance(card, bool):
+            continue
+
+        instruments = set(card['PERSONNEL']['INSTRUMENTS'].keys()).union(card['probable_instruments'])
+        instruments = set([instrument_class_map.get(instrument, -1) for instrument in instruments])
+        instruments = instruments - {-1}
+        instruments = list(instruments) # set is not serializable
+        if len(instruments) == 0:
+            instruments = [0]
+
+        mp3_url = card['URLS'][0]['FILE']
+        out_url = '-'.join(mp3_url.split('/')[-2:])
+        out_url = out_url.replace('.mp3', '.wav')
+        out_url = os.path.join(out_dir, out_url)
+
+        song_instruments[out_url] = instruments
+    
+    with open(os.path.join('/Users/dylan.d/Documents/research/music/jazz', 'song_instruments.json'), 'w') as f:
+        json.dump(song_instruments, f)
+
 if __name__ == '__main__':
-    run_parallel_processing(os.cpu_count() // 2)
+    write_instruments()
+    # run_parallel_processing(os.cpu_count() // 2)

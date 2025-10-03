@@ -527,6 +527,16 @@ class DiT(nn.Module):
         eps = torch.cat([half_eps, half_eps], dim=0)
         return torch.cat([eps, rest], dim=1)
 
+class ClassEmbedder(nn.Module):
+    def __init__(self, num_classes, hidden_size):
+        super().__init__()
+        self.embedding = nn.Embedding(num_classes, hidden_size)
+    
+    def forward(self, x):
+        x = self.embedding(x)
+        x = x.mean(-2)  # mean pooling over n instruments in song
+        return x
+
 class ChannelDiT(nn.Module):
     """
     Diffusion model with a Transformer backbone.
@@ -554,6 +564,7 @@ class ChannelDiT(nn.Module):
 
         self.x_embedder = PatchEmbed(in_channels, hidden_size, max_input_size, local_window)
         self.t_embedder = TimestepEmbedder(hidden_size)
+        self.c_embedder = ClassEmbedder(26, hidden_size) # 0 is null embedding
         # Will use fixed sin-cos embedding:
         self.pos_embed = nn.Parameter(torch.zeros(1, max_input_size // local_window, hidden_size), requires_grad=False)
 
@@ -588,6 +599,8 @@ class ChannelDiT(nn.Module):
         nn.init.normal_(self.t_embedder.mlp[0].weight, std=0.02)
         nn.init.normal_(self.t_embedder.mlp[2].weight, std=0.02)
 
+        torch.nn.init.normal_(self.c_embedder.embedding, mean=0.0, std=0.02)
+
         # Zero-out adaLN modulation layers in DiT blocks:
         for block in self.blocks:
             nn.init.constant_(block.adaLN_modulation[-1].weight, 0)
@@ -599,7 +612,7 @@ class ChannelDiT(nn.Module):
         nn.init.constant_(self.final_layer.linear.weight, 0)
         nn.init.constant_(self.final_layer.linear.bias, 0)
 
-    def forward(self, x, t, y, attn_mask=None):
+    def forward(self, x, t, y, c, attn_mask=None):
         """
         Forward pass of DiT.
         x: (N, C, H, W) tensor of spatial inputs (images or latent representations of images)
@@ -609,9 +622,10 @@ class ChannelDiT(nn.Module):
         x = torch.cat([x, y], dim=-1)
         x = self.x_embedder(x) + self.pos_embed[:, :x.shape[1]]  # (N, T, D), where T = H * W / patch_size ** 2
         t = self.t_embedder(t)                   # (N, D)
+        c = self.c_embedder(c)
         for block in self.blocks:
-            x = block(x, t, attn_mask=attn_mask)                      # (N, T, D)
-        x = self.final_layer(x, t)               # (N, T, patch_size ** 2 * out_channels)
+            x = block(x, t + c, attn_mask=attn_mask)                      # (N, T, D)
+        x = self.final_layer(x, t + c)               # (N, T, patch_size ** 2 * out_channels)
         x = self.unpatchify(x)                   # (N, out_channels, H, W)
         return x
 
@@ -1426,7 +1440,7 @@ class ConcatMaskLAM(nn.Module):
 
         return tokens, indices
 
-    def forward(self, x):
+    def forward(self, x, labels):
         target = x.clone()
         B, L, _ = x.shape
 
@@ -1441,7 +1455,7 @@ class ConcatMaskLAM(nn.Module):
 
         x[mask] = self.mask_token
 
-        return self.diffusion.concat_loss(self.decoder, x, target, mask.long(), net_kwargs={'y': tokens})
+        return self.diffusion.concat_loss(self.decoder, x, target, mask.long(), net_kwargs={'y': tokens, 'c': labels})
     
     def generate_random_different_actions(self, actions_indices, codebook_size, device):
         shape = actions_indices.shape
@@ -1456,7 +1470,7 @@ class ConcatMaskLAM(nn.Module):
 
         return random_actions
     
-    def lam_vs_random_actions(self, latents, mask, n_steps=50):
+    def lam_vs_random_actions(self, latents, labels, mask, n_steps=50):
         action_tokens, action_indices = self.encode_actions(latents)
 
         # generate random actions
@@ -1468,9 +1482,9 @@ class ConcatMaskLAM(nn.Module):
         noise = torch.randn(latents.shape, device=latents.device)
 
         # decode actions
-        recon_latents = self.sampler.inpaint(self.decoder, latents, mask.long(), n_steps=n_steps, noise=noise, net_kwargs={'y': action_tokens})
+        recon_latents = self.sampler.inpaint(self.decoder, latents, mask.long(), n_steps=n_steps, noise=noise, net_kwargs={'y': action_tokens, 'c': labels})
         # decode random actions
-        random_recon_latents = self.sampler.inpaint(self.decoder, latents, mask.long(), n_steps=n_steps, noise=noise, net_kwargs={'y': random_action_tokens})
+        random_recon_latents = self.sampler.inpaint(self.decoder, latents, mask.long(), n_steps=n_steps, noise=noise, net_kwargs={'y': random_action_tokens, 'c': labels})
 
         return recon_latents, random_recon_latents
 
