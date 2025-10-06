@@ -328,10 +328,10 @@ while True:
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
-            X, y = get_batch('test')[:10] 
+            X, y = get_batch('test')
             model.eval()
             with ctx:
-                delta_psnr = generate_lam_vs_random_actions(X, y, iter_num)
+                delta_psnr = generate_lam_vs_random_actions(X[:10], y[:10], iter_num)
             model.train()
             print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, delta PSNR {delta_psnr:.3f}")
         else:
