@@ -208,7 +208,6 @@ class Attention(nn.Module):
         q, k, v = qkv.unbind(0)
         # RoPE
         if freqs_cis is not None:
-            print(q.shape, k.shape) # (B, n_heads, N, head_dim)
             q = apply_rotary_emb(q.transpose(1, 2), freqs_cis).transpose(1, 2)
             k = apply_rotary_emb(k.transpose(1, 2), freqs_cis).transpose(1, 2)
 
@@ -851,7 +850,6 @@ class LightningDiT(nn.Module):
         t = self.t_embedder(t)
         c = self.c_embedder(c)
         for block in self.blocks:
-            print(x.shape, self.freqs_cis[:L].shape)
             x = block(x, t + c, freqs_cis=self.freqs_cis[:L], attn_mask=attn_mask)
         x = self.final_layer(x, t + c)
         x = self.unpatchify(x)
