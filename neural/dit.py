@@ -736,7 +736,7 @@ class ChannelDiT(nn.Module):
         nn.init.normal_(self.t_embedder.mlp[0].weight, std=0.02)
         nn.init.normal_(self.t_embedder.mlp[2].weight, std=0.02)
 
-        torch.nn.init.normal_(self.c_embedder.embedding, mean=0.0, std=0.02)
+        nn.init.normal_(self.c_embedder.embedding.weight, std=0.02)
 
         # Zero-out adaLN modulation layers in DiT blocks:
         for block in self.blocks:
@@ -824,7 +824,7 @@ class LightningDiT(nn.Module):
         nn.init.normal_(self.t_embedder.mlp[0].weight, std=0.02)
         nn.init.normal_(self.t_embedder.mlp[2].weight, std=0.02)
 
-        torch.nn.init.normal_(self.c_embedder.embedding, mean=0.0, std=0.02)
+        nn.init.normal_(self.c_embedder.embedding.weight, std=0.02)
 
         # Zero-out adaLN modulation layers in DiT blocks:
         for block in self.blocks:
@@ -959,7 +959,7 @@ class ClassTransformer(nn.Module):
         nn.init.xavier_uniform_(self.x_embedder.proj.weight.data)
         nn.init.constant_(self.x_embedder.proj.bias, 0)
 
-        nn.init.normal_(self.c_embedder.embedding, 0.02)
+        nn.init.normal_(self.c_embedder.embedding.weight, 0.02)
 
         for block in self.blocks:
             nn.init.constant_(block.adaLN_modulation[-1].weight, 0)
@@ -2707,6 +2707,9 @@ def MaskLAM_M(**kwargs):
 
 def ConcatMaskLAM_M(**kwargs):
     return ConcatMaskLAM(encoder_depth=12, encoder_hidden_size=768, encoder_num_heads=12, decoder_depth=20, decoder_hidden_size=768, decoder_num_heads=12, **kwargs)
+
+def InstrumentMaskLAM_M(**kwargs):
+    return InstrumentConcatMaskLAM(encoder_depth=12, encoder_hidden_size=768, encoder_num_heads=12, decoder_depth=20, decoder_hidden_size=768, decoder_num_heads=12, **kwargs)
 
 def InpaintingLAM_L(**kwargs):
     return InpaintingLAM(depth=24, hidden_size=1024, num_heads=16, **kwargs)
