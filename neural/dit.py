@@ -22,6 +22,7 @@ from tqdm import tqdm
 from fm import FM, FMEulerSampler
 from vector_quantize import VectorQuantize
 
+@torch.compile
 def modulate(x, shift, scale):
     if scale.ndim == 3:
         return x * (1 + scale) + shift
@@ -107,6 +108,72 @@ class LabelEmbedder(nn.Module):
 #                                 Core DiT Model                                #
 #################################################################################
 
+def apply_scaling(freqs: torch.Tensor):
+    # RoPE scaling (values obtained from grid search)
+    scale_factor = 8
+    low_freq_factor = 1
+    high_freq_factor = 4
+    old_context_len = 8192  # original llama3 length
+    low_freq_wavelen = old_context_len / low_freq_factor
+    high_freq_wavelen = old_context_len / high_freq_factor
+    new_freqs = []
+    for freq in freqs:
+        wavelen = 2 * math.pi / freq
+        if wavelen < high_freq_wavelen:
+            new_freqs.append(freq)
+        elif wavelen > low_freq_wavelen:
+            new_freqs.append(freq / scale_factor)
+        else:
+            assert low_freq_wavelen != high_freq_wavelen
+            smooth = (old_context_len / wavelen - low_freq_factor) / (
+                high_freq_factor - low_freq_factor
+            )
+            new_freqs.append((1 - smooth) * freq / scale_factor + smooth * freq)
+    return torch.tensor(new_freqs, dtype=freqs.dtype, device=freqs.device)
+
+def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0, use_scaled: bool = False):
+    freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
+    t = torch.arange(end, device=freqs.device, dtype=torch.float32)
+    if use_scaled:
+        freqs = apply_scaling(freqs)
+    freqs = torch.outer(t, freqs)
+    freqs_cis = torch.polar(torch.ones_like(freqs), freqs)  # complex64
+    freqs_cis_real = torch.stack([freqs_cis.real, freqs_cis.imag], dim=-1)
+    return freqs_cis_real
+
+def apply_rotary_emb(x, freqs_cis):
+    # shape gymnastics let's go
+    # x is (bs, seqlen, n_heads, head_dim), e.g. (4, 8, 32, 128)
+    # freqs_cis is (seq_len, head_dim/2, 2), e.g. (8, 64, 2)
+    xshaped = x.float().reshape(*x.shape[:-1], -1, 2)
+    # xshaped is (bs, seqlen, n_heads, head_dim/2, 2), e.g. (4, 8, 32, 64, 2)
+    freqs_cis = freqs_cis.view(1, xshaped.size(1), 1, xshaped.size(3), 2)
+    # freqs_cis becomes (1, seqlen, 1, head_dim/2, 2), e.g. (1, 8, 1, 64, 2)
+    x_out2 = torch.stack(
+        [
+            xshaped[..., 0] * freqs_cis[..., 0] - xshaped[..., 1] * freqs_cis[..., 1],
+            xshaped[..., 1] * freqs_cis[..., 0] + xshaped[..., 0] * freqs_cis[..., 1],
+        ],
+        -1,
+    )
+    # x_out2 at this point is (bs, seqlen, n_heads, head_dim/2, 2), e.g. (4, 8, 32, 64, 2)
+    x_out2 = x_out2.flatten(3)
+    # x_out2 is now (bs, seqlen, n_heads, head_dim), e.g. (4, 8, 32, 128)
+    return x_out2.type_as(x)
+
+class RMSNorm(nn.Module):
+    def __init__(self, dim, eps=1e-6):
+        super().__init__()
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(dim))
+    
+    def _norm(self, x):
+        return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+
+    def forward(self, x):
+        output = self._norm(x.float()).type_as(x)
+        return output * self.weight
+
 class Attention(nn.Module):
     def __init__(
             self,
@@ -132,11 +199,16 @@ class Attention(nn.Module):
     def forward(
             self,
             x: torch.Tensor,
+            freqs_cis: Optional[torch.Tensor]=None,
             attn_mask = None,
     ) -> torch.Tensor:
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0)
+        # RoPE
+        if freqs_cis is not None:
+            q = apply_rotary_emb(q, freqs_cis)
+            k = apply_rotary_emb(k, freqs_cis)
 
         if self.fused_attn:
             x = F.scaled_dot_product_attention(
@@ -260,6 +332,30 @@ class Mlp(nn.Module):
         x = self.drop2(x)
         return x
 
+from typing import Optional, Callable
+class SwiGLUMlp(nn.Module):
+    def __init__(
+        self,
+        in_features: int,
+        hidden_features: Optional[int] = None,
+        out_features: Optional[int] = None,
+        act_layer: Callable[..., nn.Module] = None,
+        drop: float = 0.0,
+        bias: bool = True,
+    ) -> None:
+        super().__init__()
+        out_features = out_features or in_features
+        hidden_features = hidden_features or in_features
+        self.w12 = nn.Linear(in_features, 2 * hidden_features, bias=bias)
+        self.w3 = nn.Linear(hidden_features, out_features, bias=bias)
+
+    @torch.compile
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x12 = self.w12(x)
+        x1, x2 = x12.chunk(2, dim=-1)
+        hidden = F.silu(x1) * x2
+        return self.w3(hidden)
+
 class TransformerBlock(nn.Module):
     def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
         super().__init__()
@@ -302,6 +398,28 @@ class DiTBlock(nn.Module):
             x = x + gate_mlp.unsqueeze(1) * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
         return x
 
+class LightningDiTBlock(nn.Module):
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
+        super().__init__()
+        self.norm1 = RMSNorm(hidden_size)
+        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
+        self.norm2 = RMSNorm(hidden_size)
+        self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
+        self.adaLN_modulation = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(hidden_size, 6 * hidden_size, bias=True)
+        )
+    
+    def forward(self, x, c, freqs_cis=None, attn_mask=None):
+        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(c).chunk(6, dim=-1)
+        if c.ndim == 3:
+            x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask)
+            x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
+        else:
+            x = x + gate_msa.unsqueeze(1) * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask)
+            x = x + gate_mlp.unsqueeze(1) * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
+        return x
+
 class CrossDiTBlock(nn.Module):
     """
     A DiT block with adaptive layer norm zero (adaLN-Zero) conditioning.
@@ -341,6 +459,22 @@ class FinalLayer(nn.Module):
     def __init__(self, hidden_size, out_channels, local_window=1):
         super().__init__()
         self.norm_final = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
+        self.linear = nn.Linear(hidden_size, local_window * out_channels, bias=True)
+        self.adaLN_modulation = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(hidden_size, 2 * hidden_size, bias=True)
+        )
+
+    def forward(self, x, c):
+        shift, scale = self.adaLN_modulation(c).chunk(2, dim=-1)
+        x = modulate(self.norm_final(x), shift, scale)
+        x = self.linear(x)
+        return x
+
+class LightningFinalLayer(nn.Module):
+    def __init__(self, hidden_size, out_channels, local_window=1):
+        super().__init__()
+        self.norm_final = RMSNorm(hidden_size)
         self.linear = nn.Linear(hidden_size, local_window * out_channels, bias=True)
         self.adaLN_modulation = nn.Sequential(
             nn.SiLU(),
@@ -533,9 +667,12 @@ class ClassEmbedder(nn.Module):
         self.embedding = nn.Embedding(num_classes, hidden_size)
     
     def forward(self, x):
-        x = self.embedding(x)
-        x = x.mean(-2)  # mean pooling over n instruments in song
-        return x
+        embs = self.embedding.weight.unsqueeze(0).expand(x.shape[0], -1, -1)
+        mask = x.unsqueeze(-1)
+        masked_embs = embs * mask
+        counts = mask.sum(dim=1, keepdim=True)
+        pooled = masked_embs.sum(dim=1) / counts.squeeze(1)
+        return pooled
 
 class ChannelDiT(nn.Module):
     """
@@ -627,6 +764,93 @@ class ChannelDiT(nn.Module):
             x = block(x, t + c, attn_mask=attn_mask)                      # (N, T, D)
         x = self.final_layer(x, t + c)               # (N, T, patch_size ** 2 * out_channels)
         x = self.unpatchify(x)                   # (N, out_channels, H, W)
+        return x
+
+class LightningDiT(nn.Module):
+    def __init__(
+        self,
+        max_input_size=250,
+        in_channels=128,
+        hidden_size=1152,
+        depth=28,
+        num_heads=16,
+        mlp_ratio=4.0,
+        learn_sigma=False,
+        local_window=1,
+        out_channels=None,
+        **kwargs,
+    ):
+        super().__init__()
+        self.learn_sigma = learn_sigma
+        self.in_channels = in_channels
+        out_channels = in_channels if out_channels is None else out_channels
+        self.out_channels = out_channels * 2 if learn_sigma else out_channels
+        self.num_heads = num_heads
+        self.max_input_size = max_input_size
+
+        self.x_embedder = PatchEmbed(in_channels, hidden_size, max_input_size, local_window)
+        self.t_embedder = TimestepEmbedder(hidden_size)
+        self.c_embedder = ClassEmbedder(26, hidden_size) # 0 is null embedding
+
+        self.blocks = nn.ModuleList([
+            LightningDiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+        ])
+        self.final_layer = LightningFinalLayer(hidden_size, self.out_channels, local_window=local_window)
+        self.unpatchify = Rearrange("b t1 (t2 d) -> b (t1 t2) d", t2=local_window)
+
+        freqs_cis = precompute_freqs_cis(
+            hidden_size // num_heads,
+            max_input_size * 2,
+            10000,
+            False,
+        )
+        self.register_buffer('freqs_cis', freqs_cis)
+        self.initialize_weights()
+    
+    def initialize_weights(self):
+        # Initialize transformer layers:
+        def _basic_init(module):
+            if isinstance(module, nn.Linear):
+                torch.nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+        self.apply(_basic_init)
+
+        # Initialize patch_embed:
+        nn.init.xavier_uniform_(self.x_embedder.proj.weight.data)
+        nn.init.constant_(self.x_embedder.proj.bias, 0)
+
+        # Initialize timestep embedding MLP:
+        nn.init.normal_(self.t_embedder.mlp[0].weight, std=0.02)
+        nn.init.normal_(self.t_embedder.mlp[2].weight, std=0.02)
+
+        torch.nn.init.normal_(self.c_embedder.embedding, mean=0.0, std=0.02)
+
+        # Zero-out adaLN modulation layers in DiT blocks:
+        for block in self.blocks:
+            nn.init.constant_(block.adaLN_modulation[-1].weight, 0)
+            nn.init.constant_(block.adaLN_modulation[-1].bias, 0)
+
+        # Zero-out output layers:
+        nn.init.constant_(self.final_layer.adaLN_modulation[-1].weight, 0)
+        nn.init.constant_(self.final_layer.adaLN_modulation[-1].bias, 0)
+        nn.init.constant_(self.final_layer.linear.weight, 0)
+        nn.init.constant_(self.final_layer.linear.bias, 0)
+
+    def forward(self, x, t, y, c, attn_mask=None):
+        """
+        Forward pass of DiT.
+        x: (N, C, H, W) tensor of spatial inputs (images or latent representations of images)
+        t: (N,) tensor of diffusion timesteps
+        y: (N,) tensor of class labels
+        """
+        x = self.x_embedder(x) + y
+        t = self.t_embedder(t)
+        c = self.c_embedder(c)
+        for block in self.blocks:
+            x = block(x, t + c, freqs_cis=self.freqs_cis, attn_mask=attn_mask)
+        x = self.final_layer(x, t + c)
+        x = self.unpatchify(x)
         return x
 
 class Transformer(nn.Module):
@@ -1547,6 +1771,141 @@ class ConcatMaskLAM(nn.Module):
         random_actions_indices = self.generate_random_different_actions(action_indices, self.vq.codebook_size, latents.device)
         random_action_tokens = self.vq.indices_to_codes(random_actions_indices)
         random_action_tokens = self.action_proj(random_action_tokens)
+
+        latents[mask] = self.mask_token
+        noise = torch.randn(latents.shape, device=latents.device)
+
+        # decode actions
+        recon_latents = self.sampler.inpaint(self.decoder, latents, mask.long(), n_steps=n_steps, noise=noise, net_kwargs={'y': action_tokens, 'c': labels})
+        # decode random actions
+        random_recon_latents = self.sampler.inpaint(self.decoder, latents, mask.long(), n_steps=n_steps, noise=noise, net_kwargs={'y': random_action_tokens, 'c': labels})
+
+        return recon_latents, random_recon_latents
+
+class InstrumentConcatMaskLAM(nn.Module):
+    def __init__(self, 
+        max_input_size=250,
+        in_channels=128, 
+        encoder_hidden_size=1152,
+        decoder_hidden_size=1152,
+        encoder_depth=12,
+        decoder_depth=12,
+        encoder_num_heads=12,
+        decoder_num_heads=12,
+        levels=[5, 5],
+        window_size=8,
+        min_block_size=None,
+        max_block_size=None,
+        ):
+        super().__init__()
+
+        self.encoder = ClassTransformer(max_input_size=max_input_size, depth=encoder_depth, in_channels=in_channels, out_channels=decoder_hidden_size, hidden_size=encoder_hidden_size, num_heads=encoder_num_heads, local_window=1)
+        self.decoder = LightningDiT(max_input_size=max_input_size, depth=decoder_depth, in_channels=in_channels, out_channels=in_channels, hidden_size=decoder_hidden_size, num_heads=decoder_num_heads)
+
+        self.max_input_size = max_input_size
+        self.window_size = window_size
+        self.min_block_size = min_block_size if min_block_size is not None else window_size
+        self.max_block_size = max_block_size if max_block_size is not None else max_input_size
+        
+        self.to_action_emb = nn.Sequential(
+            Rearrange("b (t1 t2) d -> b t1 (t2 d)", t1=max_input_size // window_size, t2=window_size),
+            nn.Linear(window_size * decoder_hidden_size, decoder_hidden_size),
+            nn.LayerNorm(decoder_hidden_size)
+        )
+        self.vq = FSQ(levels=levels, dim=decoder_hidden_size)
+        self.mask_token = nn.Parameter(torch.zeros(1, 1, in_channels))
+
+        self.attn_mask = self.register_buffer('attn_mask', self.block_attention_mask())
+        self.diffusion = FM(timescale=1000.0)
+        self.sampler = FMEulerSampler(self.diffusion)
+        
+        self.initialize_weights()
+    
+    def block_attention_mask(self) -> torch.Tensor:
+        """
+        Create a block-diagonal attention mask.
+        Each block of `window_size` allows full attention internally,
+        but no attention across blocks.
+
+        Args:
+            seq_len (int): total sequence length
+            window_size (int): block size
+
+        Returns:
+            mask (torch.Tensor): (seq_len, seq_len) boolean mask
+                                True = keep, False = mask
+        """
+        assert self.max_input_size % self.window_size == 0, "Sequence length must be divisible by window_size"
+        n_blocks = self.max_input_size // self.window_size
+
+        # Identity matrix of blocks (n_blocks x n_blocks)
+        block_mask = torch.eye(n_blocks, dtype=torch.bool)
+
+        # Expand to (seq_len, seq_len) by Kronecker product
+        full_mask = torch.kron(block_mask, torch.ones((self.window_size, self.window_size), dtype=torch.bool))
+        
+        return full_mask
+    
+    def initialize_weights(self):
+        # Initialize transformer layers:
+        def _basic_init(module):
+            if isinstance(module, nn.Linear):
+                torch.nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+        self.apply(_basic_init)
+        nn.init.normal_(self.mask_token, std=0.02)
+        self.encoder.initialize_weights()
+        self.decoder.initialize_weights()
+
+    @torch.no_grad()
+    def encode_actions(self, x, labels):
+        z = self.encoder(x, labels, attn_mask=self.attn_mask)
+
+        # action embeddings
+        tokens = self.to_action_emb(z)
+        tokens, indices = self.vq(tokens)
+        tokens = repeat(tokens, "b t1 d -> b (t1 t2) d", t2=self.window_size)
+        indices = repeat(indices, "b t1 -> b (t1 t2)", t2=self.window_size)
+
+        return tokens, indices
+
+    def forward(self, x, labels):
+        target = x.clone()
+        B, L, _ = x.shape
+
+        tokens, _ = self.encode_actions(x, labels)
+        
+        mask = torch.zeros(B, L, dtype=torch.bool, device=x.device)
+        lens = np.random.randint(self.min_block_size, self.max_block_size + 1, (B,))
+
+        for i in range(B):
+            start = np.random.randint(0, L - lens[i] + 1)
+            mask[i, start:start + lens[i]] = True
+
+        x[mask] = self.mask_token
+
+        return self.diffusion.concat_loss(self.decoder, x, target, mask.long(), net_kwargs={'y': tokens, 'c': labels})
+    
+    def generate_random_different_actions(self, actions_indices, codebook_size, device):
+        shape = actions_indices.shape
+        random_actions = torch.randint(0, codebook_size, shape, device=device)
+
+        while torch.any(random_actions == actions_indices):
+            random_actions = torch.where(
+                random_actions == actions_indices,
+                torch.randint(0, codebook_size, shape, device=device),
+                random_actions,
+            )
+
+        return random_actions
+    
+    def lam_vs_random_actions(self, latents, labels, mask, n_steps=50):
+        action_tokens, action_indices = self.encode_actions(latents, labels)
+
+        # generate random actions
+        random_actions_indices = self.generate_random_different_actions(action_indices, self.vq.codebook_size, latents.device)
+        random_action_tokens = self.vq.indices_to_codes(random_actions_indices)
 
         latents[mask] = self.mask_token
         noise = torch.randn(latents.shape, device=latents.device)
