@@ -9,6 +9,7 @@
 # MAE: https://github.com/facebookresearch/mae/blob/main/models_mae.py
 # --------------------------------------------------------
 import math
+from typing import Optional, Callable
 
 import torch
 import torch.nn as nn
@@ -199,7 +200,7 @@ class Attention(nn.Module):
     def forward(
             self,
             x: torch.Tensor,
-            freqs_cis: Optional[torch.Tensor]=None,
+            freqs_cis: Optional[torch.Tensor] = None,
             attn_mask = None,
     ) -> torch.Tensor:
         B, N, C = x.shape
@@ -332,7 +333,6 @@ class Mlp(nn.Module):
         x = self.drop2(x)
         return x
 
-from typing import Optional, Callable
 class SwiGLUMlp(nn.Module):
     def __init__(
         self,
