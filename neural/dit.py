@@ -845,7 +845,7 @@ class LightningDiT(nn.Module):
         y: (N,) tensor of class labels
         """
         B, C, L = x.shape
-
+        print(x.shape)
         x = self.x_embedder(x) + y
         t = self.t_embedder(t)
         c = self.c_embedder(c)
@@ -853,6 +853,7 @@ class LightningDiT(nn.Module):
             x = block(x, t + c, freqs_cis=self.freqs_cis[:L], attn_mask=attn_mask)
         x = self.final_layer(x, t + c)
         x = self.unpatchify(x)
+        print(x.shape)
         return x
 
 class Transformer(nn.Module):
