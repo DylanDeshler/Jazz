@@ -847,6 +847,7 @@ class LightningDiT(nn.Module):
         x = self.x_embedder(x) + y
         t = self.t_embedder(t)
         c = self.c_embedder(c)
+        print(self.freqs_cis.shape, x.shape)
         for block in self.blocks:
             x = block(x, t + c, freqs_cis=self.freqs_cis, attn_mask=attn_mask)
         x = self.final_layer(x, t + c)
