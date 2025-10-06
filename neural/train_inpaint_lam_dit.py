@@ -246,7 +246,7 @@ def get_lr(it):
     return min_lr + coeff * (learning_rate - min_lr)
 
 @torch.no_grad()
-def generate_lam_vs_random_actions(x, step, save=True):
+def generate_lam_vs_random_actions(x, labels, step, save=True):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
 
@@ -254,7 +254,7 @@ def generate_lam_vs_random_actions(x, step, save=True):
 
     mask = torch.zeros(B, L, dtype=torch.bool, device=device)
     mask[:, L//4:3*L//4] = True
-    recon, random_recon = raw_model.lam_vs_random_actions(x.clone(), mask, n_steps=50)
+    recon, random_recon = raw_model.lam_vs_random_actions(x.clone(), labels, mask, n_steps=50)
     
     n_cuts = L // tokens_per_tokenizer_window
     batches = []
@@ -330,7 +330,7 @@ while True:
             X, y = get_batch('test')[:10] 
             model.eval()
             with ctx:
-                delta_psnr = generate_lam_vs_random_actions(X, iter_num)
+                delta_psnr = generate_lam_vs_random_actions(X, y, iter_num)
             model.train()
             print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, delta PSNR {delta_psnr:.3f}")
         else:
@@ -367,7 +367,7 @@ while True:
             X, y = get_batch('test') 
             model.eval()
             with ctx:
-                delta_psnrs.append(generate_lam_vs_random_actions(X, iter_num))
+                delta_psnrs.append(generate_lam_vs_random_actions(X, y, iter_num))
         print(f'Delta PSNR MEAN: {np.mean(delta_psnrs):.4f}, STD: {np.std(delta_psnrs):.4f}')
         break
 
