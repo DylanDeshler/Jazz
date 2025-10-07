@@ -38,7 +38,7 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'class_concat_mask_lam_dit'
+out_dir = 'register_class_concat_mask_lam_dit'
 eval_interval = 1000
 sample_interval = 5000
 log_interval = 100
@@ -48,7 +48,7 @@ eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = False # disabled by default
+wandb_log = True # disabled by default
 wandb_project = out_dir #'zinc20++'
 wandb_run_name = out_dir + str(time.time())
 # data
