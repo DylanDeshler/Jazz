@@ -681,7 +681,7 @@ class ClassEmbedder(nn.Module):
         class_gate = self.class_gate(x.mean(1))
         
         embs = self.embedding.weight.unsqueeze(0).expand(c.shape[0], -1, -1)
-        mask = c.unsqueeze(-1) * class_gate
+        mask = (c * class_gate).unsqueeze(-1)
         masked_embs = embs * mask
         counts = mask.sum(dim=1, keepdim=True).clamp(min=1)
         pooled = masked_embs.sum(dim=1) / counts.squeeze(1)
