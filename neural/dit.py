@@ -664,6 +664,7 @@ class DiT(nn.Module):
 class ClassEmbedder(nn.Module):
     def __init__(self, num_classes, hidden_size):
         super().__init__()
+        self.embedding = nn.Embedding(num_classes, hidden_size)
         self.norm = RMSNorm(hidden_size)
         self.class_gate = nn.Sequential(
             nn.SiLU(),
