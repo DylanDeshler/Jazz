@@ -260,7 +260,7 @@ parser.add_argument("--use_gpu", type=int, default=0, help="GPU ID to use")
 parser.add_argument("--n_iter", type=int, default=2000, help="Number of training epochs")
 parser.add_argument("--lr", type=float, default=0.001, help="Learning Rate")
 parser.add_argument("--dim_reduction", type=str, default="UMAP", choices=["None", "PCA", "UMAP"], help="Dimensionality reduction method")
-parser.add_argument("--target_dim", type=int, default=100, help="Target dimensionality after reduction")
+parser.add_argument("--target_dim", type=float, default=100, help="Target dimensionality after reduction")
 parser.add_argument("--factor", type=float, default=1, help="Dimension adjust")
 parser.add_argument(
     "--components_list",
