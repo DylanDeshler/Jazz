@@ -283,7 +283,8 @@ if __name__ == "__main__":
 
     print("Original data shape:", data.shape)
     data = data[:data.shape[0] - (data.shape[0] % 64)].reshape(-1, 64 * 64)
-    data = data[:2**18]
+    idxs = np.random.choice(np.arange(data.shape[0]), 10000, replace=False)
+    data = data[idxs]
     print("Flattened data shape: ", data.shape)
 
     # Apply dimensionality reduction
