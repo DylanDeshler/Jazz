@@ -678,7 +678,7 @@ class ClassEmbedder(nn.Module):
     
     def forward(self, x, c):
         shift, scale, gate = self.adaLN_modulation(x.mean(1)).chunk(3, dim=-1)
-        class_gate = self.class_gate(x)
+        class_gate = self.class_gate(x.mean(1))
         
         embs = self.embedding.weight.unsqueeze(0).expand(c.shape[0], -1, -1)
         mask = c.unsqueeze(-1) * class_gate
