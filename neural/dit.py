@@ -664,7 +664,7 @@ class DiT(nn.Module):
 class ClassEmbedder(nn.Module):
     def __init__(self, num_classes, hidden_size):
         super().__init__()
-        self.embedding = nn.Embedding(num_classes, hidden_size)
+        self.embedding = nn.Embedding(num_classes, hidden_size) # layer dependent embedding akin to adaLN
         # self.norm = RMSNorm(hidden_size)
         self.class_gate = nn.Sequential(
             nn.SiLU(),
@@ -841,8 +841,10 @@ class LightningDiT(nn.Module):
         nn.init.normal_(self.t_embedder.mlp[0].weight, std=0.02)
         nn.init.normal_(self.t_embedder.mlp[2].weight, std=0.02)
 
-        # for block in self.c_embedders:
-        #     nn.init.normal_(.embedding.weight, std=0.02)
+        for block in self.c_embedders:
+            nn.init.normal_(block.embedding.weight, std=0.02)
+            nn.init.constant_(block.class_gate[1].weight, 0)
+            nn.init.constant_(block.class_gate[1].bias, 0)
 
         # Zero-out adaLN modulation layers in DiT blocks:
         for block in self.blocks:
@@ -979,8 +981,11 @@ class ClassTransformer(nn.Module):
         # Initialize patch_embed like nn.Linear (instead of nn.Conv2d):
         nn.init.xavier_uniform_(self.x_embedder.proj.weight.data)
         nn.init.constant_(self.x_embedder.proj.bias, 0)
-
-        # nn.init.normal_(self.c_embedder.embedding.weight, 0.02)
+        
+        for block in self.c_embedders:
+            nn.init.normal_(block.embedding.weight, std=0.02)
+            nn.init.constant_(block.class_gate[1].weight, 0)
+            nn.init.constant_(block.class_gate[1].bias, 0)
 
         for block in self.blocks:
             nn.init.constant_(block.adaLN_modulation[-1].weight, 0)
