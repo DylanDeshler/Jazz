@@ -664,14 +664,28 @@ class DiT(nn.Module):
 class ClassEmbedder(nn.Module):
     def __init__(self, num_classes, hidden_size):
         super().__init__()
-        self.embedding = nn.Embedding(num_classes, hidden_size)
+        self.norm = RMSNorm(hidden_size)
+        self.class_gate = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(hidden_size, num_classes, bias=True),
+            nn.Sigmoid()
+        )
+        self.adaLN_modulation = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(hidden_size, 3 * hidden_size, bias=True)
+        )
     
-    def forward(self, x):
-        embs = self.embedding.weight.unsqueeze(0).expand(x.shape[0], -1, -1)
-        mask = x.unsqueeze(-1)
+    def forward(self, x, c):
+        shift, scale, gate = self.adaLN_modulation(x).chunk(3, dim=-1)
+        class_gate = self.class_gate(x)
+        
+        embs = self.embedding.weight.unsqueeze(0).expand(c.shape[0], -1, -1)
+        mask = c.unsqueeze(-1) * class_gate
         masked_embs = embs * mask
-        counts = mask.sum(dim=1, keepdim=True)
+        counts = mask.sum(dim=1, keepdim=True).clamp(min=1)
         pooled = masked_embs.sum(dim=1) / counts.squeeze(1)
+
+        pooled = gate.unsqueeze(1) * modulate(self.norm(c), shift, scale)
         return pooled
 
 class ChannelDiT(nn.Module):
@@ -790,10 +804,12 @@ class LightningDiT(nn.Module):
 
         self.x_embedder = PatchEmbed(in_channels, hidden_size, max_input_size, local_window)
         self.t_embedder = TimestepEmbedder(hidden_size)
-        self.c_embedder = ClassEmbedder(26, hidden_size) # 0 is null embedding
 
         self.blocks = nn.ModuleList([
             LightningDiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+        ])
+        self.c_embedders = nn.ModuleList([
+            ClassEmbedder(26, hidden_size) for _ in range(depth + 1)
         ])
         self.final_layer = LightningFinalLayer(hidden_size, self.out_channels, local_window=local_window)
         self.unpatchify = Rearrange("b t1 (t2 d) -> b (t1 t2) d", t2=local_window)
@@ -824,7 +840,8 @@ class LightningDiT(nn.Module):
         nn.init.normal_(self.t_embedder.mlp[0].weight, std=0.02)
         nn.init.normal_(self.t_embedder.mlp[2].weight, std=0.02)
 
-        nn.init.normal_(self.c_embedder.embedding.weight, std=0.02)
+        # for block in self.c_embedders:
+        #     nn.init.normal_(.embedding.weight, std=0.02)
 
         # Zero-out adaLN modulation layers in DiT blocks:
         for block in self.blocks:
@@ -848,10 +865,9 @@ class LightningDiT(nn.Module):
         
         x = self.x_embedder(x) + y
         t = self.t_embedder(t)
-        c = self.c_embedder(c)
-        for block in self.blocks:
-            x = block(x, t + c, freqs_cis=self.freqs_cis[:L], attn_mask=attn_mask)
-        x = self.final_layer(x, t + c)
+        for block, c_embedder in zip(self.blocks, self.c_embedders):
+            x = block(x, t + c_embedder(c), freqs_cis=self.freqs_cis[:L], attn_mask=attn_mask)
+        x = self.final_layer(x, t + self.c_embedders[-1](c))
         x = self.unpatchify(x)
         return x
 
@@ -935,11 +951,13 @@ class ClassTransformer(nn.Module):
         self.num_heads = num_heads
 
         self.x_embedder = PatchEmbed(in_channels, hidden_size, max_input_size, local_window)
-        self.c_embedder = ClassEmbedder(26, hidden_size)
         self.pos_embed = nn.Parameter(torch.zeros(1, max_input_size // local_window, hidden_size), requires_grad=False)
 
         self.blocks = nn.ModuleList([
             DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+        ])
+        self.c_embedders = nn.ModuleList([
+            ClassEmbedder(26, hidden_size) for _ in range(depth + 1)
         ])
         self.final_layer = FinalLayer(hidden_size, out_channels, local_window=local_window)
         self.initialize_weights()
@@ -961,7 +979,7 @@ class ClassTransformer(nn.Module):
         nn.init.xavier_uniform_(self.x_embedder.proj.weight.data)
         nn.init.constant_(self.x_embedder.proj.bias, 0)
 
-        nn.init.normal_(self.c_embedder.embedding.weight, 0.02)
+        # nn.init.normal_(self.c_embedder.embedding.weight, 0.02)
 
         for block in self.blocks:
             nn.init.constant_(block.adaLN_modulation[-1].weight, 0)
@@ -981,10 +999,9 @@ class ClassTransformer(nn.Module):
         y: (N,) tensor of class labels
         """
         x = self.x_embedder(x) + self.pos_embed  # (N, T, D), where T = H * W / patch_size ** 2                             # (N, D)
-        c = self.c_embedder(c)
-        for block in self.blocks:
-            x = block(x, c, attn_mask=attn_mask)                      # (N, T, D)
-        x = self.final_layer(x, c)               # (N, T, patch_size ** 2 * out_channels)
+        for block, c_embedder in zip(self.blocks, self.c_embedders):
+            x = block(x, c_embedder(c), attn_mask=attn_mask)                      # (N, T, D)
+        x = self.final_layer(x, self.c_embedders[-1](c))               # (N, T, patch_size ** 2 * out_channels)
         return x
 
 from vector_quantize_pytorch import FSQ
