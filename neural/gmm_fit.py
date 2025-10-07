@@ -282,7 +282,7 @@ if __name__ == "__main__":
     ], axis=0)
 
     print("Original data shape:", data.shape)
-    data = data.reshape(-1, 64 * 64)
+    data = data[:data.shape[0] - (data.shape[0] % 64)].reshape(-1, 64 * 64)
 
     # Apply dimensionality reduction
     data = reduce_dimensionality(data, method=args.dim_reduction, n_components=args.target_dim)
