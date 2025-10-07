@@ -981,7 +981,7 @@ class ClassTransformer(nn.Module):
         # Initialize patch_embed like nn.Linear (instead of nn.Conv2d):
         nn.init.xavier_uniform_(self.x_embedder.proj.weight.data)
         nn.init.constant_(self.x_embedder.proj.bias, 0)
-        
+
         for block in self.c_embedders:
             nn.init.normal_(block.embedding.weight, std=0.02)
             nn.init.constant_(block.class_gate[1].weight, 0)
@@ -1008,6 +1008,93 @@ class ClassTransformer(nn.Module):
         for block, c_embedder in zip(self.blocks, self.c_embedders):
             x = block(x, c_embedder(x, c), attn_mask=attn_mask)                      # (N, T, D)
         x = self.final_layer(x, self.c_embedders[-1](x, c))               # (N, T, patch_size ** 2 * out_channels)
+        return x
+
+class RegisterClassTransformer(nn.Module):
+    def __init__(
+        self,
+        max_input_size=250,
+        in_channels=128,
+        out_channels=128,
+        hidden_size=1152,
+        depth=28,
+        num_heads=16,
+        mlp_ratio=4.0,
+        local_window=1,
+        n_registers=16,
+        **kwargs,
+    ):
+        super().__init__()
+        self.in_channels = in_channels
+        self.num_heads = num_heads
+        self.n_registers = n_registers
+
+        self.x_embedder = PatchEmbed(in_channels, hidden_size, max_input_size, local_window)
+        self.registers = nn.Parameter(torch.randn(1, n_registers, hidden_size))
+
+        self.blocks = nn.ModuleList([
+            LightningDiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+        ])
+        self.c_embedders = nn.ModuleList([
+            ClassEmbedder(26, hidden_size) for _ in range(depth + 1)
+        ])
+        self.final_layer = FinalLayer(hidden_size, out_channels, local_window=local_window)
+
+        freqs_cis = precompute_freqs_cis(
+            hidden_size // num_heads,
+            (max_input_size + n_registers) * 2,
+            10000,
+            False,
+        )
+        self.register_buffer('freqs_cis', freqs_cis)
+
+        self.initialize_weights()
+
+    def initialize_weights(self):
+        # Initialize transformer layers:
+        def _basic_init(module):
+            if isinstance(module, nn.Linear):
+                torch.nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+        self.apply(_basic_init)
+
+        nn.init.trunc_normal_(self.registers, std=0.02)
+
+        # Initialize patch_embed like nn.Linear (instead of nn.Conv2d):
+        nn.init.xavier_uniform_(self.x_embedder.proj.weight.data)
+        nn.init.constant_(self.x_embedder.proj.bias, 0)
+        
+        for block in self.c_embedders:
+            nn.init.normal_(block.embedding.weight, std=0.02)
+            nn.init.constant_(block.class_gate[1].weight, 0)
+            nn.init.constant_(block.class_gate[1].bias, 0)
+
+        for block in self.blocks:
+            nn.init.constant_(block.adaLN_modulation[-1].weight, 0)
+            nn.init.constant_(block.adaLN_modulation[-1].bias, 0)
+
+        # Zero-out output layers:
+        nn.init.constant_(self.final_layer.adaLN_modulation[-1].weight, 0)
+        nn.init.constant_(self.final_layer.adaLN_modulation[-1].bias, 0)
+        nn.init.constant_(self.final_layer.linear.weight, 0)
+        nn.init.constant_(self.final_layer.linear.bias, 0)
+
+    def forward(self, x, c, attn_mask=None):
+        """
+        Forward pass of DiT.
+        x: (N, C, H, W) tensor of spatial inputs (images or latent representations of images)
+        t: (N,) tensor of diffusion timesteps
+        y: (N,) tensor of class labels
+        """
+        x = self.x_embedder(x)
+        x = torch.cat([self.registers.expand(x.shape[0], -1, -1), x], dim=1)
+        B, L, C = x.shape
+
+        for block, c_embedder in zip(self.blocks, self.c_embedders):
+            x = block(x, c_embedder(x, c), freqs_cis=self.freqs_cis[:L], attn_mask=attn_mask)
+        x = self.final_layer(x, self.c_embedders[-1](x, c))
+        x = x[:, :self.n_registers]
         return x
 
 from vector_quantize_pytorch import FSQ
@@ -1824,7 +1911,7 @@ class InstrumentConcatMaskLAM(nn.Module):
         ):
         super().__init__()
 
-        self.encoder = ClassTransformer(max_input_size=max_input_size, depth=encoder_depth, in_channels=in_channels, out_channels=decoder_hidden_size, hidden_size=encoder_hidden_size, num_heads=encoder_num_heads, local_window=1)
+        self.encoder = RegisterClassTransformer(max_input_size=max_input_size, depth=encoder_depth, in_channels=in_channels, out_channels=decoder_hidden_size, hidden_size=encoder_hidden_size, num_heads=encoder_num_heads, local_window=1, n_registers=max_input_size // window_size)
         self.decoder = LightningDiT(max_input_size=max_input_size, depth=decoder_depth, in_channels=in_channels, out_channels=in_channels, hidden_size=decoder_hidden_size, num_heads=decoder_num_heads)
 
         self.max_input_size = max_input_size
@@ -1832,15 +1919,10 @@ class InstrumentConcatMaskLAM(nn.Module):
         self.min_block_size = min_block_size if min_block_size is not None else window_size
         self.max_block_size = max_block_size if max_block_size is not None else max_input_size
         
-        self.to_action_emb = nn.Sequential(
-            Rearrange("b (t1 t2) d -> b t1 (t2 d)", t1=max_input_size // window_size, t2=window_size),
-            nn.Linear(window_size * decoder_hidden_size, decoder_hidden_size),
-            nn.LayerNorm(decoder_hidden_size)
-        )
         self.vq = FSQ(levels=levels, dim=decoder_hidden_size)
-        self.mask_token = nn.Parameter(torch.zeros(1, 1, in_channels))
+        self.mask_token = nn.Parameter(torch.randn(1, 1, in_channels))
 
-        self.attn_mask = self.register_buffer('attn_mask', self.block_attention_mask())
+        # self.attn_mask = self.register_buffer('attn_mask', self.block_attention_mask())
         self.diffusion = FM(timescale=1000.0)
         self.sampler = FMEulerSampler(self.diffusion)
         
@@ -1879,16 +1961,17 @@ class InstrumentConcatMaskLAM(nn.Module):
                 if module.bias is not None:
                     nn.init.constant_(module.bias, 0)
         self.apply(_basic_init)
-        nn.init.normal_(self.mask_token, std=0.02)
+
+        nn.init.trunc_normal_(self.mask_token, std=0.02)
+
         self.encoder.initialize_weights()
         self.decoder.initialize_weights()
 
     @torch.no_grad()
     def encode_actions(self, x, labels):
-        z = self.encoder(x, labels, attn_mask=self.attn_mask)
+        tokens = self.encoder(x, labels)
 
         # action embeddings
-        tokens = self.to_action_emb(z)
         tokens, indices = self.vq(tokens)
         tokens = repeat(tokens, "b t1 d -> b (t1 t2) d", t2=self.window_size)
         indices = repeat(indices, "b t1 -> b (t1 t2)", t2=self.window_size)
