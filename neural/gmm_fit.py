@@ -277,11 +277,12 @@ if __name__ == "__main__":
 
     # Load data
     data = np.concatenate([
-        np.memmap('/home/dylan.d/research/music/Jazz/latents/high_train.bin', dtype=np.float32, mode='r', shape=(51548736, 64)).reshape(-1, 64 * 64),
-        np.memmap('/home/dylan.d/research/music/Jazz/latents/high_val.bin', dtype=np.float32, mode='r', shape=(1119840, 64))[:int(1119840/64)].reshape(-1, 64 * 64)
+        np.memmap('/home/dylan.d/research/music/Jazz/latents/high_train.bin', dtype=np.float32, mode='r', shape=(51548736, 64)),
+        np.memmap('/home/dylan.d/research/music/Jazz/latents/high_val.bin', dtype=np.float32, mode='r', shape=(1119840, 64))
     ], axis=0)
 
     print("Original data shape:", data.shape)
+    data = data.reshape(-1, 64 * 64)
 
     # Apply dimensionality reduction
     data = reduce_dimensionality(data, method=args.dim_reduction, n_components=args.target_dim)
