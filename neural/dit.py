@@ -866,8 +866,8 @@ class LightningDiT(nn.Module):
         x = self.x_embedder(x) + y
         t = self.t_embedder(t)
         for block, c_embedder in zip(self.blocks, self.c_embedders):
-            x = block(x, t + c_embedder(c), freqs_cis=self.freqs_cis[:L], attn_mask=attn_mask)
-        x = self.final_layer(x, t + self.c_embedders[-1](c))
+            x = block(x, t + c_embedder(x, c), freqs_cis=self.freqs_cis[:L], attn_mask=attn_mask)
+        x = self.final_layer(x, t + self.c_embedders[-1](x, c))
         x = self.unpatchify(x)
         return x
 
@@ -1000,8 +1000,8 @@ class ClassTransformer(nn.Module):
         """
         x = self.x_embedder(x) + self.pos_embed  # (N, T, D), where T = H * W / patch_size ** 2                             # (N, D)
         for block, c_embedder in zip(self.blocks, self.c_embedders):
-            x = block(x, c_embedder(c), attn_mask=attn_mask)                      # (N, T, D)
-        x = self.final_layer(x, self.c_embedders[-1](c))               # (N, T, patch_size ** 2 * out_channels)
+            x = block(x, c_embedder(x, c), attn_mask=attn_mask)                      # (N, T, D)
+        x = self.final_layer(x, self.c_embedders[-1](x, c))               # (N, T, patch_size ** 2 * out_channels)
         return x
 
 from vector_quantize_pytorch import FSQ
