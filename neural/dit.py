@@ -665,19 +665,19 @@ class ClassEmbedder(nn.Module):
     def __init__(self, num_classes, hidden_size):
         super().__init__()
         self.embedding = nn.Embedding(num_classes, hidden_size)
-        self.norm = RMSNorm(hidden_size)
+        # self.norm = RMSNorm(hidden_size)
         self.class_gate = nn.Sequential(
             nn.SiLU(),
             nn.Linear(hidden_size, num_classes, bias=True),
             nn.Sigmoid()
         )
-        self.adaLN_modulation = nn.Sequential(
-            nn.SiLU(),
-            nn.Linear(hidden_size, 3 * hidden_size, bias=True)
-        )
+        # self.adaLN_modulation = nn.Sequential(
+        #     nn.SiLU(),
+        #     nn.Linear(hidden_size, 3 * hidden_size, bias=True)
+        # )
     
     def forward(self, x, c):
-        shift, scale, gate = self.adaLN_modulation(x.mean(1)).chunk(3, dim=-1)
+        # shift, scale, gate = self.adaLN_modulation(x.mean(1)).chunk(3, dim=-1)
         class_gate = self.class_gate(x.mean(1))
         
         embs = self.embedding.weight.unsqueeze(0).expand(c.shape[0], -1, -1)
@@ -686,7 +686,7 @@ class ClassEmbedder(nn.Module):
         counts = mask.sum(dim=1, keepdim=True).clamp(min=1)
         pooled = masked_embs.sum(dim=1) / counts.squeeze(1)
 
-        pooled = gate.unsqueeze(1) * modulate(self.norm(c), shift, scale)
+        # pooled = gate.unsqueeze(1) * modulate(self.norm(c), shift, scale)
         return pooled
 
 class ChannelDiT(nn.Module):
