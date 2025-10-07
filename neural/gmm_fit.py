@@ -1,6 +1,6 @@
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
-import umap
+# import umap
 import matplotlib.pyplot as plt 
 import wandb
 import torch
@@ -20,13 +20,11 @@ import argparse
 import os
 import numpy as np
 from tqdm import tqdm
-import h5py
-import random
+# import h5py
+# import random
 import torch.nn.functional as F
 import os
-import random
 import numpy as np
-import h5py
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
