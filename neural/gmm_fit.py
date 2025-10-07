@@ -156,7 +156,7 @@ def train_gmm(train_data, val_data, n_components, batch_size, n_iter, lr, device
             "n_components": n_components  
         })
 
-    output_path = f"/cpfs04/user/hanyujin/ldm/results/{args.exp.split('-')[0]}_reduce{args.dim_reduction}_min{args.min_components}max{args.max_components}.csv"
+    output_path = f"{args.exp.split('-')[0]}_reduce{args.dim_reduction}_min{args.min_components}max{args.max_components}.csv"
     save_component_statistics(model, n_components, output_path)
     return model, train_losses, val_losses
 
@@ -283,7 +283,7 @@ if __name__ == "__main__":
 
     print("Original data shape:", data.shape)
     data = data[:data.shape[0] - (data.shape[0] % 64)].reshape(-1, 64 * 64)
-    data = data[:4096]
+    data = data[:2**18]
     print("Flattened data shape: ", data.shape)
 
     # Apply dimensionality reduction
