@@ -55,10 +55,10 @@ wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
-batch_size = 64 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 16 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
-n_samples = rate * 2
+n_samples = rate
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
@@ -267,7 +267,6 @@ step1 = 3001
 step2 = 5001
 step3 = 8001
 step4 = 25001
-step5 = 75001
 
 if eval_only:
     gradient_accumulation_steps *= 2
@@ -292,14 +291,9 @@ while True:
     if iter_num == step1 or local_iter_num == 0 and iter_num >= step1:
         batch_size = 32
     if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
-        batch_size = 48
-    if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
         batch_size = 64
-    if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
-        gradient_accumulation_steps *= 2
-    if iter_num == step5 or local_iter_num == 0 and iter_num >= step5:
-        batch_size = 32
-        gradient_accumulation_steps = 4
+    if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
+        batch_size = 128
 
     tokens_trained += batch_size * gradient_accumulation_steps
 
