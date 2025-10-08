@@ -260,7 +260,7 @@ parser.add_argument("--use_gpu", type=int, default=0, help="GPU ID to use")
 parser.add_argument("--n_iter", type=int, default=2000, help="Number of training epochs")
 parser.add_argument("--lr", type=float, default=0.001, help="Learning Rate")
 parser.add_argument("--dim_reduction", type=str, default="UMAP", choices=["None", "PCA", "UMAP"], help="Dimensionality reduction method")
-parser.add_argument("--target_dim", type=int, default=100, help="Target dimensionality after reduction")
+parser.add_argument("--target_dim", type=float, default=100, help="Target dimensionality after reduction")
 parser.add_argument("--factor", type=float, default=1, help="Dimension adjust")
 parser.add_argument(
     "--components_list",
@@ -282,7 +282,7 @@ if __name__ == "__main__":
     ], axis=0)
 
     print("Original data shape:", data.shape)
-    data = data[:data.shape[0] - (data.shape[0] % 64)].reshape(-1, 64 * 64)
+    data = data[:data.shape[0] - (data.shape[0] % 8)].reshape(-1, 8 * 64)
     idxs = np.random.choice(np.arange(data.shape[0]), 10000, replace=False)
     data = data[idxs]
     print("Flattened data shape: ", data.shape)
