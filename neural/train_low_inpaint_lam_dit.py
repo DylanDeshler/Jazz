@@ -48,7 +48,7 @@ eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = True # disabled by default
+wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
 wandb_run_name = out_dir + str(time.time())
 # data
@@ -130,16 +130,16 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 # poor man's data loader
 def get_batch(split='train'):
     if split == 'train':
-        data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_train.bin', dtype=np.float32, mode='r', shape=(51548736, vae_embed_dim))
-        labels = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_instruments_train.bin', dtype=np.uint8, mode='r', shape=(51548736, 26))
+        data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_train.bin', dtype=np.float32, mode='r', shape=(204654816, vae_embed_dim))
+        labels = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_instruments_train.bin', dtype=np.uint8, mode='r', shape=(204654816, 26))
         idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
         x = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
         labels = torch.from_numpy(np.stack([labels[idx] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
         return x, labels
     
     else:
-        data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_val.bin', dtype=np.float32, mode='r', shape=(1119840, vae_embed_dim))
-        labels = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_instruments_val.bin', dtype=np.uint8, mode='r', shape=(1119840, 26))
+        data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_val.bin', dtype=np.float32, mode='r', shape=(4446944, vae_embed_dim))
+        labels = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_instruments_val.bin', dtype=np.uint8, mode='r', shape=(4446944, 26))
         idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
         x = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
         labels = torch.from_numpy(np.stack([labels[idx] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
