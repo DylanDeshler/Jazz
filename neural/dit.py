@@ -412,6 +412,7 @@ class LightningDiTBlock(nn.Module):
     
     def forward(self, x, c, freqs_cis=None, attn_mask=None):
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(c).chunk(6, dim=-1)
+        print(x.shape, freqs_cis.shape)
         if c.ndim == 3:
             x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask)
             x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
@@ -869,6 +870,7 @@ class LightningDiT(nn.Module):
         x = self.x_embedder(x) + y
         t = self.t_embedder(t)
         for block, c_embedder in zip(self.blocks, self.c_embedders):
+            print(x.shape, t.shape, c_embedder(x, c).shape, self.freqs_cis[:L].shape)
             x = block(x, t + c_embedder(x, c), freqs_cis=self.freqs_cis[:L], attn_mask=attn_mask)
         x = self.final_layer(x, t + self.c_embedders[-1](x, c))
         x = self.unpatchify(x)
