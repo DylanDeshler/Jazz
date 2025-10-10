@@ -57,7 +57,7 @@ gradient_accumulation_steps = 2 # used to simulate larger batch sizes
 batch_size = 384 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 tokens_per_second = 32
-window_size = 2 * tokens_per_second
+window_size = tokens_per_second // 2
 seconds_per_tokenizer_window = 1
 tokens_per_tokenizer_window = tokens_per_second * seconds_per_tokenizer_window
 max_seq_len = 4 * tokens_per_second
