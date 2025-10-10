@@ -43,7 +43,7 @@ eval_interval = 1000
 sample_interval = 5000
 log_interval = 100
 save_interval = 10000
-eval_iters = 400
+eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
@@ -149,7 +149,7 @@ def get_batch(split='train'):
 iter_num = 0
 best_val_loss = 1e9
 
-ckpt_path = os.path.join('tokenizer_high8_long', 'ckpt.pt')
+ckpt_path = os.path.join('tokenizer_low', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 tokenizer_args = checkpoint['model_args']
 
