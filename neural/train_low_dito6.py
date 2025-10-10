@@ -44,7 +44,7 @@ out_dir = 'tokenizer_low'
 eval_interval = 1000
 log_interval = 100
 save_interval = eval_interval * 10
-eval_iters = 150
+eval_iters = 100
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
@@ -54,7 +54,7 @@ wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 2 # used to simulate larger batch sizes
+gradient_accumulation_steps = 2 * 2 # used to simulate larger batch sizes
 batch_size = 96 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
@@ -291,7 +291,7 @@ while True:
         X = get_batch('test')
         model.eval()
         with ctx:
-            logits = raw_model.reconstruct(X, n_steps=50)
+            logits = raw_model.reconstruct(X, n_steps=100)
         model.train()
         save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
         losses = estimate_loss()
