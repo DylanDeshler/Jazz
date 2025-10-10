@@ -870,7 +870,6 @@ class LightningDiT(nn.Module):
         B, L, C = x.shape
 
         for block, c_embedder in zip(self.blocks, self.c_embedders):
-            print(x.shape, t.shape, c_embedder(x, c).shape, self.freqs_cis[:L].shape)
             x = block(x, t + c_embedder(x, c), freqs_cis=self.freqs_cis[:L], attn_mask=attn_mask)
         x = self.final_layer(x, t + self.c_embedders[-1](x, c))
         x = self.unpatchify(x)
