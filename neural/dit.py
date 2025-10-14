@@ -875,6 +875,108 @@ class LightningDiT(nn.Module):
         x = self.unpatchify(x)
         return x
 
+class SimpleLightningDiT(nn.Module):
+    def __init__(
+        self,
+        max_input_size=250,
+        in_channels=128,
+        hidden_size=1152,
+        depth=28,
+        num_heads=16,
+        mlp_ratio=4.0,
+        learn_sigma=False,
+        **kwargs,
+    ):
+        super().__init__()
+        self.learn_sigma = learn_sigma
+        self.in_channels = in_channels
+        self.num_heads = num_heads
+        self.max_input_size = max_input_size
+
+        self.x_embedder = nn.Sequential(nn.Linear(in_channels, hidden_size, bias=True), RMSNorm(hidden_size))
+        self.t_embedder = TimestepEmbedder(hidden_size)
+
+        self.blocks = nn.ModuleList([
+            LightningDiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+        ])
+        self.final_layer = LightningFinalLayer(hidden_size, self.out_channels, local_window=1)
+
+        freqs_cis = precompute_freqs_cis(
+            hidden_size // num_heads,
+            max_input_size * 2,
+            10000,
+            False,
+        )
+        self.register_buffer('freqs_cis', freqs_cis)
+        self.initialize_weights()
+    
+    def initialize_weights(self):
+        # Initialize transformer layers:
+        def _basic_init(module):
+            if isinstance(module, nn.Linear):
+                torch.nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+        self.apply(_basic_init)
+
+        # Initialize patch_embed:
+        nn.init.xavier_uniform_(self.x_embedder[0].weight.data)
+        nn.init.constant_(self.x_embedder[0].bias, 0)
+
+        # Initialize timestep embedding MLP:
+        nn.init.normal_(self.t_embedder.mlp[0].weight, std=0.02)
+        nn.init.normal_(self.t_embedder.mlp[2].weight, std=0.02)
+
+        # Zero-out adaLN modulation layers in DiT blocks:
+        for block in self.blocks:
+            nn.init.constant_(block.adaLN_modulation[-1].weight, 0)
+            nn.init.constant_(block.adaLN_modulation[-1].bias, 0)
+
+        # Zero-out output layers:
+        nn.init.constant_(self.final_layer.adaLN_modulation[-1].weight, 0)
+        nn.init.constant_(self.final_layer.adaLN_modulation[-1].bias, 0)
+        nn.init.constant_(self.final_layer.linear.weight, 0)
+        nn.init.constant_(self.final_layer.linear.bias, 0)
+
+    def forward(self, x, t):
+        """
+        Forward pass of DiT.
+        x: (N, C, H, W) tensor of spatial inputs (images or latent representations of images)
+        t: (N,) tensor of diffusion timesteps
+        """
+        
+        x = self.x_embedder(x)
+        t = self.t_embedder(t)
+        B, L, C = x.shape
+
+        for block in self.blocks:
+            x = block(x, t, freqs_cis=self.freqs_cis[:L])
+        x = self.final_layer(x, t)
+        return x
+
+class SimpleLightningDiTWrapper(nn.Module):
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.net = SimpleLightningDiT(**kwargs)
+        
+        self.diffusion = FM(timescale=1000.0)
+        self.sampler = FMEulerSampler(self.diffusion)
+        
+        self.initialize_weights()
+    
+    def initialize_weights(self):
+        # Initialize transformer layers:
+        def _basic_init(module):
+            if isinstance(module, nn.Linear):
+                torch.nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+        self.apply(_basic_init)
+        self.net.initialize_weights()
+    
+    def forward(self, x):
+        return self.diffusion.loss(self.net, x)
+
 class Transformer(nn.Module):
     def __init__(
         self,
@@ -2773,7 +2875,7 @@ def DiT_M(**kwargs):
     return DiTWrapper(depth=20, hidden_size=768, patch_size=1, num_heads=12, **kwargs)
 
 def DiT_B(**kwargs):
-    return DiTWrapper(depth=12, hidden_size=768, patch_size=1, num_heads=16, **kwargs)
+    return DiTWrapper(depth=12, hidden_size=768, patch_size=1, num_heads=12, **kwargs)
 
 def MaskedDiT_B_2(**kwargs):
     return MaskedDiTWrapper(depth=12, hidden_size=768, patch_size=2, num_heads=12, **kwargs)
@@ -2828,6 +2930,9 @@ def InpaintingLAM_M(**kwargs):
 
 def InpaintingLAM_B(**kwargs):
     return InpaintingLAM(depth=12, hidden_size=768, num_heads=12, **kwargs)
+
+def LightningDiT_M(**kwargs):
+    return SimpleLightningDiTWrapper(depth=20, hidden_size=1024, num_heads=16, **kwargs)
 
 DiT_models = {
     'DiT-XL/2': DiT_XL_2,  'DiT-XL/4': DiT_XL_4,  'DiT-XL/8': DiT_XL_8,
