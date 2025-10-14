@@ -889,7 +889,6 @@ class SimpleLightningDiT(nn.Module):
     ):
         super().__init__()
         self.learn_sigma = learn_sigma
-        self.in_channels = in_channels
         self.num_heads = num_heads
         self.max_input_size = max_input_size
 
@@ -899,7 +898,7 @@ class SimpleLightningDiT(nn.Module):
         self.blocks = nn.ModuleList([
             LightningDiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
-        self.final_layer = LightningFinalLayer(hidden_size, self.out_channels, local_window=1)
+        self.final_layer = LightningFinalLayer(hidden_size, in_channels, local_window=1)
 
         freqs_cis = precompute_freqs_cis(
             hidden_size // num_heads,
