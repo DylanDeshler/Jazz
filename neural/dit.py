@@ -975,6 +975,9 @@ class SimpleLightningDiTWrapper(nn.Module):
     
     def forward(self, x):
         return self.diffusion.loss(self.net, x)
+    
+    def sample(self, shape, n_steps=50):
+        return self.sampler.sample(self.net, shape, n_steps)
 
 class Transformer(nn.Module):
     def __init__(
