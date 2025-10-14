@@ -62,7 +62,6 @@ for t in ts:
     x_t, noise = diffusion.add_noise(x, t.unsqueeze(0).expand(B, -1))
     out.append(x_t)
 x = torch.cat(out, dim=0)
-print(x.shape)
 
 n_cuts = L // tokens_per_tokenizer_window
 batches = []
@@ -71,12 +70,13 @@ for cut in tqdm(range(n_cuts), desc='Decoding'):
     batches.append(tokenizer.decode(batch, shape=(1, 16384 * seconds_per_tokenizer_window)))
 x = torch.cat(batches, dim=-1).chunk(steps, dim=0)
 
-fig, axs = plt.subplots(steps, 1)
+fig, axs = plt.subplots(steps, 1, figsize=(12, 18))
 for j, chunk in enumerate(x):
     chunk = chunk.cpu().detach().numpy()
     for i in range(len(chunk)):
         sf.write(os.path.join(batch_dir, f't={ts[j].item():.3f}_sample_{i}.wav'), chunk[i].squeeze(), 16000)
     axs.ravel()[j].plot(chunk[i].squeeze())
     axs.ravel()[j].set_axis_off()
-    axs.ravel()[j].set_title(f't={ts[[j]]}')
+    axs.ravel()[j].set_title(f't={ts[[j]].item()}')
+plt.tight_layout()
 plt.savefig(os.path.join(batch_dir, 'plot.png'))
