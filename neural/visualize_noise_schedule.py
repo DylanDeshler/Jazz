@@ -61,7 +61,7 @@ ts = torch.linspace(0, 1, steps=steps).to(device)
 for t in ts:
     x_t, noise = diffusion.add_noise(x, t.unsqueeze(0).expand(B, -1))
     out.append(x_t)
-x = torch.cat(x_t, dim=0)
+x = torch.cat(out, dim=0)
 print(x.shape)
 
 n_cuts = L // tokens_per_tokenizer_window
