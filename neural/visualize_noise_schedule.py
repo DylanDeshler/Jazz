@@ -32,9 +32,9 @@ vae_embed_dim = 16
 tokens_per_second = 32
 seconds_per_tokenizer_window = 1
 tokens_per_tokenizer_window = tokens_per_second * seconds_per_tokenizer_window
-max_seq_len = 8 * tokens_per_second
+max_seq_len = 4 * tokens_per_second
 
-diffusion = FM(sigma_min=1e-5, timescale=1000.0)
+diffusion = FM(sigma_min=1e-9, timescale=1000.0)
 
 batch_dir = 'noise_schedule'
 os.makedirs(batch_dir, exist_ok=True)
@@ -71,7 +71,12 @@ for cut in tqdm(range(n_cuts), desc='Decoding'):
     batches.append(tokenizer.decode(batch, shape=(1, 16384 * seconds_per_tokenizer_window)))
 x = torch.cat(batches, dim=-1).chunk(steps, dim=0)
 
+fig, axs = plt.subplots(steps, 1)
 for j, chunk in enumerate(x):
     chunk = chunk.cpu().detach().numpy()
     for i in range(len(chunk)):
         sf.write(os.path.join(batch_dir, f't={ts[j].item():.3f}_sample_{i}.wav'), chunk[i].squeeze(), 16000)
+    axs.ravel()[j].plot(chunk[i].squeeze())
+    axs.ravel()[j].set_axis_off()
+    axs.ravel()[j].set_title(f't={ts[[j]]}')
+plt.savefig(os.path.join(batch_dir, 'plot.png'))
