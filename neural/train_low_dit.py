@@ -242,12 +242,10 @@ def save_samples(step):
     B, L, D = samples.shape
 
     n_cuts = L // cut_len
-    cuts, inpaint_cuts = [], []
+    cuts = []
     for cut in tqdm(range(n_cuts), desc='Decoding'):
         cuts.append(tokenizer.decode(samples[:, cut * cut_len: (cut + 1) * cut_len].permute(0, 2, 1), shape=(1, 16384 * cut_seconds)))
-        inpaint_cuts.append(tokenizer.decode(inpaints[:, cut * cut_len: (cut + 1) * cut_len].permute(0, 2, 1), shape=(1, 16384 * cut_seconds)))
     samples = torch.cat(cuts, dim=-1).cpu().detach().numpy()
-    inpaints = torch.cat(inpaint_cuts, dim=-1).cpu().detach().numpy()
 
     for i in range(B):
         sf.write(os.path.join(batch_dir, f'{i}.wav'), samples[i].squeeze(), 16000)
@@ -280,7 +278,7 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        losses = estimate_loss()
+        # losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
             with ctx:
