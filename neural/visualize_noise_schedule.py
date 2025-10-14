@@ -57,7 +57,7 @@ B, L, D = x.shape
 
 out = []
 steps = 10
-ts = torch.linspace(0, 1, steps=steps)
+ts = torch.linspace(0, 1, steps=steps).to(device)
 for t in ts:
     x_t, noise = diffusion.add_noise(x, t.unsqueeze(0).expand(B, -1))
     out.append(x_t)
