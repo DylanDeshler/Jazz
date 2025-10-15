@@ -224,20 +224,20 @@ def estimate_timestep_loss(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
     
-    steps = 25
+    steps = 20
     out = {}
     model.eval()
     
     fig, axs = plt.subplots(1, 2)
     for i, split in enumerate(['train', 'val']):
-        losses = torch.zeros(1000 * gradient_accumulation_steps)
+        losses = torch.zeros(2000 * gradient_accumulation_steps)
         ts = torch.linspace(1e-5, 1, steps=steps).to(device)
         for j, t in enumerate(tqdm(ts)):
-            for k in range(40 * gradient_accumulation_steps):
+            for k in range(100 * gradient_accumulation_steps):
                 X = get_batch(split)
                 with ctx:
                     loss = model(X, t=t.unsqueeze(0).expand(batch_size, -1))
-                losses[j * 40 * gradient_accumulation_steps + k] = loss.item()
+                losses[j * 100 * gradient_accumulation_steps + k] = loss.item()
         out[split] = losses.mean()
         
         axs.ravel()[i].plot(ts.cpu().detach().numpy(), losses.view(steps, -1).mean(1).cpu().detach().numpy())
@@ -312,11 +312,12 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        losses = estimate_timestep_loss(iter_num)
+        losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
             with ctx:
                 save_samples(iter_num)
+                estimate_timestep_loss(iter_num)
             model.train()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
