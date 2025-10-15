@@ -48,7 +48,7 @@ eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = True # disabled by default
+wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
@@ -205,7 +205,22 @@ if ddp:
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
-def estimate_loss(step):
+def estimate_loss():
+    out = {}
+    model.eval()
+    for i, split in enumerate(['train', 'val']):
+        losses = torch.zeros(eval_iters * gradient_accumulation_steps)
+        for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
+            X = get_batch(split)
+            with ctx:
+                loss = model(X)
+            losses[k] = loss.item()
+        out[split] = losses.mean()
+    model.train()
+    return out
+
+@torch.no_grad()
+def estimate_timestep_loss(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
     
@@ -213,6 +228,7 @@ def estimate_loss(step):
     out = {}
     model.eval()
     
+    eval_iters *= 3
     fig, axs = plt.subplots(1, 2)
     for i, split in enumerate(['train', 'val']):
         losses = torch.zeros(eval_iters * gradient_accumulation_steps // steps * steps)
@@ -235,6 +251,7 @@ def estimate_loss(step):
     plt.savefig(os.path.join(batch_dir, 'loss.png'))
     plt.close('all')
     
+    eval_iters = eval_iters // 3
     model.train()
     return out
 
@@ -297,7 +314,7 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        losses = estimate_loss(iter_num)
+        losses = estimate_timestep_loss(iter_num)
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
             with ctx:
