@@ -216,7 +216,7 @@ def estimate_loss(step):
     fig, axs = plt.subplots(1, 2)
     for i, split in enumerate(['train', 'val']):
         losses = torch.zeros(eval_iters * gradient_accumulation_steps // steps * steps)
-        ts = torch.linspace(0, 1, steps=steps).to(device)
+        ts = torch.linspace(1e-5, 1, steps=steps).to(device)
         for t in tqdm(ts):
             for k in range(eval_iters * gradient_accumulation_steps // steps):
                 X = get_batch(split)
