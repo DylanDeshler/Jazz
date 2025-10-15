@@ -217,8 +217,8 @@ def estimate_loss(step):
     for i, split in enumerate(['train', 'val']):
         losses = torch.zeros(eval_iters * gradient_accumulation_steps // steps * steps)
         ts = torch.linspace(0, 1, steps=steps).to(device)
-        for t in ts:
-            for k in tqdm(range(eval_iters * gradient_accumulation_steps // steps)):
+        for t in tqdm(ts):
+            for k in range(eval_iters * gradient_accumulation_steps // steps):
                 X = get_batch(split)
                 with ctx:
                     loss = model(X, t=t.unsqueeze(0).expand(batch_size, -1))
