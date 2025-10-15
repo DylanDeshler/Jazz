@@ -228,13 +228,12 @@ def estimate_timestep_loss(step):
     out = {}
     model.eval()
     
-    eval_iters *= 3
     fig, axs = plt.subplots(1, 2)
     for i, split in enumerate(['train', 'val']):
-        losses = torch.zeros(eval_iters * gradient_accumulation_steps // steps * steps)
+        losses = torch.zeros(eval_iters * 3 * gradient_accumulation_steps // steps * steps)
         ts = torch.linspace(1e-5, 1, steps=steps).to(device)
         for t in tqdm(ts):
-            for k in range(eval_iters * gradient_accumulation_steps // steps):
+            for k in range(eval_iters * 3 * gradient_accumulation_steps // steps):
                 X = get_batch(split)
                 with ctx:
                     loss = model(X, t=t.unsqueeze(0).expand(batch_size, -1))
@@ -251,7 +250,6 @@ def estimate_timestep_loss(step):
     plt.savefig(os.path.join(batch_dir, 'loss.png'))
     plt.close('all')
     
-    eval_iters = eval_iters // 3
     model.train()
     return out
 
