@@ -205,17 +205,35 @@ if ddp:
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
-def estimate_loss():
+def estimate_loss(step):
+    batch_dir = os.path.join(out_dir, str(step))
+    os.makedirs(batch_dir, exist_ok=True)
+    
+    steps = 25
     out = {}
     model.eval()
-    for split in ['train', 'val']:
-        losses = torch.zeros(eval_iters * gradient_accumulation_steps)
-        for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
-            X = get_batch(split)
-            with ctx:
-                loss = model(X)
-            losses[k] = loss.item()
+    
+    fig, axs = plt.subplots(1, 2)
+    for i, split in enumerate(['train', 'val']):
+        losses = torch.zeros(eval_iters * gradient_accumulation_steps // steps * steps)
+        ts = torch.linspace(0, 1, steps=steps).to(device)
+        for t in ts:
+            for k in tqdm(range(eval_iters * gradient_accumulation_steps // steps)):
+                X = get_batch(split)
+                with ctx:
+                    loss = model(X, t=t.unsqueeze(0).expand(batch_size, -1))
+                losses[k] = loss.item()
         out[split] = losses.mean()
+        
+        axs.ravel()[i].plot(ts.cpu().detach().numpy(), losses.view(steps, -1).mean(1).cpu().detach().numpy())
+        axs.ravel()[i].set_title(split)
+        axs.ravel()[i].set_xlabel('FM Loss')
+        axs.ravel()[i].set_ylabel('t')
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(batch_dir, 'loss.png'))
+    plt.close('all')
+    
     model.train()
     return out
 
@@ -278,7 +296,7 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        losses = estimate_loss()
+        losses = estimate_loss(iter_num)
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
             with ctx:

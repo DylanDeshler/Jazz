@@ -973,8 +973,8 @@ class SimpleLightningDiTWrapper(nn.Module):
         self.apply(_basic_init)
         self.net.initialize_weights()
     
-    def forward(self, x):
-        return self.diffusion.loss(self.net, x)
+    def forward(self, x, t=None):
+        return self.diffusion.loss(self.net, x, t=t)
     
     def sample(self, shape, n_steps=50):
         return self.sampler.sample(self.net, shape, n_steps)
