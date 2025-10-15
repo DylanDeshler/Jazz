@@ -227,8 +227,9 @@ def estimate_loss(step):
         
         axs.ravel()[i].plot(ts.cpu().detach().numpy(), losses.view(steps, -1).mean(1).cpu().detach().numpy())
         axs.ravel()[i].set_title(split)
-        axs.ravel()[i].set_xlabel('FM Loss')
-        axs.ravel()[i].set_ylabel('t')
+        axs.ravel()[i].set_xlabel('t')
+        axs.ravel()[i].set_ylabel('FM Loss')
+        axs.ravel()[i].set_yscale('log')
     
     plt.tight_layout()
     plt.savefig(os.path.join(batch_dir, 'loss.png'))
