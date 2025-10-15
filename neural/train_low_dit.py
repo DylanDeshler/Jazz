@@ -244,7 +244,7 @@ def estimate_timestep_loss(step):
         axs.ravel()[i].set_title(split)
         axs.ravel()[i].set_xlabel('t')
         axs.ravel()[i].set_ylabel('FM Loss')
-        axs.ravel()[i].set_xscale('log')
+        # axs.ravel()[i].set_xscale('log')
     
     plt.tight_layout()
     plt.savefig(os.path.join(batch_dir, 'loss.png'))
