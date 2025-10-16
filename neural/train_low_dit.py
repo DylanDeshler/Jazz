@@ -230,21 +230,20 @@ def estimate_timestep_loss(step):
     
     fig, axs = plt.subplots(1, 2)
     for i, split in enumerate(['train', 'val']):
-        losses = torch.zeros(2000 * gradient_accumulation_steps)
+        losses = torch.zeros(1000 * gradient_accumulation_steps)
         ts = torch.linspace(1e-5, 1, steps=steps).to(device)
         for j, t in enumerate(tqdm(ts)):
-            for k in range(100 * gradient_accumulation_steps):
+            for k in range(50 * gradient_accumulation_steps):
                 X = get_batch(split)
                 with ctx:
                     loss = model(X, t=t.unsqueeze(0).expand(batch_size, -1))
-                losses[j * 100 * gradient_accumulation_steps + k] = loss.item()
+                losses[j * 50 * gradient_accumulation_steps + k] = loss.item()
         out[split] = losses.mean()
         
         axs.ravel()[i].plot(ts.cpu().detach().numpy(), losses.view(steps, -1).mean(1).cpu().detach().numpy())
         axs.ravel()[i].set_title(split)
         axs.ravel()[i].set_xlabel('t')
         axs.ravel()[i].set_ylabel('FM Loss')
-        # axs.ravel()[i].set_xscale('log')
     
     plt.tight_layout()
     plt.savefig(os.path.join(batch_dir, 'loss.png'))
@@ -317,7 +316,7 @@ while True:
             model.eval()
             with ctx:
                 save_samples(iter_num)
-                estimate_timestep_loss(iter_num)
+            estimate_timestep_loss(iter_num)
             model.train()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
