@@ -349,9 +349,9 @@ class STAttentionBlock(nn.Module):
     def forward(self, x, freqs_cis=None):
         B, T, N, C = x.shape
         x = rearrange(x, 'b t n c -> (b t) n c')
-        x = x + self.spatial_attn(self.norm1(x), freqs_cis=freqs_cis)
+        x = x + self.spatial_attn(self.norm1(x), freqs_cis=freqs_cis[:, :x.shape[1]])
         x = rearrange(x, '(b t) n c -> (b n) t c', b=B, t=T)
-        x = x + self.temporal_attn(self.norm2(x), freqs_cis=freqs_cis, is_causal=True)
+        x = x + self.temporal_attn(self.norm2(x), freqs_cis=freqs_cis[:, :x.shape[1]], is_causal=True)
         x = rearrange(x, '(b n) t c -> b t n c', b=B, n=N)
         x = x + self.mlp(self.norm3(x))
         return x
