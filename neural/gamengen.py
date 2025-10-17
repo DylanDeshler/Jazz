@@ -497,12 +497,12 @@ class DiT(nn.Module):
         """
         x: (B, N, C) latents to be denoised
         t: (B) noise level for x
-        history: (B, N, M, C) M historyical latent frames
-        actions: (B, M) frame actions
+        history: (B, T, N, C) T historyical latent frames
+        actions: (B, T) frame actions
         alpha: (B) noise level for historical latent frames 
         """
 
-        history = history.flatten(2)
+        history = rearrange(history, 'b t n c -> b n (t c)')
         x = torch.cat([x, history], dim=-1) # are historical latents concated before or after projection?
         x = self.x_embedder(x)
 
