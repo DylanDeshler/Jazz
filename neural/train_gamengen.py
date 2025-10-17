@@ -246,7 +246,7 @@ def generate_lam_vs_random_actions(step):
     B, T, N, D = x.shape
 
     n_autoregressive_steps=5
-    alpha = torch.ones_like(x, device=x.device) * 0.3
+    alpha = torch.ones(B, device=x.device) * 0.3
     recon, random_recon = raw_model.lam_vs_random_actions(x.clone(), alpha, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=50)
     
     batches = []
