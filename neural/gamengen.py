@@ -265,8 +265,8 @@ class CrossAttention(nn.Module):
         
         # RoPE
         if freqs_cis is not None:
-            q = apply_rotary_emb(q.transpose(1, 2), freqs_cis).transpose(1, 2)
-            k = apply_rotary_emb(k.transpose(1, 2), freqs_cis).transpose(1, 2)
+            q = apply_rotary_emb(q.transpose(1, 2), freqs_cis[:q.shape[2]]).transpose(1, 2)
+            k = apply_rotary_emb(k.transpose(1, 2), freqs_cis[:k.shape[2]]).transpose(1, 2)
 
         if self.fused_attn:
             # PyTorch 2.1+ scaled_dot_product_attention supports cross-attention
