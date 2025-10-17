@@ -126,15 +126,13 @@ def get_batch(split='train'):
     if split == 'train':
         data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_train.bin', dtype=np.float32, mode='r', shape=(204654816, vae_embed_dim))
         idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
-        x = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0))
-        x = x.view(batch_size, temporal_window, spatial_window, vae_embed_dim).pin_memory().to(device, non_blocking=True)
+        x = torch.from_numpy(np.stack([np.stack([data[idx:idx+spatial_window] for _ in range(temporal_window)], axis=0) for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
         return x
     
     else:
         data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_val.bin', dtype=np.float32, mode='r', shape=(4446944, vae_embed_dim))
         idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
-        x = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0))
-        x = x.view(batch_size, temporal_window, spatial_window, vae_embed_dim).pin_memory().to(device, non_blocking=True)
+        x = torch.from_numpy(np.stack([np.stack([data[idx:idx+spatial_window] for _ in range(temporal_window)], axis=0) for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
         return x
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
@@ -301,13 +299,11 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        with ctx:
-            generate_lam_vs_random_actions(iter_num)
         losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
-            with ctx:
-                generate_lam_vs_random_actions(iter_num)
+            # with ctx:
+            #     generate_lam_vs_random_actions(iter_num)
             model.train()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
