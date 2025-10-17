@@ -422,7 +422,7 @@ class ActionTransformer(nn.Module):
         """
         B, T, N, C = x.shape
         assert T <= self.temporal_window
-        assert N <= self.sptial_window
+        assert N <= self.spatial_window
         
         x = self.x_embedder(x)
         
