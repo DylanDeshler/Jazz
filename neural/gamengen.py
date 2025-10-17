@@ -119,9 +119,10 @@ class ClassEmbedder(nn.Module):
     def forward(self, x, force_drop=False):
         if self.training:
             drop_ids = torch.rand(x.shape, device=x.device) < self.dropout_prob
+            x = torch.where(drop_ids, self.num_classes, x)
         elif force_drop:
-            drop_ids = torch.ones_like(x)
-        x = torch.where(drop_ids, self.num_classes, x)
+            drop_ids = torch.ones_like(x).long()
+            x = torch.where(drop_ids, self.num_classes, x)
         
         x = self.embedding(x)
         return x
