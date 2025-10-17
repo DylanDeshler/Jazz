@@ -66,13 +66,13 @@ levels = [8, 8]
 max_alpha_t = 0.7
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 100000 # total number of training iterations
+max_iters = 1000000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
-decay_lr = True # whether to decay the learning rate
+decay_lr = False # whether to decay the learning rate
 warmup_iters = 5000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla

@@ -600,7 +600,7 @@ class LAM(nn.Module):
         self.decoder = DiTWrapper(in_channels=in_channels, 
                                   hidden_size=hidden_size, 
                                   num_actions=math.prod(levels), 
-                                  spatial_window=spatial_window, 
+                                  max_input_size=spatial_window, 
                                   temporal_window=temporal_window, 
                                   max_alpha_t=max_alpha_t, 
                                   num_heads=num_heads, 
