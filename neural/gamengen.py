@@ -247,6 +247,7 @@ class CrossAttention(nn.Module):
             self,
             x: torch.Tensor,
             context: torch.Tensor,
+            freqs_cis: Optional[torch.Tensor] = None,
             attn_mask = None,
     ) -> torch.Tensor:
         """
@@ -261,6 +262,11 @@ class CrossAttention(nn.Module):
         q = self.q(x).reshape(B, N, self.num_heads, self.head_dim).permute(0, 2, 1, 3)  # [B, H, N, D]
         kv = self.kv(context).reshape(B, M, 2, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
         k, v = kv.unbind(0)  # [B, H, M, D]
+        
+        # RoPE
+        if freqs_cis is not None:
+            q = apply_rotary_emb(q.transpose(1, 2), freqs_cis).transpose(1, 2)
+            k = apply_rotary_emb(k.transpose(1, 2), freqs_cis).transpose(1, 2)
 
         if self.fused_attn:
             # PyTorch 2.1+ scaled_dot_product_attention supports cross-attention
