@@ -449,7 +449,7 @@ class DiT(nn.Module):
                  ):
         super().__init__()
         
-        self.x_embedder = nn.Sequential(nn.Linear(in_channels * (num_history_tokens + 1), hidden_size, bias=True), RMSNorm(hidden_size))
+        self.x_embedder = nn.Sequential(nn.Linear(in_channels * num_history_tokens, hidden_size, bias=True), RMSNorm(hidden_size))
         self.t_embedder = TimestepEmbedder(hidden_size)
         self.alpha_embedder = NoiseEmbedder(10, hidden_size, max_t=max_alpha_t)
         self.action_embedder = ClassEmbedder(num_actions, hidden_size)
@@ -600,7 +600,8 @@ class LAM(nn.Module):
         self.decoder = DiTWrapper(in_channels=in_channels, 
                                   hidden_size=hidden_size, 
                                   num_actions=math.prod(levels), 
-                                  max_input_size=spatial_window,
+                                  max_input_size=spatial_window, 
+                                  num_history_tokens=temporal_window, 
                                   max_alpha_t=max_alpha_t, 
                                   num_heads=num_heads, 
                                   depth=depth, 
