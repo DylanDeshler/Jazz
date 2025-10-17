@@ -429,7 +429,7 @@ class ActionTransformer(nn.Module):
         for block in self.blocks:
             x = block(x, freqs_cis=self.freqs_cis)
         
-        x = x[:, 1:]    # no action can be predicted for the 0th frame because there is no previous frame to condition on
+        x = x[:, 1:].flatten(2)    # no action can be predicted for the 0th frame because there is no previous frame to condition on
         x = self.to_vq(x)
         x, indices = self.vq(x)
         return indices
