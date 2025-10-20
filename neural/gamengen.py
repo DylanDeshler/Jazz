@@ -537,7 +537,7 @@ class DiT(nn.Module):
         actions: (B, T) frame actions
         alpha: (B) noise level for historical latent frames 
         """
-        assert history.shape[1] == self.num_history_tokens
+        assert history.shape[1] == self.num_history_tokens - 1
 
         x = self.x_embedder(x, history, force_drop=force_drop_history)
         t = self.t_embedder(t)
