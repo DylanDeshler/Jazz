@@ -448,7 +448,6 @@ class PatchEmbedder(nn.Module):
         self.norm = RMSNorm(hidden_size)
         
         self.dropout_prob = dropout_prob
-        # self.null_history_token = nn.Parameter(torch.randn(1, num_history_tokens - 1, max_input_size, in_channels))
         self.null_history_token = nn.Parameter(torch.randn(1, 1, 1, in_channels))
     
     def _init_weights(self, module):
@@ -636,7 +635,9 @@ class LAM(nn.Module):
         past_actions = self.action_model(history)
         for step in range(n_autoregressive_steps):
             cur_actions = torch.cat([past_actions[:, 1:], actions[:, [step]]], dim=1)
+            print(history.shape)
             out = self.decoder.sample(history[:, 0].shape, history, cur_actions, alpha, guidance=guidance, n_steps=n_diffusion_steps)
+            print(out.shape)
             history = torch.cat([history[:, 1:], out.unsqueeze(1)], dim=1)
         return history
     
