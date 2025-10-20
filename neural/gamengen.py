@@ -448,7 +448,7 @@ class PatchEmbedder(nn.Module):
         self.norm = RMSNorm(hidden_size)
         
         self.dropout_prob = dropout_prob
-        self.null_history_token = nn.Parameter(torch.randn(1, num_history_tokens, max_input_size, hidden_size))
+        self.null_history_token = nn.Parameter(torch.randn(1, num_history_tokens - 1, max_input_size, in_channels))
         # self.null_history_token = nn.Parameter(torch.randn(1, 1, 1, in_channels))
     
     def _init_weights(self, module):
