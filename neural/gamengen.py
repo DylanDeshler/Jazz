@@ -121,7 +121,7 @@ class ClassEmbedder(nn.Module):
             drop_ids = torch.rand(x.shape[0], device=x.device) < self.dropout_prob
             x = torch.where(drop_ids.unsqueeze(-1), self.num_classes, x)
         elif force_drop:
-            drop_ids = torch.ones(x.shape[0], device=x.device).long()
+            drop_ids = torch.ones(x.shape[0], device=x.device).bool()
             x = torch.where(drop_ids.unsqueeze(-1), self.num_classes, x)
         
         x = self.embedding(x)
@@ -458,7 +458,7 @@ class PatchEmbedder(nn.Module):
             drop_ids = torch.rand(history.shape[0], device=x.device) < self.dropout_prob
             history = torch.where(drop_ids.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1), self.null_history_token, history)
         elif force_drop:
-            drop_ids = torch.ones(history.shape[0], device=x.device).long()
+            drop_ids = torch.ones(history.shape[0], device=x.device).bool()
             history = torch.where(drop_ids.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1), self.null_history_token, history)
 
         history = rearrange(history, 'b t n c -> b n (t c)')
