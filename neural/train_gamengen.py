@@ -238,16 +238,19 @@ def get_lr(it):
 def generate_lam_vs_random_actions(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
+
+    n_autoregressive_steps = 5
     
-    x = get_batch(split='val')[:10]
+    data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_val.bin', dtype=np.float32, mode='r', shape=(4446944, vae_embed_dim))
+    idxs = torch.randint(len(data) - max_seq_len - n_autoregressive_steps, (10,))
+    x = torch.from_numpy(np.stack([np.stack([data[idx:idx+spatial_window] for _ in range(temporal_window + n_autoregressive_steps)], axis=0) for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
 
     B, T, N, D = x.shape
 
-    n_autoregressive_steps = 5
     alpha = torch.ones(B, device=x.device) * 0.3
-    print(x[:, -n_autoregressive_steps:].shape)
-    recon, random_recon = raw_model.lam_vs_random_actions(x[:, -n_autoregressive_steps:].clone(), alpha, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=50, guidance=3)
+    recon, random_recon = raw_model.lam_vs_random_actions(x[:, :-n_autoregressive_steps].clone(), alpha, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=50, guidance=3)
     
+    print(x.shape, recon.shape, random_recon.shape)
     batches = []
     for cut in tqdm(range(T), desc='Decoding'):
         batch = torch.cat([x[:, cut], recon[:, cut], random_recon[:, cut]], dim=0).permute(0, 2, 1)
