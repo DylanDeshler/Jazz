@@ -429,6 +429,7 @@ class ActionTransformer(nn.Module):
         x: (B, T, N, C) latents
         """
         B, T, N, C = x.shape
+        print(x.shape)
         assert T == self.temporal_window
         assert N == self.spatial_window
         
