@@ -496,6 +496,7 @@ class DiT(nn.Module):
         self.final_layer = nn.Sequential(RMSNorm(hidden_size), nn.Linear(hidden_size, in_channels, bias=True))
 
         self.max_alpha_t = max_alpha_t
+        self.num_history_tokens = num_history_tokens
         
         freqs_cis = precompute_freqs_cis(
             hidden_size // num_heads,
@@ -536,6 +537,7 @@ class DiT(nn.Module):
         actions: (B, T) frame actions
         alpha: (B) noise level for historical latent frames 
         """
+        assert history.shape[1] == self.num_history_tokens
 
         x = self.x_embedder(x, history, force_drop=force_drop_history)
         t = self.t_embedder(t)
