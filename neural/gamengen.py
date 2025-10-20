@@ -463,7 +463,7 @@ class PatchEmbedder(nn.Module):
 
         history = rearrange(history, 'b t n c -> b n (t c)')
         x = torch.cat([history, x], dim=-1) # are historical latents concated before or after projection?
-        print(x.shape, history.shape)
+        
         x = self.proj(x)
         x = self.norm(x)
         
@@ -639,9 +639,7 @@ class LAM(nn.Module):
         history = history[:, 1:]
         for step in range(n_autoregressive_steps):
             cur_actions = torch.cat([cur_actions[:, 1:], actions[:, [step]]], dim=1)
-            print(cur_actions.shape, history.shape)
             out = self.decoder.sample(history[:, 0].shape, history, cur_actions, alpha, guidance=guidance, n_steps=n_diffusion_steps)
-            print(out.shape)
             history = torch.cat([history[:, 1:], out.unsqueeze(1)], dim=1)
         return history
     
@@ -665,7 +663,7 @@ class LAM(nn.Module):
         recon = self.generate(x, alpha, actions, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=n_diffusion_steps, guidance=guidance)
         random = self.generate(x, alpha, random_actions, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=n_diffusion_steps, guidance=guidance)
         
-        return x, recon, random
+        return recon, random
 
 def LAM_M(**kwargs):
     return LAM(depth=20, hidden_size=1024, num_heads=16, **kwargs)
