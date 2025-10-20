@@ -302,8 +302,8 @@ while True:
         losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
-            # with ctx:
-            #     generate_lam_vs_random_actions(iter_num)
+            with ctx:
+                generate_lam_vs_random_actions(iter_num)
             model.train()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
