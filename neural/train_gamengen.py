@@ -243,7 +243,7 @@ def generate_lam_vs_random_actions(step):
 
     B, T, N, D = x.shape
 
-    n_autoregressive_steps=5
+    n_autoregressive_steps = 5
     alpha = torch.ones(B, device=x.device) * 0.3
     recon, random_recon = raw_model.lam_vs_random_actions(x.clone(), alpha, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=50, guidance=3)
     
@@ -253,8 +253,8 @@ def generate_lam_vs_random_actions(step):
         batches.append(tokenizer.decode(batch, shape=(1, 16384 * cut_seconds)))
     x, recon, random_recon = [res.cpu().detach().numpy().squeeze(1) for res in torch.cat(batches, dim=-1).split(B, dim=0)]
 
-    recon_psnr = psnr(x[:, T * 16384:], recon[:, T * 16384:])
-    random_psnr = psnr(x[:, T * 16384:], random_recon[:, T * 16384:])
+    recon_psnr = psnr(x[:, -n_autoregressive_steps * 16384:], recon[:, -n_autoregressive_steps * 16384:])
+    random_psnr = psnr(x[:, -n_autoregressive_steps * 16384:], random_recon[:, -n_autoregressive_steps * 16384:])
 
     for i in range(B):
         og, y, random_y = x[i], recon[i], random_recon[i]
