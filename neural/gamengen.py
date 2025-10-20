@@ -448,8 +448,8 @@ class PatchEmbedder(nn.Module):
         self.norm = RMSNorm(hidden_size)
         
         self.dropout_prob = dropout_prob
-        self.null_history_token = nn.Parameter(torch.randn(1, num_history_tokens - 1, max_input_size, in_channels))
-        # self.null_history_token = nn.Parameter(torch.randn(1, 1, 1, in_channels))
+        # self.null_history_token = nn.Parameter(torch.randn(1, num_history_tokens - 1, max_input_size, in_channels))
+        self.null_history_token = nn.Parameter(torch.randn(1, 1, 1, in_channels))
     
     def _init_weights(self, module):
         nn.init.normal_(self.null_history_token, std=0.02)
@@ -463,7 +463,7 @@ class PatchEmbedder(nn.Module):
             history = torch.where(drop_ids.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1), self.null_history_token, history)
 
         history = rearrange(history, 'b t n c -> b n (t c)')
-        x = torch.cat([x, history], dim=-1) # are historical latents concated before or after projection?
+        x = torch.cat([history, x], dim=-1) # are historical latents concated before or after projection?
         x = self.proj(x)
         x = self.norm(x)
         
