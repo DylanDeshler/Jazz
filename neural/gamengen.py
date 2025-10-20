@@ -457,10 +457,10 @@ class PatchEmbedder(nn.Module):
     def forward(self, x, history, force_drop=False):
         if self.training:
             drop_ids = torch.rand(history.shape[0], device=x.device) < self.dropout_prob
-            history = torch.where(drop_ids, self.null_history_token.expand(history.shape[0], -1, -1, -1), history)
+            history = torch.where(drop_ids, self.null_history_token, history)
         elif force_drop:
             drop_ids = torch.ones(history.shape[0], device=x.device).long()
-            history = torch.where(drop_ids, self.null_history_token.expand(history.shape[0], -1, -1, -1), history)
+            history = torch.where(drop_ids, self.null_history_token, history)
 
         history = rearrange(history, 'b t n c -> b n (t c)')
         x = torch.cat([x, history], dim=-1) # are historical latents concated before or after projection?
