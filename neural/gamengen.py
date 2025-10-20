@@ -637,12 +637,14 @@ class LAM(nn.Module):
         assert history.ndim == 4
         
         cur_actions = self.action_model(history)
+        res = history.clone()
         history = history[:, 1:]
         for step in tqdm(range(n_autoregressive_steps), desc='Generating'):
             cur_actions = torch.cat([cur_actions[:, 1:], actions[:, [step]]], dim=1)
             out = self.decoder.sample(history[:, 0].shape, history, cur_actions, alpha, guidance=guidance, n_steps=n_diffusion_steps)
             history = torch.cat([history[:, 1:], out.unsqueeze(1)], dim=1)
-        return history
+            res = torch.cat([res, out.unsqueeze(1)], dim=1)
+        return res
     
     def generate_random_different_actions(self, actions_indices, codebook_size, device):
         shape = actions_indices.shape
