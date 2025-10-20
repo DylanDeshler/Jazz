@@ -440,7 +440,33 @@ class ActionTransformer(nn.Module):
         x = self.to_vq(x)
         x, indices = self.vq(x)
         return indices
+
+class PatchEmbedder(nn.Module):
+    def __init__(self, in_channels, hidden_size, num_history_tokens, max_input_size, dropout_prob):
+        super().__init__()
+        self.proj = nn.Linear(in_channels * num_history_tokens, hidden_size, bias=True)
+        self.norm = RMSNorm(hidden_size)
         
+        self.dropout_prob = dropout_prob
+        self.null_history_token = nn.Parameter(torch.randn(1, num_history_tokens, max_input_size, hidden_size))
+    
+    def _init_weights(self, module):
+        nn.init.normal_(self.null_history_token, std=0.02)
+    
+    def forward(self, x, history, force_drop=False):
+        if self.training:
+            drop_ids = torch.rand(history.shape[0], device=x.device) < self.dropout_prob
+            history = torch.where(drop_ids, self.null_history_token.expand(history.shape[0], -1, -1, -1), history)
+        elif force_drop:
+            drop_ids = torch.ones_like(history).long()
+            history = torch.where(drop_ids, self.null_history_token.expand(history.shape[0], -1, -1, -1), history)
+
+        history = rearrange(history, 'b t n c -> b n (t c)')
+        x = torch.cat([x, history], dim=-1) # are historical latents concated before or after projection?
+        x = self.proj(x)
+        x = self.norm(x)
+        
+        return x
 
 class DiT(nn.Module):
     def __init__(self,
@@ -450,13 +476,14 @@ class DiT(nn.Module):
                  max_input_size,
                  num_history_tokens,
                  max_alpha_t=0.7,
+                 history_dropout_prob=0.1,
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4,
                  ):
         super().__init__()
         
-        self.x_embedder = nn.Sequential(nn.Linear(in_channels * num_history_tokens, hidden_size, bias=True), RMSNorm(hidden_size))
+        self.x_embedder = PatchEmbedder(in_channels, hidden_size, num_history_tokens, max_input_size, history_dropout_prob)
         self.t_embedder = TimestepEmbedder(hidden_size)
         self.alpha_embedder = NoiseEmbedder(10, hidden_size, max_t=max_alpha_t)
         self.action_embedder = ClassEmbedder(num_actions, hidden_size)
@@ -500,7 +527,7 @@ class DiT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=1.0)
     
-    def forward(self, x, t, history, actions, alpha, force_drop=False):
+    def forward(self, x, t, history, actions, alpha, force_drop_actions=False, force_drop_history=False):
         """
         x: (B, N, C) latents to be denoised
         t: (B) noise level for x
@@ -509,13 +536,10 @@ class DiT(nn.Module):
         alpha: (B) noise level for historical latent frames 
         """
 
-        history = rearrange(history, 'b t n c -> b n (t c)')
-        x = torch.cat([x, history], dim=-1) # are historical latents concated before or after projection?
-        x = self.x_embedder(x)
-
+        x = self.x_embedder(x, history, force_drop=force_drop_history)
         t = self.t_embedder(t)
         alpha = self.alpha_embedder(alpha)
-        actions = self.action_embedder(actions, force_drop=force_drop)
+        actions = self.action_embedder(actions, force_drop=force_drop_actions)
         context = torch.cat([t.unsqueeze(1), alpha.unsqueeze(1), actions], dim=1)
         
         for block in self.blocks:
