@@ -126,13 +126,13 @@ def get_batch(split='train'):
     if split == 'train':
         data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_train.bin', dtype=np.float32, mode='r', shape=(204654816, vae_embed_dim))
         idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
-        x = torch.from_numpy(np.stack([np.stack([data[idx:idx+spatial_window] for _ in range(temporal_window)], axis=0) for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+        x = torch.from_numpy(np.stack([np.stack([data[idx+i*spatial_window:idx+(i+1)*spatial_window] for i in range(temporal_window)], axis=0) for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
         return x
     
     else:
         data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_val.bin', dtype=np.float32, mode='r', shape=(4446944, vae_embed_dim))
         idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
-        x = torch.from_numpy(np.stack([np.stack([data[idx:idx+spatial_window] for _ in range(temporal_window)], axis=0) for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+        x = torch.from_numpy(np.stack([np.stack([data[idx+i*spatial_window:idx+(i+1)*spatial_window] for i in range(temporal_window)], axis=0) for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
         return x
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
@@ -199,6 +199,7 @@ if compile and 'cuda' in device:
     print("compiling the model... (takes a ~minute)")
     unoptimized_model = model
     model = torch.compile(model) # requires PyTorch 2.0
+    tokenizer = torch.compile(tokenizer)
 
 # wrap model into DDP container
 if ddp:
@@ -243,7 +244,7 @@ def generate_lam_vs_random_actions(step):
     
     data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_val.bin', dtype=np.float32, mode='r', shape=(4446944, vae_embed_dim))
     idxs = torch.randint(len(data) - max_seq_len - n_autoregressive_steps, (10,))
-    x = torch.from_numpy(np.stack([np.stack([data[idx:idx+spatial_window] for _ in range(temporal_window + n_autoregressive_steps)], axis=0) for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    x = torch.from_numpy(np.stack([np.stack([data[idx+i*spatial_window:idx+(i+1)*spatial_window] for i in range(temporal_window + n_autoregressive_steps)], axis=0) for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
 
     B, T, N, D = x.shape
 
@@ -306,8 +307,9 @@ while True:
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
             with ctx:
-                generate_lam_vs_random_actions(iter_num)
+                delta_psnr = generate_lam_vs_random_actions(iter_num)
             model.train()
+            print(f"step {iter_num}: delta PSNR {delta_psnr:.3f}")
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
             wandb.log({
