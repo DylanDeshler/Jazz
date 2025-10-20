@@ -250,7 +250,6 @@ def generate_lam_vs_random_actions(step):
     alpha = torch.ones(B, device=x.device) * 0.3
     recon, random_recon = raw_model.lam_vs_random_actions(x[:, :-n_autoregressive_steps].clone(), alpha, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=50, guidance=3)
     
-    print(x.shape, recon.shape, random_recon.shape)
     batches = []
     for cut in tqdm(range(T), desc='Decoding'):
         batch = torch.cat([x[:, cut], recon[:, cut], random_recon[:, cut]], dim=0).permute(0, 2, 1)
@@ -303,7 +302,7 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        # losses = estimate_loss()
+        losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
             with ctx:
