@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import math
+from tqdm import tqdm
 from typing import Optional, Callable
 
 from einops import rearrange
@@ -637,7 +638,7 @@ class LAM(nn.Module):
         
         cur_actions = self.action_model(history)
         history = history[:, 1:]
-        for step in range(n_autoregressive_steps):
+        for step in tqdm(range(n_autoregressive_steps), desc='Generating'):
             cur_actions = torch.cat([cur_actions[:, 1:], actions[:, [step]]], dim=1)
             out = self.decoder.sample(history[:, 0].shape, history, cur_actions, alpha, guidance=guidance, n_steps=n_diffusion_steps)
             history = torch.cat([history[:, 1:], out.unsqueeze(1)], dim=1)
