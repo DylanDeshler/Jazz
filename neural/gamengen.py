@@ -463,6 +463,7 @@ class PatchEmbedder(nn.Module):
 
         history = rearrange(history, 'b t n c -> b n (t c)')
         x = torch.cat([history, x], dim=-1) # are historical latents concated before or after projection?
+        print(x.shape, history.shape)
         x = self.proj(x)
         x = self.norm(x)
         
