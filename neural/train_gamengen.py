@@ -245,10 +245,10 @@ def generate_lam_vs_random_actions(step):
 
     n_autoregressive_steps = 5
     alpha = torch.ones(B, device=x.device) * 0.3
-    recon, random_recon = raw_model.lam_vs_random_actions(x.clone(), alpha, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=50, guidance=3)
+    recon, random_recon = raw_model.lam_vs_random_actions(x[:, -n_autoregressive_steps:].clone(), alpha, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=50, guidance=3)
     
     batches = []
-    for cut in tqdm(range(T + n_autoregressive_steps), desc='Decoding'):
+    for cut in tqdm(range(T), desc='Decoding'):
         batch = torch.cat([x[:, cut], recon[:, cut], random_recon[:, cut]], dim=0).permute(0, 2, 1)
         batches.append(tokenizer.decode(batch, shape=(1, 16384 * cut_seconds)))
     x, recon, random_recon = [res.cpu().detach().numpy().squeeze(1) for res in torch.cat(batches, dim=-1).split(B, dim=0)]
