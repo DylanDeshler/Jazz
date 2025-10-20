@@ -119,10 +119,10 @@ class ClassEmbedder(nn.Module):
     def forward(self, x, force_drop=False):
         if self.training:
             drop_ids = torch.rand(x.shape[0], device=x.device) < self.dropout_prob
-            x = torch.where(drop_ids, self.num_classes, x)
+            x = torch.where(drop_ids.unsqueeze(-1), self.num_classes, x)
         elif force_drop:
             drop_ids = torch.ones(x.shape[0], device=x.device).long()
-            x = torch.where(drop_ids, self.num_classes, x)
+            x = torch.where(drop_ids.unsqueeze(-1), self.num_classes, x)
         
         x = self.embedding(x)
         return x
@@ -457,7 +457,6 @@ class PatchEmbedder(nn.Module):
     def forward(self, x, history, force_drop=False):
         if self.training:
             drop_ids = torch.rand(history.shape[0], device=x.device) < self.dropout_prob
-            print(x.shape, history.shape, self.null_history_token.shape, drop_ids.shape)
             history = torch.where(drop_ids.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1), self.null_history_token, history)
         elif force_drop:
             drop_ids = torch.ones(history.shape[0], device=x.device).long()
