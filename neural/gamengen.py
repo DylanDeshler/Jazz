@@ -581,7 +581,7 @@ class DiTWrapper(nn.Module):
         history, _ = self.diffusion.add_noise(history, alpha)
 
         net_kwargs={'history': history, 'actions': actions, 'alpha': alpha}
-        uncond_net_kwargs={'history': history, 'actions': actions, 'alpha': alpha, 'force_drop': True}
+        uncond_net_kwargs={'history': history, 'actions': actions, 'alpha': alpha, 'force_drop_actions': True, 'force_drop_history': True}
         
         return self.sampler.sample(self.net, shape, n_steps, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, guidance=guidance)
 
