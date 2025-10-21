@@ -63,4 +63,4 @@ x = torch.cat(batches, dim=-1)
 print(x.shape)
 
 for i in range(B):
-    sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x[i].squeeze(), 16000)
+    sf.write(os.path.join(batch_dir, f'{i}_sanity.wav'), x[i].squeeze().cpu().detach().numpy(), 16000)
