@@ -17,7 +17,7 @@ import soundfile as sf
 import librosa
 import glob
 
-device = torch.device('mps')
+device = torch.device('cuda')
 
 batch_size = 4
 rate = 16000
