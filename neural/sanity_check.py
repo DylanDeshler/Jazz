@@ -60,9 +60,7 @@ batches = []
 for cut in tqdm(range(T), desc='Decoding'):
     batches.append(tokenizer.decode(x[:, cut].permute(0, 2, 1), shape=(1, 16384 * cut_seconds)))
 x = torch.cat(batches, dim=-1)
+print(x.shape)
 
 for i in range(B):
-    og = x[i]
-
-    # save .wavs
-    sf.write(os.path.join(batch_dir, f'{i}_real.wav'), og, 16000)
+    sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x[i].squeeze(), 16000)
