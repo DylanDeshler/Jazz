@@ -37,9 +37,6 @@ batch_size = 4
 
 diffusion = FM(sigma_min=1e-9, timescale=1000.0)
 
-batch_dir = 'noise_schedule'
-os.makedirs(batch_dir, exist_ok=True)
-
 def get_batch(split='train'):
     if split == 'train':
         data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_train.bin', dtype=np.float32, mode='r', shape=(204654816, vae_embed_dim))
@@ -62,5 +59,4 @@ for cut in tqdm(range(T), desc='Decoding'):
 x = torch.cat(batches, dim=-1)
 print(x.shape)
 
-for i in range(B):
-    sf.write(os.path.join(batch_dir, f'{i}_sanity.wav'), x[i].squeeze().cpu().detach().numpy(), 16000)
+sf.write('sanity.wav', x[0].squeeze().cpu().detach().numpy(), 16000)
