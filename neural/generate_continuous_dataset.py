@@ -46,9 +46,9 @@ print(len(paths))
 with open('/home/dylan.d/research/music/Jazz/song_instruments.json', 'r') as f:
     song_instruments = json.load(f)
 
-if False:
+if True:
 
-    test = False
+    test = True
 
     write_idx = 0
     write_paths = []
@@ -119,6 +119,9 @@ if False:
 
                 sf.write('real.wav', x, rate)
                 sf.write('recon.wav', this_samples, rate)
+                
+                import sys
+                sys.exit()
             
             if (idx + 1) % (len(paths) // total_write_batches) == 0:
                 print(f'Writing batch {write_idx}...')
