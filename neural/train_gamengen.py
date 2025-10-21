@@ -56,7 +56,7 @@ dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
 batch_size = 64# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
-temporal_window = 12
+temporal_window = 16
 spatial_window = 32
 cut_seconds = 1
 cut_len = spatial_window * cut_seconds
