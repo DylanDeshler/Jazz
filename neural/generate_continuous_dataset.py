@@ -17,9 +17,9 @@ import soundfile as sf
 import librosa
 import glob
 
-device = torch.device('cpu')
+device = torch.device('mps')
 
-batch_size = 128
+batch_size = 4
 rate = 16000
 n_samples = rate
 
