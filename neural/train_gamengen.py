@@ -29,7 +29,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from gamengen import LAM_M as net
+from gamengen import LAM_B as net
 from dito import DiToV4 as Tokenizer
 
 import matplotlib.pyplot as plt
@@ -38,7 +38,7 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'LAM_M'
+out_dir = 'LAM_B'
 eval_interval = 1000
 sample_interval = 5000
 log_interval = 100
@@ -46,15 +46,15 @@ save_interval = 10000
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 2 # used to simulate larger batch sizes
-batch_size = 64# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+gradient_accumulation_steps = 4 # used to simulate larger batch sizes
+batch_size = 128# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 temporal_window = 16
 spatial_window = 32
