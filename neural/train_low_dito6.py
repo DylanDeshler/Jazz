@@ -40,21 +40,21 @@ import glob
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'tokenizer_low'
+out_dir = 'tokenizer_low_large'
 eval_interval = 1000
 log_interval = 100
 save_interval = eval_interval * 10
 eval_iters = 100
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 2 * 2 # used to simulate larger batch sizes
+gradient_accumulation_steps = 2 # used to simulate larger batch sizes
 batch_size = 96 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
@@ -68,7 +68,7 @@ beta2 = 0.999
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
 decay_lr = False # whether to decay the learning rate
-warmup_iters = 2000 # how many steps to warm up for
+warmup_iters = 5000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
@@ -152,7 +152,7 @@ def get_batch(split='train'):
 iter_num = 0
 best_val_loss = 1e9
 
-model_args = dict(z_shape=(16, 32), n_residual_layers=3, lstm=0, transformer=1, dimension=16, n_filters=32, ratios=[8, 4, 4, 2, 2], channels=[128, 256, 256, 512, 512], dilation_base=2)
+model_args = dict(z_shape=(16, 32), n_residual_layers=3, lstm=0, transformer=1, dimension=16, n_filters=32, ratios=[8, 4, 4, 2, 2], channels=[128, 256, 512, 512, 1024], dilation_base=2)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
