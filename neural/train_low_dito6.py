@@ -43,7 +43,6 @@ import glob
 out_dir = 'tokenizer_low_large'
 eval_interval = 5000
 log_interval = 100
-save_interval = 10000
 eval_iters = 100
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
@@ -166,20 +165,17 @@ elif init_from == 'resume':
     model_args = checkpoint['model_args']
 
     model = Transformer(**model_args)
-    if eval_only:
-        model.load_state_dict(average_checkpoints([os.path.join(out_dir, f'ckpt_{n}.pt') for n in [50000, 60000, 70000]]))
-    else:
-        state_dict = checkpoint['model']
-        # fix the keys of the state dictionary :(
-        # honestly no idea how checkpoints sometimes get this prefix, have to debug more
-        unwanted_prefix = '_orig_mod.'
-        for k,v in list(state_dict.items()):
-            if k.startswith(unwanted_prefix):
-                state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-        model.load_state_dict(state_dict)
-        iter_num = checkpoint['iter_num']
-        tokens_trained = checkpoint['tokens']
-        best_val_loss = checkpoint['best_val_loss']
+    state_dict = checkpoint['model']
+    # fix the keys of the state dictionary :(
+    # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+    unwanted_prefix = '_orig_mod.'
+    for k,v in list(state_dict.items()):
+        if k.startswith(unwanted_prefix):
+            state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+    model.load_state_dict(state_dict)
+    iter_num = checkpoint['iter_num']
+    tokens_trained = checkpoint['tokens']
+    best_val_loss = checkpoint['best_val_loss']
 elif init_from.startswith('gpt2'):
     print(f"Initializing from OpenAI GPT-2 weights: {init_from}")
     # initialize from OpenAI GPT-2 weights
@@ -295,6 +291,7 @@ while True:
         model.train()
         save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
         losses = estimate_loss()
+        optimizer.zero_grad(set_to_none=True)
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
             wandb.log({
@@ -319,9 +316,6 @@ while True:
                 }
                 print(f"saving checkpoint to {out_dir}")
                 torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
-
-                if iter_num % save_interval == 0:
-                    torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
 
     if iter_num == 0 and eval_only:
         break
