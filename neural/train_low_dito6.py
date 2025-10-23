@@ -246,7 +246,7 @@ def save_samples(xs, ys, step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
 
-    for i in range(min(8, xs.shape[0])):
+    for i in range(min(10, xs.shape[0])):
         x, y = xs[i].squeeze(), ys[i].squeeze()
 
         # save .wavs
