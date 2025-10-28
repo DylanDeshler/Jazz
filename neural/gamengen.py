@@ -679,7 +679,7 @@ def LAM_L(**kwargs):
     return LAM(depth=24, hidden_size=1024, num_heads=16, **kwargs)
 
 def LAM_M(**kwargs):
-    return LAM(depth=20, hidden_size=768, num_heads=20, **kwargs)
+    return LAM(depth=20, hidden_size=768, num_heads=12, **kwargs)
 
 def LAM_B(**kwargs):
     return LAM(depth=12, hidden_size=768, num_heads=12, **kwargs)
