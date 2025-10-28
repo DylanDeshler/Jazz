@@ -19,12 +19,12 @@ import glob
 
 device = torch.device('cuda')
 
-batch_size = 4
+batch_size = 64
 rate = 16000
 n_samples = rate
 
-out_prefix = 'low'
-ckpt_path = os.path.join('tokenizer_low', 'ckpt.pt')
+out_prefix = 'low_large'
+ckpt_path = os.path.join('tokenizer_low_large', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 tokenizer_args = checkpoint['model_args']
 vae_embed_dim = tokenizer_args['dimension']
@@ -183,7 +183,7 @@ if True:
 ## get token write paths
 dtype = np.float32
 write_paths = []
-paths = [f'{out_prefix}_{str(i).zfill(2)}.bin' for i in range(49)]
+paths = [f'{out_prefix}_{str(i).zfill(2)}.bin' for i in range(total_write_batches + 1)]
 for path in paths:
     data = np.memmap(path, dtype=np.float32, mode='r')
     data = data.reshape((-1, vae_embed_dim))
@@ -222,7 +222,7 @@ for path, length in write_paths[-2:]:
 ## get instrument write paths
 dtype = np.uint8
 write_paths = []
-paths = [f'{out_prefix}_instruments_{str(i).zfill(2)}.bin' for i in range(49)]
+paths = [f'{out_prefix}_instruments_{str(i).zfill(2)}.bin' for i in range(total_write_batches + 1)]
 for path in paths:
     data = np.memmap(path, dtype=dtype, mode='r')
     data = data.reshape((-1, 26))
