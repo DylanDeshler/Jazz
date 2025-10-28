@@ -29,7 +29,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from gamengen import LAM_B as net
+from gamengen import LAM_M as net
 from dito import DiToV4 as Tokenizer
 
 import matplotlib.pyplot as plt
@@ -38,7 +38,7 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'LAM_B'
+out_dir = 'LAM_M'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -46,7 +46,7 @@ save_interval = 10000
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -54,7 +54,7 @@ wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 4 # used to simulate larger batch sizes
-batch_size = 128# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 64# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 temporal_window = 16
 spatial_window = 32
@@ -139,7 +139,7 @@ def get_batch(split='train'):
 iter_num = 0
 best_val_loss = 1e9
 
-ckpt_path = os.path.join('tokenizer_low', 'ckpt.pt')
+ckpt_path = os.path.join('tokenizer_low_large', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 tokenizer_args = checkpoint['model_args']
 
@@ -242,7 +242,7 @@ def generate_lam_vs_random_actions(step):
 
     n_autoregressive_steps = 5
     
-    data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_val.bin', dtype=np.float32, mode='r', shape=(4446944, vae_embed_dim))
+    data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_large_val.bin', dtype=np.float32, mode='r', shape=(4446944, vae_embed_dim))
     idxs = torch.randint(len(data) - max_seq_len - n_autoregressive_steps, (10,))
     x = torch.from_numpy(np.stack([np.stack([data[idx+i*spatial_window:idx+(i+1)*spatial_window] for i in range(temporal_window + n_autoregressive_steps)], axis=0) for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
 
@@ -302,41 +302,41 @@ while True:
     tokens_trained += batch_size * gradient_accumulation_steps * max_seq_len
 
     # evaluate the loss on train/val sets and write checkpoints
-    if iter_num % eval_interval == 0 and master_process:
-        losses = estimate_loss()
-        if iter_num % sample_interval == 0 and master_process:
-            model.eval()
-            with ctx:
-                delta_psnr = generate_lam_vs_random_actions(iter_num)
-            model.train()
-            print(f"iter {iter_num}: delta PSNR {delta_psnr:.3f}")
-        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-        if wandb_log:
-            wandb.log({
-                "iter": iter_num,
-                "train/loss": losses['train'],
-                "val/loss": losses['val'],
-                "lr": lr,
-                "mfu": running_mfu*100, # convert to percentage
-                "tokens": tokens_trained,
-            })
-        if losses['val'] < best_val_loss or always_save_checkpoint:
-            best_val_loss = losses['val']
-            if iter_num > 0:
-                checkpoint = {
-                    'model': raw_model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'model_args': model_args,
-                    'iter_num': iter_num,
-                    'best_val_loss': best_val_loss,
-                    'config': config,
-                    'tokens': tokens_trained,
-                }
-                print(f"saving checkpoint to {out_dir}")
-                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+    # if iter_num % eval_interval == 0 and master_process:
+    #     losses = estimate_loss()
+    #     if iter_num % sample_interval == 0 and master_process:
+    #         model.eval()
+    #         with ctx:
+    #             delta_psnr = generate_lam_vs_random_actions(iter_num)
+    #         model.train()
+    #         print(f"iter {iter_num}: delta PSNR {delta_psnr:.3f}")
+    #     print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+    #     if wandb_log:
+    #         wandb.log({
+    #             "iter": iter_num,
+    #             "train/loss": losses['train'],
+    #             "val/loss": losses['val'],
+    #             "lr": lr,
+    #             "mfu": running_mfu*100, # convert to percentage
+    #             "tokens": tokens_trained,
+    #         })
+    #     if losses['val'] < best_val_loss or always_save_checkpoint:
+    #         best_val_loss = losses['val']
+    #         if iter_num > 0:
+    #             checkpoint = {
+    #                 'model': raw_model.state_dict(),
+    #                 'optimizer': optimizer.state_dict(),
+    #                 'model_args': model_args,
+    #                 'iter_num': iter_num,
+    #                 'best_val_loss': best_val_loss,
+    #                 'config': config,
+    #                 'tokens': tokens_trained,
+    #             }
+    #             print(f"saving checkpoint to {out_dir}")
+    #             torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
 
-                if iter_num % save_interval == 0 and master_process == 0:
-                    torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
+    #             if iter_num % save_interval == 0 and master_process == 0:
+    #                 torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
     if iter_num == 0 and eval_only:
         break
 
