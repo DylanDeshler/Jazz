@@ -602,7 +602,14 @@ class LAM(nn.Module):
                  mlp_ratio=4,
                  ):
         super().__init__()
-        self.action_model = ActionTransformer(in_channels, hidden_size, levels, spatial_window, temporal_window, num_heads, depth, mlp_ratio)
+        self.action_model = ActionTransformer(in_channels=in_channels, 
+                                              hidden_size=hidden_size, 
+                                              levels=levels, 
+                                              spatial_window=spatial_window, 
+                                              temporal_window=temporal_window, 
+                                              num_heads=num_heads, 
+                                              depth=depth, 
+                                              mlp_ratio=mlp_ratio)
         self.decoder = DiTWrapper(in_channels=in_channels, 
                                   hidden_size=hidden_size, 
                                   num_actions=math.prod(levels), 
@@ -672,7 +679,7 @@ def LAM_L(**kwargs):
     return LAM(depth=24, hidden_size=1024, num_heads=16, **kwargs)
 
 def LAM_M(**kwargs):
-    return LAM(depth=20, hidden_size=768, num_heads=12, **kwargs)
+    return LAM(depth=20, hidden_size=768, num_heads=20, **kwargs)
 
 def LAM_B(**kwargs):
     return LAM(depth=12, hidden_size=768, num_heads=12, **kwargs)
