@@ -19,7 +19,7 @@ import glob
 
 device = torch.device('cuda')
 
-batch_size = 64
+batch_size = 128
 rate = 16000
 n_samples = rate
 
@@ -48,7 +48,7 @@ with open('/home/dylan.d/research/music/Jazz/song_instruments.json', 'r') as f:
 
 if True:
 
-    test = True
+    test = False
 
     write_idx = 0
     write_paths = []
