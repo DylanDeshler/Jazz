@@ -46,7 +46,7 @@ save_interval = 5000
 eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -163,9 +163,9 @@ if init_from == 'scratch':
 elif init_from == 'resume':
     print(f"Resuming training from {out_dir}")
     # resume training from a checkpoint.
-    ckpt_path = os.path.join(out_dir, 'ckpt.pt')
+    ckpt_path = os.path.join('LAM_M', 'ckpt.pt')
     checkpoint = torch.load(ckpt_path, map_location=device)
-    model_args = checkpoint['model_args']
+    # model_args = checkpoint['model_args']
 
     model = net(**model_args)
     state_dict = checkpoint['model']
@@ -173,9 +173,9 @@ elif init_from == 'resume':
     # honestly no idea how checkpoints sometimes get this prefix, have to debug more
     unwanted_prefix = '_orig_mod.'
     for k,v in list(state_dict.items()):
-        if k.startswith(unwanted_prefix):
+        if k.startswith(unwanted_prefix) and 'levels' not in k:
             state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-    model.load_state_dict(state_dict)
+    model.load_state_dict(state_dict, strict=False)
     iter_num = checkpoint['iter_num']
     tokens_trained = checkpoint['tokens']
     best_val_loss = checkpoint['best_val_loss']
