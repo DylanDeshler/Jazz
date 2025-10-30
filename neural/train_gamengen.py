@@ -174,7 +174,7 @@ elif init_from == 'resume':
     unwanted_prefix = '_orig_mod.'
     for k,v in list(state_dict.items()):
         if 'levels' in k or 'to_vq' in k or 'action_embedder' in k:
-            continue
+            state_dict.pop(k)
         if k.startswith(unwanted_prefix):
             state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
     model.load_state_dict(state_dict, strict=False)
