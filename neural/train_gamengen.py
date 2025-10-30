@@ -46,7 +46,7 @@ save_interval = 5000
 eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -62,7 +62,7 @@ cut_seconds = 1
 cut_len = spatial_window * cut_seconds
 max_seq_len = temporal_window * cut_len
 vae_embed_dim = 16
-levels = [8, 8]
+levels = [8, 5, 5, 5] #[8, 8]
 max_alpha_t = 0.7
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
