@@ -259,6 +259,8 @@ def generate_lam_vs_random_actions(step):
         x = rearrange(x, 'b (t1 t2) n c -> b t1 (t2 n) c', t1=t1, t2=t2)
         recon = rearrange(recon, 'b (t1 t2) n c -> b t1 (t2 n) c', t1=t1, t2=t2)
         random_recon = rearrange(random_recon, 'b (t1 t2) n c -> b t1 (t2 n) c', t1=t1, t2=t2)
+        
+        B, T, N, D = x.shape
     
     batches = []
     for cut in tqdm(range(T), desc='Decoding'):
