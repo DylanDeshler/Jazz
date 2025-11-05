@@ -38,7 +38,7 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'LAM_M_1024'
+out_dir = 'LAM_M_shortwindow'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -46,7 +46,7 @@ save_interval = 5000
 eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -56,13 +56,13 @@ dataset = ''
 gradient_accumulation_steps = 4 # used to simulate larger batch sizes
 batch_size = 64# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
-temporal_window = 16
-spatial_window = 32
+temporal_window = 16 * 4
+spatial_window = 32 // 4
 cut_seconds = 1
 cut_len = spatial_window * cut_seconds
 max_seq_len = temporal_window * cut_len
 vae_embed_dim = 16
-levels = [8, 5, 5, 5] #[8, 8]
+levels = [8, 8]
 max_alpha_t = 0.7
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
@@ -72,8 +72,8 @@ beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
-decay_lr = True # whether to decay the learning rate
-warmup_iters = 180000 # how many steps to warm up for
+decay_lr = False # whether to decay the learning rate
+warmup_iters = 1000000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
