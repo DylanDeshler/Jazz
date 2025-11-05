@@ -28,6 +28,7 @@ import numpy as np
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
+from einops import rearrange
 
 from gamengen import LAM_M as net
 from dito import DiToV4 as Tokenizer
@@ -58,8 +59,9 @@ batch_size = 64# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro
 # model
 temporal_window = 16 * 4
 spatial_window = 32 // 4
+decoder_window = 32
 cut_seconds = 1
-cut_len = spatial_window * cut_seconds
+cut_len = decoder_window * cut_seconds
 max_seq_len = temporal_window * cut_len
 vae_embed_dim = 16
 levels = [8, 8]
@@ -250,6 +252,13 @@ def generate_lam_vs_random_actions(step):
 
     alpha = torch.ones(B, device=x.device) * 0.3
     recon, random_recon = raw_model.lam_vs_random_actions(x[:, :-n_autoregressive_steps].clone(), alpha, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=100, guidance=3)
+    
+    if decoder_window > spatial_window:
+        t2 = decoder_window // spatial_window
+        t1 = temporal_window // t2
+        x = rearrange(x, 'b (t1 t2) n c -> b t1 (t2 n) c', t1=t1, t2=t2)
+        recon = rearrange(recon, 'b (t1 t2) n c -> b t1 (t2 n) c', t1=t1, t2=t2)
+        random_recon = rearrange(random_recon, 'b (t1 t2) n c -> b t1 (t2 n) c', t1=t1, t2=t2)
     
     batches = []
     for cut in tqdm(range(T), desc='Decoding'):
