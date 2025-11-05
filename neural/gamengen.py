@@ -327,7 +327,7 @@ class CrossAttentionBlock(nn.Module):
     
     def forward(self, x, context, freqs_cis=None):
         x = x + self.attn(self.norm1(x), freqs_cis=freqs_cis[:x.shape[1]])
-        x = x + self.cross(self.norm2(x), context, freqs_cis=freqs_cis[:x.shape[1]])
+        x = x + self.cross(self.norm2(x), context, freqs_cis=freqs_cis[:max(x.shape[1], context.shape[1])])
         x = x + self.mlp(self.norm3(x))
         return x
 
