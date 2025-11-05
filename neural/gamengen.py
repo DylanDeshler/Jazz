@@ -502,7 +502,7 @@ class DiT(nn.Module):
         
         freqs_cis = precompute_freqs_cis(
             hidden_size // num_heads,
-            max_input_size * 2,
+            max(max_input_size, num_history_tokens) * 2,
             10000,
             False,
         )
