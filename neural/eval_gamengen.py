@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 device = torch.device('cuda')
 
-batch_size = 64
+batch_size = 128
 eval_batch_size = 256
 eval_iters = eval_batch_size // batch_size
 
@@ -82,7 +82,7 @@ def generate_lam_vs_random_actions(n_autoregressive_steps, n_diffusion_steps, gu
     batches = []
     for cut in tqdm(range(T), desc='Decoding'):
         batch = torch.cat([x[:, cut], recon[:, cut], random_recon[:, cut]], dim=0).permute(0, 2, 1)
-        batches.append(tokenizer.decode(batch, shape=(1, 16384 * cut_seconds), n_steps=100))
+        batches.append(tokenizer.decode(batch, shape=(1, 16384 * cut_seconds), n_steps=n_diffusion_steps))
     x, recon, random_recon = [res.cpu().detach().numpy().squeeze(1) for res in torch.cat(batches, dim=-1).split(B, dim=0)]
 
     recon_psnr = psnr(x[:, -n_autoregressive_steps * 16000:], recon[:, -n_autoregressive_steps * 16000:])
