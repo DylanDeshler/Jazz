@@ -101,15 +101,13 @@ n_autoregressive_steps = 10
 n_diffusion_steps = 50
 
 res = {}
-pairs = itertools.product(guidances, alphas)
-total = len(pairs)
-for i, (guidance, alpha) in enumerate(pairs):
+for i, (guidance, alpha) in enumerate(itertools.product(guidances, alphas)):
     temp = np.zeros(eval_batch_size)
     for iter in range(eval_iters):
         delta_psnrs = generate_lam_vs_random_actions(n_autoregressive_steps, n_diffusion_steps, guidance, alpha)
         temp[iter*batch_size:(iter+1)*batch_size] = delta_psnrs
     res[f'{guidance},{alpha}'] = temp
     
-    print(f'[{i} / {total}] Guidance {guidance} Alpha {alpha}: Delta PSNR {np.mean(temp).item():.2f}')
+    print(f'[{i} / {len(guidances) * len(alphas)}] Guidance {guidance} Alpha {alpha}: Delta PSNR {np.mean(temp).item():.2f}')
     with open(out_path, 'w') as f:
         json.dump(res, f)
