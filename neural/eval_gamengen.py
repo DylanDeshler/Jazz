@@ -58,7 +58,7 @@ model.load_state_dict(state_dict)
 model.eval()
 
 @torch.no_grad()
-def generate_lam_vs_random_actions(n_autoregressive_steps, n_diffusion_steps, guidance, alpha, eval_steps):
+def generate_lam_vs_random_actions(n_autoregressive_steps, n_diffusion_steps, guidance, alpha):
     n_autoregressive_steps = n_autoregressive_steps * decoder_window // spatial_window
     
     data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_large_val.bin', dtype=np.float32, mode='r', shape=(4446944, vae_embed_dim))
@@ -85,8 +85,8 @@ def generate_lam_vs_random_actions(n_autoregressive_steps, n_diffusion_steps, gu
         batches.append(tokenizer.decode(batch, shape=(1, 16384 * cut_seconds), n_steps=n_diffusion_steps))
     x, recon, random_recon = [res.cpu().detach().numpy().squeeze(1) for res in torch.cat(batches, dim=-1).split(B, dim=0)]
 
-    recon_psnr = psnr(x[:, -eval_steps * 16000:], recon[:, -eval_steps * 16000:])
-    random_psnr = psnr(x[:, -eval_steps * 16000:], random_recon[:, -eval_steps * 16000:])
+    recon_psnr = psnr(x[:, -n_autoregressive_steps * 16000:], recon[:, -n_autoregressive_steps * 16000:])
+    random_psnr = psnr(x[:, -n_autoregressive_steps * 16000:], random_recon[:, -n_autoregressive_steps * 16000:])
     
     return recon_psnr - random_psnr
 
