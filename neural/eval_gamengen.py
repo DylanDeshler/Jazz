@@ -30,7 +30,7 @@ vae_embed_dim = 16
 out_path = 'LAM_M_analysis.json'
 
 ## load tokenizer
-ckpt_path = 'tokenizer_low_large.pt'
+ckpt_path = os.path.join('tokenizer_low_large', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 tokenizer_args = checkpoint['model_args']
 
@@ -44,7 +44,7 @@ tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 
 ## load generative model
-ckpt_path = 'LAM_M.pt'
+ckpt_path = os.path.join('LAM_M', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 model_args = checkpoint['model_args']
 
@@ -106,7 +106,7 @@ for guidance, alpha in tqdm(itertools.product(guidances, alphas)):
     for iter in range(eval_iters):
         delta_psnrs = generate_lam_vs_random_actions(n_autoregressive_steps, n_diffusion_steps, guidance, alpha)
         temp[iter*batch_size:(iter+1)*batch_size] = delta_psnrs
-    res[(guidance, alpha)] = np.mean(temp).item()
+    res[(guidance, alpha)] = temp
     
     print(f'Guidance {guidance} Alpha {alpha}: Delta PSNR {np.mean(temp).item():.2f}')
     with open(out_path, 'w') as f:
