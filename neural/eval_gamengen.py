@@ -108,6 +108,6 @@ for i, (guidance, alpha) in enumerate(itertools.product(guidances, alphas)):
         temp[iter*batch_size:(iter+1)*batch_size] = delta_psnrs
     res[f'{guidance},{alpha}'] = temp
     
-    print(f'[{i} / {len(guidances) * len(alphas)}] Guidance {guidance} Alpha {alpha}: Delta PSNR {np.mean(temp).item():.2f}')
+    print(f'[{i} / {len(guidances) * len(alphas)}] Guidance {guidance} Alpha {alpha}: Delta PSNR {np.mean(temp).item():.2f} +- {np.std(temp).item()}')
     with open(out_path, 'w') as f:
         json.dump(res, f)
