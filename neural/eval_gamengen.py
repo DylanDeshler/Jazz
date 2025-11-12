@@ -42,6 +42,7 @@ for k,v in list(state_dict.items()):
         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
 tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
+tokenizer = torch.compile(tokenizer)
 
 ## load generative model
 ckpt_path = os.path.join('LAM_M', 'ckpt.pt')
