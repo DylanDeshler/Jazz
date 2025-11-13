@@ -534,7 +534,7 @@ class DiT(nn.Module):
         """
         x: (B, N, C) latents to be denoised
         t: (B) noise level for x
-        history: (B, T, N, C) T historyical latent frames
+        history: (B, T, N, C) T historical latent frames
         actions: (B, T) frame actions
         alpha: (B) noise level for historical latent frames 
         """
@@ -579,13 +579,15 @@ class DiTWrapper(nn.Module):
         history, _ = self.diffusion.add_noise(history, alpha)
         return self.diffusion.loss(self.net, x, t=t, net_kwargs={'history': history, 'actions': actions, 'alpha': alpha})
     
-    def sample(self, shape, history, actions, alpha, guidance=1, n_steps=50):
+    def sample(self, shape, history, actions, alpha, guidance=1, n_steps=50, force_drop_actions=False, force_drop_history=False):
+        if guidance > 1:
+            assert force_drop_actions or force_drop_history
         if alpha is None:
             alpha = torch.rand(history.shape[0], device=history.device) * self.max_alpha_t
         history, _ = self.diffusion.add_noise(history, alpha)
 
         net_kwargs={'history': history, 'actions': actions, 'alpha': alpha}
-        uncond_net_kwargs={'history': history, 'actions': actions, 'alpha': alpha, 'force_drop_actions': True, 'force_drop_history': True}
+        uncond_net_kwargs={'history': history, 'actions': actions, 'alpha': alpha, 'force_drop_actions': force_drop_actions, 'force_drop_history': force_drop_actions}
         
         return self.sampler.sample(self.net, shape, n_steps, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, guidance=guidance)
 
@@ -636,7 +638,7 @@ class LAM(nn.Module):
         x = self.decoder(x, history, actions)
         return x
     
-    def generate(self, history, alpha, actions, n_autoregressive_steps, n_diffusion_steps=50, guidance=1):
+    def generate(self, history, alpha, actions, n_autoregressive_steps, n_diffusion_steps=50, guidance=1, force_drop_actions=False, force_drop_history=False):
         """
         history: (B, T, N, C) latents
         alpha: (B) noise level for history latents
@@ -648,7 +650,7 @@ class LAM(nn.Module):
         history = history[:, 1:]
         for step in tqdm(range(n_autoregressive_steps), desc='Generating'):
             cur_actions = torch.cat([cur_actions[:, 1:], actions[:, [step]]], dim=1)
-            out = self.decoder.sample(history[:, 0].shape, history, cur_actions, alpha, guidance=guidance, n_steps=n_diffusion_steps)
+            out = self.decoder.sample(history[:, 0].shape, history, cur_actions, alpha, guidance=guidance, n_steps=n_diffusion_steps, force_drop_actions=force_drop_actions, force_drop_history=force_drop_history)
             history = torch.cat([history[:, 1:], out.unsqueeze(1)], dim=1)
             res = torch.cat([res, out.unsqueeze(1)], dim=1)
         return res
