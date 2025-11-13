@@ -121,7 +121,7 @@ with torch.no_grad():
         X = get_batch('val')
         with ctx:
             actions = model.encode_actions(X)
-            print(actions.unique() / actions.view(-1).shape)
+            print(actions.nunique() / actions.view(-1).shape)
         
 
 import sys
