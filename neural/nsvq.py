@@ -58,7 +58,6 @@ class NSVQ(torch.nn.Module):
         """
 
         # compute the distances between input and codebooks vectors
-        print(input_data.shape, self.codebooks.t().shape)
         distances = (torch.sum(input_data ** 2, dim=1, keepdim=True)
                      - 2 * (torch.matmul(input_data, self.codebooks.t()))
                      + torch.sum(self.codebooks.t() ** 2, dim=0, keepdim=True))

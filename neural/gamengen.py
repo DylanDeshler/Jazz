@@ -119,8 +119,10 @@ class ClassEmbedder(nn.Module):
         self.num_classes = num_classes
     
     def forward(self, x, force_drop=False):
+        print(x.shape)
         if self.training:
             drop_ids = torch.rand(x.shape[0], device=x.device) < self.dropout_prob
+            print(drop_ids.shape)
             x = torch.where(drop_ids.unsqueeze(-1), self.num_classes, x)
         elif force_drop:
             drop_ids = torch.ones(x.shape[0], device=x.device).bool()
