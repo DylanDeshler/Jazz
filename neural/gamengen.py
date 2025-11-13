@@ -450,6 +450,7 @@ class ActionTransformer(nn.Module):
         x = self.to_vq(x)
         x = rearrange(x, 'b t d -> (b t) d')
         indices, perplexity, codebooks_used = self.vq(x)
+        print(indices.shape)
         indices = rearrange(indices, '(b t) d -> b t d', b=B, t=T-1)
         # x, indices = self.vq(x)
         return indices
