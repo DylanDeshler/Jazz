@@ -447,14 +447,14 @@ class ActionTransformer(nn.Module):
         x = self.to_vq(x)
         x = rearrange(x, 'b t d -> (b t) d')
         if self.training:
-            indices, perplexity, codebooks_used = self.vq(x)
+            x, perplexity, codebooks_used = self.vq(x)
         else:
-            indices, perplexity, codebooks_used = self.vq.inference(x)
-        indices = rearrange(indices, '(b t) d -> b t d', b=B, t=T-1)
-        indices = self.from_vq(x)
-        indices = rearrange(x, 'b t (n c) -> b t n c', n=N, c=C)
+            x, perplexity, codebooks_used = self.vq.inference(x)
+        x = rearrange(x, '(b t) d -> b t d', b=B, t=T-1)
+        x = self.from_vq(x)
+        x = rearrange(x, 'b t (n c) -> b t n c', n=N, c=C)
         # x, indices = self.vq(x)
-        return indices
+        return x
     
     def action_perplexity(self, x):
         """
