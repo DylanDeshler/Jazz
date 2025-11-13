@@ -206,7 +206,7 @@ if compile and 'cuda' in device:
 
 # wrap model into DDP container
 if ddp:
-    model = DDP(model, device_ids=[ddp_local_rank], find_unused_parameters=True)
+    model = DDP(model, device_ids=[ddp_local_rank])
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
@@ -227,16 +227,11 @@ def estimate_loss():
 @torch.no_grad()
 def estimate_codebook_usage():
     out = []
-    model.eval()
+    model.train()
     for _ in range(100):
         X = get_batch('val')
         with ctx:
-            actions = raw_model.action_model.action_perplexity(X)
-            unique_elements, counts = torch.unique(actions, return_counts=True)
-            total_elements = actions.numel()
-            percentage_unique = (len(unique_elements) / total_elements) * 100
-            out.append(percentage_unique)
-    model.train()
+            out.append(raw_model.action_model.action_perplexity(X))
     return np.mean(out)
 
 # learning rate decay scheduler (cosine with warmup)

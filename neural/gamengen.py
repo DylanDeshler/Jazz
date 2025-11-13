@@ -470,10 +470,7 @@ class ActionTransformer(nn.Module):
         x = x[:, 1:].flatten(2)    # no action can be predicted for the 0th frame because there is no previous frame to condition on
         x = self.to_vq(x)
         x = rearrange(x, 'b t d -> (b t) d')
-        if self.training:
-            indices, perplexity, codebooks_used = self.vq(x)
-        else:
-            indices, perplexity, codebooks_used = self.vq.inference(x)
+        indices, perplexity, codebooks_used = self.vq(x)
         return perplexity
 
 class PatchEmbedder(nn.Module):
