@@ -121,7 +121,11 @@ with torch.no_grad():
         X = get_batch('val')
         with ctx:
             actions = model.encode_actions(X)
-            print(actions.nunique() / actions.view(-1).shape)
+            
+            unique_elements, counts = torch.unique(actions, return_counts=True)
+            total_elements = actions.numel()
+            percentage_unique = (len(unique_elements) / total_elements) * 100
+            print(percentage_unique)
         
 
 import sys
