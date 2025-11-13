@@ -10,6 +10,7 @@ from typing import Optional, Callable
 from einops import rearrange
 from vector_quantize_pytorch import FSQ
 from fm import FM, FMEulerSampler
+from nsvq import NSVQ
 
 @torch.compile
 def modulate(x, shift, scale):
@@ -370,7 +371,8 @@ class ActionTransformer(nn.Module):
     def __init__(self,
                  in_channels,
                  hidden_size,
-                 levels,
+                 codebook_size,
+                 codebook_dim,
                  spatial_window,
                  temporal_window,
                  num_heads=12,
@@ -386,9 +388,14 @@ class ActionTransformer(nn.Module):
         ])
         self.to_vq = nn.Sequential(
             RMSNorm(spatial_window * hidden_size),
-            nn.Linear(spatial_window * hidden_size, len(levels))
+            nn.Linear(spatial_window * hidden_size, codebook_dim)
         )
-        self.vq = FSQ(levels=levels)
+        # self.vq = FSQ(levels=levels)
+        self.vq = NSVQ(
+            num_embeddings=codebook_size,
+            embedding_dim=codebook_dim,
+            device='cuda'
+        )
         
         self.spatial_window = spatial_window
         self.temporal_window = temporal_window
@@ -439,7 +446,8 @@ class ActionTransformer(nn.Module):
         
         x = x[:, 1:].flatten(2)    # no action can be predicted for the 0th frame because there is no previous frame to condition on
         x = self.to_vq(x)
-        x, indices = self.vq(x)
+        indices, perplexity = self.vq(x)
+        # x, indices = self.vq(x)
         return indices
 
 class PatchEmbedder(nn.Module):
@@ -595,7 +603,8 @@ class LAM(nn.Module):
     def __init__(self,
                  in_channels,
                  hidden_size,
-                 levels,
+                 codebook_size,
+                 codebook_dim,
                  spatial_window,
                  temporal_window,
                  max_alpha_t=0.7,
@@ -606,7 +615,8 @@ class LAM(nn.Module):
         super().__init__()
         self.action_model = ActionTransformer(in_channels=in_channels, 
                                               hidden_size=hidden_size, 
-                                              levels=levels, 
+                                              codebook_size=codebook_size,
+                                              codebook_dim=codebook_dim, 
                                               spatial_window=spatial_window, 
                                               temporal_window=temporal_window, 
                                               num_heads=num_heads, 
@@ -614,7 +624,7 @@ class LAM(nn.Module):
                                               mlp_ratio=mlp_ratio)
         self.decoder = DiTWrapper(in_channels=in_channels, 
                                   hidden_size=hidden_size, 
-                                  num_actions=math.prod(levels), 
+                                  num_actions=codebook_size, 
                                   max_input_size=spatial_window, 
                                   num_history_tokens=temporal_window, 
                                   max_alpha_t=max_alpha_t, 
@@ -622,7 +632,7 @@ class LAM(nn.Module):
                                   depth=depth, 
                                   mlp_ratio=mlp_ratio)
         
-        self.levels = levels
+        self.codebook_size = codebook_size
     
     def forward(self, x):
         """
@@ -674,7 +684,7 @@ class LAM(nn.Module):
     def lam_vs_random_actions(self, x, alpha, n_autoregressive_steps, n_diffusion_steps=50, guidance=1, force_drop_actions=False, force_drop_history=False):
         actions = self.action_model(x)
         
-        random_actions = self.generate_random_different_actions(actions, math.prod(self.levels), x.device)
+        random_actions = self.generate_random_different_actions(actions, self.codebook_size, x.device)
         recon = self.generate(x, alpha, actions, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=n_diffusion_steps, guidance=guidance, force_drop_actions=force_drop_actions, force_drop_history=force_drop_history)
         random = self.generate(x, alpha, random_actions, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=n_diffusion_steps, guidance=guidance, force_drop_actions=force_drop_actions, force_drop_history=force_drop_history)
         

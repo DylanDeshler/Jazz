@@ -39,7 +39,7 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'LAM_M_shortwindow'
+out_dir = 'LAM_M_NSVQ'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -47,7 +47,7 @@ save_interval = 5000
 eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -57,25 +57,26 @@ dataset = ''
 gradient_accumulation_steps = 4 # used to simulate larger batch sizes
 batch_size = 64# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
-temporal_window = 16 * 4
-spatial_window = 32 // 4
+temporal_window = 16
+spatial_window = 32
 decoder_window = 32
 cut_seconds = 1
 cut_len = decoder_window * cut_seconds
 max_seq_len = temporal_window * cut_len
 vae_embed_dim = 16
-levels = [8, 8]
+codebook_size = 64
+codebook_dim = 8
 max_alpha_t = 0.7
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 180000 # total number of training iterations
+max_iters = 1000000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
-decay_lr = True # whether to decay the learning rate
-warmup_iters = 160000 # how many steps to warm up for
+decay_lr = False # whether to decay the learning rate
+warmup_iters = 5000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
@@ -83,7 +84,7 @@ backend = 'gloo' # 'nccl', 'gloo', etc.
 # system
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
-compile = False # use PyTorch 2.0 to compile the model to be faster
+compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 # exec(open('configurator.py').read()) # overrides from command line or config file
@@ -156,7 +157,7 @@ for k,v in list(state_dict.items()):
 tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 
-model_args = dict(in_channels=vae_embed_dim, levels=levels, spatial_window=spatial_window, temporal_window=temporal_window, max_alpha_t=max_alpha_t)
+model_args = dict(in_channels=vae_embed_dim, codebook_size=codebook_size, codebook_dim=codebook_dim, spatial_window=spatial_window, temporal_window=temporal_window, max_alpha_t=max_alpha_t)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -222,6 +223,21 @@ def estimate_loss():
         out[split] = losses.mean()
     model.train()
     return out
+
+@torch.no_grad()
+def estimate_codebook_usage():
+    out = []
+    model.eval()
+    for _ in range(100):
+        X = get_batch('val')
+        with ctx:
+            actions = model.encode_actions(X)
+            unique_elements, counts = torch.unique(actions, return_counts=True)
+            total_elements = actions.numel()
+            percentage_unique = (len(unique_elements) / total_elements) * 100
+            out.append(percentage_unique)
+    model.train()
+    return np.mean(out)
 
 # learning rate decay scheduler (cosine with warmup)
 def get_lr(it):
@@ -315,13 +331,14 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
+        codebook_usage = estimate_codebook_usage()
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
             with ctx:
                 delta_psnr = generate_lam_vs_random_actions(iter_num)
             model.train()
             print(f"iter {iter_num}: delta PSNR {delta_psnr:.3f}")
-        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, codebook usage {codebook_usage:.2f}")
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
