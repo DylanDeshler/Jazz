@@ -638,6 +638,9 @@ class LAM(nn.Module):
         x = self.decoder(x, history, actions)
         return x
     
+    def encode_actions(self, x):
+        return self.action_model(x)
+    
     def generate(self, history, alpha, actions, n_autoregressive_steps, n_diffusion_steps=50, guidance=1, force_drop_actions=False, force_drop_history=False):
         """
         history: (B, T, N, C) latents
