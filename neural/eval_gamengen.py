@@ -14,8 +14,8 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 from contextlib import nullcontext
 
-device = torch.device('cuda:1')
-
+device = 'cuda:1'
+torch.cuda.set_device(device)
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16'
 device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
 # note: float16 data type will automatically use a GradScaler
