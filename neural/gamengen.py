@@ -449,6 +449,7 @@ class ActionTransformer(nn.Module):
             x, perplexity, codebooks_used = self.vq(x)
         else:
             x, perplexity, codebooks_used = self.vq.inference(x)
+        print(x.shape)
         x = self.from_vq(x)
         x = rearrange(x, '(b t) (n c) -> b t n c', b=B, n=N)
         # x, indices = self.vq(x)
