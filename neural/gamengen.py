@@ -387,7 +387,6 @@ class ActionTransformer(nn.Module):
             STAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
         self.to_vq = nn.Linear(spatial_window * hidden_size, codebook_dim)
-        self.from_vq = nn.Linear(codebook_dim, spatial_window * hidden_size)
         
         # self.vq = FSQ(levels=levels)
         self.vq = NSVQ(
@@ -449,10 +448,6 @@ class ActionTransformer(nn.Module):
             x, perplexity, codebooks_used = self.vq(x)
         else:
             x, perplexity, codebooks_used = self.vq.inference(x)
-        print(x.shape)
-        x = self.from_vq(x)
-        print(x.shape)
-        x = rearrange(x, '(b t) (n c) -> b t n c', b=B, n=N)
         # x, indices = self.vq(x)
         return x
     
@@ -525,6 +520,7 @@ class DiT(nn.Module):
         self.t_embedder = TimestepEmbedder(hidden_size)
         self.alpha_embedder = NoiseEmbedder(10, hidden_size, max_t=max_alpha_t)
         # self.action_embedder = ClassEmbedder(num_actions, hidden_size)
+        self.action_embedder = nn.Linear(num_actions, hidden_size)
 
         self.blocks = nn.ModuleList([
             CrossAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
@@ -579,8 +575,9 @@ class DiT(nn.Module):
         x = self.x_embedder(x, history, force_drop=force_drop_history)
         t = self.t_embedder(t)
         alpha = self.alpha_embedder(alpha)
+        actions = self.action_embedder(actions)
         # actions = self.action_embedder(actions, force_drop=force_drop_actions)
-        print(t.shape, alpha.shape, actions.shape)
+        # print(t.shape, alpha.shape, actions.shape)
         context = torch.cat([t.unsqueeze(1), alpha.unsqueeze(1), actions], dim=1)
         
         for block in self.blocks:
