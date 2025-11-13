@@ -164,7 +164,7 @@ class NSVQ(torch.nn.Module):
         input_data = input_data.detach().clone()
         codebooks = self.codebooks.detach().clone()
         ###########################################
-
+        print(input_data.shape, codebooks.t().shape)
         distances = (torch.sum(input_data ** 2, dim=1, keepdim=True)
                      - 2 * (torch.matmul(input_data, codebooks.t()))
                      + torch.sum(codebooks.t() ** 2, dim=0, keepdim=True))
