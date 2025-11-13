@@ -411,7 +411,7 @@ class ActionTransformer(nn.Module):
     def initialize_weights(self):
         self.apply(self._init_weights)
         # zero out classifier weights
-        torch.nn.init.zeros_(self.to_vq[-1].weight)
+        torch.nn.init.trunc_normal_(self.to_vq.weight)
         # zero out c_proj weights in all blocks
         for block in self.blocks:
             torch.nn.init.zeros_(block.mlp.w3.weight)
