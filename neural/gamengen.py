@@ -447,7 +447,7 @@ class ActionTransformer(nn.Module):
         x = x[:, 1:].flatten(2)    # no action can be predicted for the 0th frame because there is no previous frame to condition on
         x = self.to_vq(x)
         x = rearrange(x, 'b t d -> (b t) d')
-        indices, perplexity = self.vq(x)
+        indices, perplexity, codebooks_used = self.vq(x)
         indices = rearrange(indices, '(b t) d -> b t d', b=B, t=T-1)
         # x, indices = self.vq(x)
         return indices
