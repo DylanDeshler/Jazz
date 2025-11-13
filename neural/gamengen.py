@@ -447,9 +447,6 @@ class ActionTransformer(nn.Module):
         x = x[:, 1:].flatten(2)    # no action can be predicted for the 0th frame because there is no previous frame to condition on
         x = self.to_vq(x)
         indices, perplexity = self.vq(x)
-        if ((step % 10 == 0 and step < 100)  or (step % 100 == 0 and step < 1000) or (step % 500 == 0 and step < 5000)) and step != 0:
-            print(f"update codebook {step}")
-            self.vq.replace_unused_codebooks(x.shape[0])
         # x, indices = self.vq(x)
         return indices
 
