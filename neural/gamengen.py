@@ -579,6 +579,7 @@ class DiT(nn.Module):
         t = self.t_embedder(t)
         alpha = self.alpha_embedder(alpha)
         # actions = self.action_embedder(actions, force_drop=force_drop_actions)
+        print(t.shape, alpha.shape, actions.shape)
         context = torch.cat([t.unsqueeze(1), alpha.unsqueeze(1), actions], dim=1)
         
         for block in self.blocks:
