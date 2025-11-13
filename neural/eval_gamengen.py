@@ -107,7 +107,7 @@ for i, (guidance, alpha) in enumerate(itertools.product(guidances, alphas)):
     for iter in range(eval_iters):
         delta_psnrs = generate_lam_vs_random_actions(n_autoregressive_steps, n_diffusion_steps, guidance, alpha)
         temp[iter*batch_size:(iter+1)*batch_size] = delta_psnrs
-    res[f'{guidance},{alpha}'] = temp
+    res[f'{guidance},{alpha}'] = temp.tolist()
     
     print(f'[{i} / {len(guidances) * len(alphas)}] Guidance {guidance} Alpha {alpha}: Delta PSNR {np.mean(temp).item():.2f} +- {np.std(temp).item()}')
     with open(out_path, 'w') as f:
