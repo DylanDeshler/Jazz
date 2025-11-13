@@ -145,6 +145,43 @@ class NSVQ(torch.nn.Module):
             print(f'************* Replaced ' + str(unused_count) + f' codebooks *************')
             self.codebooks_used[:] = 0.0
 
+    def generate_random_different_actions(self, input_data):
+        """
+        This function performs the vector quantization function for inference (evaluation) time (after training).
+        This function should not be used during training.
+
+        N: number of input data samples
+        K: num_embeddings (number of codebook entries)
+        D: embedding_dim (dimensionality of each input data sample or codebook entry)
+
+        input: input_data (input data matrix which is going to be vector quantized | shape: (NxD) )
+        outputs:
+                quantized_input (vector quantized version of input data used for inference (evaluation) | shape: (NxD) )
+        """
+
+        input_data = input_data.detach().clone()
+        codebooks = self.codebooks.detach().clone()
+        ###########################################
+        
+        distances = (torch.sum(input_data ** 2, dim=1, keepdim=True)
+                     - 2 * (torch.matmul(input_data, codebooks.t()))
+                     + torch.sum(codebooks.t() ** 2, dim=0, keepdim=True))
+
+        min_indices = torch.argmin(distances, dim=1)
+        
+        
+        shape = min_indices.shape
+        random_actions = torch.randint(0, self.num_embeddings, shape, device=input_data.device)
+
+        while torch.any(random_actions == min_indices):
+            random_actions = torch.where(
+                random_actions == min_indices,
+                torch.randint(0, self.num_embeddings, shape, device=input_data.device),
+                random_actions,
+            )
+        
+        random_actions = codebooks[min_indices]
+        return random_actions
 
     def inference(self, input_data):
 

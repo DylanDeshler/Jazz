@@ -119,10 +119,8 @@ class ClassEmbedder(nn.Module):
         self.num_classes = num_classes
     
     def forward(self, x, force_drop=False):
-        print(x.shape)
         if self.training:
             drop_ids = torch.rand(x.shape[0], device=x.device) < self.dropout_prob
-            print(drop_ids.shape)
             x = torch.where(drop_ids.unsqueeze(-1), self.num_classes, x)
         elif force_drop:
             drop_ids = torch.ones(x.shape[0], device=x.device).bool()
@@ -433,7 +431,7 @@ class ActionTransformer(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=1.0)
     
-    def forward(self, x, step=0):
+    def forward(self, x):
         """
         x: (B, T, N, C) latents
         """
@@ -449,11 +447,35 @@ class ActionTransformer(nn.Module):
         x = x[:, 1:].flatten(2)    # no action can be predicted for the 0th frame because there is no previous frame to condition on
         x = self.to_vq(x)
         x = rearrange(x, 'b t d -> (b t) d')
-        indices, perplexity, codebooks_used = self.vq(x)
-        print(indices.shape)
+        if self.training:
+            indices, perplexity, codebooks_used = self.vq(x)
+        else:
+            indices, perplexity, codebooks_used = self.vq.inference(x)
         indices = rearrange(indices, '(b t) d -> b t d', b=B, t=T-1)
         # x, indices = self.vq(x)
         return indices
+    
+    def action_perplexity(self, x):
+        """
+        x: (B, T, N, C) latents
+        """
+        B, T, N, C = x.shape
+        assert T == self.temporal_window
+        assert N == self.spatial_window
+        
+        x = self.x_embedder(x)
+        
+        for block in self.blocks:
+            x = block(x, freqs_cis=self.freqs_cis)
+        
+        x = x[:, 1:].flatten(2)    # no action can be predicted for the 0th frame because there is no previous frame to condition on
+        x = self.to_vq(x)
+        x = rearrange(x, 'b t d -> (b t) d')
+        if self.training:
+            indices, perplexity, codebooks_used = self.vq(x)
+        else:
+            indices, perplexity, codebooks_used = self.vq.inference(x)
+        return perplexity
 
 class PatchEmbedder(nn.Module):
     def __init__(self, in_channels, hidden_size, num_history_tokens, max_input_size, dropout_prob):
@@ -491,7 +513,7 @@ class DiT(nn.Module):
                  max_input_size,
                  num_history_tokens,
                  max_alpha_t=0.7,
-                 history_dropout_prob=0.1,
+                 history_dropout_prob=0,
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4,
@@ -501,7 +523,7 @@ class DiT(nn.Module):
         self.x_embedder = PatchEmbedder(in_channels, hidden_size, num_history_tokens, max_input_size, history_dropout_prob)
         self.t_embedder = TimestepEmbedder(hidden_size)
         self.alpha_embedder = NoiseEmbedder(10, hidden_size, max_t=max_alpha_t)
-        self.action_embedder = ClassEmbedder(num_actions, hidden_size)
+        # self.action_embedder = ClassEmbedder(num_actions, hidden_size)
 
         self.blocks = nn.ModuleList([
             CrossAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
@@ -556,7 +578,7 @@ class DiT(nn.Module):
         x = self.x_embedder(x, history, force_drop=force_drop_history)
         t = self.t_embedder(t)
         alpha = self.alpha_embedder(alpha)
-        actions = self.action_embedder(actions, force_drop=force_drop_actions)
+        # actions = self.action_embedder(actions, force_drop=force_drop_actions)
         context = torch.cat([t.unsqueeze(1), alpha.unsqueeze(1), actions], dim=1)
         
         for block in self.blocks:
@@ -653,9 +675,6 @@ class LAM(nn.Module):
         x = self.decoder(x, history, actions)
         return x
     
-    def encode_actions(self, x):
-        return self.action_model(x)
-    
     def generate(self, history, alpha, actions, n_autoregressive_steps, n_diffusion_steps=50, guidance=1, force_drop_actions=False, force_drop_history=False):
         """
         history: (B, T, N, C) latents
@@ -689,7 +708,7 @@ class LAM(nn.Module):
     def lam_vs_random_actions(self, x, alpha, n_autoregressive_steps, n_diffusion_steps=50, guidance=1, force_drop_actions=False, force_drop_history=False):
         actions = self.action_model(x)
         
-        random_actions = self.generate_random_different_actions(actions, self.codebook_size, x.device)
+        random_actions = self.action_model.vq.generate_random_different_actions(actions)
         recon = self.generate(x, alpha, actions, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=n_diffusion_steps, guidance=guidance, force_drop_actions=force_drop_actions, force_drop_history=force_drop_history)
         random = self.generate(x, alpha, random_actions, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=n_diffusion_steps, guidance=guidance, force_drop_actions=force_drop_actions, force_drop_history=force_drop_history)
         
