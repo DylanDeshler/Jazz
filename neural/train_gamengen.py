@@ -231,7 +231,7 @@ def estimate_codebook_usage():
     for _ in range(100):
         X = get_batch('val')
         with ctx:
-            out.append(raw_model.action_model.action_perplexity(X))
+            out.append(raw_model.action_model.action_perplexity(X).mean().item())
     return np.mean(out)
 
 # learning rate decay scheduler (cosine with warmup)
