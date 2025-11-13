@@ -451,8 +451,8 @@ class ActionTransformer(nn.Module):
         else:
             indices, perplexity, codebooks_used = self.vq.inference(x)
         indices = rearrange(indices, '(b t) d -> b t d', b=B, t=T-1)
-        x = self.from_vq(x)
-        x = rearrange(x, 'b t (n c) -> b t n c', n=N, c=C)
+        indices = self.from_vq(x)
+        indices = rearrange(x, 'b t (n c) -> b t n c', n=N, c=C)
         # x, indices = self.vq(x)
         return indices
     
