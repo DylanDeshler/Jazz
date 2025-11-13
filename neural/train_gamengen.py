@@ -228,7 +228,7 @@ def estimate_loss():
 def estimate_codebook_usage():
     out = []
     model.train()
-    for _ in range(100):
+    for _ in tqdm(range(100)):
         X = get_batch('val')
         with ctx:
             out.append(raw_model.action_model.action_perplexity(X).mean().item())
@@ -262,7 +262,7 @@ def generate_lam_vs_random_actions(step):
     B, T, N, D = x.shape
 
     alpha = torch.ones(B, device=x.device) * 0.3
-    recon, random_recon = raw_model.lam_vs_random_actions(x[:, :-n_autoregressive_steps].clone(), alpha, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=100, guidance=3)
+    recon, random_recon = raw_model.lam_vs_random_actions(x[:, :-n_autoregressive_steps].clone(), alpha, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=100, guidance=1)
     
     if decoder_window > spatial_window:
         t2 = decoder_window // spatial_window
@@ -325,8 +325,8 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        losses = estimate_loss()
-        codebook_usage = estimate_codebook_usage()
+        # losses = estimate_loss()
+        # codebook_usage = estimate_codebook_usage()
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
             with ctx:
