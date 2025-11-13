@@ -706,7 +706,7 @@ class LAM(nn.Module):
         cur_actions = self.action_model(history)
         res = history.clone()
         history = history[:, 1:]
-        for step in tqdm(range(n_autoregressive_steps), desc='Generating'):
+        for step in range(n_autoregressive_steps):
             cur_actions = torch.cat([cur_actions[:, 1:], actions[:, [step]]], dim=1)
             out = self.decoder.sample(history[:, 0].shape, history, cur_actions, alpha, guidance=guidance, n_steps=n_diffusion_steps, force_drop_actions=force_drop_actions, force_drop_history=force_drop_history)
             history = torch.cat([history[:, 1:], out.unsqueeze(1)], dim=1)
