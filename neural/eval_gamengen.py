@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 device = torch.device('cuda')
 
 batch_size = 128
-eval_batch_size = 256
+eval_batch_size = 128
 eval_iters = eval_batch_size // batch_size
 
 temporal_window = 16
