@@ -13,7 +13,7 @@ import numpy as np
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 
-device = torch.device('cuda')
+device = torch.device('cuda:1')
 
 batch_size = 128
 eval_batch_size = 128
@@ -69,7 +69,7 @@ def generate_lam_vs_random_actions(n_autoregressive_steps, n_diffusion_steps, gu
     B, T, N, D = x.shape
 
     alpha = torch.ones(B, device=x.device) * alpha
-    recon, random_recon = model.lam_vs_random_actions(x[:, :-n_autoregressive_steps].clone(), alpha, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=n_diffusion_steps, guidance=guidance)
+    recon, random_recon = model.lam_vs_random_actions(x[:, :-n_autoregressive_steps].clone(), alpha, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=n_diffusion_steps, guidance=guidance, force_drop_actions=force_drop_actions, force_drop_history=force_drop_history)
     
     if decoder_window > spatial_window:
         t2 = decoder_window // spatial_window
@@ -101,6 +101,9 @@ alphas = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
 n_autoregressive_steps = 10
 n_diffusion_steps = 50
 
+force_drop_actions = True
+force_drop_history = False
+
 res = {}
 for i, (guidance, alpha) in enumerate(itertools.product(guidances, alphas)):
     temp = np.zeros(eval_batch_size)
@@ -109,6 +112,6 @@ for i, (guidance, alpha) in enumerate(itertools.product(guidances, alphas)):
         temp[iter*batch_size:(iter+1)*batch_size] = delta_psnrs
     res[f'{guidance},{alpha}'] = temp.tolist()
     
-    print(f'[{i} / {len(guidances) * len(alphas)}] Guidance {guidance} Alpha {alpha}: Delta PSNR {np.mean(temp).item():.2f} +- {np.std(temp).item()}')
+    print(f'[{i} / {len(guidances) * len(alphas)}] Guidance {guidance} Alpha {alpha}: Delta PSNR {np.mean(temp).item():.2f} +- {np.std(temp).item():.4f}')
     with open(out_path, 'w') as f:
         json.dump(res, f)
