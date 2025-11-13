@@ -12,8 +12,15 @@ import itertools
 import numpy as np
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from contextlib import nullcontext
 
 device = torch.device('cuda:1')
+
+dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16'
+device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
+# note: float16 data type will automatically use a GradScaler
+ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
+ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 batch_size = 128
 eval_batch_size = 128
@@ -58,6 +65,19 @@ for k,v in list(state_dict.items()):
 model.load_state_dict(state_dict)
 model.eval()
 
+def get_batch(split='train'):
+    if split == 'train':
+        data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_large_train.bin', dtype=np.float32, mode='r', shape=(204654816, vae_embed_dim))
+        idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
+        x = torch.from_numpy(np.stack([np.stack([data[idx+i*spatial_window:idx+(i+1)*spatial_window] for i in range(temporal_window)], axis=0) for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+        return x
+    
+    else:
+        data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_large_val.bin', dtype=np.float32, mode='r', shape=(4446944, vae_embed_dim))
+        idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
+        x = torch.from_numpy(np.stack([np.stack([data[idx+i*spatial_window:idx+(i+1)*spatial_window] for i in range(temporal_window)], axis=0) for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+        return x
+
 @torch.no_grad()
 def generate_lam_vs_random_actions(n_autoregressive_steps, n_diffusion_steps, guidance, alpha):
     n_autoregressive_steps = n_autoregressive_steps * decoder_window // spatial_window
@@ -95,6 +115,16 @@ def psnr(y_true, y_pred, max_val=1.):
     mse = np.mean((y_true - y_pred) ** 2, axis=1)  # (B,)
     res = 10 * np.log10((max_val ** 2) / (mse + 1e-8))
     return res
+
+for _ in range(100):
+    X = get_batch('val')
+    with ctx:
+        actions = model.encode_actions(X)
+        print(actions.unique() / actions.view(-1).shape)
+        
+
+import sys
+sys.exit()
 
 guidances = [1, 2, 3, 5, 10]
 alphas = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
