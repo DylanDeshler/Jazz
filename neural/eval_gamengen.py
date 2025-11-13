@@ -27,7 +27,7 @@ cut_len = decoder_window * cut_seconds
 max_seq_len = temporal_window * cut_len
 vae_embed_dim = 16
 
-out_path = 'LAM_M_analysis.json'
+out_path = 'LAM_M_analysis_history.json'
 
 ## load tokenizer
 ckpt_path = os.path.join('tokenizer_low_large', 'ckpt.pt')
