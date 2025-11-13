@@ -367,6 +367,10 @@ while True:
     #                 torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
     # if iter_num == 0 and eval_only:
     #     break
+    
+    if ((iter_num % 10 == 0 and iter_num < 100)  or (iter_num % 100 == 0 and iter_num < 1000) or (iter_num % 500 == 0 and iter_num < 5000)) and iter_num != 0:
+            print(f"update codebook {iter_num}")
+            raw_model.action_model.vq.replace_unused_codebooks(X.shape[0])
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
