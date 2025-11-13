@@ -123,7 +123,7 @@ with torch.no_grad():
             actions = model.encode_actions(X)
             
             unique_elements, counts = torch.unique(actions, return_counts=True)
-            print(unique_elements, counts)
+            print(unique_elements, counts, len(unique_elements), actions.numel())
             total_elements = actions.numel()
             percentage_unique = (len(unique_elements) / total_elements) * 100
             print(percentage_unique)
