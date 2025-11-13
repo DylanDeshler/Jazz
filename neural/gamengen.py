@@ -454,6 +454,31 @@ class ActionTransformer(nn.Module):
         # x, indices = self.vq(x)
         return x
     
+    def generate_random_different_actions(self, x):
+        """
+        x: (B, T, N, C) latents
+        """
+        B, T, N, C = x.shape
+        assert T == self.temporal_window
+        assert N == self.spatial_window
+        
+        x = self.x_embedder(x)
+        
+        for block in self.blocks:
+            x = block(x, freqs_cis=self.freqs_cis)
+        
+        x = rearrange(x[:, 1:], 'b t n c -> (b t) (n c)')    # no action can be predicted for the 0th frame because there is no previous frame to condition on
+        x = self.to_vq(x)
+        x, random_x = self.vq.generate_random_different_actions(x)
+        
+        x = rearrange(x, '(b t) d -> b t d', b=B)
+        x = self.from_vq(x)
+        
+        random_x = rearrange(random_x, '(b t) d -> b t d', b=B)
+        random_x = self.from_vq(random_x)
+        # x, indices = self.vq(x)
+        return x, random_x
+    
     def action_perplexity(self, x):
         """
         x: (B, T, N, C) latents
@@ -702,9 +727,8 @@ class LAM(nn.Module):
         return random_actions
     
     def lam_vs_random_actions(self, x, alpha, n_autoregressive_steps, n_diffusion_steps=50, guidance=1, force_drop_actions=False, force_drop_history=False):
-        actions = self.action_model(x)
+        actions, random_actions = self.action_model.generate_random_different_actions(x)
         
-        random_actions = self.action_model.vq.generate_random_different_actions(actions)
         recon = self.generate(x, alpha, actions, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=n_diffusion_steps, guidance=guidance, force_drop_actions=force_drop_actions, force_drop_history=force_drop_history)
         random = self.generate(x, alpha, random_actions, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=n_diffusion_steps, guidance=guidance, force_drop_actions=force_drop_actions, force_drop_history=force_drop_history)
         

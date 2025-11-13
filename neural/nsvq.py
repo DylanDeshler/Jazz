@@ -168,7 +168,7 @@ class NSVQ(torch.nn.Module):
                      + torch.sum(codebooks.t() ** 2, dim=0, keepdim=True))
 
         min_indices = torch.argmin(distances, dim=1)
-        
+        quantized_input = codebooks[min_indices]
         
         shape = min_indices.shape
         random_actions = torch.randint(0, self.num_embeddings, shape, device=input_data.device)
@@ -181,7 +181,7 @@ class NSVQ(torch.nn.Module):
             )
         
         random_actions = codebooks[min_indices]
-        return random_actions
+        return quantized_input, random_actions
 
     def inference(self, input_data):
 
