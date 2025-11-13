@@ -253,7 +253,7 @@ def generate_lam_vs_random_actions(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
 
-    n_autoregressive_steps = 5 * decoder_window // spatial_window
+    n_autoregressive_steps = 10 * decoder_window // spatial_window
     
     data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_large_val.bin', dtype=np.float32, mode='r', shape=(4446944, vae_embed_dim))
     idxs = torch.randint(len(data) - max_seq_len - n_autoregressive_steps, (10,))
@@ -274,7 +274,7 @@ def generate_lam_vs_random_actions(step):
         B, T, N, D = x.shape
     
     batches = []
-    for cut in tqdm(range(T), desc='Decoding'):
+    for cut in tqdm(range(T - n_autoregressive_steps), desc='Decoding'):
         batch = torch.cat([x[:, cut], recon[:, cut], random_recon[:, cut]], dim=0).permute(0, 2, 1)
         batches.append(tokenizer.decode(batch, shape=(1, 16384 * cut_seconds), n_steps=100))
     x, recon, random_recon = [res.cpu().detach().numpy().squeeze(1) for res in torch.cat(batches, dim=-1).split(B, dim=0)]
