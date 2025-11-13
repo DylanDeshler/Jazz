@@ -116,11 +116,12 @@ def psnr(y_true, y_pred, max_val=1.):
     res = 10 * np.log10((max_val ** 2) / (mse + 1e-8))
     return res
 
-for _ in range(100):
-    X = get_batch('val')
-    with ctx:
-        actions = model.encode_actions(X)
-        print(actions.unique() / actions.view(-1).shape)
+with torch.no_grad():
+    for _ in range(100):
+        X = get_batch('val')
+        with ctx:
+            actions = model.encode_actions(X)
+            print(actions.unique() / actions.view(-1).shape)
         
 
 import sys
