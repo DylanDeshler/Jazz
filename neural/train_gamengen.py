@@ -363,9 +363,11 @@ while True:
     if iter_num == 0 and eval_only:
         break
     
-    if ((iter_num % 10 == 0 and iter_num < 100)  or (iter_num % 100 == 0 and iter_num < 1000) or (iter_num % 500 == 0 and iter_num < 5000)) and iter_num != 0 and master_process:
+    if ((iter_num % 10 == 0 and iter_num < 100)  or (iter_num % 100 == 0 and iter_num < 1000) or (iter_num % 500 == 0 and iter_num < 5000)) and iter_num != 0:
         print(f"update codebook {iter_num}")
-        raw_model.action_model.vq.replace_unused_codebooks(X.shape[0])
+        if master_process:
+            raw_model.action_model.vq.replace_unused_codebooks(X.shape[0])
+        raw_model.action_model.vq.sync_codebooks_ddp(ddp_local_rank)
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16

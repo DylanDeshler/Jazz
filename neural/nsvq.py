@@ -1,6 +1,7 @@
 import torch
 import torch.distributions.normal as normal_dist
 import torch.distributions.uniform as uniform_dist
+import torch.distributed as dist
 
 class NSVQ(torch.nn.Module):
     def __init__(self, num_embeddings, embedding_dim, device=torch.device('cpu'), discarding_threshold=0.01, initialization='normal'):
@@ -144,6 +145,59 @@ class NSVQ(torch.nn.Module):
 
             print(f'************* Replaced ' + str(unused_count) + f' codebooks *************')
             self.codebooks_used[:] = 0.0
+    
+    def sync_codebooks_ddp(self, src=0):
+        """
+        Broadcast the codebook state from `src` to all other ranks.
+
+        Must be called on ALL ranks (including `src`). `torch.distributed` must be initialized
+        (this function will raise if it is not). This will broadcast:
+          - self.codebooks (Parameter data)
+          - self.codebooks_used (the usage counter)
+
+        Usage pattern (typical):
+            # on rank 0:
+            vq.replace_unused_codebooks(num_batches)
+            # on ALL ranks:
+            vq.sync_codebooks_ddp(src=0)
+
+        Notes:
+          - this does not change requires_grad of self.codebooks (keeps it as Parameter with gradients enabled).
+          - buffers are created on-device to match shapes before broadcast (so this requires that each process
+            has the same shapes/dtypes).
+        """
+        if not dist.is_initialized():
+            raise RuntimeError("torch.distributed is not initialized. Initialize before calling sync_codebooks_ddp().")
+
+        rank = dist.get_rank()
+
+        # Broadcast codebooks.data
+        with torch.no_grad():
+            # prepare buffer on src rank (contains the authoritative data) or an empty buffer on other ranks
+            if rank == src:
+                buf_cb = self.codebooks.data.clone().to(self.device)
+            else:
+                buf_cb = torch.empty_like(self.codebooks.data, device=self.device)
+
+            # This will populate buf_cb on all ranks with the src's values
+            dist.broadcast(buf_cb, src=src)
+
+            # copy broadcasted values into the Parameter
+            # ensure the Parameter is on self.device
+            if self.codebooks.data.device != self.device:
+                self.codebooks.data = self.codebooks.data.to(self.device)
+            self.codebooks.data.copy_(buf_cb)
+
+            # Broadcast codebooks_used (int32 tensor)
+            if rank == src:
+                buf_used = self.codebooks_used.clone().to(self.device)
+            else:
+                buf_used = torch.empty_like(self.codebooks_used, device=self.device)
+
+            dist.broadcast(buf_used, src=src)
+
+            # ensure dtype and device, and assign back as tensor
+            self.codebooks_used = buf_used.to(device=self.device, dtype=torch.int32)
 
     def generate_random_different_actions(self, input_data):
         """
