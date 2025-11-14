@@ -367,6 +367,7 @@ while True:
         print(f"update codebook {iter_num}")
         if master_process:
             raw_model.action_model.vq.replace_unused_codebooks(X.shape[0])
+        print(raw_model.action_model.vq.codebooks_used)
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
