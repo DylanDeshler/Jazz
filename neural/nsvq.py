@@ -124,6 +124,7 @@ class NSVQ(torch.nn.Module):
 
             unused_indices = torch.where((self.codebooks_used.cpu() / num_batches) < self.discarding_threshold)[0]
             used_indices = torch.where((self.codebooks_used.cpu() / num_batches) >= self.discarding_threshold)[0]
+            print(used_indices)
 
             unused_count = unused_indices.shape[0]
             used_count = used_indices.shape[0]

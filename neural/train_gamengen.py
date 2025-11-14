@@ -365,8 +365,8 @@ while True:
     
     if ((iter_num % 10 == 0 and iter_num < 100)  or (iter_num % 100 == 0 and iter_num < 1000) or (iter_num % 500 == 0 and iter_num < 5000)) and iter_num != 0:
         print(f"update codebook {iter_num}")
-        if master_process:
-            raw_model.action_model.vq.replace_unused_codebooks(X.shape[0])
+        # if master_process:
+        raw_model.action_model.vq.replace_unused_codebooks(X.shape[0])
         print(raw_model.action_model.vq.codebooks_used)
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
