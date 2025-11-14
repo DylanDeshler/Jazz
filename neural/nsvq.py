@@ -146,14 +146,7 @@ class NSVQ(torch.nn.Module):
             print(f'************* Replaced ' + str(unused_count) + f' codebooks *************')
             self.codebooks_used[:] = 0.0
     
-    def replace_and_broadcast_codebooks(self, num_batches, src=0):
-        """
-        Call this function on all ranks after a specific number of batches.
-        Rank 0 replaces unused codebooks, then all ranks synchronize via Gloo.
-        """
-        if dist.get_rank() == src:
-            self.replace_unused_codebooks(num_batches)
-
+    def sync_codebooks_ddp(self, src=0):
         # Move codebooks and usage counters to CPU for broadcasting
         codebooks_cpu = self.codebooks.detach().cpu()
         usage_cpu = self.codebooks_used.detach().cpu()
