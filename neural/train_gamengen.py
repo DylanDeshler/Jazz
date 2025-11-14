@@ -80,7 +80,7 @@ warmup_iters = 5000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
-backend = 'gloo' # 'nccl', 'gloo', etc.
+backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
@@ -367,7 +367,8 @@ while True:
         print(f"update codebook {iter_num}")
         if master_process:
             raw_model.action_model.vq.replace_unused_codebooks(X.shape[0])
-        raw_model.action_model.vq.sync_codebooks_ddp(ddp_local_rank)
+        if ddp:
+            raw_model.action_model.vq.sync_codebooks_ddp(ddp_local_rank)
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
