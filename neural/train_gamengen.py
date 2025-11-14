@@ -54,7 +54,7 @@ wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 4 # used to simulate larger batch sizes
+gradient_accumulation_steps = 2 # used to simulate larger batch sizes
 batch_size = 64# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 temporal_window = 16
@@ -333,7 +333,7 @@ while True:
                 delta_psnr = generate_lam_vs_random_actions(iter_num)
             model.train()
             print(f"iter {iter_num}: delta PSNR {delta_psnr:.3f}")
-        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, codebook usage {codebook_usage:.2f}")
+        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, codebook usage {codebook_usage:.2f}%")
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
@@ -363,9 +363,9 @@ while True:
     if iter_num == 0 and eval_only:
         break
     
-    if ((iter_num % 10 == 0 and iter_num < 100)  or (iter_num % 100 == 0 and iter_num < 1000) or (iter_num % 500 == 0 and iter_num < 5000)) and iter_num != 0:
-            print(f"update codebook {iter_num}")
-            raw_model.action_model.vq.replace_unused_codebooks(X.shape[0])
+    if ((iter_num % 10 == 0 and iter_num < 100)  or (iter_num % 100 == 0 and iter_num < 1000) or (iter_num % 500 == 0 and iter_num < 5000)) and iter_num != 0 and master_process:
+        print(f"update codebook {iter_num}")
+        raw_model.action_model.vq.replace_unused_codebooks(X.shape[0])
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
