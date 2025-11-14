@@ -10,7 +10,6 @@ from typing import Optional, Callable
 from einops import rearrange
 from vector_quantize_pytorch import FSQ
 from fm import FM, FMEulerSampler
-from nsvq import NSVQ
 
 @torch.compile
 def modulate(x, shift, scale):
@@ -371,8 +370,7 @@ class ActionTransformer(nn.Module):
     def __init__(self,
                  in_channels,
                  hidden_size,
-                 codebook_size,
-                 codebook_dim,
+                 levels,
                  spatial_window,
                  temporal_window,
                  num_heads=12,
@@ -386,15 +384,11 @@ class ActionTransformer(nn.Module):
         self.blocks = nn.ModuleList([
             STAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
-        self.to_vq = nn.Linear(spatial_window * hidden_size, codebook_dim)
-        self.from_vq = nn.Linear(codebook_dim, hidden_size)
-        
-        # self.vq = FSQ(levels=levels)
-        self.vq = NSVQ(
-            num_embeddings=codebook_size,
-            embedding_dim=codebook_dim,
-            device='cuda'
+        self.to_vq = nn.Sequential(
+            RMSNorm(spatial_window * hidden_size),
+            nn.Linear(spatial_window * hidden_size, len(levels))
         )
+        self.vq = FSQ(levels=levels)
         
         self.spatial_window = spatial_window
         self.temporal_window = temporal_window
@@ -411,7 +405,7 @@ class ActionTransformer(nn.Module):
     def initialize_weights(self):
         self.apply(self._init_weights)
         # zero out classifier weights
-        torch.nn.init.trunc_normal_(self.to_vq.weight)
+        torch.nn.init.zeros_(self.to_vq[-1].weight)
         # zero out c_proj weights in all blocks
         for block in self.blocks:
             torch.nn.init.zeros_(block.mlp.w3.weight)
@@ -443,60 +437,10 @@ class ActionTransformer(nn.Module):
         for block in self.blocks:
             x = block(x, freqs_cis=self.freqs_cis)
         
-        x = rearrange(x[:, 1:], 'b t n c -> (b t) (n c)')    # no action can be predicted for the 0th frame because there is no previous frame to condition on
-        x = self.to_vq(x)
-        if self.training:
-            x, perplexity, codebooks_used = self.vq(x)
-        else:
-            x = self.vq.inference(x)
-        x = rearrange(x, '(b t) d -> b t d', b=B)
-        x = self.from_vq(x)
-        # x, indices = self.vq(x)
-        return x
-    
-    def generate_random_different_actions(self, x):
-        """
-        x: (B, T, N, C) latents
-        """
-        B, T, N, C = x.shape
-        assert T == self.temporal_window
-        assert N == self.spatial_window
-        
-        x = self.x_embedder(x)
-        
-        for block in self.blocks:
-            x = block(x, freqs_cis=self.freqs_cis)
-        
-        x = rearrange(x[:, 1:], 'b t n c -> (b t) (n c)')    # no action can be predicted for the 0th frame because there is no previous frame to condition on
-        x = self.to_vq(x)
-        x, random_x = self.vq.generate_random_different_actions(x)
-        
-        x = rearrange(x, '(b t) d -> b t d', b=B)
-        x = self.from_vq(x)
-        
-        random_x = rearrange(random_x, '(b t) d -> b t d', b=B)
-        random_x = self.from_vq(random_x)
-        # x, indices = self.vq(x)
-        return x, random_x
-    
-    def action_perplexity(self, x):
-        """
-        x: (B, T, N, C) latents
-        """
-        B, T, N, C = x.shape
-        assert T == self.temporal_window
-        assert N == self.spatial_window
-        
-        x = self.x_embedder(x)
-        
-        for block in self.blocks:
-            x = block(x, freqs_cis=self.freqs_cis)
-        
         x = x[:, 1:].flatten(2)    # no action can be predicted for the 0th frame because there is no previous frame to condition on
         x = self.to_vq(x)
-        x = rearrange(x, 'b t d -> (b t) d')
-        indices, perplexity, codebooks_used = self.vq(x)
-        return perplexity
+        x, indices = self.vq(x)
+        return indices
 
 class PatchEmbedder(nn.Module):
     def __init__(self, in_channels, hidden_size, num_history_tokens, max_input_size, dropout_prob):
@@ -534,7 +478,7 @@ class DiT(nn.Module):
                  max_input_size,
                  num_history_tokens,
                  max_alpha_t=0.7,
-                 history_dropout_prob=0,
+                 history_dropout_prob=0.1,
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4,
@@ -544,7 +488,7 @@ class DiT(nn.Module):
         self.x_embedder = PatchEmbedder(in_channels, hidden_size, num_history_tokens, max_input_size, history_dropout_prob)
         self.t_embedder = TimestepEmbedder(hidden_size)
         self.alpha_embedder = NoiseEmbedder(10, hidden_size, max_t=max_alpha_t)
-        # self.action_embedder = ClassEmbedder(num_actions, hidden_size)
+        self.action_embedder = ClassEmbedder(num_actions, hidden_size)
 
         self.blocks = nn.ModuleList([
             CrossAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
@@ -590,7 +534,7 @@ class DiT(nn.Module):
         """
         x: (B, N, C) latents to be denoised
         t: (B) noise level for x
-        history: (B, T, N, C) T historical latent frames
+        history: (B, T, N, C) T historyical latent frames
         actions: (B, T) frame actions
         alpha: (B) noise level for historical latent frames 
         """
@@ -599,7 +543,7 @@ class DiT(nn.Module):
         x = self.x_embedder(x, history, force_drop=force_drop_history)
         t = self.t_embedder(t)
         alpha = self.alpha_embedder(alpha)
-        # actions = self.action_embedder(actions, force_drop=force_drop_actions)
+        actions = self.action_embedder(actions, force_drop=force_drop_actions)
         context = torch.cat([t.unsqueeze(1), alpha.unsqueeze(1), actions], dim=1)
         
         for block in self.blocks:
@@ -635,15 +579,13 @@ class DiTWrapper(nn.Module):
         history, _ = self.diffusion.add_noise(history, alpha)
         return self.diffusion.loss(self.net, x, t=t, net_kwargs={'history': history, 'actions': actions, 'alpha': alpha})
     
-    def sample(self, shape, history, actions, alpha, guidance=1, n_steps=50, force_drop_actions=False, force_drop_history=False):
-        if guidance > 1:
-            assert force_drop_actions or force_drop_history
+    def sample(self, shape, history, actions, alpha, guidance=1, n_steps=50):
         if alpha is None:
             alpha = torch.rand(history.shape[0], device=history.device) * self.max_alpha_t
         history, _ = self.diffusion.add_noise(history, alpha)
 
         net_kwargs={'history': history, 'actions': actions, 'alpha': alpha}
-        uncond_net_kwargs={'history': history, 'actions': actions, 'alpha': alpha, 'force_drop_actions': force_drop_actions, 'force_drop_history': force_drop_actions}
+        uncond_net_kwargs={'history': history, 'actions': actions, 'alpha': alpha, 'force_drop_actions': True, 'force_drop_history': True}
         
         return self.sampler.sample(self.net, shape, n_steps, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, guidance=guidance)
 
@@ -651,8 +593,7 @@ class LAM(nn.Module):
     def __init__(self,
                  in_channels,
                  hidden_size,
-                 codebook_size,
-                 codebook_dim,
+                 levels,
                  spatial_window,
                  temporal_window,
                  max_alpha_t=0.7,
@@ -663,8 +604,7 @@ class LAM(nn.Module):
         super().__init__()
         self.action_model = ActionTransformer(in_channels=in_channels, 
                                               hidden_size=hidden_size, 
-                                              codebook_size=codebook_size,
-                                              codebook_dim=codebook_dim, 
+                                              levels=levels, 
                                               spatial_window=spatial_window, 
                                               temporal_window=temporal_window, 
                                               num_heads=num_heads, 
@@ -672,7 +612,7 @@ class LAM(nn.Module):
                                               mlp_ratio=mlp_ratio)
         self.decoder = DiTWrapper(in_channels=in_channels, 
                                   hidden_size=hidden_size, 
-                                  num_actions=codebook_size, 
+                                  num_actions=math.prod(levels), 
                                   max_input_size=spatial_window, 
                                   num_history_tokens=temporal_window, 
                                   max_alpha_t=max_alpha_t, 
@@ -680,7 +620,7 @@ class LAM(nn.Module):
                                   depth=depth, 
                                   mlp_ratio=mlp_ratio)
         
-        self.codebook_size = codebook_size
+        self.levels = levels
     
     def forward(self, x):
         """
@@ -696,7 +636,7 @@ class LAM(nn.Module):
         x = self.decoder(x, history, actions)
         return x
     
-    def generate(self, history, alpha, actions, n_autoregressive_steps, n_diffusion_steps=50, guidance=1, force_drop_actions=False, force_drop_history=False):
+    def generate(self, history, alpha, actions, n_autoregressive_steps, n_diffusion_steps=50, guidance=1):
         """
         history: (B, T, N, C) latents
         alpha: (B) noise level for history latents
@@ -706,9 +646,9 @@ class LAM(nn.Module):
         cur_actions = self.action_model(history)
         res = history.clone()
         history = history[:, 1:]
-        for step in range(n_autoregressive_steps):
+        for step in tqdm(range(n_autoregressive_steps), desc='Generating'):
             cur_actions = torch.cat([cur_actions[:, 1:], actions[:, [step]]], dim=1)
-            out = self.decoder.sample(history[:, 0].shape, history, cur_actions, alpha, guidance=guidance, n_steps=n_diffusion_steps, force_drop_actions=force_drop_actions, force_drop_history=force_drop_history)
+            out = self.decoder.sample(history[:, 0].shape, history, cur_actions, alpha, guidance=guidance, n_steps=n_diffusion_steps)
             history = torch.cat([history[:, 1:], out.unsqueeze(1)], dim=1)
             res = torch.cat([res, out.unsqueeze(1)], dim=1)
         return res
@@ -726,11 +666,12 @@ class LAM(nn.Module):
 
         return random_actions
     
-    def lam_vs_random_actions(self, x, alpha, n_autoregressive_steps, n_diffusion_steps=50, guidance=1, force_drop_actions=False, force_drop_history=False):
-        actions, random_actions = self.action_model.generate_random_different_actions(x)
+    def lam_vs_random_actions(self, x, alpha, n_autoregressive_steps, n_diffusion_steps=50, guidance=1):
+        actions = self.action_model(x)
         
-        recon = self.generate(x, alpha, actions, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=n_diffusion_steps, guidance=guidance, force_drop_actions=force_drop_actions, force_drop_history=force_drop_history)
-        random = self.generate(x, alpha, random_actions, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=n_diffusion_steps, guidance=guidance, force_drop_actions=force_drop_actions, force_drop_history=force_drop_history)
+        random_actions = self.generate_random_different_actions(actions, math.prod(self.levels), x.device)
+        recon = self.generate(x, alpha, actions, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=n_diffusion_steps, guidance=guidance)
+        random = self.generate(x, alpha, random_actions, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=n_diffusion_steps, guidance=guidance)
         
         return recon, random
 

@@ -39,7 +39,7 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'LAM_M_NSVQ'
+out_dir = 'LAM_M_shortwindow'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -54,18 +54,17 @@ wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 2 # used to simulate larger batch sizes
+gradient_accumulation_steps = 4 # used to simulate larger batch sizes
 batch_size = 64# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
-temporal_window = 16
-spatial_window = 32
+temporal_window = 16 * 4
+spatial_window = 32 // 4
 decoder_window = 32
 cut_seconds = 1
 cut_len = decoder_window * cut_seconds
 max_seq_len = temporal_window * cut_len
 vae_embed_dim = 16
-codebook_size = 64
-codebook_dim = 8
+levels = [8, 8]
 max_alpha_t = 0.7
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
@@ -157,7 +156,7 @@ for k,v in list(state_dict.items()):
 tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 
-model_args = dict(in_channels=vae_embed_dim, codebook_size=codebook_size, codebook_dim=codebook_dim, spatial_window=spatial_window, temporal_window=temporal_window, max_alpha_t=max_alpha_t)
+model_args = dict(in_channels=vae_embed_dim, levels=levels, spatial_window=spatial_window, temporal_window=temporal_window, max_alpha_t=max_alpha_t)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -206,7 +205,7 @@ if compile and 'cuda' in device:
 
 # wrap model into DDP container
 if ddp:
-    model = DDP(model, device_ids=[ddp_local_rank])
+    model = DDP(model, device_ids=[ddp_local_rank], find_unused_parameters=True)
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
@@ -223,16 +222,6 @@ def estimate_loss():
         out[split] = losses.mean()
     model.train()
     return out
-
-@torch.no_grad()
-def estimate_codebook_usage():
-    out = []
-    model.train()
-    for _ in tqdm(range(100)):
-        X = get_batch('val')
-        with ctx:
-            out.append(raw_model.action_model.action_perplexity(X).mean().item())
-    return np.mean(out)
 
 # learning rate decay scheduler (cosine with warmup)
 def get_lr(it):
@@ -253,7 +242,7 @@ def generate_lam_vs_random_actions(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
 
-    n_autoregressive_steps = 10 * decoder_window // spatial_window
+    n_autoregressive_steps = 5 * decoder_window // spatial_window
     
     data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_large_val.bin', dtype=np.float32, mode='r', shape=(4446944, vae_embed_dim))
     idxs = torch.randint(len(data) - max_seq_len - n_autoregressive_steps, (10,))
@@ -262,7 +251,7 @@ def generate_lam_vs_random_actions(step):
     B, T, N, D = x.shape
 
     alpha = torch.ones(B, device=x.device) * 0.3
-    recon, random_recon = raw_model.lam_vs_random_actions(x[:, :-n_autoregressive_steps].clone(), alpha, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=100, guidance=1)
+    recon, random_recon = raw_model.lam_vs_random_actions(x[:, :-n_autoregressive_steps].clone(), alpha, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=100, guidance=3)
     
     if decoder_window > spatial_window:
         t2 = decoder_window // spatial_window
@@ -274,7 +263,7 @@ def generate_lam_vs_random_actions(step):
         B, T, N, D = x.shape
     
     batches = []
-    for cut in tqdm(range(T - n_autoregressive_steps, T), desc='Decoding'):
+    for cut in tqdm(range(T), desc='Decoding'):
         batch = torch.cat([x[:, cut], recon[:, cut], random_recon[:, cut]], dim=0).permute(0, 2, 1)
         batches.append(tokenizer.decode(batch, shape=(1, 16384 * cut_seconds), n_steps=100))
     x, recon, random_recon = [res.cpu().detach().numpy().squeeze(1) for res in torch.cat(batches, dim=-1).split(B, dim=0)]
@@ -326,14 +315,13 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
-        codebook_usage = estimate_codebook_usage()
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
             with ctx:
                 delta_psnr = generate_lam_vs_random_actions(iter_num)
             model.train()
             print(f"iter {iter_num}: delta PSNR {delta_psnr:.3f}")
-        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, codebook usage {codebook_usage:.2f}%")
+        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
@@ -362,10 +350,6 @@ while True:
                     torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
     if iter_num == 0 and eval_only:
         break
-    
-    if ((iter_num % 10 == 0 and iter_num < 100)  or (iter_num % 100 == 0 and iter_num < 1000) or (iter_num % 500 == 0 and iter_num < 5000)) and iter_num != 0 and master_process:
-        print(f"update codebook {iter_num}")
-        raw_model.action_model.vq.replace_unused_codebooks(X.shape[0])
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
