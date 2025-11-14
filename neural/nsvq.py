@@ -40,7 +40,7 @@ class NSVQ(torch.nn.Module):
         self.codebooks = torch.nn.Parameter(codebooks, requires_grad=True)
 
         # Counter variable which contains the number of times each codebook is used
-        self.codebooks_used = torch.zeros(self.num_embeddings, dtype=torch.int32, device=device)
+        self.register_buffer('codebooks_used', torch.zeros(self.num_embeddings, dtype=torch.int32, device=device))
 
     def forward(self, input_data):
 
