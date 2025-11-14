@@ -39,7 +39,7 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'LAM_M_shortwindow'
+out_dir = 'LAM_M_test'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -54,11 +54,11 @@ wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 4 # used to simulate larger batch sizes
+gradient_accumulation_steps = 2 # used to simulate larger batch sizes
 batch_size = 64# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
-temporal_window = 16 * 4
-spatial_window = 32 // 4
+temporal_window = 16
+spatial_window = 32
 decoder_window = 32
 cut_seconds = 1
 cut_len = decoder_window * cut_seconds
