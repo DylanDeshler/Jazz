@@ -386,8 +386,8 @@ class ActionTransformer(nn.Module):
         self.blocks = nn.ModuleList([
             STAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
-        self.to_vq = nn.Linear(spatial_window * hidden_size, codebook_dim)
-        self.from_vq = nn.Linear(codebook_dim, hidden_size)
+        self.to_vq = nn.Sequential(RMSNorm(spatial_window * hidden_size), nn.Linear(spatial_window * hidden_size, codebook_dim))
+        self.from_vq = nn.Sequential(nn.Linear(codebook_dim, hidden_size), RMSNorm(hidden_size))
         
         # self.vq = FSQ(levels=levels)
         self.vq = NSVQ(
