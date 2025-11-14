@@ -145,20 +145,6 @@ class NSVQ(torch.nn.Module):
 
             print(f'************* Replaced ' + str(unused_count) + f' codebooks *************')
             self.codebooks_used[:] = 0.0
-    
-    def sync_codebooks_ddp(self, src=0):
-        # Move codebooks and usage counters to CPU for broadcasting
-        codebooks_cpu = self.codebooks.detach().cpu()
-        usage_cpu = self.codebooks_used.detach().cpu()
-
-        # Broadcast from rank 0 to all other ranks
-        dist.broadcast(codebooks_cpu, src=src)
-        dist.broadcast(usage_cpu, src=src)
-
-        # Copy back to the model
-        with torch.no_grad():
-            self.codebooks.copy_(codebooks_cpu.to(self.codebooks.device))
-            self.codebooks_used.copy_(usage_cpu.to(self.codebooks_used.device))
 
     def generate_random_different_actions(self, input_data):
         """
