@@ -335,7 +335,7 @@ while True:
                 delta_psnr = generate_lam_vs_random_actions(iter_num)
             model.train()
             print(f"iter {iter_num}: delta PSNR {delta_psnr:.3f}")
-        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, codebook usage {codebook_usage:.2f}%")
+        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, codebook perplexity {codebook_usage:.2f}")
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
