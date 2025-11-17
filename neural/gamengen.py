@@ -393,7 +393,8 @@ class ActionTransformer(nn.Module):
         self.vq = NSVQ(
             num_embeddings=codebook_size,
             embedding_dim=codebook_dim,
-            device='cuda'
+            device='cuda',
+            discarding_threshold=0.05,
         )
         
         self.spatial_window = spatial_window
