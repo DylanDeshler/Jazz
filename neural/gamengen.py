@@ -444,11 +444,9 @@ class ActionTransformer(nn.Module):
             x = block(x, freqs_cis=self.freqs_cis)
         
         # x = rearrange(x[:, 1:], 'b t n c -> (b t) (n c)')    # no action can be predicted for the 0th frame because there is no previous frame to condition on
+        x = x[:, 1:] - x[:, :-1]
         x = rearrange(x, 'b t n c -> (b t) (n c)')
         x = self.to_vq(x)
-        print(x.shape)
-        x = x[:, 1:] - x[:, :-1]
-        print(x.shape)
         if self.training:
             x, perplexity, codebooks_used = self.vq(x)
         else:
@@ -472,9 +470,9 @@ class ActionTransformer(nn.Module):
             x = block(x, freqs_cis=self.freqs_cis)
         
         # x = rearrange(x[:, 1:], 'b t n c -> (b t) (n c)')    # no action can be predicted for the 0th frame because there is no previous frame to condition on
+        x = x[:, 1:] - x[:, :-1]
         x = rearrange(x, 'b t n c -> (b t) (n c)')
         x = self.to_vq(x)
-        x = x[:, 1:] - x[:, :-1]
         x, random_x = self.vq.generate_random_different_actions(x)
         
         x = rearrange(x, '(b t) d -> b t d', b=B)
@@ -499,10 +497,9 @@ class ActionTransformer(nn.Module):
             x = block(x, freqs_cis=self.freqs_cis)
         
         # x = x[:, 1:].flatten(2)    # no action can be predicted for the 0th frame because there is no previous frame to condition on
+        x = x[:, 1:] - x[:, :-1]
         x = rearrange(x, 'b t n c -> (b t) (n c)')
         x = self.to_vq(x)
-        x = x[:, 1:] - x[:, :-1]
-        # x = rearrange(x, 'b t d -> (b t) d')
         indices, perplexity, codebooks_used = self.vq(x)
         return perplexity
 
