@@ -335,8 +335,9 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
+        temp = raw_model.action_model.vq.codebooks_used
         codebook_usage = estimate_codebook_usage()
-        raw_model.action_model.vq.codebooks_used[:] = 0.0
+        raw_model.action_model.vq.codebooks_used[:] = temp
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
             with ctx:
