@@ -324,11 +324,19 @@ while True:
         param_group['lr'] = lr
     
     tokens_trained += batch_size * gradient_accumulation_steps * max_seq_len
+    
+    if iter_num != 0:
+        for num_batches, max_iter in nsvq_batch_iters:
+            if iter_num % num_batches == 0 and iter_num < max_iter:
+                print(f"update codebook {iter_num}")
+                if master_process:
+                    raw_model.action_model.vq.replace_unused_codebooks(num_batches)
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
         codebook_usage = estimate_codebook_usage()
+        raw_model.action_model.vq.codebooks_used[:] = 0.0
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
             with ctx:
@@ -364,13 +372,6 @@ while True:
                     torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
     if iter_num == 0 and eval_only:
         break
-    
-    if iter_num != 0:
-        for num_batches, max_iter in nsvq_batch_iters:
-            if iter_num % num_batches == 0 and iter_num < max_iter:
-                print(f"update codebook {iter_num}")
-                if master_process:
-                    raw_model.action_model.vq.replace_unused_codebooks(num_batches)
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
