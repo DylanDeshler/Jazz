@@ -446,6 +446,7 @@ class ActionTransformer(nn.Module):
         # x = rearrange(x[:, 1:], 'b t n c -> (b t) (n c)')    # no action can be predicted for the 0th frame because there is no previous frame to condition on
         x = rearrange(x, 'b t n c -> (b t) (n c)')
         x = self.to_vq(x)
+        print(x.shape)
         x = x[:, 1:] - x[:, :-1]
         print(x.shape)
         if self.training:
