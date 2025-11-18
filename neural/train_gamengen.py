@@ -309,7 +309,7 @@ local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
 
-nsvq_batch_iters = [(10, 100), (100, 1000), (500, 5000), (5000, 50000)]
+nsvq_batch_iters = [(10, 100), (100, 1000), (500, 5000), (2000, 50000)]
 
 # optimizer
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, betas=(beta1, beta2))
