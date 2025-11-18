@@ -447,6 +447,7 @@ class ActionTransformer(nn.Module):
         x = rearrange(x, 'b t n c -> (b t) (n c)')
         x = self.to_vq(x)
         x = x[:, 1:] - x[:, :-1]
+        print(x.shape)
         if self.training:
             x, perplexity, codebooks_used = self.vq(x)
         else:
