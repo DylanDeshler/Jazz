@@ -39,7 +39,7 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'LAM_M_test'
+out_dir = 'LAM_M_FSQ_relative'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -55,9 +55,9 @@ wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
-batch_size = 64# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 128# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
-temporal_window = 16
+temporal_window = 2
 spatial_window = 32
 decoder_window = 32
 cut_seconds = 1
@@ -223,6 +223,26 @@ def estimate_loss():
     model.train()
     return out
 
+@torch.no_grad()
+def estimate_codebook_usage():
+    out = {}
+    model.eval()
+    for i, split in enumerate(['train', 'val']):
+        usage = torch.zeros(eval_iters * gradient_accumulation_steps)
+        for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
+            X = get_batch(split)
+            with ctx:
+                actions = model.encode_actions(X)
+            
+            unique_elements, counts = torch.unique(actions, return_counts=True)
+            total_elements = actions.numel()
+            percentage_unique = (len(unique_elements) / total_elements) * 100
+            
+            usage[k] = percentage_unique.item()
+        out[split] = usage.mean()
+    model.train()
+    return out
+
 # learning rate decay scheduler (cosine with warmup)
 def get_lr(it):
     # 1) linear warmup for warmup_iters steps
@@ -314,6 +334,7 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
+        usage = estimate_codebook_usage()
         losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
@@ -321,7 +342,7 @@ while True:
                 delta_psnr = generate_lam_vs_random_actions(iter_num)
             model.train()
             print(f"iter {iter_num}: delta PSNR {delta_psnr:.3f}")
-        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, train usage: {usage['train']:.2f}, val usage {['val']:.2f}")
         if wandb_log:
             wandb.log({
                 "iter": iter_num,

@@ -437,7 +437,9 @@ class ActionTransformer(nn.Module):
         for block in self.blocks:
             x = block(x, freqs_cis=self.freqs_cis)
         
-        x = x[:, 1:].flatten(2)    # no action can be predicted for the 0th frame because there is no previous frame to condition on
+        x = rearrange(x, 'b t n c -> b t (n c)')
+        x = x[:, 1:] - x[:, :-1]
+        x = rearrange(x, 'b t (n c) -> (b t) (n c)')
         x = self.to_vq(x)
         x, indices = self.vq(x)
         return indices
@@ -652,6 +654,12 @@ class LAM(nn.Module):
             history = torch.cat([history[:, 1:], out.unsqueeze(1)], dim=1)
             res = torch.cat([res, out.unsqueeze(1)], dim=1)
         return res
+    
+    def encode_actions(self, x):
+        assert x.ndim == 4
+        
+        actions = self.action_model(x)
+        return actions
     
     def generate_random_different_actions(self, actions_indices, codebook_size, device):
         shape = actions_indices.shape
