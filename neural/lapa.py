@@ -367,7 +367,7 @@ class ActionTransformer(nn.Module):
         #     RMSNorm(spatial_window * hidden_size),
         #     nn.Linear(spatial_window * hidden_size, len(levels))
         # )
-        self.vq = FSQ(dim=spatial_window * hidden_size, levels=levels)
+        self.vq = FSQ(dim=hidden_size, levels=levels)
         
         self.spatial_pos = nn.Embedding(spatial_window, hidden_size)
         self.temporal_pos = nn.Embedding(temporal_window, hidden_size)
