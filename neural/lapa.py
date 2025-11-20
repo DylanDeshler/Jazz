@@ -368,7 +368,7 @@ class ActionTransformer(nn.Module):
         #     nn.Linear(hidden_size, len(levels)),
         #     nn.LayerNorm(len(levels), elementwise_affine=False)
         # )
-        self.vq = FSQ(levels=levels)
+        self.vq = FSQ(dim=hidden_size, levels=levels)
         # self.from_vq = nn.Linear(len(levels), hidden_size)
         
         self.spatial_pos = nn.Embedding(spatial_window, hidden_size)
