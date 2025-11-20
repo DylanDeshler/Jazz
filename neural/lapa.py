@@ -407,7 +407,7 @@ class ActionTransformer(nn.Module):
         B, T, N, C = x.shape
         
         x = self.x_embedder(x)
-        x_patch = x.clone().detach()
+        x_patch = x[:, 0].clone().detach()
         
         x = rearrange(x, 'b t n c -> (b t) n c')
         x = x + self.spatial_pos(torch.arange(N, device=x.device, dtype=torch.long).unsqueeze(0))
