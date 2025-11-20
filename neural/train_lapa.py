@@ -55,7 +55,7 @@ wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
-batch_size = 128# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 256# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 temporal_window = 2
 spatial_window = 32
@@ -82,7 +82,7 @@ backend = 'gloo' # 'nccl', 'gloo', etc.
 # system
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
-compile = False # use PyTorch 2.0 to compile the model to be faster
+compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 # exec(open('configurator.py').read()) # overrides from command line or config file
@@ -261,11 +261,12 @@ def generate_lam_vs_random_actions(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
     
-    x = get_batch('val')[:32]
+    x = get_batch('val')
 
     B, T, N, D = x.shape
 
-    recon, random_recon = raw_model.lam_vs_random_actions(x.clone(), n_steps=50)
+    with ctx:
+        recon, random_recon = raw_model.lam_vs_random_actions(x.clone(), n_steps=50)
     
     if decoder_window > spatial_window:
         raise NotImplementedError()
