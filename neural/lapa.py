@@ -369,6 +369,7 @@ class ActionTransformer(nn.Module):
             nn.LayerNorm(len(levels), elementwise_affine=False)
         )
         self.vq = FSQ(levels=levels)
+        self.from_vq = nn.Linear(len(levels), hidden_size)
         
         self.spatial_pos = nn.Embedding(spatial_window, hidden_size)
         self.temporal_pos = nn.Embedding(temporal_window, hidden_size)
@@ -426,6 +427,7 @@ class ActionTransformer(nn.Module):
         
         x = self.to_vq(x)
         x, indices = self.vq(x)
+        x = self.from_vq(x)
         return x, indices
 
 class DiT(nn.Module):
