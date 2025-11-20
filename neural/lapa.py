@@ -521,7 +521,7 @@ class DiTWrapper(nn.Module):
         return self.diffusion.loss(self.net, x, t=t, net_kwargs={'actions': actions})
     
     def sample(self, x, actions, n_steps=50):
-        return self.sampler.sample(self.net, x.shape, n_steps, net_kwargs={'x': x, 'actions': actions})
+        return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'x': x, 'actions': actions})
 
 class LAM(nn.Module):
     def __init__(self,
@@ -571,7 +571,7 @@ class LAM(nn.Module):
         return x, actions
     
     def generate(self, x, actions, n_steps=50):
-        return self.decoder.sample(x.shape, net_kwargs={'actions': actions}, n_steps=n_steps)
+        return self.decoder.sample(x.shape, x, actions, n_steps=n_steps)
     
     def generate_random_different_actions(self, actions_indices, codebook_size, device):
         shape = actions_indices.shape
