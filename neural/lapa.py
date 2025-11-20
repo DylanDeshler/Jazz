@@ -515,7 +515,7 @@ class DiTWrapper(nn.Module):
         self.net.initialize_weights()
     
     def forward(self, x, actions, t=None):
-        return self.diffusion.target_loss(self.net, x, t=t, net_kwargs={'actions': actions})
+        return self.diffusion.target_loss(self.net, x, x[:, 1], t=t, net_kwargs={'actions': actions})
     
     def sample(self, x, actions, n_steps=50):
         return self.sampler.sample(self.net, x.shape, n_steps, net_kwargs={'x': x, 'actions': actions})
