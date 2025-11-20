@@ -487,6 +487,7 @@ class DiT(nn.Module):
         actions = self.action_embedder(actions)
         context = torch.cat([t.unsqueeze(1), actions], dim=1)
         
+        print(x.shape, torch.arange(x.shape[1], device=x.device, dtype=torch.long).shape)
         x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
         context = context + self.context_pos(torch.arange(2, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.blocks:
@@ -551,6 +552,7 @@ class LAM(nn.Module):
         
         self.levels = levels
         
+        # tie weights
         self.decoder.net.x_embedder[0].weight = self.action_model.x_embedder[0].weight
         self.decoder.net.x_embedder[0].bias = self.action_model.x_embedder[0].bias
         self.decoder.net.x_embedder[1].weight = self.action_model.x_embedder[1].weight
