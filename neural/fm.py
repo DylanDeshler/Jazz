@@ -40,7 +40,7 @@ class FM:
         pred = net(x_t, t=t * self.timescale, **net_kwargs)
         
         target = self.A(t) * x + self.B(t) * noise # -dxt/dt
-        print(x_t.shape, x.shape, target.shape)
+        print(x_t.shape, x.shape, pred.shape, target.shape)
         if return_loss_unreduced:
             loss = ((pred.float() - target.float()) ** 2).mean(dim=[1, 2])
             if return_all:
