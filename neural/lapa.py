@@ -406,7 +406,6 @@ class ActionTransformer(nn.Module):
         B, T, N, C = x.shape
         
         x = self.x_embedder(x)
-        x_patch = x[:, 0].clone().detach()
         
         x = rearrange(x, 'b t n c -> (b t) n c')
         x = x + self.spatial_pos(torch.arange(N, device=x.device, dtype=torch.long).unsqueeze(0))
@@ -426,7 +425,7 @@ class ActionTransformer(nn.Module):
         
         x = self.to_vq(x)
         x, indices = self.vq(x)
-        return indices, x_patch
+        return indices
 
 class DiT(nn.Module):
     def __init__(self,
@@ -440,6 +439,7 @@ class DiT(nn.Module):
                  ):
         super().__init__()
         
+        self.x_embedder = nn.Sequential(nn.Linear(in_channels, hidden_size, bias=True), RMSNorm(hidden_size))
         self.t_embedder = TimestepEmbedder(hidden_size)
         self.action_embedder = nn.Embedding(num_actions, hidden_size)
         
@@ -478,10 +478,11 @@ class DiT(nn.Module):
     
     def forward(self, x, t, actions):
         """
-        x: (B, N, D) latents to be denoised
+        x: (B, N, C) latents to be denoised
         t: (B) noise level for x
         actions: (B, T) frame actions
         """
+        x = self.x_embedder(x)
         t = self.t_embedder(t)
         actions = self.action_embedder(actions)
         context = torch.cat([t.unsqueeze(1), actions], dim=1)
@@ -549,6 +550,10 @@ class LAM(nn.Module):
                                   mlp_ratio=mlp_ratio)
         
         self.levels = levels
+        
+        self.decoder.x_embedder[0].weight = self.action_model.x_embedder[0].weight
+        self.decoder.x_embedder[0].bias = self.action_model.x_embedder[0].bias
+        self.decoder.x_embedder[1].weight = self.action_model.x_embedder[1].weight
     
     def forward(self, x):
         """
@@ -557,7 +562,7 @@ class LAM(nn.Module):
         """
         assert x.ndim == 4
         
-        actions, x = self.action_model(x)
+        actions = self.action_model(x)
         
         x = self.decoder(x, actions)
         return x, actions
@@ -579,7 +584,7 @@ class LAM(nn.Module):
         return random_actions
     
     def lam_vs_random_actions(self, x, n_steps=50):
-        actions, x = self.action_model(x)
+        actions = self.action_model(x)
         
         random_actions = self.generate_random_different_actions(actions, math.prod(self.levels), x.device)
         recon = self.generate(x, actions, n_steps=n_steps)
