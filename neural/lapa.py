@@ -482,6 +482,8 @@ class DiT(nn.Module):
         t: (B) noise level for x
         actions: (B, T) frame actions
         """
+        assert x.ndim == 3
+        
         x = self.x_embedder(x)
         t = self.t_embedder(t)
         actions = self.action_embedder(actions)
@@ -520,7 +522,7 @@ class DiTWrapper(nn.Module):
         return self.diffusion.loss(self.net, x, t=t, net_kwargs={'actions': actions})
     
     def sample(self, x, actions, n_steps=50):
-        return self.sampler.sample(self.net, x[:, [1]].shape, n_steps, net_kwargs={'x': x, 'actions': actions})
+        return self.sampler.sample(self.net, x.shape, n_steps, net_kwargs={'x': x, 'actions': actions})
 
 class LAM(nn.Module):
     def __init__(self,
@@ -566,7 +568,7 @@ class LAM(nn.Module):
         
         actions = self.action_model(x)
         
-        x = self.decoder(x, actions)
+        x = self.decoder(x[:, 1], actions)
         return x, actions
     
     def generate(self, x, actions, n_steps=50):
@@ -589,8 +591,8 @@ class LAM(nn.Module):
         actions = self.action_model(x)
         
         random_actions = self.generate_random_different_actions(actions, math.prod(self.levels), x.device)
-        recon = self.generate(x, actions, n_steps=n_steps)
-        random = self.generate(x, random_actions, n_steps=n_steps)
+        recon = self.generate(x[:, 1], actions, n_steps=n_steps)
+        random = self.generate(x[:, 1], random_actions, n_steps=n_steps)
         
         return recon, random
 
