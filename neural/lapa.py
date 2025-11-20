@@ -379,10 +379,13 @@ class ActionTransformer(nn.Module):
         # zero out classifier weights
         torch.nn.init.zeros_(self.to_vq[-1].weight)
         # zero out c_proj weights in all blocks
-        for block in self.blocks:
+        for block in self.spatial_blocks:
             torch.nn.init.zeros_(block.mlp.w3.weight)
-            torch.nn.init.zeros_(block.spatial_attn.proj.weight)
-            torch.nn.init.zeros_(block.temporal_attn.proj.weight)
+            torch.nn.init.zeros_(block.attn.proj.weight)
+        
+        for block in self.temporal_blocks:
+            torch.nn.init.zeros_(block.mlp.w3.weight)
+            torch.nn.init.zeros_(block.attn.proj.weight)
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
