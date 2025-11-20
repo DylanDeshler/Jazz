@@ -425,7 +425,7 @@ class ActionTransformer(nn.Module):
         x = last_frame - first_frame # LAPA subtracts at codebook dim but thats 2 for [8, 8] levels... not enough information?
         # x = x.unsqueeze(1)
         
-        x = self.to_vq(x)
+        x = self.to_vq(x) * 10
         x, indices = self.vq(x)
         x = self.from_vq(x)
         return x, indices
