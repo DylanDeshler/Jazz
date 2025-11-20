@@ -233,9 +233,9 @@ def estimate_codebook_usage():
             with ctx:
                 _, actions = model(X)
             
-            unique_elements, counts = torch.unique(actions, return_counts=True)
-            total_elements = actions.numel()
-            percentage_unique = (len(unique_elements) / total_elements) * 100
+                unique_elements, counts = torch.unique(actions, return_counts=True)
+                total_elements = actions.numel()
+                percentage_unique = (len(unique_elements) / total_elements) * 100
             
             usage[k] = percentage_unique
         out[split] = usage.mean()
