@@ -237,7 +237,7 @@ def estimate_codebook_usage():
             total_elements = actions.numel()
             percentage_unique = (len(unique_elements) / total_elements) * 100
             
-            usage[k] = percentage_unique.item()
+            usage[k] = percentage_unique
         out[split] = usage.mean()
     model.train()
     return out
