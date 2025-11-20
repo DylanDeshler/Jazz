@@ -216,7 +216,7 @@ def estimate_loss():
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
             X = get_batch(split)
             with ctx:
-                loss = model(X)
+                loss, _ = model(X)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -374,7 +374,7 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            loss = model(X)
+            loss, _ = model(X)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X = get_batch('train')
