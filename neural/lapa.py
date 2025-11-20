@@ -425,7 +425,7 @@ class ActionTransformer(nn.Module):
         
         # x = self.to_vq(x)
         x, indices = self.vq(x)
-        return indices
+        return x, indices
 
 class DiT(nn.Module):
     def __init__(self,
@@ -441,7 +441,7 @@ class DiT(nn.Module):
         
         self.x_embedder = nn.Sequential(nn.Linear(in_channels, hidden_size, bias=True), RMSNorm(hidden_size))
         self.t_embedder = TimestepEmbedder(hidden_size)
-        self.action_embedder = nn.Embedding(num_actions, hidden_size)
+        # self.action_embedder = nn.Embedding(num_actions, hidden_size)
         
         self.x_pos = nn.Embedding(max_input_size, hidden_size)
         self.context_pos = nn.Embedding(1 + 32, hidden_size)
@@ -486,7 +486,7 @@ class DiT(nn.Module):
         
         x = self.x_embedder(x)
         t = self.t_embedder(t)
-        actions = self.action_embedder(actions)
+        # actions = self.action_embedder(actions)
         context = torch.cat([t.unsqueeze(1), actions], dim=1)
         
         x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
@@ -565,10 +565,10 @@ class LAM(nn.Module):
         """
         assert x.ndim == 4
         
-        actions = self.action_model(x)
+        z, indices = self.action_model(x)
         
-        x = self.decoder(x[:, 1], actions)
-        return x, actions
+        x = self.decoder(x[:, 1], z)
+        return x, indices
     
     def generate(self, x, actions, n_steps=50):
         return self.decoder.sample(x, actions, n_steps=n_steps)
@@ -587,11 +587,11 @@ class LAM(nn.Module):
         return random_actions
     
     def lam_vs_random_actions(self, x, n_steps=50):
-        actions = self.action_model(x)
+        z, indices = self.action_model(x)
         
-        random_actions = self.generate_random_different_actions(actions, math.prod(self.levels), x.device)
-        recon = self.generate(x[:, 1], actions, n_steps=n_steps)
-        random = self.generate(x[:, 1], random_actions, n_steps=n_steps)
+        random_actions = self.generate_random_different_actions(indices, math.prod(self.levels), x.device)
+        recon = self.generate(x[:, 1], z, n_steps=n_steps)
+        random = self.generate(x[:, 1], self.action_model.vq.indices_to_codes(random_actions), n_steps=n_steps)
         
         return recon, random
 
