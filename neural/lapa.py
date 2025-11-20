@@ -324,7 +324,6 @@ class CrossAttentionBlock(nn.Module):
         self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
     
     def forward(self, x, context, freqs_cis=None):
-        print(x.shape, context.shape)
         x = x + self.attn(self.norm1(x), freqs_cis=freqs_cis[:x.shape[1]] if freqs_cis is not None else None)
         x = x + self.cross(self.norm2(x), context, freqs_cis=freqs_cis[:max(x.shape[1], context.shape[1])] if freqs_cis is not None else None)
         x = x + self.mlp(self.norm3(x))
@@ -516,7 +515,7 @@ class DiTWrapper(nn.Module):
         self.net.initialize_weights()
     
     def forward(self, x, actions, t=None):
-        return self.diffusion.loss(self.net, x, t=t, net_kwargs={'actions': actions})
+        return self.diffusion.target_loss(self.net, x, t=t, net_kwargs={'actions': actions})
     
     def sample(self, x, actions, n_steps=50):
         return self.sampler.sample(self.net, x.shape, n_steps, net_kwargs={'x': x, 'actions': actions})
