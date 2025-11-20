@@ -409,6 +409,7 @@ class ActionTransformer(nn.Module):
         x_patch = x.clone().detach()
         
         x = rearrange(x, 'b t n c -> (b t) n c')
+        print(x.shape, torch.arange(N, device=x.device, dtype=torch.long).unsqueeze(0).shape)
         x = x + self.spatial_pos(torch.arange(N, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.spatial_blocks:
             x = block(x)
@@ -487,7 +488,7 @@ class DiT(nn.Module):
         context = torch.cat([t.unsqueeze(1), actions], dim=1)
         
         print(x.shape, torch.arange(x.shape[1]).shape)
-        x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
+        x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0).unsqueeze(-1))
         context = context + self.context_pos(torch.arange(2, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.blocks:
             x = block(x, context)
