@@ -324,6 +324,7 @@ class CrossAttentionBlock(nn.Module):
         self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
     
     def forward(self, x, context, freqs_cis=None):
+        print(x.shape, context.shape)
         x = x + self.attn(self.norm1(x), freqs_cis=freqs_cis[:x.shape[1]] if freqs_cis is not None else None)
         x = x + self.cross(self.norm2(x), context, freqs_cis=freqs_cis[:max(x.shape[1], context.shape[1])] if freqs_cis is not None else None)
         x = x + self.mlp(self.norm3(x))
@@ -409,7 +410,6 @@ class ActionTransformer(nn.Module):
         x_patch = x.clone().detach()
         
         x = rearrange(x, 'b t n c -> (b t) n c')
-        print(x.shape, torch.arange(N, device=x.device, dtype=torch.long).unsqueeze(0).shape)
         x = x + self.spatial_pos(torch.arange(N, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.spatial_blocks:
             x = block(x)
@@ -487,7 +487,6 @@ class DiT(nn.Module):
         actions = self.action_embedder(actions)
         context = torch.cat([t.unsqueeze(1), actions], dim=1)
         
-        print(x.shape, torch.arange(x.shape[1]).shape)
         x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0).unsqueeze(-1))
         context = context + self.context_pos(torch.arange(2, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.blocks:
