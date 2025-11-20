@@ -409,12 +409,12 @@ class ActionTransformer(nn.Module):
         x_patch = x.clone().detach()
         
         x = rearrange(x, 'b t n c -> (b t) n c')
-        x = x + self.spatial_pos(torch.arange(N, device=x.device, dtype=x.dtype).unsqueeze(0))
+        x = x + self.spatial_pos(torch.arange(N, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.spatial_blocks:
             x = block(x)
         
         x = rearrange(x, '(b t) n c -> (b n) t c', b=B, t=T)
-        x = x + self.temporal_pos(torch.arange(T, device=x.device, dtype=x.dtype).unsqueeze(0))
+        x = x + self.temporal_pos(torch.arange(T, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.temporal_blocks:
             x = block(x, is_causal=True)
         
@@ -485,8 +485,8 @@ class DiT(nn.Module):
         actions = self.action_embedder(actions)
         context = torch.cat([t.unsqueeze(1), actions], dim=1)
         
-        x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=x.dtype).unsqueeze(0))
-        context = context + self.context_pos(torch.arange(2, device=x.device, dtype=x.dtype).unsqueeze(0))
+        x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
+        context = context + self.context_pos(torch.arange(2, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.blocks:
             x = block(x, context)
         
