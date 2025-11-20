@@ -363,13 +363,13 @@ class ActionTransformer(nn.Module):
             SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
         
-        self.to_vq = nn.Sequential(
-            # RMSNorm(spatial_window * hidden_size),
-            nn.Linear(hidden_size, len(levels)),
-            nn.LayerNorm(len(levels), elementwise_affine=False)
-        )
+        # self.to_vq = nn.Sequential(
+        #     # RMSNorm(spatial_window * hidden_size),
+        #     nn.Linear(hidden_size, len(levels)),
+        #     nn.LayerNorm(len(levels), elementwise_affine=False)
+        # )
         self.vq = FSQ(levels=levels)
-        self.from_vq = nn.Linear(len(levels), hidden_size)
+        # self.from_vq = nn.Linear(len(levels), hidden_size)
         
         self.spatial_pos = nn.Embedding(spatial_window, hidden_size)
         self.temporal_pos = nn.Embedding(temporal_window, hidden_size)
@@ -425,9 +425,9 @@ class ActionTransformer(nn.Module):
         x = last_frame - first_frame # LAPA subtracts at codebook dim but thats 2 for [8, 8] levels... not enough information?
         # x = x.unsqueeze(1)
         
-        x = self.to_vq(x) * 10
+        # x = self.to_vq(x)
         x, indices = self.vq(x)
-        x = self.from_vq(x)
+        # x = self.from_vq(x)
         return x, indices
 
 class DiT(nn.Module):
@@ -594,7 +594,8 @@ class LAM(nn.Module):
         
         random_actions = self.generate_random_different_actions(indices, math.prod(self.levels), x.device)
         recon = self.generate(x[:, 1], z, n_steps=n_steps)
-        random = self.generate(x[:, 1], self.action_model.from_vq(self.action_model.vq.indices_to_codes(random_actions)), n_steps=n_steps)
+        # random = self.generate(x[:, 1], self.action_model.from_vq(self.action_model.vq.indices_to_codes(random_actions)), n_steps=n_steps)
+        random = self.generate(x[:, 1], self.action_model.vq.indices_to_codes(random_actions), n_steps=n_steps)
         
         return recon, random
 

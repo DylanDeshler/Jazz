@@ -231,13 +231,20 @@ def estimate_codebook_usage():
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
             X = get_batch(split)
             with ctx:
-                _, actions = model(X)
+                _, indices = model(X)
+                
+                indices = indices.flatten()
+                num_tokens = indices.numel()
             
-                unique_elements, counts = torch.unique(actions, return_counts=True)
-                total_elements = actions.numel()
-                percentage_unique = (len(unique_elements) / total_elements) * 100
+                counts = torch.bincount(indices, minlength=math.prod(levels)).float()
+                probs = counts / num_tokens
+                
+                # Add epsilon to avoid log(0)
+                probs = probs + 1e-10
+                entropy = -torch.sum(probs * torch.log(probs))
+                perplexity = torch.exp(entropy).item()
             
-            usage[k] = percentage_unique
+            usage[k] = perplexity
         out[split] = usage.mean()
     model.train()
     return out
@@ -335,7 +342,7 @@ while True:
                 delta_psnr = generate_lam_vs_random_actions(iter_num)
             model.train()
             print(f"iter {iter_num}: delta PSNR {delta_psnr:.3f}")
-        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, train usage: {usage['train']:.2f}%, val usage {usage['val']:.2f}%")
+        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, train perplexity: {usage['train']:.2f}, val perplexity {usage['val']:.2f}")
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
