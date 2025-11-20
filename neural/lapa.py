@@ -521,7 +521,7 @@ class DiTWrapper(nn.Module):
         return self.diffusion.loss(self.net, x, t=t, net_kwargs={'actions': actions})
     
     def sample(self, x, actions, n_steps=50):
-        return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'x': x, 'actions': actions})
+        return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions})
 
 class LAM(nn.Module):
     def __init__(self,
