@@ -420,6 +420,7 @@ class ActionTransformer(nn.Module):
         
         x = rearrange(x, '(b n) t c -> b t n c', b=B, n=N)
         first_frame, last_frame = x[:, 0], x[:, 1]
+        print(x.shape, first_frame.shape, last_frame.shape)
         first_frame, last_frame = rearrange(x, 'b n c -> b (n c)'), rearrange(last_frame, 'b n c -> b (n c)')
         x = last_frame - first_frame # LAPA subtracts at codebook dim but thats 2 for [8, 8] levels... not enough information?
         
