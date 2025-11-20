@@ -65,7 +65,6 @@ cut_len = decoder_window * cut_seconds
 max_seq_len = temporal_window * cut_len
 vae_embed_dim = 16
 levels = [8, 8]
-max_alpha_t = 0.7
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
@@ -156,7 +155,7 @@ for k,v in list(state_dict.items()):
 tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 
-model_args = dict(in_channels=vae_embed_dim, levels=levels, spatial_window=spatial_window, temporal_window=temporal_window, max_alpha_t=max_alpha_t)
+model_args = dict(in_channels=vae_embed_dim, levels=levels, spatial_window=spatial_window, temporal_window=temporal_window)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
