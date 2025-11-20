@@ -487,7 +487,7 @@ class DiT(nn.Module):
         actions = self.action_embedder(actions)
         context = torch.cat([t.unsqueeze(1), actions], dim=1)
         
-        x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0).unsqueeze(-1))
+        x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
         context = context + self.context_pos(torch.arange(2, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.blocks:
             x = block(x, context)
