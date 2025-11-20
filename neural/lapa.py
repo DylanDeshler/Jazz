@@ -489,7 +489,6 @@ class DiT(nn.Module):
         actions = self.action_embedder(actions)
         context = torch.cat([t.unsqueeze(1), actions], dim=1)
         
-        print(x.shape, torch.arange(x.shape[1], device=x.device, dtype=torch.long).shape)
         x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
         context = context + self.context_pos(torch.arange(2, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.blocks:
@@ -572,7 +571,7 @@ class LAM(nn.Module):
         return x, actions
     
     def generate(self, x, actions, n_steps=50):
-        return self.decoder.sample(x.shape, x, actions, n_steps=n_steps)
+        return self.decoder.sample(x.shape, net_kwargs={'actions': actions}, n_steps=n_steps)
     
     def generate_random_different_actions(self, actions_indices, codebook_size, device):
         shape = actions_indices.shape
