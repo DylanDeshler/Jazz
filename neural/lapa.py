@@ -363,11 +363,11 @@ class ActionTransformer(nn.Module):
             SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
         
-        self.to_vq = nn.Sequential(
-            RMSNorm(spatial_window * hidden_size),
-            nn.Linear(spatial_window * hidden_size, len(levels))
-        )
-        self.vq = FSQ(levels=levels)
+        # self.to_vq = nn.Sequential(
+        #     RMSNorm(spatial_window * hidden_size),
+        #     nn.Linear(spatial_window * hidden_size, len(levels))
+        # )
+        self.vq = FSQ(dim=spatial_window * hidden_size, levels=levels)
         
         self.spatial_pos = nn.Embedding(spatial_window, hidden_size)
         self.temporal_pos = nn.Embedding(temporal_window, hidden_size)
@@ -419,11 +419,11 @@ class ActionTransformer(nn.Module):
         
         x = rearrange(x, '(b n) t c -> b t n c', b=B, n=N)
         first_frame, last_frame = x[:, 0], x[:, 1]
-        first_frame, last_frame = rearrange(first_frame, 'b n c -> b (n c)'), rearrange(last_frame, 'b n c -> b (n c)')
+        # first_frame, last_frame = rearrange(first_frame, 'b n c -> b (n c)'), rearrange(last_frame, 'b n c -> b (n c)')
         x = last_frame - first_frame # LAPA subtracts at codebook dim but thats 2 for [8, 8] levels... not enough information?
         x = x.unsqueeze(1)
         
-        x = self.to_vq(x)
+        # x = self.to_vq(x)
         x, indices = self.vq(x)
         return indices
 
@@ -444,7 +444,7 @@ class DiT(nn.Module):
         self.action_embedder = nn.Embedding(num_actions, hidden_size)
         
         self.x_pos = nn.Embedding(max_input_size, hidden_size)
-        self.context_pos = nn.Embedding(2, hidden_size)
+        self.context_pos = nn.Embedding(1 + 32, hidden_size)
 
         self.blocks = nn.ModuleList([
             CrossAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
@@ -490,7 +490,7 @@ class DiT(nn.Module):
         context = torch.cat([t.unsqueeze(1), actions], dim=1)
         
         x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
-        context = context + self.context_pos(torch.arange(2, device=x.device, dtype=torch.long).unsqueeze(0))
+        context = context + self.context_pos(torch.arange(1 + 32, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.blocks:
             x = block(x, context)
         

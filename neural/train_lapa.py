@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from lapa import LAM_M as net
+from lapa import LAM_B as net
 from dito import DiToV4 as Tokenizer
 
 import matplotlib.pyplot as plt
@@ -39,7 +39,7 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'LAPA_M_FSQ'
+out_dir = 'LAPA_B_FSQ'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
