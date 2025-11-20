@@ -231,7 +231,7 @@ def estimate_codebook_usage():
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
             X = get_batch(split)
             with ctx:
-                actions, _ = model.encode_actions(X)
+                _, actions = model(X)
             
             unique_elements, counts = torch.unique(actions, return_counts=True)
             total_elements = actions.numel()
