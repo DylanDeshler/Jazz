@@ -12,10 +12,11 @@ if __name__ == '__main__':
     fan_out = linear.weight.size(0)
     fan_in = linear.weight.size(1)
     std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
-    torch.nn.init.normal_(linear.weight, mean=0.0, std=std)
+    print(std)
+    torch.nn.init.normal_(linear.weight, mean=0.0, std=std * 10)
     if linear.bias is not None:
         torch.nn.init.zeros_(linear.bias)
-    # linear.reset_parameters()
+    linear.reset_parameters()
     
     vq = FSQ(levels=levels)
     
