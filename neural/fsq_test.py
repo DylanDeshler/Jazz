@@ -15,7 +15,7 @@ if __name__ == '__main__':
     torch.nn.init.normal_(linear.weight, mean=0.0, std=std)
     if linear.bias is not None:
         torch.nn.init.zeros_(linear.bias)
-    linear.reset_parameters()
+    # linear.reset_parameters()
     
     vq = FSQ(levels=levels)
     
