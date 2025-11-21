@@ -17,7 +17,7 @@ if __name__ == '__main__':
         torch.nn.init.zeros_(linear.bias)
     linear.reset_parameters()
     
-    norm = nn.LayerNorm(hidden_size, elementwise_affine=False)
+    norm = nn.LayerNorm(hidden_size, elementwise_affine=True)
     
     vq = FSQ(levels=levels)
     

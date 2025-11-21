@@ -429,7 +429,7 @@ class ActionTransformer(nn.Module):
         
         x = self.to_vq(x)
         x, indices = self.vq(x)
-        # x = self.from_vq(x)
+        x = self.from_vq(x)
         return x, indices
 
 class DiT(nn.Module):
@@ -596,8 +596,8 @@ class LAM(nn.Module):
         
         random_actions = self.generate_random_different_actions(indices, math.prod(self.levels), x.device)
         recon = self.generate(x[:, 1], z, n_steps=n_steps)
-        # random = self.generate(x[:, 1], self.action_model.from_vq(self.action_model.vq.indices_to_codes(random_actions)), n_steps=n_steps)
-        random = self.generate(x[:, 1], self.action_model.vq.indices_to_codes(random_actions), n_steps=n_steps)
+        random = self.generate(x[:, 1], self.action_model.from_vq(self.action_model.vq.indices_to_codes(random_actions)), n_steps=n_steps)
+        # random = self.generate(x[:, 1], self.action_model.vq.indices_to_codes(random_actions), n_steps=n_steps)
         
         return recon, random
 
