@@ -364,7 +364,7 @@ class ActionTransformer(nn.Module):
         ])
         
         self.to_vq = nn.Sequential(
-            nn.LayerNorm(hidden_size, elementwise_affine=False),
+            nn.LayerNorm(hidden_size),
             nn.Linear(hidden_size, len(levels)),
         )
         self.vq = FSQ(levels=levels)
