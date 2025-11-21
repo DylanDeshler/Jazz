@@ -13,7 +13,7 @@ if __name__ == '__main__':
     fan_in = linear.weight.size(1)
     std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
     print(std)
-    torch.nn.init.normal_(linear.weight, mean=0.0, std=std * 10)
+    torch.nn.init.normal_(linear.weight, mean=0.0, std=std * 100)
     if linear.bias is not None:
         torch.nn.init.zeros_(linear.bias)
     linear.reset_parameters()
