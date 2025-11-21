@@ -360,7 +360,7 @@ class ActionTransformer(nn.Module):
             SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
         self.temporal_blocks = nn.ModuleList([
-            SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+            SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth // 3)
         ])
         
         self.to_vq = nn.Sequential(
@@ -423,9 +423,9 @@ class ActionTransformer(nn.Module):
         
         x = rearrange(x, '(b n) t c -> b t n c', b=B, n=N)
         first_frame, last_frame = x[:, 0], x[:, 1]
-        # first_frame, last_frame = rearrange(first_frame, 'b n c -> b (n c)'), rearrange(last_frame, 'b n c -> b (n c)')
-        x = last_frame - first_frame # LAPA subtracts at codebook dim but thats 2 for [8, 8] levels... not enough information?
-        # x = x.unsqueeze(1)
+        first_frame, last_frame = rearrange(first_frame, 'b n c -> b (n c)'), rearrange(last_frame, 'b n c -> b (n c)')
+        x = last_frame - first_frame
+        x = x.unsqueeze(1)
         
         x = self.to_vq(x)
         x, indices = self.vq(x)
@@ -449,7 +449,7 @@ class DiT(nn.Module):
         # self.action_embedder = nn.Embedding(num_actions, hidden_size)
         
         self.x_pos = nn.Embedding(max_input_size, hidden_size)
-        self.context_pos = nn.Embedding(1 + 32, hidden_size)
+        self.context_pos = nn.Embedding(1 + 1, hidden_size)
 
         self.blocks = nn.ModuleList([
             CrossAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
@@ -495,7 +495,7 @@ class DiT(nn.Module):
         context = torch.cat([t.unsqueeze(1), actions], dim=1)
         
         x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
-        context = context + self.context_pos(torch.arange(1 + 32, device=x.device, dtype=torch.long).unsqueeze(0))
+        context = context + self.context_pos(torch.arange(1 + 1, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.blocks:
             x = block(x, context)
         
@@ -597,7 +597,6 @@ class LAM(nn.Module):
         random_actions = self.generate_random_different_actions(indices, math.prod(self.levels), x.device)
         recon = self.generate(x[:, 1], z, n_steps=n_steps)
         random = self.generate(x[:, 1], self.action_model.from_vq(self.action_model.vq.indices_to_codes(random_actions)), n_steps=n_steps)
-        # random = self.generate(x[:, 1], self.action_model.vq.indices_to_codes(random_actions), n_steps=n_steps)
         
         return recon, random
 
