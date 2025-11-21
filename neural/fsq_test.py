@@ -6,7 +6,7 @@ from vector_quantize_pytorch import FSQ
 
 if __name__ == '__main__':
     hidden_size = 768
-    levels = [8, 8]
+    levels = [7, 5, 5, 5]#[8, 8]
     
     linear = nn.Linear(hidden_size, len(levels))
     fan_out = linear.weight.size(0)
@@ -17,13 +17,10 @@ if __name__ == '__main__':
         torch.nn.init.zeros_(linear.bias)
     linear.reset_parameters()
     
-    norm = nn.LayerNorm(len(levels), elementwise_affine=False)
-    
     vq = FSQ(levels=levels)
     
     x = torch.randn(64, 32, hidden_size)
     x = linear(x)
-    x = norm(x)
     x, indices = vq(x)
     
     indices = indices.flatten()
