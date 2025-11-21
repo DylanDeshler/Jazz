@@ -19,7 +19,7 @@ if __name__ == '__main__':
     
     vq = FSQ(levels=levels)
     
-    x = torch.randn(64, 32, hidden_size)
+    x = torch.randn(64, 32, hidden_size) * 0.02
     x = linear(x)
     x, indices = vq(x)
     
