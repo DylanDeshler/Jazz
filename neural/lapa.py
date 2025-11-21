@@ -364,12 +364,11 @@ class ActionTransformer(nn.Module):
         ])
         
         self.to_vq = nn.Sequential(
-            # RMSNorm(spatial_window * hidden_size),
-            # nn.Linear(hidden_size, len(levels)),
-            nn.LayerNorm(hidden_size, elementwise_affine=False)
+            nn.LayerNorm(hidden_size, elementwise_affine=False),
+            nn.Linear(hidden_size, len(levels)),
         )
-        self.vq = FSQ(dim=hidden_size, levels=levels)
-        # self.from_vq = nn.Linear(len(levels), hidden_size)
+        self.vq = FSQ(levels=levels)
+        self.from_vq = nn.Linear(len(levels), hidden_size)
         
         self.spatial_pos = nn.Embedding(spatial_window, hidden_size)
         self.temporal_pos = nn.Embedding(temporal_window, hidden_size)
@@ -388,6 +387,9 @@ class ActionTransformer(nn.Module):
         for block in self.temporal_blocks:
             torch.nn.init.zeros_(block.mlp.w3.weight)
             torch.nn.init.zeros_(block.attn.proj.weight)
+        
+        self.to_vq[1].reset_parameters()
+        self.from_vq.reset_parameters()
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
