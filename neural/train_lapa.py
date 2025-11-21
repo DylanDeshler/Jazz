@@ -291,7 +291,7 @@ def generate_lam_vs_random_actions(step):
     recon_psnr = psnr(x, recon)
     random_psnr = psnr(x, random_recon)
 
-    for i in range(B):
+    for i in range(20):
         og, y, random_y = x[i], recon[i], random_recon[i]
 
         # save .wavs
