@@ -9,6 +9,13 @@ if __name__ == '__main__':
     levels = [8, 8]
     
     linear = nn.Linear(hidden_size, len(levels))
+    fan_out = linear.weight.size(0)
+    fan_in = linear.weight.size(1)
+    std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
+    torch.nn.init.normal_(linear.weight, mean=0.0, std=std)
+    if linear.bias is not None:
+        torch.nn.init.zeros_(linear.bias)
+    
     vq = FSQ(levels=levels)
     
     x = torch.randn(64, 32, hidden_size)
