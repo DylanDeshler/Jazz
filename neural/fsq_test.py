@@ -17,10 +17,13 @@ if __name__ == '__main__':
         torch.nn.init.zeros_(linear.bias)
     linear.reset_parameters()
     
+    norm = nn.LayerNorm(len(levels), elementwise_affine=False)
+    
     vq = FSQ(levels=levels)
     
     x = torch.randn(64, 32, hidden_size)
     x = linear(x)
+    x = norm(x)
     x, indices = vq(x)
     
     indices = indices.flatten()
