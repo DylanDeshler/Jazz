@@ -6,7 +6,7 @@ import math
 from typing import Optional, List, Callable
 
 from einops import rearrange
-from vector_quantize_pytorch import FSQ
+from vector_quantize_pytorch import FSQ, ResidualFSQ
 from fm import FM, FMEulerSampler
 
 @torch.compile
@@ -360,7 +360,7 @@ class ActionTransformer(nn.Module):
             SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
         self.temporal_blocks = nn.ModuleList([
-            SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth // 3)
+            SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth // 2)
         ])
         
         self.to_vq = nn.Sequential(
@@ -368,6 +368,7 @@ class ActionTransformer(nn.Module):
             nn.Linear(spatial_window * hidden_size, len(levels)),
         )
         self.vq = FSQ(levels=levels)
+        # self.vq = ResidualFSQ(levels=levels, num_quantizers=)
         self.from_vq = nn.Linear(len(levels), hidden_size)
         
         self.spatial_pos = nn.Embedding(spatial_window, hidden_size)
