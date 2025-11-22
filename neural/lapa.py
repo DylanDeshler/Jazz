@@ -7,6 +7,7 @@ from typing import Optional, List, Callable
 
 from einops import rearrange
 from vector_quantize_pytorch import FSQ, ResidualFSQ
+from consistency_decoder import DownsampleV3, UpsampleV3
 from fm import FM, FMEulerSampler
 
 @torch.compile
@@ -342,6 +343,61 @@ class SelfAttentionBlock(nn.Module):
         x = x + self.mlp(self.norm2(x))
         return x
 
+class ConvBlock(nn.Module):
+    def __init__(self, hidden_size, kernel_size):
+        super().__init__()
+        self.norm = nn.GroupNorm(1, hidden_size)
+        self.conv1 = nn.Conv1d(hidden_size, hidden_size, kernel_size, padding=kernel_size//2)
+        self.conv2 = nn.Conv1d(hidden_size, hidden_size, kernel_size, padding=kernel_size//2)
+    
+    def forward(self, x):
+        x_skip = x
+        x = self.norm(x)
+        x = self.conv1(x)
+        x = F.silu(x)
+        x = self.conv2(x)
+        return x_skip + x
+
+class CNNEncoder(nn.Module):
+    def __init__(self, in_size, out_size, ratios):
+        super().__init__()
+        blocks = []
+        for ratio in ratios:
+            blocks.append(ConvBlock(in_size, 3))
+            blocks.append(DownsampleV3(in_size, in_size, ratio))
+        self.blocks = nn.ModuleList(blocks)
+        
+        self.norm = nn.LayerNorm(in_size)
+        self.fc = nn.Linear(in_size, out_size)
+    
+    def forward(self, x):
+        x = rearrange(x, 'n l c -> n c l')
+        for block in self.blocks:
+            x = block(x)
+        
+        x = rearrange(x, 'n c l -> n (c l)')
+        x = self.norm(x)
+        x = self.fc(x)
+        return x
+
+class CNNDecoder(nn.Module):
+    def __init__(self, in_size, out_size, ratios):
+        super().__init__()
+        blocks = []
+        for ratio in ratios:
+            blocks.append(UpsampleV3(in_size, in_size, ratio))
+            blocks.append(ConvBlock(in_size, 3))
+        self.blocks = nn.ModuleList(blocks)
+        
+        self.fc = nn.Linear(in_size, out_size)
+        
+    def forward(self, x):
+        for block in self.blocks:
+            x = block(x)
+        
+        x = self.fc(x)
+        return x
+
 class ActionTransformer(nn.Module):
     def __init__(self,in_channels,
                  hidden_size,
@@ -363,13 +419,15 @@ class ActionTransformer(nn.Module):
             SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth // 2)
         ])
         
-        self.to_vq = nn.Sequential(
-            nn.LayerNorm(spatial_window * hidden_size),
-            nn.Linear(spatial_window * hidden_size, len(levels)),
-        )
+        # self.to_vq = nn.Sequential(
+        #     nn.LayerNorm(spatial_window * hidden_size),
+        #     nn.Linear(spatial_window * hidden_size, len(levels)),
+        # )
+        self.to_vq = CNNEncoder(hidden_size, len(levels), [4, 2])
         self.vq = FSQ(levels=levels)
         # self.vq = ResidualFSQ(levels=levels, num_quantizers=)
-        self.from_vq = nn.Linear(len(levels), hidden_size)
+        # self.from_vq = nn.Linear(len(levels), hidden_size)
+        self.from_vq = CNNDecoder(len(levels), hidden_size, [4, 2])
         
         self.spatial_pos = nn.Embedding(spatial_window, hidden_size)
         self.temporal_pos = nn.Embedding(temporal_window, hidden_size)
