@@ -527,6 +527,7 @@ class CNNEncoder(nn.Module):
         x = rearrange(x, 'n c l -> n (c l)')
         x = self.norm(x)
         x = self.fc(x)
+        x = x.unsqueeze(1)
         return x
 
 class CNNDecoder(nn.Module):
