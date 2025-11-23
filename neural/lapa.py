@@ -503,7 +503,7 @@ class ConvBlock(nn.Module):
         return x_skip + x
 
 class CNNEncoder(nn.Module):
-    def __init__(self, in_size, out_size, ratios):
+    def __init__(self, in_size, out_size, ratios, spatial_window):
         super().__init__()
         blocks = []
         for ratio in ratios:
@@ -511,8 +511,8 @@ class CNNEncoder(nn.Module):
             blocks.append(DownsampleV3(in_size, in_size, ratio))
         self.blocks = nn.ModuleList(blocks)
         
-        self.norm = nn.LayerNorm(in_size)
-        self.fc = nn.Linear(in_size, out_size)
+        self.norm = nn.LayerNorm(in_size * spatial_window)
+        self.fc = nn.Linear(in_size * spatial_window, out_size)
         
         self.initialize_weights()
     
@@ -577,7 +577,7 @@ class ActionTransformer(nn.Module):
         #     nn.LayerNorm(spatial_window * hidden_size),
         #     nn.Linear(spatial_window * hidden_size, len(levels)),
         # )
-        self.to_vq = CNNEncoder(hidden_size, len(levels), [4, 2])
+        self.to_vq = CNNEncoder(hidden_size, len(levels), [4, 2], spatial_window)
         self.vq = FSQ(levels=levels)
         # self.vq = ResidualFSQ(levels=levels, num_quantizers=)
         # self.from_vq = nn.Linear(len(levels), hidden_size)
