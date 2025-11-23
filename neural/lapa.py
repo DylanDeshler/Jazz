@@ -542,9 +542,6 @@ class CNNDecoder(nn.Module):
         self.fc = nn.Linear(in_size, out_size)
         
         self.initialize_weights()
-    
-    def initialize_weights(self):
-        self.fc.reset_parameters()
         
     def forward(self, x):
         for block in self.blocks:
@@ -604,6 +601,7 @@ class ActionTransformer(nn.Module):
         
         # self.to_vq[1].reset_parameters()
         # self.from_vq.reset_parameters()
+        self.to_vq.fc.reset_parameters()
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
