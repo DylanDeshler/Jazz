@@ -638,7 +638,7 @@ class ActionTransformer(nn.Module):
         first_frame, last_frame = x[:, 0], x[:, 1]
         # first_frame, last_frame = rearrange(first_frame, 'b n c -> b (n c)'), rearrange(last_frame, 'b n c -> b (n c)')
         x = last_frame - first_frame
-        x = x.unsqueeze(1)
+        # x = x.unsqueeze(1)
         
         x = self.to_vq(x)
         x, indices = self.vq(x)
