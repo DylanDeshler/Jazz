@@ -581,8 +581,8 @@ class ActionTransformer(nn.Module):
         self.to_vq = CNNEncoder(hidden_size, len(levels), [4, 2], spatial_window)
         self.vq = FSQ(levels=levels)
         # self.vq = ResidualFSQ(levels=levels, num_quantizers=)
-        # self.from_vq = nn.Linear(len(levels), hidden_size)
-        self.from_vq = CNNDecoder(len(levels), hidden_size, [4, 2])
+        self.from_vq = nn.Linear(len(levels), hidden_size)
+        # self.from_vq = CNNDecoder(len(levels), hidden_size, [4, 2])
         
         self.spatial_pos = nn.Embedding(spatial_window, hidden_size)
         self.temporal_pos = nn.Embedding(temporal_window, hidden_size)
