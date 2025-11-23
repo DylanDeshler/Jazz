@@ -512,7 +512,7 @@ class CNNEncoder(nn.Module):
         self.blocks = nn.ModuleList(blocks)
         
         self.norm = nn.LayerNorm(in_size * spatial_window // sum(ratios))
-        self.fc = nn.Linear(in_size * spatial_window, out_size)
+        self.fc = nn.Linear(in_size * spatial_window // sum(ratios), out_size)
         
         self.initialize_weights()
     
