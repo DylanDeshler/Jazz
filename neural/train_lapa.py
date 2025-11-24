@@ -36,6 +36,17 @@ from dito import DiToV4 as Tokenizer
 import matplotlib.pyplot as plt
 import soundfile as sf
 
+from transformers import Wav2Vec2FeatureExtractor, AutoModel
+import torch
+import torchaudio
+from sklearn.metrics.pairwise import cosine_similarity
+
+emb_model_id = "m-a-p/MERT-v1-330M"
+emb_model = AutoModel.from_pretrained(emb_model_id, trust_remote_code=True)
+processor = Wav2Vec2FeatureExtractor.from_pretrained(emb_model_id, trust_remote_code=True)
+
+resampler = torchaudio.transforms.Resample(16000, 24000)
+
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
@@ -299,7 +310,22 @@ def generate_lam_vs_random_actions(step):
         sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, 16000)
         sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_y, 16000)
     
-    return np.mean(recon_psnr - random_psnr).item()
+    x = resampler(x)
+    recon = resampler(recon)
+    random_recon = resampler(random_recon)
+
+    x_inputs = processor(x, sampling_rate=24000, return_tensors="pt")
+    recon_inputs = processor(recon, sampling_rate=24000, return_tensors="pt")
+    random_recon_inputs = processor(random_recon, sampling_rate=24000, return_tensors="pt")
+    with torch.no_grad():
+        x_emb = emb_model(**x_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1)
+        recon_emb = emb_model(**recon_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1)
+        random_recon_emb = emb_model(**random_recon_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1)
+
+    recon_sim = cosine_similarity(x_emb, recon_emb)
+    random_sim = cosine_similarity(x_emb, random_recon_emb)
+    
+    return {'PSNR': np.mean(recon_psnr - random_psnr).item(), 'Similarity': np.mean(recon_sim - random_sim).item()}
 
 def psnr(y_true, y_pred, max_val=1.):
     mse = np.mean((y_true - y_pred) ** 2, axis=1)  # (B,)
@@ -339,9 +365,9 @@ while True:
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
             with ctx:
-                delta_psnr = generate_lam_vs_random_actions(iter_num)
+                metrics = generate_lam_vs_random_actions(iter_num)
             model.train()
-            print(f"iter {iter_num}: delta PSNR {delta_psnr:.3f}")
+            print(f"iter {iter_num}: delta PSNR {metrics['PSNR']:.3f}, delta Similarity {metrics['Similarity']:.3f}")
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, train perplexity: {usage['train']:.2f}, val perplexity {usage['val']:.2f}")
         if wandb_log:
             wandb.log({
