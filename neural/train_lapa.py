@@ -319,10 +319,14 @@ def generate_lam_vs_random_actions(step):
     x_inputs = processor(x, sampling_rate=24000, return_tensors="pt")
     recon_inputs = processor(recon, sampling_rate=24000, return_tensors="pt")
     random_recon_inputs = processor(random_recon, sampling_rate=24000, return_tensors="pt")
+    
+    x_inputs['input_values'] = x_inputs['input_values'].to(device)
+    recon_inputs['input_values'] = recon_inputs['input_values'].to(device)
+    random_recon_inputs['input_values'] = random_recon_inputs['input_values'].to(device)
     with torch.no_grad():
-        x_emb = emb_model(**x_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1)
-        recon_emb = emb_model(**recon_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1)
-        random_recon_emb = emb_model(**random_recon_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1)
+        x_emb = emb_model(**x_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1).cpu().numpy()
+        recon_emb = emb_model(**recon_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1).cpu().numpy()
+        random_recon_emb = emb_model(**random_recon_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1).cpu().numpy()
 
     recon_sim = 1 - paired_cosine_distances(x_emb, recon_emb)
     random_sim = 1 - paired_cosine_distances(x_emb, random_recon_emb)
