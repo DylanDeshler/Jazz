@@ -166,6 +166,8 @@ for k,v in list(state_dict.items()):
 tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 
+emb_model = emb_model.to(device)
+
 model_args = dict(in_channels=vae_embed_dim, levels=levels, spatial_window=spatial_window, temporal_window=temporal_window)
 if init_from == 'scratch':
     # init a new model from scratch
@@ -310,19 +312,13 @@ def generate_lam_vs_random_actions(step):
         sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, 16000)
         sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_y, 16000)
     
-    x = resampler(torch.from_numpy(x))
-    recon = resampler(torch.from_numpy(recon))
-    random_recon = resampler(torch.from_numpy(random_recon))
-    print(x.shape, recon.shape, random_recon.shape)
+    x = [row for row in resampler(torch.from_numpy(x)).numpy()]
+    recon = [row for row in resampler(torch.from_numpy(recon)).numpy()]
+    random_recon = [row for row in resampler(torch.from_numpy(random_recon)).numpy()]
 
     x_inputs = processor(x, sampling_rate=24000, return_tensors="pt")
     recon_inputs = processor(recon, sampling_rate=24000, return_tensors="pt")
     random_recon_inputs = processor(random_recon, sampling_rate=24000, return_tensors="pt")
-    print(x_inputs.keys())
-    
-    x_inputs['input_values'] = x_inputs['input_values'].squeeze()
-    recon_inputs['input_values'] = recon_inputs['input_values'].squeeze()
-    random_recon_inputs['input_values'] = random_recon_inputs['input_values'].squeeze()
     with torch.no_grad():
         x_emb = emb_model(**x_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1)
         recon_emb = emb_model(**recon_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1)
