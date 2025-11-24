@@ -320,9 +320,9 @@ def generate_lam_vs_random_actions(step):
     random_recon_inputs = processor(random_recon, sampling_rate=24000, return_tensors="pt")
     print(x_inputs.keys())
     
-    x['input_values'] = x['input_values'].squeeze()
-    recon['input_values'] = recon['input_values'].squeeze()
-    random_recon['input_values'] = random_recon['input_values'].squeeze()
+    x_inputs['input_values'] = x_inputs['input_values'].squeeze()
+    recon_inputs['input_values'] = recon_inputs['input_values'].squeeze()
+    random_recon_inputs['input_values'] = random_recon_inputs['input_values'].squeeze()
     with torch.no_grad():
         x_emb = emb_model(**x_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1)
         recon_emb = emb_model(**recon_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1)
