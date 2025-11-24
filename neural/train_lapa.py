@@ -310,13 +310,19 @@ def generate_lam_vs_random_actions(step):
         sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, 16000)
         sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_y, 16000)
     
-    x = [row for row in resampler(torch.from_numpy(x))]
-    recon = [row for row in resampler(torch.from_numpy(recon))]
-    random_recon = [row for row in resampler(torch.from_numpy(random_recon))]
+    x = resampler(torch.from_numpy(x))
+    recon = resampler(torch.from_numpy(recon))
+    random_recon = resampler(torch.from_numpy(random_recon))
+    print(x.shape, recon.shape, random_recon.shape)
 
     x_inputs = processor(x, sampling_rate=24000, return_tensors="pt")
     recon_inputs = processor(recon, sampling_rate=24000, return_tensors="pt")
     random_recon_inputs = processor(random_recon, sampling_rate=24000, return_tensors="pt")
+    print(x_inputs.keys())
+    
+    x['input_values'] = x['input_values'].squeeze()
+    recon['input_values'] = recon['input_values'].squeeze()
+    random_recon['input_values'] = random_recon['input_values'].squeeze()
     with torch.no_grad():
         x_emb = emb_model(**x_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1)
         recon_emb = emb_model(**recon_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1)
