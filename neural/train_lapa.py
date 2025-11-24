@@ -310,9 +310,9 @@ def generate_lam_vs_random_actions(step):
         sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, 16000)
         sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_y, 16000)
     
-    x = resampler(x)
-    recon = resampler(recon)
-    random_recon = resampler(random_recon)
+    x = resampler(torch.from_numpy(x))
+    recon = resampler(torch.from_numpy(recon))
+    random_recon = resampler(torch.from_numpy(random_recon))
 
     x_inputs = processor(x, sampling_rate=24000, return_tensors="pt")
     recon_inputs = processor(recon, sampling_rate=24000, return_tensors="pt")
