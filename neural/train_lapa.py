@@ -323,6 +323,9 @@ def generate_lam_vs_random_actions(step):
     x_inputs['input_values'] = x_inputs['input_values'].to(device)
     recon_inputs['input_values'] = recon_inputs['input_values'].to(device)
     random_recon_inputs['input_values'] = random_recon_inputs['input_values'].to(device)
+    x_inputs['attention_mask'] = x_inputs['attention_mask'].to(device)
+    recon_inputs['attention_mask'] = recon_inputs['attention_mask'].to(device)
+    random_recon_inputs['attention_mask'] = random_recon_inputs['attention_mask'].to(device)
     with torch.no_grad():
         x_emb = emb_model(**x_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1).cpu().numpy()
         recon_emb = emb_model(**recon_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1).cpu().numpy()
