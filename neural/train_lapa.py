@@ -39,7 +39,7 @@ import soundfile as sf
 from transformers import Wav2Vec2FeatureExtractor, AutoModel
 import torch
 import torchaudio
-from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics.pairwise import paired_cosine_distances
 
 emb_model_id = "m-a-p/MERT-v1-330M"
 emb_model = AutoModel.from_pretrained(emb_model_id, trust_remote_code=True)
@@ -313,6 +313,7 @@ def generate_lam_vs_random_actions(step):
     x = resampler(torch.from_numpy(x))
     recon = resampler(torch.from_numpy(recon))
     random_recon = resampler(torch.from_numpy(random_recon))
+    print(x.shape, recon.shape, random_recon.shape)
 
     x_inputs = processor(x, sampling_rate=24000, return_tensors="pt")
     recon_inputs = processor(recon, sampling_rate=24000, return_tensors="pt")
@@ -322,8 +323,8 @@ def generate_lam_vs_random_actions(step):
         recon_emb = emb_model(**recon_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1)
         random_recon_emb = emb_model(**random_recon_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1)
 
-    recon_sim = cosine_similarity(x_emb, recon_emb)
-    random_sim = cosine_similarity(x_emb, random_recon_emb)
+    recon_sim = 1 - paired_cosine_distances(x_emb, recon_emb)
+    random_sim = 1 - paired_cosine_distances(x_emb, random_recon_emb)
     
     return {'PSNR': np.mean(recon_psnr - random_psnr).item(), 'Similarity': np.mean(recon_sim - random_sim).item()}
 
