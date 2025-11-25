@@ -78,7 +78,7 @@ vae_embed_dim = 16
 levels = [8, 8]
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 800000 # total number of training iterations
+max_iters = 80000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.95
