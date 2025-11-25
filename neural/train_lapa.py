@@ -50,7 +50,7 @@ resampler = torchaudio.transforms.Resample(16000, 24000)
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'LAPA_B_FS_512'
+out_dir = 'LAPA_B_FS_64_noagg'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -75,7 +75,7 @@ cut_seconds = 1
 cut_len = decoder_window * cut_seconds
 max_seq_len = temporal_window * cut_len
 vae_embed_dim = 16
-levels = [8, 8, 8]
+levels = [8, 8]
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
