@@ -53,7 +53,7 @@ model.load_state_dict(state_dict)
 model.eval()
 
 with torch.no_grad():
-    for batch in range(204654816 // batch_size):
+    for batch in tqdm(range(204654816 // batch_size)):
         data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_large_train.bin', dtype=np.float32, mode='r', shape=(204654816, vae_embed_dim))
         idxs = torch.arange(batch * batch_size, batch * (batch_size + 1))
         print(idxs.shape)
