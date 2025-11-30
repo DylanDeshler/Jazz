@@ -38,7 +38,7 @@ model_args = checkpoint['model_args']
 spatial_window = model_args['spatial_window']
 temporal_window = model_args['temporal_window']
 max_seq_len = spatial_window * temporal_window
-batch_size = 2**14
+batch_size = 2**12
 vae_embed_dim = 16
 
 model = net(**model_args).to(device)
