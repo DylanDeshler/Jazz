@@ -38,7 +38,7 @@ model_args = checkpoint['model_args']
 spatial_window = model_args['spatial_window']
 temporal_window = model_args['temporal_window']
 max_seq_len = spatial_window * temporal_window
-batch_size = 1024
+batch_size = 2**14
 vae_embed_dim = 16
 
 model = net(**model_args).to(device)
@@ -53,7 +53,7 @@ model.load_state_dict(state_dict)
 model.eval()
 
 
-n_tokens = 100 * batch_size
+n_tokens = 1000 * batch_size
 actions = []
 with torch.no_grad():
     for batch in tqdm(range(n_tokens // batch_size)):
@@ -62,7 +62,6 @@ with torch.no_grad():
         x = torch.from_numpy(np.stack([np.stack([data[idx+i*spatial_window:idx+(i+1)*spatial_window] for i in range(temporal_window)], axis=0) for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
         
         z, indices = model.enocde_actions(x)
-        print(indices.dtype)
         actions.append(indices.cpu().detach().numpy().astype(np.uint8))
 
 actions = np.concatenate(actions)
