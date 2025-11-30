@@ -62,6 +62,7 @@ with torch.no_grad():
         x = torch.from_numpy(np.stack([np.stack([data[idx+i*spatial_window:idx+(i+1)*spatial_window] for i in range(temporal_window)], axis=0) for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
         
         z, indices = model.enocde_actions(x)
+        print(indices.dtype)
         actions.append(indices.cpu().detach().numpy().astype(np.uint8))
 
 actions = np.concatenate(actions)
