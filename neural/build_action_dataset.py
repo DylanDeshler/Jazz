@@ -53,7 +53,7 @@ model.load_state_dict(state_dict)
 model.eval()
 
 
-n_tokens = 10000 * batch_size
+n_tokens = 100 * batch_size
 actions = []
 with torch.no_grad():
     for batch in tqdm(range(n_tokens // batch_size)):
