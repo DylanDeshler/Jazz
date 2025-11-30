@@ -52,6 +52,8 @@ for k,v in list(state_dict.items()):
 model.load_state_dict(state_dict)
 model.eval()
 
+
+actions = []
 with torch.no_grad():
     for batch in tqdm(range(204654816 // batch_size)):
         data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_large_train.bin', dtype=np.float32, mode='r', shape=(204654816, vae_embed_dim))
@@ -59,4 +61,5 @@ with torch.no_grad():
         x = torch.from_numpy(np.stack([np.stack([data[idx+i*spatial_window:idx+(i+1)*spatial_window] for i in range(temporal_window)], axis=0) for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
         
         z, indices = model.enocde_actions(x)
-        print(indices.shape)
+        actions.append(indices.cpu().detach().numpy().astype(np.uint8))
+    
