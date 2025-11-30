@@ -53,10 +53,11 @@ model.load_state_dict(state_dict)
 model.eval()
 
 
-n_tokens = 1000 * batch_size
+n_tokens = 10000 * batch_size
+max_tokens = 204654816
 actions = []
 with torch.no_grad():
-    for batch in tqdm(range(n_tokens // batch_size)):
+    for batch in tqdm(range(min(n_tokens, max_tokens) // batch_size)):
         data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_large_train.bin', dtype=np.float32, mode='r', shape=(204654816, vae_embed_dim))
         idxs = torch.arange(batch * batch_size, (batch + 1) * batch_size)
         x = torch.from_numpy(np.stack([np.stack([data[idx+i*spatial_window:idx+(i+1)*spatial_window] for i in range(temporal_window)], axis=0) for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
