@@ -786,6 +786,16 @@ class LAM(nn.Module):
         x = self.decoder(x[:, 1], z)
         return x, indices
     
+    def enocde_actions(self, x):
+        """
+        x: (B, T, N, C) latents
+        alpha: (B) noise level for history latents
+        """
+        assert x.ndim == 4
+        
+        z, indices = self.action_model(x)
+        return z, indices
+    
     def generate(self, x, actions, n_steps=50):
         return self.decoder.sample(x, actions, n_steps=n_steps)
     
