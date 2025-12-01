@@ -166,7 +166,15 @@ def sample_audio_measures(audio_path, beat_path, batch_size):
     for i in range(len(downbeat_indices) - 1):
         start_idx = downbeat_indices[i]
         end_idx = downbeat_indices[i+1]
-        measure_intervals.append((start_idx, end_idx))
+        
+        t_start = beat_data[start_idx]['time']
+        t_end = beat_data[end_idx]['time']
+        
+        frame_start = int(t_start * sr)
+        frame_end = int(t_end * sr)
+        
+        if frame_end - frame_start <= n_samples:
+            measure_intervals.append((frame_start, frame_end))
     
     possible_indices = list(range(len(measure_intervals)))
     
@@ -181,13 +189,7 @@ def sample_audio_measures(audio_path, beat_path, batch_size):
 
     frames, masks = [], []
     for i, idx in enumerate(selected_indices):
-        start_beat_idx, end_beat_idx = measure_intervals[idx]
-        
-        t_start = beat_data[start_beat_idx]['time']
-        t_end = beat_data[end_beat_idx]['time']
-        
-        frame_start = int(t_start * sr)
-        frame_end = int(t_end * sr)
+        frame_start, frame_end = measure_intervals[idx]
         
         audio_slice = np.zeros(n_samples)
         mask = np.zeros(n_samples)
