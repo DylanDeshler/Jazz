@@ -6,6 +6,66 @@ from consistency_decoder import ConsistencyDecoderUNet, ConsistencyDecoderUNetV2
 from seanet import SEANetEncoder, DylanSEANetEncoder
 from fm import FM, FMEulerSampler
 
+class DiToV5(nn.Module):
+    def __init__(self, z_shape, n_residual_layers, lstm, transformer, down_proj=None, in_channels=1, dimension=128, n_filters=32, ratios=[8, 5, 4, 2], dilation_base=2, channels=[128, 256, 512], pad_n_samples=16384, sample_rate=16000):
+        super().__init__()
+        self.z_shape = z_shape
+        self.encoder = DylanSEANetEncoder(channels=in_channels, dimension=dimension, n_filters=n_filters, ratios=ratios, n_residual_layers=n_residual_layers, lstm=lstm, transformer=transformer, dilation_base=dilation_base, down_proj=down_proj)
+        self.z_norm = nn.LayerNorm(self.z_shape[0], elementwise_affine=False)
+        self.unet = DylanDecoderUNet2(in_channels=in_channels, z_dec_channels=dimension, channels=channels, ratios=ratios[:len(channels)])
+
+        self.diffusion = FM(timescale=1000.0)
+        self.sampler = FMEulerSampler(self.diffusion)
+        self.pad_n_samples = pad_n_samples
+        self.sample_rate = sample_rate
+
+    def forward(self, x, mask):
+        x, z = self.encode(x, mask)
+        
+        # noise synchronization
+        t = torch.rand(z.shape[0], device=z.device)
+        post_t = t + torch.rand(z.shape[0], device=z.device) * (1 - t)
+        z_t, _ = self.diffusion.add_noise(z, t)
+        mask_aug = (torch.rand(z.shape[0], device=z.device) < 0.1).float()
+        z = mask_aug.view(-1, 1, 1) * z_t + (1 - mask_aug).view(-1, 1, 1) * z
+        t[mask_aug.long()] = post_t
+        
+        loss = self.diffusion.loss(self.unet, x, t, net_kwargs={'z_dec': z})
+        return loss
+    
+    def encode(self, x, mask):
+        x = torch.cat([x, mask], dim=1)
+
+        z = self.encoder(x)
+        z = self.z_norm(z.transpose(1, 2)).transpose(1, 2)
+        return x, z
+
+    def reconstruct(self, x, mask, n_steps=50):
+        x, z = self.encode(x, mask)
+        return self.decode(z, shape=x.shape, n_steps=n_steps)
+    
+    def decode(self, z, shape=(1, 16000), n_steps=50):
+        x = self.sampler.sample(self.unet, (z.shape[0], *shape[-2:]), n_steps, net_kwargs={'z_dec': z})
+        x, mask = x.split(1, dim=1)
+        
+        # do some smoothing of mask and chop when < 0.5
+        probs = torch.sigmoid(mask)
+        smooth_kernel_size = 512
+        pad_size = smooth_kernel_size // 2
+        probs_padded = F.pad(probs, (pad_size, pad_size), mode='replicate')
+        kernel = torch.ones(1, 1, smooth_kernel_size).to(probs.device) / smooth_kernel_size
+        smoothed_probs = F.conv1d(probs_padded, kernel)
+        smoothed_probs = smoothed_probs[..., :probs.shape[-1]]
+        smoothed_probs[..., 0] = 1.0
+        monotonic_mask, _ = torch.cummin(smoothed_probs, dim=-1)
+        valid_mask = monotonic_mask > 0.5
+        lengths = valid_mask.sum(dim=-1).squeeze(1)
+        
+        measures = []
+        for i, length in enumerate(lengths):
+            measures.append(x[i, :max(1, int(length.item()))])
+        return measures
+
 class DiToV4(nn.Module):
     def __init__(self, z_shape, n_residual_layers, lstm, transformer, down_proj=None, in_channels=1, dimension=128, n_filters=32, ratios=[8, 5, 4, 2], dilation_base=2, channels=[128, 256, 512]):
         super().__init__()

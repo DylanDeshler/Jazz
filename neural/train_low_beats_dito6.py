@@ -160,7 +160,7 @@ def sample_audio_measures(audio_path, beat_path, batch_size):
     downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
     
     if len(downbeat_indices) < 2:
-        return None
+        return None, None
 
     measure_intervals = []
     for i in range(len(downbeat_indices) - 1):
@@ -172,14 +172,14 @@ def sample_audio_measures(audio_path, beat_path, batch_size):
     
     if batch_size > len(possible_indices):
         # selected_indices = possible_indices
-        return None
+        return None, None
     else:
         selected_indices = np.random.choice(possible_indices, batch_size)
     
     y, sr = librosa.load(audio_path, sr=None)
     assert sr == rate
 
-    slices = []
+    frames, masks = [], []
     for i, idx in enumerate(selected_indices):
         start_beat_idx, end_beat_idx = measure_intervals[idx]
         
@@ -194,29 +194,30 @@ def sample_audio_measures(audio_path, beat_path, batch_size):
         audio_slice[:frame_end-frame_start] = y[frame_start:frame_end]
         mask[:frame_end-frame_start] = 1
 
-        frame = np.stack([audio_slice, mask], axis=0)
-        slices.append(frame)
-    return np.stack(slices, axis=0)
+        frames.append(audio_slice)
+        masks.append(mask)
+    return np.stack(frames, axis=0), np.stack(masks, axis=0)
 
 def get_batch(split='train'):
     if split == 'train':
         idx = torch.randint(int(len(beat_paths) * 0.98))
-        batch = sample_audio_measures(audio_paths[idx], beat_paths[idx], batch_size)
-        print(batch.shape)
-        while batch is None:
+        frames, masks = sample_audio_measures(audio_paths[idx], beat_paths[idx], batch_size)
+        while frames is None:
             idx = torch.randint(int(len(beat_paths) * 0.98))
-            batch = sample_audio_measures(audio_paths[idx], beat_paths[idx], batch_size)
-        batch = torch.from_numpy(batch).pin_memory().to(device, non_blocking=True)
-        return batch
+            frames, masks = sample_audio_measures(audio_paths[idx], beat_paths[idx], batch_size)
+        frames = torch.from_numpy(frames).pin_memory().to(device, non_blocking=True)
+        masks = torch.from_numpy(masks).pin_memory().to(device, non_blocking=True)
+        return frames, masks
     
     else:
         idx = torch.randint(int(len(beat_paths) * 0.98), len(beat_paths))
-        batch = sample_audio_measures(audio_paths[idx], beat_paths[idx], batch_size)
-        while batch is None:
+        frames, masks = sample_audio_measures(audio_paths[idx], beat_paths[idx], batch_size)
+        while frames is None:
             idx = torch.randint(int(len(beat_paths) * 0.98), len(beat_paths))
-            batch = sample_audio_measures(audio_paths[idx], beat_paths[idx], batch_size)
-        batch = torch.from_numpy(batch).pin_memory().to(device, non_blocking=True)
-        return batch
+            frames, masks = sample_audio_measures(audio_paths[idx], beat_paths[idx], batch_size)
+        frames = torch.from_numpy(frames).pin_memory().to(device, non_blocking=True)
+        masks = torch.from_numpy(masks).pin_memory().to(device, non_blocking=True)
+        return frames, masks
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
