@@ -161,6 +161,9 @@ def sample_audio_measures(audio_path, beat_path, batch_size):
     
     if len(downbeat_indices) < 2:
         return None, None
+    
+    y, sr = librosa.load(audio_path, sr=None)
+    assert sr == rate
 
     measure_intervals = []
     for i in range(len(downbeat_indices) - 1):
@@ -183,9 +186,6 @@ def sample_audio_measures(audio_path, beat_path, batch_size):
         return None, None
     else:
         selected_indices = np.random.choice(possible_indices, batch_size)
-    
-    y, sr = librosa.load(audio_path, sr=None)
-    assert sr == rate
 
     frames, masks = [], []
     for i, idx in enumerate(selected_indices):
