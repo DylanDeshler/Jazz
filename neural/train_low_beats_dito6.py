@@ -320,8 +320,9 @@ def save_samples(xs, ys, step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
 
-    for i in range(min(10, xs.shape[0])):
-        x, y = xs[i].squeeze(), ys[i].squeeze()
+    for i in range(min(10, len(ys))):
+        x, y = xs[0][i].squeeze().cpu().detach().float().numpy(), ys[i].squeeze().cpu().detach().float().numpy()
+        print(x.shape, y.shape)
 
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, rate)
@@ -363,7 +364,7 @@ while True:
         with ctx:
             logits = raw_model.reconstruct(*X, n_steps=100)
         model.train()
-        save_samples(X[0].cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
+        save_samples(X, logits, iter_num)
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
