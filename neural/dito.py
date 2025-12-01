@@ -34,7 +34,7 @@ class DiToV5(nn.Module):
         return loss
     
     def encode(self, x, mask):
-        x = torch.cat([x, mask], dim=1)
+        x = torch.stack([x, mask], dim=1)
 
         z = self.encoder(x)
         z = self.z_norm(z.transpose(1, 2)).transpose(1, 2)
