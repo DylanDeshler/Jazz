@@ -144,7 +144,7 @@ def analyze_folder_stats(folder_path):
             
             # Print row
             sig_str = f"{stats['measure_beats_mode']}/4" if stats['measure_beats_mode'] > 0 else "?"
-            print(f"{fname[:30]:<30} | {stats['bpm_median']:<6.1f} | {sig_str:<5} | {stats['consistency']:<6.4f} | {stats['duration_seconds']:<7.1f}")
+            print(f"{fname[:30]:<30} | {stats['bpm_median']:<6.1f} | {sig_str:<5} | {stats['consistency']:<6.4f} | {stats['duration_seconds']:<7.1f}, {stats['sec_per_measure']:<7.1f}")
 
     if not all_stats:
         print("Could not calculate stats for any files.")
@@ -159,6 +159,7 @@ def analyze_folder_stats(folder_path):
     time_sigs = [s['measure_beats_mode'] for s in all_stats if s['measure_beats_mode'] > 0]
     durations = [s['duration_seconds'] for s in all_stats]
     consistencies = [s['consistency'] for s in all_stats]
+    measure_durations = [s['sec_per_measure'] for s in all_stats]
 
     print(f"Total Files Processed: {len(all_stats)}")
     print(f"Total Audio Duration:  {sum(durations)/60:.1f} minutes")
@@ -177,6 +178,12 @@ def analyze_folder_stats(folder_path):
             print(f"  {v} beats/measure: {c} files ({c/len(time_sigs)*100:.1f}%)")
     else:
         print("  No measure info detected.")
+    print("-" * 30)
+    print("Measure Distribution:")
+    print(f"  Mean: {np.mean(measure_durations)}")
+    print(f"  Median: {np.median(measure_durations)}")
+    print(f"  Std: {np.std(measure_durations)}")
+    print(f"  Quantiles (5%, 10%, 50%, 90%, 95%): {np.quantile(measure_durations, [0.05, 0.1, 0.5, 0.9, 0.95])}")
     print("-" * 30)
     print("Rhythmic Consistency (IBI StdDev):")
     print(f"  Average StdDev: {np.mean(consistencies):.4f}s")
