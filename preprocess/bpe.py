@@ -215,7 +215,7 @@ class IntegerTokenizer(Tokenizer):
         return ids
 
 if __name__ == '__main__':
-    data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_large_actions_train.bin', dtype=np.uint8, mode='r', shape=(1000 * 2**12, 16))
+    data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_large_actions_train.bin', dtype=np.uint8, mode='r', shape=(10000 * 2**12, 16))
     data = data.flatten()
     
     tokenizer = IntegerTokenizer()
