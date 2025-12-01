@@ -302,7 +302,6 @@ if __name__ == "__main__":
     
     # audio_file is now optional (nargs='?') because 'stats' mode doesn't need it.
     parser.add_argument("audio_file", nargs='?', help="Path to input audio file. (Ignored in 'stats' mode)")
-    parser.add_argument("beat_path", help="Path to beat file OR folder containing .beats files (for 'stats' mode)")
     
     parser.add_argument("--mode", choices=['beats', 'measures', 'stats'], default='beats', 
                         help="Action mode: 'beats' (random clips), 'measures' (random bars), 'stats' (analyze folder).")
@@ -315,8 +314,9 @@ if __name__ == "__main__":
     
     if args.mode == 'stats':
         # Check if user passed a folder
-        if os.path.isdir(args.beat_path):
-            analyze_folder_stats(args.beat_path)
+        beat_path = '/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats'
+        if os.path.isdir(beat_path):
+            analyze_folder_stats(beat_path)
         else:
             print(f"Error: Mode is 'stats' but '{args.beat_path}' is not a directory.")
     elif args.mode == 'measures':
