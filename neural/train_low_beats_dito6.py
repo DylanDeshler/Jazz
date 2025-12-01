@@ -207,6 +207,7 @@ def get_batch(split='train'):
             frames, masks = sample_audio_measures(audio_paths[idx], beat_paths[idx], batch_size)
         frames = torch.from_numpy(frames).pin_memory().to(device, non_blocking=True)
         masks = torch.from_numpy(masks).pin_memory().to(device, non_blocking=True)
+        print(frames.dtype, masks.dtype)
         return frames, masks
     
     else:
