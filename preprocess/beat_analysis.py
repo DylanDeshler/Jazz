@@ -183,7 +183,7 @@ def analyze_folder_stats(folder_path):
     print(f"  Mean: {np.mean(measure_durations)}")
     print(f"  Median: {np.median(measure_durations)}")
     print(f"  Std: {np.std(measure_durations)}")
-    print(f"  Quantiles (5%, 10%, 50%, 90%, 95%): {np.quantile(measure_durations, [0.01, 0.05, 0.1, 0.5, 0.9, 0.95, 0.99])}")
+    print(f"  Quantiles (1%, 5%, 10%, 50%, 90%, 95%, 99%): {np.quantile(measure_durations, [0.01, 0.05, 0.1, 0.5, 0.9, 0.95, 0.99])}")
     print("-" * 30)
     print("Rhythmic Consistency (IBI StdDev):")
     print(f"  Average StdDev: {np.mean(consistencies):.4f}s")
