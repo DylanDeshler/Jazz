@@ -43,7 +43,7 @@ import glob
 out_dir = 'tokenizer_low_beats_large'
 eval_interval = 5000
 log_interval = 100
-eval_iters = 400
+eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
@@ -322,7 +322,6 @@ def save_samples(xs, ys, step):
 
     for i in range(min(10, len(ys))):
         x, y = xs[0][i].squeeze().cpu().detach().float().numpy(), ys[i].squeeze().cpu().detach().float().numpy()
-        print(x.shape, y.shape)
 
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, rate)
@@ -358,41 +357,41 @@ while True:
     tokens_trained += batch_size * gradient_accumulation_steps
 
     # evaluate the loss on train/val sets and write checkpoints
-    if iter_num % eval_interval == 0 and master_process:
-        X = get_batch('test')
-        model.eval()
-        with ctx:
-            logits = raw_model.reconstruct(*X, n_steps=100)
-        model.train()
-        save_samples(X, logits, iter_num)
-        losses = estimate_loss()
-        print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-        if wandb_log:
-            wandb.log({
-                "iter": iter_num,
-                "train/loss": losses['train'],
-                "val/loss": losses['val'],
-                "lr": lr,
-                "mfu": running_mfu*100, # convert to percentage
-                "tokens": tokens_trained,
-            })
-        if losses['val'] < best_val_loss or always_save_checkpoint:
-            best_val_loss = losses['val']
-            if iter_num > 0:
-                checkpoint = {
-                    'model': raw_model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'model_args': model_args,
-                    'iter_num': iter_num,
-                    'best_val_loss': best_val_loss,
-                    'config': config,
-                    'tokens': tokens_trained,
-                }
-                print(f"saving checkpoint to {out_dir}")
-                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+    # if iter_num % eval_interval == 0 and master_process:
+    #     X = get_batch('test')
+    #     model.eval()
+    #     with ctx:
+    #         logits = raw_model.reconstruct(*X, n_steps=100)
+    #     model.train()
+    #     save_samples(X, logits, iter_num)
+    #     losses = estimate_loss()
+    #     print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+    #     if wandb_log:
+    #         wandb.log({
+    #             "iter": iter_num,
+    #             "train/loss": losses['train'],
+    #             "val/loss": losses['val'],
+    #             "lr": lr,
+    #             "mfu": running_mfu*100, # convert to percentage
+    #             "tokens": tokens_trained,
+    #         })
+    #     if losses['val'] < best_val_loss or always_save_checkpoint:
+    #         best_val_loss = losses['val']
+    #         if iter_num > 0:
+    #             checkpoint = {
+    #                 'model': raw_model.state_dict(),
+    #                 'optimizer': optimizer.state_dict(),
+    #                 'model_args': model_args,
+    #                 'iter_num': iter_num,
+    #                 'best_val_loss': best_val_loss,
+    #                 'config': config,
+    #                 'tokens': tokens_trained,
+    #             }
+    #             print(f"saving checkpoint to {out_dir}")
+    #             torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
 
-    if iter_num == 0 and eval_only:
-        break
+    # if iter_num == 0 and eval_only:
+    #     break
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
