@@ -144,7 +144,7 @@ def analyze_folder_stats(folder_path):
             
             # Print row
             sig_str = f"{stats['measure_beats_mode']}/4" if stats['measure_beats_mode'] > 0 else "?"
-            print(f"{fname[:30]:<30} | {stats['bpm_median']:<6.1f} | {sig_str:<5} | {stats['consistency']:<6.4f} | {stats['duration_seconds']:<7.1f}, {stats['sec_per_measure']:<7.1f}")
+            print(f"{fname[:30]:<30} | {stats['bpm_median']:<6.1f} | {sig_str:<5} | {stats['consistency']:<6.4f} | {stats['duration_seconds']:<7.1f} | {stats['sec_per_measure']:<7.1f}")
 
     if not all_stats:
         print("Could not calculate stats for any files.")
@@ -184,6 +184,8 @@ def analyze_folder_stats(folder_path):
     print(f"  Median: {np.median(measure_durations)}")
     print(f"  Std: {np.std(measure_durations)}")
     print(f"  Quantiles (5%, 10%, 50%, 90%, 95%): {np.quantile(measure_durations, [0.05, 0.1, 0.5, 0.9, 0.95])}")
+    print(f"  Min: {np.min(measure_durations)}")
+    print(f"  Max: {np.max(measure_durations)}")
     print("-" * 30)
     print("Rhythmic Consistency (IBI StdDev):")
     print(f"  Average StdDev: {np.mean(consistencies):.4f}s")
