@@ -230,7 +230,7 @@ def main():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Beat sampling and statistical analysis tool.")
     
-    parser.add_argument("--test", type=bool, action='store_true', default=False, help="True to test the effects of warping and unwarping measures")
+    parser.add_argument("--test", action='store_true', default=False, help="True to test the effects of warping and unwarping measures")
     parser.add_argument("--n", type=int, default=20, help="The number of measures to test")
     
     args = parser.parse_args()
