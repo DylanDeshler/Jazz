@@ -7,7 +7,8 @@ from concurrent.futures import ProcessPoolExecutor
 from tqdm import tqdm
 
 TARGET_SR = 16000
-TARGET_SAMPLES = 24576 
+TARGET_SAMPLES = 24576
+TARGET_SIG = 4
 NUM_WORKERS = 48
 
 def parse_beat_file(beat_path):
@@ -70,6 +71,8 @@ def get_time_signature(beat_data):
 def process_measure(y):
     current_samples = len(y)
     stretch_factor = current_samples / TARGET_SAMPLES
+    duration_sec = current_samples / TARGET_SR
+    instant_bpm = (TARGET_SIG / duration_sec) * 60
     
     y_warped = pyrb.time_stretch(y, TARGET_SR, stretch_factor)
 
@@ -78,7 +81,7 @@ def process_measure(y):
     elif len(y_warped) < TARGET_SAMPLES:
         y_warped = np.pad(y_warped, (0, TARGET_SAMPLES - len(y_warped)))
         
-    return y_warped
+    return y_warped, stretch_factor, instant_bpm
 
 def generate_audio_measures(paths):
     """
@@ -101,7 +104,7 @@ def generate_audio_measures(paths):
     if np.max(np.abs(y)) < 0.001:
         return
 
-    res = []
+    audios, stretch_ratios, instant_bpms = [], [], []
     for i in range(len(downbeat_indices) - 1):
         start_idx = downbeat_indices[i]
         end_idx = downbeat_indices[i+1]
@@ -112,12 +115,21 @@ def generate_audio_measures(paths):
         frame_start = int(t_start * sr)
         frame_end = int(t_end * sr)
         
-        warped = process_measure(y[frame_start:frame_end])
-        res.append(warped)
-        
-    res = np.stack(res, axis=0)
+        audio, stretch_ratio, instant_bpm = process_measure(y[frame_start:frame_end])
+        audios.append(audio)
+        stretch_ratios.append(stretch_ratio)
+        instant_bpms.append(instant_bpm)
+    
+    if np.mean(instant_bpms) < 40 or np.mean(instant_bpms) > 330:
+        return
+    
     out_path = audio_path.replace('jazz_data_16000_full_clean', 'jazz_data_16000_full_clean_measures').replace('.wav', '.npy')
-    np.save(out_path, res.astype(np.float16))
+    np.savez_compressed(
+        out_path, 
+        audio=np.stack(audios, axis=0).astype(np.float16), 
+        ratio=np.array(stretch_ratios, dtype=np.float32), 
+        bpm=np.array(instant_bpms, dtype=np.float32)
+    )
 
 def main():
     print("Gathering files...")
@@ -130,7 +142,7 @@ def main():
         beat_data = parse_beat_file(beat_p)
         detected_sig = get_time_signature(beat_data)
         
-        if detected_sig == 4:
+        if detected_sig == TARGET_SIG:
             valid_audio.append(audio_p)
             valid_beats.append(beat_p)
 
