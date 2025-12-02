@@ -197,15 +197,11 @@ del valid_beats
 
 assert len(audio_paths) == len(beat_paths)
 
-def process_measure(audio_path, start_time, end_time):
-    y, sr = sf.read(audio_path)
-    slice_y = y[int(start_time*sr):int(end_time*sr)]
-    assert sr == rate
-
-    current_samples = len(slice_y)
+def process_measure(y):
+    current_samples = len(y)
     stretch_factor = current_samples / n_samples
     
-    y_warped = pyrb.time_stretch(slice_y, rate, stretch_factor)
+    y_warped = pyrb.time_stretch(y, rate, stretch_factor)
 
     if len(y_warped) > n_samples:
         y_warped = y_warped[:n_samples]
@@ -251,7 +247,7 @@ def sample_audio_measures(audio_path, beat_path, batch_size):
         selected_indices = np.random.choice(possible_indices, batch_size)
 
     measure_intervals = [measure_intervals[idx] for idx in selected_indices]
-    return np.stack([y[frame_start:frame_end] for frame_start, frame_end in measure_intervals], axis=0)
+    return np.stack([process_measure(y[frame_start:frame_end]) for frame_start, frame_end in measure_intervals], axis=0)
 
 def get_batch(split='train'):
     if split == 'train':
