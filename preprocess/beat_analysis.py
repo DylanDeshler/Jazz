@@ -328,7 +328,7 @@ def sample_chirp_measures(n_samples, output_dir):
 
     for i in range(n_samples):
         # Pick a random song
-        audio_path, beat_path = random.choice(list(zip(audio_path, beat_path)))
+        audio_path, beat_path = random.choice(list(zip(audio_paths, beat_paths)))
         filename = os.path.basename(audio_path)
         
         # Parse beats
