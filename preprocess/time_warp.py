@@ -80,10 +80,11 @@ def process_measure(y):
         
     return y_warped
 
-def generate_audio_measures(audio_path, beat_path):
+def generate_audio_measures(paths):
     """
     Clips full measures (Downbeat '1' to the next Downbeat '1').
     """
+    audio_path, beat_path = paths
     beat_data = parse_beat_file(beat_path)
     
     downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
