@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 TARGET_SR = 16000
 TARGET_SAMPLES = 24576 
-NUM_WORKERS = 32
+NUM_WORKERS = 48
 
 def parse_beat_file(beat_path):
     """
@@ -113,11 +113,10 @@ def generate_audio_measures(paths):
         frame_end = int(t_end * sr)
         
         warped = process_measure(y[frame_start:frame_end])
-        print(warped.shape)
         res.append(warped)
         
     res = np.stack(res, axis=0)
-    out_path = audio_path.replace('.wav', '.npy')
+    out_path = audio_path.replace('jazz_data_16000_full_clean', 'jazz_data_16000_full_clean_measures').replace('.wav', '.npy')
     np.save(out_path, res.astype(np.float16))
 
 def main():
