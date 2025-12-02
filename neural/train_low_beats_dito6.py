@@ -41,7 +41,7 @@ import glob
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'tokenizer_low_beats_large'
+out_dir = 'tokenizer_low_measures_large'
 eval_interval = 5000
 log_interval = 100
 eval_iters = 200
@@ -59,7 +59,6 @@ batch_size = 128 # if gradient_accumulation_steps > 1, this is the micro-batch s
 # model
 rate = 16000
 n_samples = 24576
-target_sig = 4
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
@@ -118,84 +117,8 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
-def parse_beat_file(beat_path):
-    """
-    Parses the beat_this output file.
-    Expected format per line: <timestamp> <beat_number>
-    
-    Returns a list of dictionaries: {'time': float, 'beat': int}
-    """
-    beat_data = []
-    with open(beat_path, 'r') as f:
-        for line in f:
-            parts = line.strip().split()
-            if len(parts) >= 1:
-                try:
-                    ts = float(parts[0])
-                    # specific beat number (1, 2, 3, 4)
-                    # Default to 0 if not present
-                    bn = 0 
-                    if len(parts) >= 2:
-                        try:
-                            bn = int(float(parts[1]))
-                        except ValueError:
-                            pass
-                    
-                    beat_data.append({'time': ts, 'beat': bn})
-                except ValueError:
-                    continue
-    
-    return beat_data
-
-def get_time_signature(beat_data):
-    """
-    Estimates the numerator of the time signature (e.g., 4 for 4/4) 
-    based on the most frequent measure length found in the file.
-    """
-    if not beat_data:
-        return 0
-        
-    beat_nums = np.array([b['beat'] for b in beat_data])
-    downbeat_indices = np.where(beat_nums == 1)[0]
-    
-    if len(downbeat_indices) < 2:
-        return 0
-        
-    beats_per_measure = []
-    for i in range(len(downbeat_indices) - 1):
-        start = downbeat_indices[i]
-        end = downbeat_indices[i+1]
-        count = end - start
-        beats_per_measure.append(count)
-        
-    if not beats_per_measure:
-        return 0
-        
-    vals, counts = np.unique(beats_per_measure, return_counts=True)
-    mode_time_sig = vals[np.argmax(counts)]
-    return mode_time_sig
-
 # poor man's data loader
-audio_paths = sorted(glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav'))
-beat_paths = sorted(glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats/*.beats'))
-
-valid_audio, valid_beats = [], []
-print(f"Filtering for songs with Time Signature: {target_sig}/4 ...")
-for audio_p, beat_p in zip(audio_paths, beat_paths):
-    beat_data = parse_beat_file(beat_p)
-    detected_sig = get_time_signature(beat_data)
-    
-    if detected_sig == target_sig:
-        valid_audio.append(audio_p)
-        valid_beats.append(beat_p)
-
-print(f"Found {len(valid_beats)} matching songs (out of {len(audio_paths)} total).")
-audio_paths = valid_audio
-beat_paths = valid_beats
-del valid_audio
-del valid_beats
-
-assert len(audio_paths) == len(beat_paths)
+paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.npy')
 
 def process_measure(y):
     current_samples = len(y)
@@ -210,61 +133,17 @@ def process_measure(y):
         
     return y_warped
 
-def sample_audio_measures(audio_path, beat_path, batch_size):
-    """
-    Samples full measures (Downbeat '1' to the next Downbeat '1').
-    """
-    beat_data = parse_beat_file(beat_path)
-    
-    downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
-    
-    if len(downbeat_indices) < 2:
-        return None
-    
-    y, sr = librosa.load(audio_path, sr=None)
-    assert sr == rate
-
-    measure_intervals = []
-    for i in range(len(downbeat_indices) - 1):
-        start_idx = downbeat_indices[i]
-        end_idx = downbeat_indices[i+1]
-        
-        t_start = beat_data[start_idx]['time']
-        t_end = beat_data[end_idx]['time']
-        
-        frame_start = int(t_start * sr)
-        frame_end = int(t_end * sr)
-        
-        if frame_end - frame_start <= n_samples:
-            measure_intervals.append((frame_start, frame_end))
-    
-    possible_indices = list(range(len(measure_intervals)))
-    
-    if batch_size > len(possible_indices):
-        # selected_indices = possible_indices
-        return None
-    else:
-        selected_indices = np.random.choice(possible_indices, batch_size)
-
-    measure_intervals = [measure_intervals[idx] for idx in selected_indices]
-    return np.stack([process_measure(y[frame_start:frame_end]) for frame_start, frame_end in measure_intervals], axis=0)
-
 def get_batch(split='train'):
     if split == 'train':
-        idx = np.random.randint(int(len(beat_paths) * 0.98))
-        batch = sample_audio_measures(audio_paths[idx], beat_paths[idx], batch_size)
-        while batch is None:
-            idx = np.random.randint(int(len(beat_paths) * 0.98))
-            batch = sample_audio_measures(audio_paths[idx], beat_paths[idx], batch_size)
+        idxs = torch.randint(int(len(paths) * 0.98), (batch_size,))
+        samples = [np.load(paths[idx])['audio'] for idx in idxs]
+        batch = [sample[np.random.randint(len(samples))] for sample in samples]
         batch = torch.from_numpy(np.stack(batch, axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         return batch
-    
     else:
-        idx = np.random.randint(int(len(beat_paths) * 0.98), len(beat_paths))
-        batch = sample_audio_measures(audio_paths[idx], beat_paths[idx], batch_size)
-        while batch is None:
-            idx = np.random.randint(int(len(beat_paths) * 0.98), len(beat_paths))
-            batch = sample_audio_measures(audio_paths[idx], beat_paths[idx], batch_size)
+        idxs = torch.randint(int(len(paths) * 0.98), len(paths), (batch_size,))
+        samples = [np.load(paths[idx])['audio'] for idx in idxs]
+        batch = [sample[np.random.randint(len(samples))] for sample in samples]
         batch = torch.from_numpy(np.stack(batch, axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         return batch
 
@@ -310,7 +189,6 @@ model.to(device)
 summary(model)
 print('Encoder # params: ', sum(param.numel() for param in model.encoder.parameters()))
 print('Decoder # params: ', sum(param.numel() for param in model.unet.parameters()))
-
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
@@ -362,7 +240,6 @@ def get_lr(it):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
 
-
 def save_samples(xs, ys, step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
@@ -380,7 +257,6 @@ if wandb_log and master_process:
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
-
 if eval_only:
     gradient_accumulation_steps *= 2
     model.eval()
@@ -405,12 +281,13 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        X = get_batch('test')
-        model.eval()
-        with ctx:
-            logits = raw_model.reconstruct(X, n_steps=100)
-        model.train()
-        save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
+        # pyrubberband is slow without multiprocessing so cant do during training loop
+        # X = get_batch('test')
+        # model.eval()
+        # with ctx:
+        #     logits = raw_model.reconstruct(X, n_steps=100)
+        # model.train()
+        # save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
