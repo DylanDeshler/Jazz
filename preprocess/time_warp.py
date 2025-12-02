@@ -143,7 +143,7 @@ def main():
     
     tasks = []
     for audio_path, beat_path in zip(audio_paths, beat_paths):
-        tasks.append(audio_path, beat_path)
+        tasks.append((audio_path, beat_path))
         
     print(f"Found {len(tasks)} files. Processing with {NUM_WORKERS} cores...")
     
