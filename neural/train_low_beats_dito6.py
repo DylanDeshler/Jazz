@@ -137,13 +137,13 @@ def get_batch(split='train'):
     if split == 'train':
         idxs = torch.randint(int(len(paths) * 0.98), (batch_size,))
         samples = [np.load(paths[idx])['audio'] for idx in idxs]
-        batch = [sample[np.random.randint(len(samples))] for sample in samples]
+        batch = [sample[np.random.randint(len(sample))] for sample in samples]
         batch = torch.from_numpy(np.stack(batch, axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         return batch
     else:
         idxs = torch.randint(int(len(paths) * 0.98), len(paths), (batch_size,))
         samples = [np.load(paths[idx])['audio'] for idx in idxs]
-        batch = [sample[np.random.randint(len(samples))] for sample in samples]
+        batch = [sample[np.random.randint(len(sample))] for sample in samples]
         batch = torch.from_numpy(np.stack(batch, axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         return batch
 
