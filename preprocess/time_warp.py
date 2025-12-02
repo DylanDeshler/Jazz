@@ -120,7 +120,7 @@ def test(n_samples):
         audio = data['audio']
         idx = np.random.randint(len(audio))
         
-        restored = restore_measure(audio[idx], data['stretch_ratio'][idx], TARGET_SR)
+        restored = restore_measure(audio[idx], data['ratio'][idx], TARGET_SR)
         
         wav_path = path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean').replace('.npz', '.wav')
         beat_path = path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.npz', '.beats')
