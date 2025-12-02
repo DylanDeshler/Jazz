@@ -1,7 +1,9 @@
 import os
 import glob
 import librosa
+import argparse
 import numpy as np
+import soundfile as sf
 import pyrubberband as pyrb
 from concurrent.futures import ProcessPoolExecutor
 from tqdm import tqdm
@@ -82,6 +84,66 @@ def process_measure(y):
         y_warped = np.pad(y_warped, (0, TARGET_SAMPLES - len(y_warped)))
         
     return y_warped, stretch_factor, instant_bpm
+
+def restore_measure(audio, stretch_ratio, sr=16000):
+    """
+    Restores a time-warped measure to its original duration.
+    
+    Args:
+        audio (np.array): The fixed-length audio (from VAE or .npy file).
+                          Can be shape (1, 24576) or (24576,).
+        stretch_ratio (float): The ratio saved in your metadata 
+                               (Original Length / Target Length).
+        sr (int): Sampling rate (default 16000).
+        
+    Returns:
+        np.array: The restored audio array at original duration.
+    """
+    
+    if audio.dtype == np.float16:
+        audio = audio.astype(np.float32)
+    restore_rate = 1.0 / stretch_ratio
+    
+    try:
+        y_restored = pyrb.time_stretch(audio, sr, restore_rate)
+        return y_restored
+    except Exception as e:
+        print(f"RubberBand failed: {e}")
+        return audio
+
+def test(n_samples):
+    paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.npz')
+    paths = np.random.choice(paths, n_samples)
+    
+    for j, path in enumerate(paths):
+        data = np.load(path)
+        audio = data['audio']
+        idx = np.random.randint(len(audio))
+        
+        restored = restore_measure(audio[idx], data['stretch_ratio'][idx], TARGET_SR)
+        
+        wav_path = path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean').replace('.npz', '.wav')
+        beat_path = path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.npz', '.beats')
+        beat_data = parse_beat_file(beat_path)
+        
+        y, sr = librosa.load(wav_path, sr=None)
+        assert sr == TARGET_SR
+        
+        downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
+        start_idx = downbeat_indices[idx]
+        end_idx = downbeat_indices[idx+1]
+        
+        t_start = beat_data[start_idx]['time']
+        t_end = beat_data[end_idx]['time']
+        
+        frame_start = int(t_start * sr)
+        frame_end = int(t_end * sr)
+        
+        y = y[frame_start:frame_end]
+        print(restored.shape, y.shape)
+        
+        sf.write(f'{j}_real', y, TARGET_SR)
+        sf.write(f'{j}_restored', restored, TARGET_SR)
 
 def generate_audio_measures(paths):
     """
@@ -166,4 +228,14 @@ def main():
     print("Done!")
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Beat sampling and statistical analysis tool.")
+    
+    parser.add_argument("--test", type=bool, default=False, help="True to test the effects of warping and unwarping measures")
+    parser.add_argument("--n", type=int, default=20, help="The number of measures to test")
+    
+    args = parser.parse_args()
+    
+    if args.test:
+        test(args.n)
+    else:
+        main()
