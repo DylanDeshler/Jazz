@@ -112,11 +112,12 @@ def generate_audio_measures(paths):
         frame_start = int(t_start * sr)
         frame_end = int(t_end * sr)
         
-        res.append(process_measure(y[frame_start:frame_end]))
+        warped = process_measure(y[frame_start:frame_end])
+        print(warped.shape)
+        res.append(warped)
+        
     res = np.stack(res, axis=0)
     out_path = audio_path.replace('.wav', '.npy')
-    
-    print(res.shape, out_path)
     np.save(out_path, res.astype(np.float16))
 
 def main():
