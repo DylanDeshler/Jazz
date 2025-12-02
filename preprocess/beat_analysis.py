@@ -303,6 +303,94 @@ def sample_audio_measures(audio_path, beat_path, n_samples, output_dir):
         print(f"Saved: {out_name} (Duration: {t_end - t_start:.2f}s)")
         
     print("\nProcessing complete.")
+    
+def generate_chirp(sr, duration=0.1, freq_start=440, freq_end=1760):
+    """Generates a linear chirp signal (frequency sweep) from start to end freq."""
+    t = np.linspace(0, duration, int(sr * duration), endpoint=False)
+    # Linear chirp formula
+    k = (freq_end - freq_start) / duration
+    phase = 2 * np.pi * (freq_start * t + 0.5 * k * t**2)
+    chirp = 0.5 * np.sin(phase) # 0.5 amplitude
+    return chirp
+
+def sample_chirp_measures(n_samples, output_dir):
+    """
+    Randomly selects valid song pairs from a folder, grabs 2 contiguous measures, 
+    and inserts an audible chirp at the measure transition.
+    """
+    audio_paths = sorted(glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav'))
+    beat_paths = sorted(glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats/*.beats'))
+    print(len(audio_paths), len(beat_paths))
+    assert len(audio_paths) == len(beat_paths)
+    
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    for i in range(n_samples):
+        # Pick a random song
+        audio_path, beat_path = random.choice(list(zip(audio_path, beat_path)))
+        filename = os.path.basename(audio_path)
+        
+        # Parse beats
+        beat_data = parse_beat_file(beat_path)
+        
+        # Find Downbeats
+        downbeats = [idx for idx, b in enumerate(beat_data) if b['beat'] == 1]
+        
+        # Need at least 3 downbeats to define 2 full measures:
+        # Measure 1: [Downbeat A ... Downbeat B)
+        # Measure 2: [Downbeat B ... Downbeat C)
+        if len(downbeats) < 3:
+            print(f"Skipping selection from {filename} (not enough measures).")
+            # We try again by decrementing loop counter? 
+            # Or just accept fewer samples. Let's just continue to avoid infinite loops on bad folders.
+            continue
+            
+        # Select random start measure
+        # We need index j such that we can get j, j+1, j+2
+        start_m_idx = random.randint(0, len(downbeats) - 3)
+        
+        idx_A = downbeats[start_m_idx]   # Start of Measure 1
+        idx_B = downbeats[start_m_idx+1] # Start of Measure 2 (TRANSITION)
+        idx_C = downbeats[start_m_idx+2] # End of Measure 2
+        
+        t_start = beat_data[idx_A]['time']
+        t_trans = beat_data[idx_B]['time']
+        t_end = beat_data[idx_C]['time']
+        
+        duration = t_end - t_start
+        
+        try:
+            # Load specific slice of audio
+            y, sr = librosa.load(audio_path, sr=None, offset=t_start, duration=duration)
+            
+            # Generate Chirp
+            chirp = generate_chirp(sr, duration=0.1, freq_start=880, freq_end=1760)
+            chirp_len = len(chirp)
+            
+            # Calculate where the transition is relative to our slice start
+            # t_trans is absolute time, t_start is absolute time
+            rel_time = t_trans - t_start
+            rel_frame = int(rel_time * sr)
+            
+            # Mix chirp
+            # Ensure we don't index out of bounds
+            if rel_frame + chirp_len < len(y):
+                y[rel_frame : rel_frame + chirp_len] += chirp
+            
+            # Prevent clipping
+            y = np.clip(y, -1.0, 1.0)
+            
+            # Save
+            out_name = f"chirp_{i+1}_{filename}_measures.wav"
+            out_path = os.path.join(output_dir, out_name)
+            sf.write(out_path, y, sr)
+            print(f"[{i+1}/{n_samples}] Saved: {out_name} (Transition @ {rel_time:.2f}s)")
+            
+        except Exception as e:
+            print(f"Error processing {filename}: {e}")
+            
+    print("\nProcessing complete.")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Beat sampling and statistical analysis tool.")
@@ -310,8 +398,8 @@ if __name__ == "__main__":
     # audio_file is now optional (nargs='?') because 'stats' mode doesn't need it.
     parser.add_argument("audio_file", nargs='?', help="Path to input audio file. (Ignored in 'stats' mode)")
     
-    parser.add_argument("--mode", choices=['beats', 'measures', 'stats'], default='beats', 
-                        help="Action mode: 'beats' (random clips), 'measures' (random bars), 'stats' (analyze folder).")
+    parser.add_argument("--mode", choices=['beats', 'measures', 'stats', 'chirp'], default='beats', 
+                        help="Action mode: 'beats' (random clips), 'measures' (random bars), 'stats' (analyze folder), 'chirp' (2 measures with transition sound)")
     
     parser.add_argument("--n", type=int, default=5, help="Number of samples to extract")
     parser.add_argument("--m", type=int, default=4, help="Number of beats per sample (only used in 'beats' mode)")
@@ -326,6 +414,8 @@ if __name__ == "__main__":
             analyze_folder_stats(beat_path)
         else:
             print(f"Error: Mode is 'stats' but '{args.beat_path}' is not a directory.")
+    elif args.mode == 'chirp':
+        sample_chirp_measures(args.n, args.output)
     elif args.mode == 'measures':
         if not args.audio_file:
             print("Error: Audio file required for 'measures' mode.")
