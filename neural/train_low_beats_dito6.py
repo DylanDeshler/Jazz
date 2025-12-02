@@ -30,9 +30,10 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from dito import DiToV5 as Transformer
+from dito import DiToV4 as Transformer
 
 import matplotlib.pyplot as plt
+import pyrubberband as pyrb
 import soundfile as sf
 import librosa
 import glob
@@ -53,11 +54,12 @@ wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 3 # used to simulate larger batch sizes
-batch_size = 24 # if gradient_accumulation_steps > 1, this is the micro-batch size
+gradient_accumulation_steps = 1 # used to simulate larger batch sizes
+batch_size = 128 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
-n_samples = 24576#2**16
+n_samples = 24576
+target_sig = 4
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
@@ -116,12 +118,6 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
-# poor man's data loader
-audio_paths = sorted(glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav'))
-beat_paths = sorted(glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats/*.beats'))
-print(len(audio_paths), len(beat_paths))
-assert len(audio_paths) == len(beat_paths)
-
 def parse_beat_file(beat_path):
     """
     Parses the beat_this output file.
@@ -151,6 +147,73 @@ def parse_beat_file(beat_path):
     
     return beat_data
 
+def get_time_signature(beat_data):
+    """
+    Estimates the numerator of the time signature (e.g., 4 for 4/4) 
+    based on the most frequent measure length found in the file.
+    """
+    if not beat_data:
+        return 0
+        
+    beat_nums = np.array([b['beat'] for b in beat_data])
+    downbeat_indices = np.where(beat_nums == 1)[0]
+    
+    if len(downbeat_indices) < 2:
+        return 0
+        
+    beats_per_measure = []
+    for i in range(len(downbeat_indices) - 1):
+        start = downbeat_indices[i]
+        end = downbeat_indices[i+1]
+        count = end - start
+        beats_per_measure.append(count)
+        
+    if not beats_per_measure:
+        return 0
+        
+    vals, counts = np.unique(beats_per_measure, return_counts=True)
+    mode_time_sig = vals[np.argmax(counts)]
+    return mode_time_sig
+
+# poor man's data loader
+audio_paths = sorted(glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav'))
+beat_paths = sorted(glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats/*.beats'))
+
+valid_audio, valid_beats = [], []
+print(f"Filtering for songs with Time Signature: {target_sig}/4 ...")
+for audio_p, beat_p in zip(audio_paths, beat_paths):
+    beat_data = parse_beat_file(beat_p)
+    detected_sig = get_time_signature(beat_data)
+    
+    if detected_sig == target_sig:
+        valid_audio.append(audio_p)
+        valid_beats.append(beat_p)
+
+print(f"Found {len(valid_beats)} matching songs (out of {len(audio_paths)} total).")
+audio_paths = valid_audio
+beat_paths = valid_beats
+del valid_audio
+del valid_beats
+
+assert len(audio_paths) == len(beat_paths)
+
+def process_measure(audio_path, start_time, end_time):
+    y, sr = sf.read(audio_path)
+    slice_y = y[int(start_time*sr):int(end_time*sr)]
+    assert sr == rate
+
+    current_samples = len(slice_y)
+    stretch_factor = current_samples / n_samples
+    
+    y_warped = pyrb.time_stretch(slice_y, rate, stretch_factor)
+
+    if len(y_warped) > n_samples:
+        y_warped = y_warped[:n_samples]
+    elif len(y_warped) < n_samples:
+        y_warped = np.pad(y_warped, (0, n_samples - len(y_warped)))
+        
+    return y_warped
+
 def sample_audio_measures(audio_path, beat_path, batch_size):
     """
     Samples full measures (Downbeat '1' to the next Downbeat '1').
@@ -160,7 +223,7 @@ def sample_audio_measures(audio_path, beat_path, batch_size):
     downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
     
     if len(downbeat_indices) < 2:
-        return None, None
+        return None
     
     y, sr = librosa.load(audio_path, sr=None)
     assert sr == rate
@@ -183,43 +246,30 @@ def sample_audio_measures(audio_path, beat_path, batch_size):
     
     if batch_size > len(possible_indices):
         # selected_indices = possible_indices
-        return None, None
+        return None
     else:
         selected_indices = np.random.choice(possible_indices, batch_size)
 
-    frames, masks = [], []
-    for i, idx in enumerate(selected_indices):
-        frame_start, frame_end = measure_intervals[idx]
-        
-        audio_slice = np.zeros(n_samples)
-        mask = np.zeros(n_samples)
-        audio_slice[:frame_end-frame_start] = y[frame_start:frame_end]
-        mask[:frame_end-frame_start] = 1
-
-        frames.append(audio_slice)
-        masks.append(mask)
-    return np.stack(frames, axis=0), np.stack(masks, axis=0)
+    return np.stack([y[frame_start:frame_end] for frame_start, frame_end in measure_intervals[selected_indices]], axis=0)
 
 def get_batch(split='train'):
     if split == 'train':
         idx = np.random.randint(int(len(beat_paths) * 0.98))
-        frames, masks = sample_audio_measures(audio_paths[idx], beat_paths[idx], batch_size)
-        while frames is None:
+        batch = sample_audio_measures(audio_paths[idx], beat_paths[idx], batch_size)
+        while batch is None:
             idx = np.random.randint(int(len(beat_paths) * 0.98))
-            frames, masks = sample_audio_measures(audio_paths[idx], beat_paths[idx], batch_size)
-        frames = torch.from_numpy(frames).float().pin_memory().to(device, non_blocking=True)
-        masks = torch.from_numpy(masks).float().pin_memory().to(device, non_blocking=True)
-        return frames, masks
+            batch = sample_audio_measures(audio_paths[idx], beat_paths[idx], batch_size)
+        batch = torch.from_numpy(np.stack(batch, axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+        return batch
     
     else:
         idx = np.random.randint(int(len(beat_paths) * 0.98), len(beat_paths))
-        frames, masks = sample_audio_measures(audio_paths[idx], beat_paths[idx], batch_size)
-        while frames is None:
+        batch = sample_audio_measures(audio_paths[idx], beat_paths[idx], batch_size)
+        while batch is None:
             idx = np.random.randint(int(len(beat_paths) * 0.98), len(beat_paths))
-            frames, masks = sample_audio_measures(audio_paths[idx], beat_paths[idx], batch_size)
-        frames = torch.from_numpy(frames).float().pin_memory().to(device, non_blocking=True)
-        masks = torch.from_numpy(masks).float().pin_memory().to(device, non_blocking=True)
-        return frames, masks
+            batch = sample_audio_measures(audio_paths[idx], beat_paths[idx], batch_size)
+        batch = torch.from_numpy(np.stack(batch, axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+        return batch
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
@@ -295,7 +345,7 @@ def estimate_loss():
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
             X = get_batch(split)
             with ctx:
-                loss = model(*X)
+                loss = model(X)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -320,8 +370,8 @@ def save_samples(xs, ys, step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
 
-    for i in range(min(10, len(ys))):
-        x, y = xs[0][i].squeeze().cpu().detach().float().numpy(), ys[i].squeeze().cpu().detach().float().numpy()
+    for i in range(min(10, xs.shape[0])):
+        x, y = xs[i].squeeze(), ys[i].squeeze()
 
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, rate)
@@ -361,9 +411,9 @@ while True:
         X = get_batch('test')
         model.eval()
         with ctx:
-            logits = raw_model.reconstruct(*X, n_steps=100)
+            logits = raw_model.reconstruct(X, n_steps=100)
         model.train()
-        save_samples(X, logits, iter_num)
+        save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
@@ -403,7 +453,7 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            loss = model(*X)
+            loss = model(X)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X = get_batch('train')
