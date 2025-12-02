@@ -123,7 +123,7 @@ def generate_audio_measures(paths):
     if np.mean(instant_bpms) < 40 or np.mean(instant_bpms) > 330:
         return
     
-    out_path = audio_path.replace('jazz_data_16000_full_clean', 'jazz_data_16000_full_clean_measures').replace('.wav', '.npy')
+    out_path = audio_path.replace('jazz_data_16000_full_clean', 'jazz_data_16000_full_clean_measures').replace('.wav', '.npz')
     np.savez_compressed(
         out_path, 
         audio=np.stack(audios, axis=0).astype(np.float16), 
