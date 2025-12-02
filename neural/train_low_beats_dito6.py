@@ -57,7 +57,7 @@ gradient_accumulation_steps = 3 # used to simulate larger batch sizes
 batch_size = 24 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
-n_samples = 2**16
+n_samples = 24576#2**16
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
@@ -357,41 +357,41 @@ while True:
     tokens_trained += batch_size * gradient_accumulation_steps
 
     # evaluate the loss on train/val sets and write checkpoints
-    # if iter_num % eval_interval == 0 and master_process:
-    #     X = get_batch('test')
-    #     model.eval()
-    #     with ctx:
-    #         logits = raw_model.reconstruct(*X, n_steps=100)
-    #     model.train()
-    #     save_samples(X, logits, iter_num)
-    #     losses = estimate_loss()
-    #     print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-    #     if wandb_log:
-    #         wandb.log({
-    #             "iter": iter_num,
-    #             "train/loss": losses['train'],
-    #             "val/loss": losses['val'],
-    #             "lr": lr,
-    #             "mfu": running_mfu*100, # convert to percentage
-    #             "tokens": tokens_trained,
-    #         })
-    #     if losses['val'] < best_val_loss or always_save_checkpoint:
-    #         best_val_loss = losses['val']
-    #         if iter_num > 0:
-    #             checkpoint = {
-    #                 'model': raw_model.state_dict(),
-    #                 'optimizer': optimizer.state_dict(),
-    #                 'model_args': model_args,
-    #                 'iter_num': iter_num,
-    #                 'best_val_loss': best_val_loss,
-    #                 'config': config,
-    #                 'tokens': tokens_trained,
-    #             }
-    #             print(f"saving checkpoint to {out_dir}")
-    #             torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+    if iter_num % eval_interval == 0 and master_process:
+        X = get_batch('test')
+        model.eval()
+        with ctx:
+            logits = raw_model.reconstruct(*X, n_steps=100)
+        model.train()
+        save_samples(X, logits, iter_num)
+        losses = estimate_loss()
+        print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        if wandb_log:
+            wandb.log({
+                "iter": iter_num,
+                "train/loss": losses['train'],
+                "val/loss": losses['val'],
+                "lr": lr,
+                "mfu": running_mfu*100, # convert to percentage
+                "tokens": tokens_trained,
+            })
+        if losses['val'] < best_val_loss or always_save_checkpoint:
+            best_val_loss = losses['val']
+            if iter_num > 0:
+                checkpoint = {
+                    'model': raw_model.state_dict(),
+                    'optimizer': optimizer.state_dict(),
+                    'model_args': model_args,
+                    'iter_num': iter_num,
+                    'best_val_loss': best_val_loss,
+                    'config': config,
+                    'tokens': tokens_trained,
+                }
+                print(f"saving checkpoint to {out_dir}")
+                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
 
-    # if iter_num == 0 and eval_only:
-    #     break
+    if iter_num == 0 and eval_only:
+        break
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
