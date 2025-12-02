@@ -313,7 +313,35 @@ def generate_chirp(sr, duration=0.1, freq_start=440, freq_end=1760):
     chirp = 0.5 * np.sin(phase) # 0.5 amplitude
     return chirp
 
-def sample_chirp_measures(n_samples, output_dir):
+def get_time_signature(beat_data):
+    """
+    Estimates the numerator of the time signature (e.g., 4 for 4/4) 
+    based on the most frequent measure length found in the file.
+    """
+    if not beat_data:
+        return 0
+        
+    beat_nums = np.array([b['beat'] for b in beat_data])
+    downbeat_indices = np.where(beat_nums == 1)[0]
+    
+    if len(downbeat_indices) < 2:
+        return 0
+        
+    beats_per_measure = []
+    for i in range(len(downbeat_indices) - 1):
+        start = downbeat_indices[i]
+        end = downbeat_indices[i+1]
+        count = end - start
+        beats_per_measure.append(count)
+        
+    if not beats_per_measure:
+        return 0
+        
+    vals, counts = np.unique(beats_per_measure, return_counts=True)
+    mode_time_sig = vals[np.argmax(counts)]
+    return mode_time_sig
+
+def sample_chirp_measures(n_samples, output_dir, target_sig=None):
     """
     Randomly selects valid song pairs from a folder, grabs 2 contiguous measures, 
     and inserts an audible chirp at the measure transition.
@@ -322,6 +350,21 @@ def sample_chirp_measures(n_samples, output_dir):
     beat_paths = sorted(glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats/*.beats'))
     print(len(audio_paths), len(beat_paths))
     assert len(audio_paths) == len(beat_paths)
+    
+    if target_sig:
+        valid_audio, valid_beats = [], []
+        print(f"Filtering for songs with Time Signature: {target_sig}/4 ...")
+        for audio_p, beat_p in zip(audio_paths, beat_paths):
+            beat_data = parse_beat_file(beat_p)
+            detected_sig = get_time_signature(beat_data)
+            
+            if detected_sig == target_sig:
+                valid_audio.append(audio_p)
+                valid_beats.append(beat_p)
+        
+        print(f"Found {len(valid_beats)} matching songs (out of {len(audio_paths)} total).")
+        audio_paths = valid_audio
+        beat_paths = valid_beats
     
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -403,6 +446,7 @@ if __name__ == "__main__":
     
     parser.add_argument("--n", type=int, default=5, help="Number of samples to extract")
     parser.add_argument("--m", type=int, default=4, help="Number of beats per sample (only used in 'beats' mode)")
+    parser.add_argument("--sig", type=str, default=None, help="Target time signature for 'chirp' mode (e.g. '4' or '4/4')")
     parser.add_argument("--output", default="beat_samples", help="Output directory")
 
     args = parser.parse_args()
@@ -415,7 +459,7 @@ if __name__ == "__main__":
         else:
             print(f"Error: Mode is 'stats' but '{args.beat_path}' is not a directory.")
     elif args.mode == 'chirp':
-        sample_chirp_measures(args.n, args.output)
+        sample_chirp_measures(args.n, args.output, int(args.sig))
     elif args.mode == 'measures':
         if not args.audio_file:
             print("Error: Audio file required for 'measures' mode.")
