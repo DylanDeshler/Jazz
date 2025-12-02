@@ -250,7 +250,7 @@ def sample_audio_measures(audio_path, beat_path, batch_size):
     else:
         selected_indices = np.random.choice(possible_indices, batch_size)
 
-    measure_intervals = measure_intervals[idx for idx in selected_indices]
+    measure_intervals = [measure_intervals[idx] for idx in selected_indices]
     return np.stack([y[frame_start:frame_end] for frame_start, frame_end in measure_intervals], axis=0)
 
 def get_batch(split='train'):
