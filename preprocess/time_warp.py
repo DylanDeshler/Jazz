@@ -104,12 +104,8 @@ def restore_measure(audio, stretch_ratio, sr=16000):
         audio = audio.astype(np.float32)
     restore_rate = 1.0 / stretch_ratio
     
-    try:
-        y_restored = pyrb.time_stretch(audio, sr, restore_rate)
-        return y_restored
-    except Exception as e:
-        print(f"RubberBand failed: {e}")
-        return audio
+    y_restored = pyrb.time_stretch(audio, sr, restore_rate)
+    return y_restored
 
 def test(n_samples):
     paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.npz')
@@ -142,8 +138,8 @@ def test(n_samples):
         y = y[frame_start:frame_end]
         print(restored.shape, y.shape)
         
-        sf.write(f'{j}_real', y, TARGET_SR)
-        sf.write(f'{j}_restored', restored, TARGET_SR)
+        sf.write(f'{j}_real.wav', y, TARGET_SR)
+        sf.write(f'{j}_restored.wav', restored, TARGET_SR)
 
 def generate_audio_measures(paths):
     """
