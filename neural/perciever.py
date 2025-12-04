@@ -296,7 +296,7 @@ class Perciever(nn.Module):
         B, C, L = x.shape
         
         x = x.transpose(1, 2)
-        data = self.proj(x)
+        data = self.in_proj(x)
         data = data + self.pos_emb(torch.linspace(0, 1, steps=L, device=x.device).unsqueeze(0))
         
         x = self.latents(torch.arange(self.n_latents, device=x.device, dtype=torch.long).unsqueeze(0))
