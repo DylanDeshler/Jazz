@@ -228,15 +228,18 @@ def main():
         
     print("Done!")
 
-def crunch():
+def crunch(length=None):
     paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.npz')
     
-    length = 0
-    for path in tqdm(paths, desc='Calculating Total Length'):
-        try:
-            length += len(np.load(path)['audio'])
-        except:
-            print(path)
+    # 3693787
+    if length is None:
+        length = 0
+        for path in tqdm(paths, desc='Calculating Total Length'):
+            try:
+                length += len(np.load(path)['audio'])
+            except:
+                print('Error with path: ', path)
+        print('Total samples: ', length)
     
     audio_mmap = np.memmap(
         '/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_audio.npy', 
@@ -259,21 +262,24 @@ def crunch():
         'data': {}
     }
     for path in tqdm(paths, desc='Writing Contiguous Data'):
-        data = np.load(path)
-        
-        audio = data['audio']
-        ratio = data['ratio']
-        bpm = data['bpm']
-        
-        audio_mmap[curr_index:curr_index+len(audio)] = audio
-        meta_mmap[curr_index:curr_index+len(audio), 0] = ratio
-        meta_mmap[curr_index:curr_index+len(audio), 1] = bpm
-        
-        name = os.path.basename(path)
-        name, root = os.path.splitext(name)
-        song_index['data'][name] = [curr_index, curr_index + len(audio)]
-        
-        curr_index += len(audio)
+        try:
+            data = np.load(path)
+            
+            audio = data['audio']
+            ratio = data['ratio']
+            bpm = data['bpm']
+            
+            audio_mmap[curr_index:curr_index+len(audio)] = audio
+            meta_mmap[curr_index:curr_index+len(audio), 0] = ratio
+            meta_mmap[curr_index:curr_index+len(audio), 1] = bpm
+            
+            name = os.path.basename(path)
+            name, ext = os.path.splitext(name)
+            song_index['data'][name] = [curr_index, curr_index + len(audio)]
+            
+            curr_index += len(audio)
+        except:
+            print('Error with path: ', path)
     
     audio_mmap.flush()
     meta_mmap.flush()
@@ -286,10 +292,14 @@ if __name__ == "__main__":
     
     parser.add_argument("--test", action='store_true', default=False, help="True to test the effects of warping and unwarping measures")
     parser.add_argument("--n", type=int, default=20, help="The number of measures to test")
+    parser.add_argument("--crunch", action='store_true', default=False, help="Squash npzs into a single memmap")
+    parser.add_argument("--length", type=int, default=None, help="The number of samples to convert to memmap array")
     
     args = parser.parse_args()
     
     if args.test:
         test(args.n)
+    elif args.crunch:
+        crunch(args.length)
     else:
-        crunch()
+        main()
