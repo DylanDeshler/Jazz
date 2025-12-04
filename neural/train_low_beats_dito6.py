@@ -150,7 +150,7 @@ def get_meta_batch(split='train'):
     else:
         idxs = torch.randint(train_n, len(data), (batch_size,))
     batch = torch.from_numpy(np.stack([data[idx] for idx in idxs], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-    meta = torch.from_numpy(np.stack([meta[idx] for idx in idxs], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+    meta = torch.from_numpy(np.stack([meta[idx] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     return batch, meta
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
@@ -281,10 +281,9 @@ def save_samples(step):
     X = X.cpu().detach().float().numpy()
     Y = Y.cpu().detach().float().numpy()
     meta = meta.cpu().detach().numpy()
-    print(X.shape, Y.shape, meta.shape)
 
     for i in range(min(10, len(X))):
-        x, y, ratio = X[i].squeeze(), Y[i].squeeze(), meta[i, 0].squeeze()
+        x, y, ratio = X[i].squeeze(), Y[i].squeeze(), meta[i, 0].item()
 
         # save .wavs
         print(ratio)
