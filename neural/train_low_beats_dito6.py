@@ -282,11 +282,11 @@ def save_samples(step):
     Y = Y.cpu().detach().float().numpy()
 
     for i in range(min(10, len(X))):
-        x, y = X[i].squeeze(), Y[i].squeeze()
+        x, y, ratio = X[i].squeeze(), Y[i].squeeze(), meta[i, 0].squeeze()
 
         # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), restore_measure(x, meta[0]), rate)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), restore_measure(y, meta[0]), rate)
+        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), restore_measure(x, ratio), rate)
+        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), restore_measure(y, ratio), rate)
 
 # logging
 if wandb_log and master_process:
