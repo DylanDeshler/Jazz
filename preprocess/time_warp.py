@@ -234,7 +234,7 @@ def crunch():
     length = 0
     for path in tqdm(paths, desc='Calculating Total Length'):
         shape = np.load(path)['audio']
-        print(shape)
+        print(shape.shape)
         length += len(shape)
     
     audio_mmap = np.memmap(
