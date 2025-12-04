@@ -306,7 +306,11 @@ class Perciever(nn.Module):
         return x
 
 if __name__ == '__main__':
+    from torchinfo import summary
+    
     model = Perciever(512, 8, 4, 4, 32)
+    summary(model)
+    
     x = torch.randn((64, 1, 16000))
     y = model(x)
     print(x.shape, y.shape)
