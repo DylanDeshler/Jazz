@@ -118,8 +118,6 @@ ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torc
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 # poor man's data loader
-paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.npz')
-
 def process_measure(y):
     current_samples = len(y)
     stretch_factor = current_samples / n_samples
@@ -134,18 +132,14 @@ def process_measure(y):
     return y_warped
 
 def get_batch(split='train'):
+    data = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_audio.npy', dtype=np.float16, mode='r', shape=(3693787, n_samples))
+    train_n = int(len(data) * 0.98)
     if split == 'train':
-        idxs = torch.randint(int(len(paths) * 0.98), (batch_size,))
-        samples = [np.load(paths[idx])['audio'] for idx in idxs]
-        batch = [sample[np.random.randint(len(sample))] for sample in samples]
-        batch = torch.from_numpy(np.stack(batch, axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-        return batch
+        idxs = torch.randint(train_n, (batch_size,))
     else:
-        idxs = torch.randint(int(len(paths) * 0.98), len(paths), (batch_size,))
-        samples = [np.load(paths[idx])['audio'] for idx in idxs]
-        batch = [sample[np.random.randint(len(sample))] for sample in samples]
-        batch = torch.from_numpy(np.stack(batch, axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-        return batch
+        idxs = torch.randint(train_n, len(data), (batch_size,))
+    batch = torch.from_numpy(np.stack([data[idx:idx + n_samples] for idx in idxs], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+    return batch
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
