@@ -286,6 +286,7 @@ def save_samples(step):
         x, y, ratio = X[i].squeeze(), Y[i].squeeze(), meta[i, 0].squeeze()
 
         # save .wavs
+        print(ratio)
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), restore_measure(x, ratio), rate)
         sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), restore_measure(y, ratio), rate)
 
