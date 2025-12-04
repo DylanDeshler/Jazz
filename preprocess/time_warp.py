@@ -233,7 +233,10 @@ def crunch():
     
     length = 0
     for path in tqdm(paths, desc='Calculating Total Length'):
-        length += len(np.load(path)['audio'])
+        try:
+            length += len(np.load(path)['audio'])
+        except:
+            print(path)
     
     audio_mmap = np.memmap(
         '/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_audio.npy', 
