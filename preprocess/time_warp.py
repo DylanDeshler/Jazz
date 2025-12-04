@@ -117,6 +117,7 @@ def test(n_samples):
         audio = data['audio']
         idx = np.random.randint(len(audio))
         
+        noised = restore_measure(audio[idx] + np.random.randn(*audio[idx].shape) * 0.05, data['ratio'][idx], TARGET_SR)
         restored = restore_measure(audio[idx], data['ratio'][idx], TARGET_SR)
         
         wav_path = path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean').replace('.npz', '.wav')
@@ -139,6 +140,7 @@ def test(n_samples):
         y = y[frame_start:frame_end]
         
         sf.write(f'test_wavs/{j}_real.wav', y, TARGET_SR)
+        sf.write(f'test_wavs/{j}_noised.wav', noised, TARGET_SR)
         sf.write(f'test_wavs/{j}_restored.wav', restored, TARGET_SR)
 
 def generate_audio_measures(paths):
