@@ -138,7 +138,7 @@ def get_batch(split='train'):
         idxs = torch.randint(train_n, (batch_size,))
     else:
         idxs = torch.randint(train_n, len(data), (batch_size,))
-    batch = torch.from_numpy(np.stack([data[idx:idx + n_samples] for idx in idxs], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+    batch = torch.from_numpy(np.stack([data[idx] for idx in idxs], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
     return batch
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
