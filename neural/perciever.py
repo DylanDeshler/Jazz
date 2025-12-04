@@ -298,6 +298,7 @@ class Perciever(nn.Module):
         
         x = self.latents(torch.arange(self.n_latents, device=x.device, dtype=torch.long).unsqueeze(0))
         x = x + self.pos_emb(torch.linspace(0, 1, steps=x.shape[1], device=x.device).unsqueeze(0))
+        x = x.repeat((B, 1, 1))
         print(data.shape, x.shape)
         
         for layer in self.layers:
