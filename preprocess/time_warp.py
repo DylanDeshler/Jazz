@@ -137,10 +137,9 @@ def test(n_samples):
         frame_end = int(t_end * sr)
         
         y = y[frame_start:frame_end]
-        print(restored.shape, y.shape)
         
-        sf.write(f'{j}_real.wav', y, TARGET_SR)
-        sf.write(f'{j}_restored.wav', restored, TARGET_SR)
+        sf.write(f'test_wavs/{j}_real.wav', y, TARGET_SR)
+        sf.write(f'test_wavs/{j}_restored.wav', restored, TARGET_SR)
 
 def generate_audio_measures(paths):
     """
