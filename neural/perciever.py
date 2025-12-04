@@ -229,12 +229,12 @@ class CrossAttentionBlock(nn.Module):
     def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
         super().__init__()
         self.norm1 = RMSNorm(hidden_size)
-        self.cross = CrossAttention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
+        self.attn = CrossAttention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
         self.norm2 = RMSNorm(hidden_size)
         self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
     
     def forward(self, x, context, freqs_cis=None):
-        x = x + self.cross(self.norm1(x), context)
+        x = x + self.attn(self.norm1(x), context)
         x = x + self.mlp(self.norm2(x))
         return x
 
@@ -287,6 +287,7 @@ class Perciever(nn.Module):
             layers.append(CrossAttentionBlock(hidden_dim, n_heads))
             for _ in range(n_interleave):
                 layers.append(SelfAttentionBlock(hidden_dim, n_heads))
+        
         self.layers = nn.ModuleList(layers)
         
         self.norm = RMSNorm(hidden_dim)
