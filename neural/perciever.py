@@ -274,44 +274,52 @@ class ContinuousPositionalEmbeddings(nn.Module):
         return torch.cat([torch.sin(args), torch.cos(args)], dim=-1)
 
 class Perciever(nn.Module):
-    def __init__(self, dim, n_heads, depth, n_interleave, n_latents):
+    def __init__(self, in_dim, hidden_dim, out_dim, n_heads, depth, n_interleave, n_latents):
         super().__init__()
         self.n_latents = n_latents
         
-        self.proj = nn.Linear(1, dim)
-        self.latents = nn.Embedding(n_latents, dim)
-        self.pos_emb = ContinuousPositionalEmbeddings(dim)
+        self.in_proj = nn.Linear(in_dim, hidden_dim)
+        self.latents = nn.Embedding(n_latents, hidden_dim)
+        self.pos_emb = ContinuousPositionalEmbeddings(hidden_dim)
         
         layers = []
         for d in range(depth):
-            layers.append(CrossAttentionBlock(dim, n_heads))
+            layers.append(CrossAttentionBlock(hidden_dim, n_heads))
             for _ in range(n_interleave):
-                layers.append(SelfAttentionBlock(dim, n_heads))
+                layers.append(SelfAttentionBlock(hidden_dim, n_heads))
         self.layers = nn.ModuleList(layers)
+        
+        self.norm = RMSNorm(hidden_dim)
+        self.out_proj = nn.Linear(hidden_dim, out_dim)
     
     def forward(self, x):
         B, C, L = x.shape
         
         x = x.transpose(1, 2)
         data = self.proj(x)
-        data = data + self.pos_emb(torch.linspace(0, 1, steps=data.shape[1], device=x.device).unsqueeze(0))
+        data = data + self.pos_emb(torch.linspace(0, 1, steps=L, device=x.device).unsqueeze(0))
         
         x = self.latents(torch.arange(self.n_latents, device=x.device, dtype=torch.long).unsqueeze(0))
         x = x + self.pos_emb(torch.linspace(0, 1, steps=x.shape[1], device=x.device).unsqueeze(0))
         x = x.repeat((B, 1, 1))
-        print(data.shape, x.shape)
         
         for layer in self.layers:
             x = layer(x, data)
         
+        x = self.norm(x)
+        x = self.out_proj(x)
         return x
 
 if __name__ == '__main__':
     from torchinfo import summary
     
-    model = Perciever(512, 8, 4, 4, 32)
+    model = Perciever(1, 512, 16, 8, 4, 4, 32).to('cuda:1')
     summary(model)
     
-    x = torch.randn((64, 1, 16000))
+    x = torch.randn((64, 1, 16000)).to('cuda:1')
+    y = model(x)
+    print(x.shape, y.shape)
+    
+    x = torch.randn((64, 1, 48000)).to('cuda:1')
     y = model(x)
     print(x.shape, y.shape)
