@@ -280,6 +280,7 @@ def save_samples(step):
     
     X = X.cpu().detach().float().numpy()
     Y = Y.cpu().detach().float().numpy()
+    meta = meta.cpu().detach().numpy()
 
     for i in range(min(10, len(X))):
         x, y, ratio = X[i].squeeze(), Y[i].squeeze(), meta[i, 0].squeeze()
