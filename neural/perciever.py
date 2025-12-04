@@ -320,6 +320,6 @@ if __name__ == '__main__':
     y = model(x)
     print(x.shape, y.shape)
     
-    x = torch.randn((64, 1, 48000)).to('cuda:1')
+    x = torch.randn((32, 1, 48000)).to('cuda:1')
     y = model(x)
     print(x.shape, y.shape)
