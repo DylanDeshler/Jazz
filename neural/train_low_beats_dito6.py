@@ -141,6 +141,18 @@ def get_batch(split='train'):
     batch = torch.from_numpy(np.stack([data[idx] for idx in idxs], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
     return batch
 
+def get_meta_batch(split='train'):
+    data = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_audio.npy', dtype=np.float16, mode='r', shape=(3693787, n_samples))
+    meta = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_meta.npy', dtype=np.float32, mode='r', shape=(3693787, 2))
+    train_n = int(len(data) * 0.98)
+    if split == 'train':
+        idxs = torch.randint(train_n, (batch_size,))
+    else:
+        idxs = torch.randint(train_n, len(data), (batch_size,))
+    batch = torch.from_numpy(np.stack([data[idx] for idx in idxs], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+    meta = torch.from_numpy(np.stack([meta[idx] for idx in idxs], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+    return batch
+
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
 best_val_loss = 1e9
@@ -234,16 +246,47 @@ def get_lr(it):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
 
-def save_samples(xs, ys, step):
+def restore_measure(audio, stretch_ratio, sr=16000):
+    """
+    Restores a time-warped measure to its original duration.
+    
+    Args:
+        audio (np.array): The fixed-length audio (from VAE or .npy file).
+                          Can be shape (1, 24576) or (24576,).
+        stretch_ratio (float): The ratio saved in your metadata 
+                               (Original Length / Target Length).
+        sr (int): Sampling rate (default 16000).
+        
+    Returns:
+        np.array: The restored audio array at original duration.
+    """
+    
+    if audio.dtype == np.float16:
+        audio = audio.astype(np.float32)
+    restore_rate = 1.0 / stretch_ratio
+    
+    y_restored = pyrb.time_stretch(audio, sr, restore_rate)
+    return y_restored
+
+def save_samples(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
+    
+    X, meta = get_meta_batch('test')
+    model.eval()
+    with ctx:
+        Y = raw_model.reconstruct(X, n_steps=100)
+    model.train()
+    
+    X = X.cpu().detach().float().numpy()
+    Y = Y.cpu().detach().float().numpy()
 
-    for i in range(min(10, xs.shape[0])):
-        x, y = xs[i].squeeze(), ys[i].squeeze()
+    for i in range(min(10, len(X))):
+        x, y = X[i].squeeze(), Y[i].squeeze()
 
         # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, rate)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, rate)
+        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), restore_measure(x, meta[0]), rate)
+        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), restore_measure(y, meta[0]), rate)
 
 # logging
 if wandb_log and master_process:
@@ -275,13 +318,7 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        # pyrubberband is slow without multiprocessing so cant do during training loop
-        # X = get_batch('test')
-        # model.eval()
-        # with ctx:
-        #     logits = raw_model.reconstruct(X, n_steps=100)
-        # model.train()
-        # save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
+        save_samples(iter_num)
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
