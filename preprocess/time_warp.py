@@ -1,5 +1,6 @@
 import os
 import glob
+import json
 import librosa
 import argparse
 import numpy as np
@@ -226,6 +227,58 @@ def main():
         list(tqdm(executor.map(generate_audio_measures, tasks), total=len(tasks)))
         
     print("Done!")
+
+def crunch():
+    paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.npz')
+    
+    length = 0
+    for path in tqdm(paths, desc='Calculating Total Length'):
+        shape = np.load(path)['audio']
+        print(shape)
+        length += len(shape)
+    
+    audio_mmap = np.memmap(
+        '/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_audio.npy', 
+        dtype=np.float16, 
+        mode='w+', 
+        shape=(length, TARGET_SAMPLES)
+    )
+    meta_mmap = np.memmap(
+        '/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_meta.npy', 
+        dtype=np.float32, 
+        mode='w+', 
+        shape=(length, 2)
+    )
+    
+    curr_index = 0
+    song_index = {
+        'sample_rate': 16000,
+        'samples': 24576,
+        'signature': 4,
+        'data': {}
+    }
+    for i, path in enumerate(tqdm(paths, desc='Writing Contiguous Data')):
+        data = np.load(path)
+        
+        audio = data['audio']
+        ratio = data['ratio']
+        bpm = data['bpm']
+        
+        audio_mmap[curr_index:curr_index+len(audio)] = audio
+        meta_mmap[curr_index:curr_index+len(audio), 0] = ratio
+        meta_mmap[curr_index:curr_index+len(audio), 1] = bpm
+        
+        name = os.path.basename(path)
+        name, root = os.path.splitext(name)
+        song_index['data'][name] = [curr_index, curr_index + len(audio)]
+        
+        curr_index += len(audio)
+    
+    audio_mmap.flush()
+    meta_mmap.flush()
+    
+    with open('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_songs.json', 'w') as f:
+        json.dump(song_index, f, indent=2)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Beat sampling and statistical analysis tool.")
