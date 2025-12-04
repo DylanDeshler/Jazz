@@ -257,7 +257,7 @@ def crunch():
         'signature': 4,
         'data': {}
     }
-    for i, path in enumerate(tqdm(paths, desc='Writing Contiguous Data')):
+    for path in tqdm(paths, desc='Writing Contiguous Data'):
         data = np.load(path)
         
         audio = data['audio']
@@ -291,4 +291,4 @@ if __name__ == "__main__":
     if args.test:
         test(args.n)
     else:
-        main()
+        crunch()
