@@ -151,7 +151,7 @@ def get_meta_batch(split='train'):
         idxs = torch.randint(train_n, len(data), (batch_size,))
     batch = torch.from_numpy(np.stack([data[idx] for idx in idxs], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
     meta = torch.from_numpy(np.stack([meta[idx] for idx in idxs], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-    return batch
+    return batch, meta
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
