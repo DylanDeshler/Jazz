@@ -117,7 +117,7 @@ def test(n_samples):
         audio = data['audio']
         idx = np.random.randint(len(audio))
         
-        noised = restore_measure(audio[idx] + np.random.randn(*audio[idx].shape) * 0.05, data['ratio'][idx], TARGET_SR)
+        noised = restore_measure(audio[idx] + np.random.randn(*audio[idx].shape) * 0.01, data['ratio'][idx], TARGET_SR)
         restored = restore_measure(audio[idx], data['ratio'][idx], TARGET_SR)
         
         wav_path = path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean').replace('.npz', '.wav')
