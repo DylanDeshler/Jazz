@@ -235,7 +235,8 @@ class CrossAttention(nn.Module):
             self,
             x: torch.Tensor,
             context: torch.Tensor,
-            attn_mask = None,
+            q_mask = None,
+            kv_mask = None,
     ) -> torch.Tensor:
         """
         x: [B, N, C] query sequence
@@ -252,12 +253,13 @@ class CrossAttention(nn.Module):
 
         if self.fused_attn:
             # PyTorch 2.1+ scaled_dot_product_attention supports cross-attention
-            print(q.shape, k.shape, attn_mask.shape)
             x = F.scaled_dot_product_attention(
                 q, k, v,
-                attn_mask=attn_mask,
+                attn_mask=kv_mask,
                 dropout_p=self.attn_drop.p if self.training else 0.,
             )
+            if q_mask is not None:
+                x = x * q_mask
         else:
             raise NotImplementedError()
             # fallback: manual attention
@@ -333,7 +335,7 @@ class ConvNeXtBlock(nn.Module):
         self.pwconv2 = nn.Conv1d(4 * dim, dim, kernel_size=1)
         self.gamma = nn.Parameter(layer_scale_init_value * torch.ones((dim)), requires_grad=True) if layer_scale_init_value > 0 else None
 
-    def forward(self, x, context=None, attn_mask=None):
+    def forward(self, x, context=None, q_mask=None):
         x = x.transpose(1, 2)
         input = x
         x = self.dwconv(x)
@@ -344,8 +346,8 @@ class ConvNeXtBlock(nn.Module):
         
         if self.gamma is not None:
             x = self.gamma.unsqueeze(0).unsqueeze(-1) * x
-        if attn_mask is not None:
-            x = x * attn_mask
+        if q_mask is not None:
+            x = x * q_mask
         
         x = input + x
         x = x.transpose(1, 2)
@@ -359,8 +361,8 @@ class CrossAttentionBlock(nn.Module):
         self.norm2 = RMSNorm(hidden_size)
         self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
     
-    def forward(self, x, context, freqs_cis=None, attn_mask=None):
-        x = x + self.attn(self.norm1(x), context, attn_mask=attn_mask)
+    def forward(self, x, context, freqs_cis=None, q_mask=None, kv_mask=None):
+        x = x + self.attn(self.norm1(x), context, q_mask=q_mask, kv_mask=kv_mask)
         x = x + self.mlp(self.norm2(x))
         return x
 
@@ -375,8 +377,8 @@ class SelfAttentionBlock(nn.Module):
         self.norm2 = RMSNorm(hidden_size)
         self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
     
-    def forward(self, x, context=None, freqs_cis=None, attn_mask=None):
-        x = x + self.attn(self.norm1(x), freqs_cis=freqs_cis, attn_mask=attn_mask)
+    def forward(self, x, context=None, freqs_cis=None, q_mask=None):
+        x = x + self.attn(self.norm1(x), freqs_cis=freqs_cis, attn_mask=q_mask)
         x = x + self.mlp(self.norm2(x))
         return x
 
@@ -434,7 +436,7 @@ class Perciever(nn.Module):
         x = x.repeat((B, 1, 1))
         
         for layer in self.layers:
-            x = layer(x, data, attn_mask=mask)
+            x = layer(x, data, q_mask=mask)
         
         x = self.norm(x)
         x = self.out_proj(x)
@@ -475,7 +477,7 @@ class Reciever(nn.Module):
         z = self.latent_proj(z)
         
         for layer in self.layers:
-            x = layer(x, z, attn_mask=mask)
+            x = layer(x, z, kv_mask=mask)
         
         x = self.norm(x)
         x = self.out_proj(x).transpose(1, 2)
