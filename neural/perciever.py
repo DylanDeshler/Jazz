@@ -172,8 +172,7 @@ class WindowAttention(nn.Module):
 
         if self.fused_attn:
             def score_mod(b, h, q_idx, kv_idx):
-                # window_match = (q_idx // self.window_size) == (kv_idx // self.window_size)
-                window_match = torch.abs(q_idx - kv_idx) <= self.window_size
+                window_match = torch.abs(q_idx - kv_idx) <= self.window_size // 2
                 
                 if attn_mask is not None:
                     is_valid = attn_mask[b, kv_idx]
@@ -398,8 +397,8 @@ class Reciever(nn.Module):
         layers = []
         for d in range(depth):
             layers.append(CrossAttentionBlock(hidden_dim, n_heads))
-            for _ in range(n_interleave):
-                layers.append(SelfAttentionBlock(hidden_dim, n_heads, window_size=window_size))
+            # for _ in range(n_interleave):
+            #     layers.append(SelfAttentionBlock(hidden_dim, n_heads, window_size=window_size))
         
         self.layers = nn.ModuleList(layers)
         
@@ -430,7 +429,7 @@ if __name__ == '__main__':
         encoder = Perciever(1, 512, 16, 8, 4, 4, 32).to('cuda:1')
         summary(encoder)
         
-        decoder = Reciever(1, 512, 16, 8, 4, 4, 32, 4).to('cuda:1')
+        decoder = Reciever(1, 512, 16, 8, 12, 4, 32, 4).to('cuda:1')
         summary(decoder)
         
         x = torch.randn((64, 1, 16000)).to('cuda:1')
