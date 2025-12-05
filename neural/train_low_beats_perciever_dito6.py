@@ -132,9 +132,9 @@ for i, (k, v) in enumerate(audio_dict.items()):
 
 def get_batch(split='train'):
     if split == 'train':
-        start_stops = np.random.randint(len(train_list), size=batch_size)
+        start_stops = [train_list[idx] for idx in np.random.randint(len(train_list), size=batch_size)]
     else:
-        start_stops = np.random.randint(len(test_list), size=batch_size)
+        start_stops = [test_list[idx] for idx in np.random.randint(len(test_list), size=batch_size)]
     
     data = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_audio.npy', dtype=np.float16, mode='r', shape=(79188421662,))
     audio = torch.zeros(batch_size, max_samples)
