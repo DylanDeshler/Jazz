@@ -142,7 +142,7 @@ def get_batch(split='train'):
         mask[i, :stop - start] = 1
         bpms[i] = bpm
     
-    audio = audio.unsqueeze(-1).pin_memory().to(device, non_blocking=True)
+    audio = audio.unsqueeze(1).pin_memory().to(device, non_blocking=True)
     mask = mask.bool().pin_memory().to(device, non_blocking=True)
     # bpms = bpms.pin_memory().to(device, non_blocking=True)
     
@@ -254,7 +254,7 @@ def save_samples(step):
     X = X.cpu().detach().float().numpy()
     Y = Y.cpu().detach().float().numpy()
     
-    for i in range(min(10, xs.shape[0])):
+    for i in range(min(10, len(X))):
         x, y = X[i].squeeze(), X[i].squeeze()
 
         # save .wavs
