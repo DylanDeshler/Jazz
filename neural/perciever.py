@@ -375,7 +375,7 @@ class SelfAttentionBlock(nn.Module):
         self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
     
     def forward(self, x, context=None, freqs_cis=None, attn_mask=None):
-        x = x + self.attn(self.norm1(x), freqs_cis=freqs_cis, attn_mask=attn_mask)
+        x = x + self.attn(self.norm1(x), freqs_cis=freqs_cis)
         x = x + self.mlp(self.norm2(x))
         return x
 
@@ -452,12 +452,12 @@ class Reciever(nn.Module):
         layers = []
         for d in range(depth):
             layers.append(CrossAttentionBlock(hidden_dim, n_heads))
-            if window_size:
-                for _ in range(n_interleave):
-                    layers.append(SelfAttentionBlock(hidden_dim, n_heads, window_size=window_size))
-            else:
-                for _ in range(n_interleave):
-                    layers.append(ConvNeXtBlock(hidden_dim, kernel_size))
+            # if window_size:
+            #     for _ in range(n_interleave):
+            #         layers.append(SelfAttentionBlock(hidden_dim, n_heads, window_size=window_size))
+            # else:
+            for _ in range(n_interleave):
+                layers.append(ConvNeXtBlock(hidden_dim, kernel_size))
         
         self.layers = nn.ModuleList(layers)
         
