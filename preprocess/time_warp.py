@@ -252,8 +252,9 @@ def measures():
 
     assert len(audio_paths) == len(beat_paths)
     
+    length = 0
     audio_dict = {}
-    for audio_path, beat_path in zip(audio_paths, beat_paths):
+    for audio_path, beat_path in tqdm(zip(audio_paths, beat_paths)):
         beat_data = parse_beat_file(beat_path)
         
         downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
@@ -271,6 +272,7 @@ def measures():
             return
 
         start_stops, stretch_ratios, instant_bpms = [], [], []
+        lengths = []
         for i in range(len(downbeat_indices) - 1):
             start_idx = downbeat_indices[i]
             end_idx = downbeat_indices[i+1]
@@ -289,12 +291,14 @@ def measures():
             start_stops.append((frame_start, frame_end))
             stretch_ratios.append(stretch_ratio)
             instant_bpms.append(instant_bpm)
+            lengths.append(current_samples)
         
         if np.mean(instant_bpms) < 40 or np.mean(instant_bpms) > 330:
             continue
         
         audio_dict[audio_path] = start_stops
-    
+        length += np.sum(lengths)
+    print('Total length: ', length)
     with open('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_songs.json', 'w') as f:
         json.dump(audio_dict, f)
 
