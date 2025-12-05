@@ -138,7 +138,7 @@ def get_batch(split='train'):
         duration = num_samples / rate
         bpm = (4 / duration) * 60
         
-        audio[i, :stop - start] = data[start:stop]
+        audio[i, :stop - start] = data[start:stop].copy()
         mask[i, :stop - start] = 1
         bpms[i] = bpm
     
