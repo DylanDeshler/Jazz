@@ -480,13 +480,13 @@ class Reciever(nn.Module):
             #     for _ in range(n_interleave):
             #         layers.append(SelfAttentionBlock(hidden_dim, n_heads, window_size=window_size))
             # else:
-        for _ in range(n_interleave):
-            layers.append(ConvNeXtBlock(hidden_dim, kernel_size))
+            for _ in range(n_interleave):
+                layers.append(ConvNeXtBlock(hidden_dim, kernel_size))
         
         self.layers = nn.ModuleList(layers)
         
         self.norm = RMSNorm(hidden_dim)
-        self.out_proj = nn.Linear(hidden_dim, in_dim)
+        self.out_proj = nn.Conv1d(hidden_dim, in_dim, kernel_size=7, padding=kernel_size//2)
     
     def forward(self, x, t, z, mask):
         B, C, L = x.shape
@@ -504,7 +504,7 @@ class Reciever(nn.Module):
             x = layer(x, z, q_mask=mask)
         
         x = self.norm(x)
-        x = self.out_proj(x).transpose(1, 2)
+        x = self.out_proj(x.transpose(1, 2))
         return x
 
 if __name__ == '__main__':
