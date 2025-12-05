@@ -124,7 +124,7 @@ with open('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_meas
 
 train_list = []
 test_list = []
-for i, (k, v) in tqdm(audio_dict.items(), desc='Decomposing Metadata'):
+for i, (k, v) in enumerate(tqdm(audio_dict.items(), desc='Decomposing Metadata')):
     if i < len(audio_dict) * 0.98:
         train_list.append(v)
     else:
