@@ -332,7 +332,7 @@ class ConvNeXtBlock(nn.Module):
         self.pwconv2 = nn.Conv1d(4 * dim, dim, kernel_size=1)
         self.gamma = nn.Parameter(layer_scale_init_value * torch.ones((dim)), requires_grad=True) if layer_scale_init_value > 0 else None
 
-    def forward(self, x, context=None):
+    def forward(self, x, context=None, attn_mask=None):
         x = x.transpose(1, 2)
         input = x
         x = self.dwconv(x)
@@ -340,9 +340,12 @@ class ConvNeXtBlock(nn.Module):
         x = self.pwconv1(x)
         x = self.act(x)
         x = self.pwconv2(x)
+        
         if self.gamma is not None:
             x = self.gamma.unsqueeze(0).unsqueeze(-1) * x
-
+        if attn_mask is not None:
+            x = x * attn_mask
+        
         x = input + x
         x = x.transpose(1, 2)
         return x
@@ -372,7 +375,7 @@ class SelfAttentionBlock(nn.Module):
         self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
     
     def forward(self, x, context=None, freqs_cis=None, attn_mask=None):
-        x = x + self.attn(self.norm1(x), freqs_cis=freqs_cis)
+        x = x + self.attn(self.norm1(x), freqs_cis=freqs_cis, attn_mask=attn_mask)
         x = x + self.mlp(self.norm2(x))
         return x
 
@@ -418,7 +421,7 @@ class Perciever(nn.Module):
         self.norm = RMSNorm(hidden_dim)
         self.out_proj = nn.Linear(hidden_dim, out_dim)
     
-    def forward(self, x):
+    def forward(self, x, mask):
         B, C, L = x.shape
         
         x = x.transpose(1, 2)
@@ -430,7 +433,7 @@ class Perciever(nn.Module):
         x = x.repeat((B, 1, 1))
         
         for layer in self.layers:
-            x = layer(x, data)
+            x = layer(x, data, mask)
         
         x = self.norm(x)
         x = self.out_proj(x)
@@ -461,7 +464,7 @@ class Reciever(nn.Module):
         self.norm = RMSNorm(hidden_dim)
         self.out_proj = nn.Linear(hidden_dim, in_dim)
     
-    def forward(self, x, z):
+    def forward(self, x, z, mask):
         B, C, L = x.shape
         
         x = x.transpose(1, 2)
@@ -469,10 +472,9 @@ class Reciever(nn.Module):
         x = x + self.pos_emb(torch.linspace(0, 1, steps=L, device=x.device).unsqueeze(0))
         
         z = self.latent_proj(z)
-        z = z + self.pos_emb(torch.linspace(0, 1, steps=z.shape[1], device=z.device).unsqueeze(0))
         
         for layer in self.layers:
-            x = layer(x, z)
+            x = layer(x, z, mask)
         
         x = self.norm(x)
         x = self.out_proj(x).transpose(1, 2)
@@ -489,13 +491,19 @@ if __name__ == '__main__':
         summary(decoder)
         
         x = torch.randn((64, 1, 16000)).to('cuda:1')
-        y = encoder(x)
+        mask = torch.zeros((64, 16000))
+        mask[:14000] = 1
+        mask = mask.bool().to('cuda:1')
+        y = encoder(x, mask)
         print(x.shape, y.shape)
-        z = decoder(x, y)
+        z = decoder(x, y, mask)
         print(z.shape)
         
         x = torch.randn((32, 1, 48000)).to('cuda:1')
-        y = encoder(x)
+        mask = torch.zeros((32, 48000))
+        mask[:, :41000] = 1
+        mask = mask.bool().to('cuda:1')
+        y = encoder(x, mask)
         print(x.shape, y.shape)
-        z = decoder(x, y)
+        z = decoder(x, y, mask)
         print(z.shape)
