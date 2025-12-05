@@ -230,7 +230,7 @@ def time_warp_measures():
         
     print("Done!")
 
-def measures():
+def measures(length=None, max_samples=None):
     print("Gathering files...")
     audio_paths = sorted(glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav'))
     beat_paths = sorted(glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats/*.beats'))
@@ -253,8 +253,11 @@ def measures():
 
     assert len(audio_paths) == len(beat_paths)
     
-    arr = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_audio.npy', dtype=np.float16, mode='w+', shape=(86630226506,))
+    if length is not None:
+        arr = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_audio.npy', dtype=np.float16, mode='w+', shape=(length,))
+    
     curr_index = 0
+    total_length = 0
     audio_dict = defaultdict(list)
     for audio_path, beat_path in tqdm(zip(audio_paths, beat_paths), total=len(audio_paths)):
         beat_data = parse_beat_file(beat_path)
@@ -274,6 +277,7 @@ def measures():
             continue
 
         start_stops, stretch_ratios, instant_bpms = [], [], []
+        lengths = []
         for i in range(len(downbeat_indices) - 1):
             start_idx = downbeat_indices[i]
             end_idx = downbeat_indices[i+1]
@@ -285,6 +289,10 @@ def measures():
             frame_end = int(t_end * sr)
             
             current_samples = frame_end - frame_start
+            
+            if max_samples is not None and current_samples > max_samples:
+                continue
+            
             stretch_ratio = current_samples / TARGET_SAMPLES
             duration_sec = current_samples / TARGET_SR
             instant_bpm = (TARGET_SIG / duration_sec) * 60
@@ -292,20 +300,25 @@ def measures():
             start_stops.append((frame_start, frame_end))
             stretch_ratios.append(stretch_ratio)
             instant_bpms.append(instant_bpm)
+            lengths.append(current_samples)
         
         if np.mean(instant_bpms) < 40 or np.mean(instant_bpms) > 330:
             continue
         
-        for start, stop in start_stops:
-            current_samples = stop - start
-            arr[curr_index:curr_index+current_samples] = y[start:stop].astype(np.float16)
-            curr_index += current_samples
-        
-            audio_dict[audio_path].append((curr_index, curr_index + current_samples))
+        total_length += np.sum(lengths)
+        if length is not None:
+            for start, stop in start_stops:
+                current_samples = stop - start
+                arr[curr_index:curr_index+current_samples] = y[start:stop].astype(np.float16)
+                curr_index += current_samples
+            
+                audio_dict[audio_path].append((curr_index, curr_index + current_samples))
     
-    arr.flush()
-    with open('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_songs.json', 'w') as f:
-        json.dump(audio_dict, f)
+    print(total_length)
+    if length is not None:
+        arr.flush()
+        with open('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_songs.json', 'w') as f:
+            json.dump(audio_dict, f)
 
 def crunch(length=None):
     paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.npz')
@@ -375,6 +388,7 @@ if __name__ == "__main__":
     parser.add_argument("--length", type=int, default=None, help="The number of samples to convert to memmap array")
     parser.add_argument("--time-warp", action='store_true', default=False, help='Generate time warped npz 4/4 measures')
     parser.add_argument("--measure", action='store_true', default=False, help="Generate 4/4 measure")
+    parser.add_argument("--max-samples", type=int, default=None, help="The maximum number of sample to allow for a measure")
     
     args = parser.parse_args()
     
@@ -385,4 +399,4 @@ if __name__ == "__main__":
     elif args.time_warp:
         time_warp_measures()
     elif args.measure:
-        measures()
+        measures(args.length, args.max_samples)
