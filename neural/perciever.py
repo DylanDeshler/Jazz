@@ -258,7 +258,7 @@ class CrossAttention(nn.Module):
                 attn_mask=kv_mask,
                 dropout_p=self.attn_drop.p if self.training else 0.,
             )
-            if q_mask is not None:
+            if kv_mask is not None:
                 x = x * q_mask
         else:
             raise NotImplementedError()
@@ -377,8 +377,8 @@ class SelfAttentionBlock(nn.Module):
         self.norm2 = RMSNorm(hidden_size)
         self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
     
-    def forward(self, x, context=None, freqs_cis=None, q_mask=None):
-        x = x + self.attn(self.norm1(x), freqs_cis=freqs_cis, attn_mask=q_mask)
+    def forward(self, x, context=None, freqs_cis=None, kv_mask=None):
+        x = x + self.attn(self.norm1(x), freqs_cis=freqs_cis, attn_mask=kv_mask)
         x = x + self.mlp(self.norm2(x))
         return x
 
@@ -436,7 +436,7 @@ class Perciever(nn.Module):
         x = x.repeat((B, 1, 1))
         
         for layer in self.layers:
-            x = layer(x, data, q_mask=mask)
+            x = layer(x, data, kv_mask=mask)
         
         x = self.norm(x)
         x = self.out_proj(x)
@@ -477,7 +477,7 @@ class Reciever(nn.Module):
         z = self.latent_proj(z)
         
         for layer in self.layers:
-            x = layer(x, z, kv_mask=mask)
+            x = layer(x, z, q_mask=mask)
         
         x = self.norm(x)
         x = self.out_proj(x).transpose(1, 2)
