@@ -296,6 +296,55 @@ class SwiGLUMlp(nn.Module):
         hidden = F.silu(x1) * x2
         return self.w3(hidden)
 
+class ConvBlock(nn.Module):
+    def __init__(self, dim, kernel_size):
+        super().__init__()
+        self.norm = nn.GroupNorm(1, dim)
+        self.conv1 = nn.Conv1d(dim, dim, kernel_size=kernel_size, padding=kernel_size//2)
+        self.act = nn.GELU()
+        self.conv2 = nn.Conv1d(dim, dim, kernel_size=kernel_size, padding=kernel_size//2)
+    
+    def forward(self, x):
+        res = x
+        x = self.norm(x)
+        x = self.conv1(x)
+        x = self.act(x)
+        x = self.conv2(x)
+        x = res + x
+        return x
+
+class ConvNeXtBlock(nn.Module):
+    r""" ConvNeXt Block. There are two equivalent implementations:
+    (1) DwConv -> LayerNorm (channels_first) -> 1x1 Conv -> GELU -> 1x1 Conv; all in (N, C, H, W)
+    (2) DwConv -> Permute to (N, H, W, C); LayerNorm (channels_last) -> Linear -> GELU -> Linear; Permute back
+    We use (2) as we find it slightly faster in PyTorch
+    
+    Args:
+        dim (int): Number of input channels.
+        layer_scale_init_value (float): Init value for Layer Scale. Default: 1e-6.
+    """
+    def __init__(self, dim, layer_scale_init_value=1e-6):
+        super().__init__()
+        self.dwconv = nn.Conv1d(dim, dim, kernel_size=7, padding=3, groups=dim)
+        self.norm = nn.GroupNorm(1, dim)
+        self.pwconv1 = nn.Conv1d(dim, 4 * dim, kernel_size=1)
+        self.act = nn.GELU()
+        self.pwconv2 = nn.Conv1d(4 * dim, dim, kernel_size=1)
+        self.gamma = nn.Parameter(layer_scale_init_value * torch.ones((dim)), requires_grad=True) if layer_scale_init_value > 0 else None
+
+    def forward(self, x):
+        input = x
+        x = self.dwconv(x)
+        x = self.norm(x)
+        x = self.pwconv1(x)
+        x = self.act(x)
+        x = self.pwconv2(x)
+        if self.gamma is not None:
+            x = self.gamma * x
+
+        x = input + x
+        return x
+
 class CrossAttentionBlock(nn.Module):
     def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
         super().__init__()
@@ -386,8 +435,9 @@ class Perciever(nn.Module):
         return x
 
 class Reciever(nn.Module):
-    def __init__(self, in_dim, hidden_dim, latent_dim, n_heads, depth, n_interleave, n_latents, window_size):
+    def __init__(self, in_dim, hidden_dim, latent_dim, n_heads, depth, n_interleave, n_latents, window_size=None, kernel_size=None):
         super().__init__()
+        assert (window_size and kernel_size is None) or (window_size is None and kernel_size)
         self.n_latents = n_latents
         
         self.in_proj = nn.Linear(in_dim, hidden_dim)
@@ -399,6 +449,8 @@ class Reciever(nn.Module):
             layers.append(CrossAttentionBlock(hidden_dim, n_heads))
             # for _ in range(n_interleave):
             #     layers.append(SelfAttentionBlock(hidden_dim, n_heads, window_size=window_size))
+            for _ in range(n_interleave):
+                layers.append(ConvNeXtBlock(hidden_dim))
         
         self.layers = nn.ModuleList(layers)
         
@@ -419,7 +471,7 @@ class Reciever(nn.Module):
             x = layer(x, z)
         
         x = self.norm(x)
-        x = self.out_proj(x)
+        x = self.out_proj(x).transpose(1, 2)
         return x
 
 if __name__ == '__main__':
@@ -429,7 +481,7 @@ if __name__ == '__main__':
         encoder = Perciever(1, 512, 16, 8, 4, 4, 32).to('cuda:1')
         summary(encoder)
         
-        decoder = Reciever(1, 512, 16, 8, 12, 4, 32, 4).to('cuda:1')
+        decoder = Reciever(1, 512, 16, 8, 12, 4, 32, 7).to('cuda:1')
         summary(decoder)
         
         x = torch.randn((64, 1, 16000)).to('cuda:1')
