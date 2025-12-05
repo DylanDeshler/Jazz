@@ -387,11 +387,12 @@ class Perciever(nn.Module):
         return x
 
 class Reciever(nn.Module):
-    def __init__(self, in_dim, hidden_dim, out_dim, n_heads, depth, n_interleave, n_latents, window_size):
+    def __init__(self, in_dim, hidden_dim, latent_dim, n_heads, depth, n_interleave, n_latents, window_size):
         super().__init__()
         self.n_latents = n_latents
         
         self.in_proj = nn.Linear(in_dim, hidden_dim)
+        self.latent_proj = nn.Linear(latent_dim, hidden_dim)
         self.pos_emb = ContinuousPositionalEmbeddings(hidden_dim)
         
         layers = []
@@ -403,7 +404,7 @@ class Reciever(nn.Module):
         self.layers = nn.ModuleList(layers)
         
         self.norm = RMSNorm(hidden_dim)
-        self.out_proj = nn.Linear(hidden_dim, out_dim)
+        self.out_proj = nn.Linear(hidden_dim, in_dim)
     
     def forward(self, x, z):
         B, C, L = x.shape
@@ -413,6 +414,7 @@ class Reciever(nn.Module):
         x = self.in_proj(x)
         x = x + self.pos_emb(torch.linspace(0, 1, steps=L, device=x.device).unsqueeze(0))
         
+        z = self.latent_proj(z)
         z = z + self.pos_emb(torch.linspace(0, 1, steps=z.shape[1], device=z.device).unsqueeze(0))
         
         for layer in self.layers:
@@ -429,7 +431,7 @@ if __name__ == '__main__':
         encoder = Perciever(1, 512, 16, 8, 4, 4, 32).to('cuda:1')
         summary(encoder)
         
-        decoder = Reciever(16, 512, 1, 8, 4, 4, 32, 256).to('cuda:1')
+        decoder = Reciever(1, 512, 16, 8, 4, 4, 32, 256).to('cuda:1')
         summary(decoder)
         
         x = torch.randn((64, 1, 16000)).to('cuda:1')
