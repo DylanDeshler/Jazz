@@ -304,10 +304,13 @@ class CrossAttentionBlock(nn.Module):
         return x
 
 class SelfAttentionBlock(nn.Module):
-    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
+    def __init__(self, hidden_size, num_heads, window_size=None, mlp_ratio=4.0, **block_kwargs):
         super().__init__()
         self.norm1 = RMSNorm(hidden_size)
-        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
+        if window_size is None:
+            self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
+        else:
+            self.attn = WindowAttention(hidden_size, window_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
         self.norm2 = RMSNorm(hidden_size)
         self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
     
@@ -399,7 +402,7 @@ class Reciever(nn.Module):
         for d in range(depth):
             layers.append(CrossAttentionBlock(hidden_dim, n_heads))
             for _ in range(n_interleave):
-                layers.append(WindowAttention(hidden_dim, window_size, n_heads))
+                layers.append(SelfAttentionBlock(hidden_dim, n_heads, window_size=window_size))
         
         self.layers = nn.ModuleList(layers)
         
@@ -409,7 +412,6 @@ class Reciever(nn.Module):
     def forward(self, x, z):
         B, C, L = x.shape
         
-        print(x.shape, z.shape)
         x = x.transpose(1, 2)
         x = self.in_proj(x)
         x = x + self.pos_emb(torch.linspace(0, 1, steps=L, device=x.device).unsqueeze(0))
