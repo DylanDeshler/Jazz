@@ -457,7 +457,7 @@ class Perciever(nn.Module):
         
         for layer in self.layers:
             x = layer(x, data, kv_mask=mask)
-        
+        print(x.shape)
         x = self.norm(x)
         x = self.out_proj(x)
         return x
