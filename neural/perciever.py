@@ -444,7 +444,7 @@ class Perciever(nn.Module):
         self.norm = RMSNorm(hidden_dim)
         self.out_proj = nn.Linear(hidden_dim, latent_dim)
     
-    def forward(self, x, mask, t):
+    def forward(self, x, mask):
         B, C, L = x.shape
         
         x = x.transpose(1, 2)
