@@ -434,7 +434,7 @@ class Perciever(nn.Module):
         x = x.repeat((B, 1, 1))
         
         for layer in self.layers:
-            x = layer(x, data, mask)
+            x = layer(x, data, attn_mask=mask)
         
         x = self.norm(x)
         x = self.out_proj(x)
@@ -475,7 +475,7 @@ class Reciever(nn.Module):
         z = self.latent_proj(z)
         
         for layer in self.layers:
-            x = layer(x, z, mask)
+            x = layer(x, z, attn_mask=mask)
         
         x = self.norm(x)
         x = self.out_proj(x).transpose(1, 2)
