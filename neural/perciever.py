@@ -270,12 +270,10 @@ class CrossAttention(nn.Module):
             x = attn @ v  # [B, H, N, D]
 
         x = x.transpose(1, 2).reshape(B, N, C)
-        
-        if q_mask is not None:
-            print(x.shape, q_mask.unsqueeze(-1).repeat(1, 1, C).shape)
-            x = x * q_mask.unsqueeze(-1).repeat(1, 1, C)
         x = self.proj(x)
         x = self.proj_drop(x)
+        if q_mask is not None:
+            x = x * q_mask.unsqueeze(-1).repeat(1, 1, C)
         return x
 
 class SwiGLUMlp(nn.Module):
@@ -349,7 +347,7 @@ class ConvNeXtBlock(nn.Module):
         if self.gamma is not None:
             x = self.gamma.unsqueeze(0).unsqueeze(-1) * x
         if q_mask is not None:
-            x = x * q_mask
+            x = q_mask * x
         
         x = input + x
         x = x.transpose(1, 2)
