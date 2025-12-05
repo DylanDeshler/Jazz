@@ -171,14 +171,23 @@ class WindowAttention(nn.Module):
             k = apply_rotary_emb(k.transpose(1, 2), freqs_cis).transpose(1, 2)
 
         if self.fused_attn:
-            print(q.shape, k.shape)
+            
+            print(q.shape, k.shape)#B, H, L, C
+            
+            def score_mod(b, h, q_idx, kv_idx):
+                window_match = (q_idx // self.window_size) == (kv_idx // self.window_size)
+                
+                if attn_mask is not None:
+                    is_valid = attn_mask[b, kv_idx]
+                    return window_match & is_valid
+                
+                return window_match
+            
             block_mask = create_block_mask(
-                generate_window_mask_mod(self.window_size), 
-                B=None, H=None, Q_LEN=q.shape[0], KV_LEN=k.shape[0], 
+                score_mod(self.window_size), 
+                B=None, H=None, Q_LEN=q.shape[2], KV_LEN=k.shape[2], 
                 device=q.device
             )
-            print(block_mask.shape, block_mask.dtype)
-            block_mask = block_mask & attn_mask
             
             x = flex_attention(q, k, v, block_mask=block_mask)
         else:
@@ -298,7 +307,7 @@ class CrossAttentionBlock(nn.Module):
         self.norm2 = RMSNorm(hidden_size)
         self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
     
-    def forward(self, x, context, freqs_cis=None):
+    def forward(self, x, context, freqs_cis=None, attn_mask=None):
         x = x + self.attn(self.norm1(x), context)
         x = x + self.mlp(self.norm2(x))
         return x
@@ -314,20 +323,10 @@ class SelfAttentionBlock(nn.Module):
         self.norm2 = RMSNorm(hidden_size)
         self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
     
-    def forward(self, x, context=None, freqs_cis=None):
+    def forward(self, x, context=None, freqs_cis=None, attn_mask=None):
         x = x + self.attn(self.norm1(x), freqs_cis=freqs_cis)
         x = x + self.mlp(self.norm2(x))
         return x
-
-def generate_window_mask_mod(window_size):
-    """
-    Returns a score_mod function for flex_attention that enforces
-    local window constraints.
-    """
-    def window_mask(b, h, q_idx, kv_idx):
-        # Only attend if Query and Key are in the same window block
-        return (q_idx // window_size) == (kv_idx // window_size)
-    return window_mask
 
 class ContinuousPositionalEmbeddings(nn.Module):
     def __init__(self, dim, max_freq=10):
