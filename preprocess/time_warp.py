@@ -260,16 +260,16 @@ def measures():
         downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
         
         if len(downbeat_indices) < 10:
-            return
+            continue
         
         y, sr = librosa.load(audio_path, sr=None)
         assert sr == TARGET_SR
         
         if len(y) < 1000:
-            return
+            continue
         
         if np.max(np.abs(y)) < 0.001:
-            return
+            continue
 
         start_stops, stretch_ratios, instant_bpms = [], [], []
         lengths = []
