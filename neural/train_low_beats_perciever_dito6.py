@@ -137,8 +137,6 @@ def get_batch(split='train'):
         start_stops = [test_list[idx] for idx in np.random.randint(len(test_list), size=batch_size)]
     
     data = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_audio.npy', dtype=np.float16, mode='r', shape=(79188421662,))
-    audio = torch.from_numpy(np.stack([data[idx:idx+max_samples] for idx in np.arange(batch_size)], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-    return audio, torch.zeros(batch_size, max_samples).bool().pin_memory().to(device, non_blocking=True)
     audio = torch.zeros(batch_size, max_samples)
     mask = torch.zeros(batch_size, max_samples)
     bpms = torch.zeros(batch_size, 1)
