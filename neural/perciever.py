@@ -480,8 +480,8 @@ class Reciever(nn.Module):
             #     for _ in range(n_interleave):
             #         layers.append(SelfAttentionBlock(hidden_dim, n_heads, window_size=window_size))
             # else:
-            # for _ in range(n_interleave):
-            #     layers.append(ConvNeXtBlock(hidden_dim, kernel_size))
+            for _ in range(n_interleave):
+                layers.append(ConvNeXtBlock(hidden_dim, kernel_size))
         
         self.layers = nn.ModuleList(layers)
         
