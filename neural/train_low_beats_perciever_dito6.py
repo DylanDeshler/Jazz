@@ -59,7 +59,7 @@ gradient_accumulation_steps = 4 # used to simulate larger batch sizes
 batch_size = 4 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
-max_samples = 48000
+max_samples = 32000
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
