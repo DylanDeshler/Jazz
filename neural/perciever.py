@@ -408,6 +408,7 @@ class Reciever(nn.Module):
     def forward(self, x, z):
         B, L, C = x.shape
         
+        print(x.shape, z.shape)
         x = self.in_proj(x)
         x = x + self.pos_emb(torch.linspace(0, 1, steps=L, device=x.device).unsqueeze(0))
         
