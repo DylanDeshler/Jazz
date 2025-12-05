@@ -332,7 +332,7 @@ class ConvNeXtBlock(nn.Module):
         self.pwconv2 = nn.Conv1d(4 * dim, dim, kernel_size=1)
         self.gamma = nn.Parameter(layer_scale_init_value * torch.ones((dim)), requires_grad=True) if layer_scale_init_value > 0 else None
 
-    def forward(self, x):
+    def forward(self, x, context=None):
         input = x
         x = self.dwconv(x)
         x = self.norm(x)
@@ -481,7 +481,7 @@ if __name__ == '__main__':
         encoder = Perciever(1, 512, 16, 8, 4, 4, 32).to('cuda:1')
         summary(encoder)
         
-        decoder = Reciever(1, 512, 16, 8, 12, 4, 32, 7).to('cuda:1')
+        decoder = Reciever(1, 512, 16, 8, 8, 4, 32, 7).to('cuda:1')
         summary(decoder)
         
         x = torch.randn((64, 1, 16000)).to('cuda:1')
