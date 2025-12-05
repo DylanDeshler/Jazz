@@ -341,7 +341,7 @@ class ConvNeXtBlock(nn.Module):
         x = self.act(x)
         x = self.pwconv2(x)
         if self.gamma is not None:
-            x = self.gamma * x
+            x = self.gamma.unsqueeze(0).unsqueeze(-1) * x
 
         x = input + x
         x = x.transpose(1, 2)
