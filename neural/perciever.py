@@ -175,7 +175,8 @@ class WindowAttention(nn.Module):
             print(q.shape, k.shape)#B, H, L, C
             
             def score_mod(b, h, q_idx, kv_idx):
-                window_match = (q_idx // self.window_size) == (kv_idx // self.window_size)
+                # window_match = (q_idx // self.window_size) == (kv_idx // self.window_size)
+                window_match = torch.abs(q_idx - kv_idx) <= self.window_size
                 
                 if attn_mask is not None:
                     is_valid = attn_mask[b, kv_idx]
