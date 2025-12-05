@@ -113,7 +113,7 @@ class Attention(nn.Module):
         if self.fused_attn:
             x = F.scaled_dot_product_attention(
                 q, k, v,
-                attn_mask=attn_mask,
+                attn_mask=None,
                 is_causal=is_causal,
                 dropout_p=self.attn_drop.p if self.training else 0.,
             )
