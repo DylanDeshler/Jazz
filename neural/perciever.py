@@ -171,9 +171,6 @@ class WindowAttention(nn.Module):
             k = apply_rotary_emb(k.transpose(1, 2), freqs_cis).transpose(1, 2)
 
         if self.fused_attn:
-            
-            print(q.shape, k.shape)#B, H, L, C
-            
             def score_mod(b, h, q_idx, kv_idx):
                 # window_match = (q_idx // self.window_size) == (kv_idx // self.window_size)
                 window_match = torch.abs(q_idx - kv_idx) <= self.window_size
@@ -433,7 +430,7 @@ if __name__ == '__main__':
         encoder = Perciever(1, 512, 16, 8, 4, 4, 32).to('cuda:1')
         summary(encoder)
         
-        decoder = Reciever(1, 512, 16, 8, 4, 4, 32, 64).to('cuda:1')
+        decoder = Reciever(1, 512, 16, 8, 4, 4, 32, 4).to('cuda:1')
         summary(decoder)
         
         x = torch.randn((64, 1, 16000)).to('cuda:1')
