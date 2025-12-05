@@ -113,7 +113,7 @@ class Attention(nn.Module):
         if self.fused_attn:
             x = F.scaled_dot_product_attention(
                 q, k, v,
-                attn_mask=attn_mask.unsqueeze(1).unsqueeze(1),
+                attn_mask=attn_mask.unsqueeze(1).unsqueeze(1) if attn_mask is not None else None,
                 is_causal=is_causal,
                 dropout_p=self.attn_drop.p if self.training else 0.,
             )
@@ -255,7 +255,7 @@ class CrossAttention(nn.Module):
             # PyTorch 2.1+ scaled_dot_product_attention supports cross-attention
             x = F.scaled_dot_product_attention(
                 q, k, v,
-                attn_mask=kv_mask.unsqueeze(1).unsqueeze(1),
+                attn_mask=kv_mask.unsqueeze(1).unsqueeze(1) if kv_mask is not None else None,
                 dropout_p=self.attn_drop.p if self.training else 0.,
             )
             if q_mask is not None:
