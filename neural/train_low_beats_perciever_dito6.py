@@ -119,31 +119,25 @@ ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torc
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 # poor man's data loader
-paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.npz')
 with open('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_songs.json', 'r') as f:
     audio_dict = json.load(f)
 
 def get_batch(split='train'):
     if split == 'train':
-        idxs = torch.randint(int(len(paths) * 0.98), (batch_size,))
+        start_stops = np.random.choice(list(audio_dict.keys())[:int(len(audio_dict) * 0.98)], batch_size)
     else:
-        idxs = torch.randint(int(len(paths) * 0.98), len(paths), (batch_size,))
+        start_stops = np.random.choice(list(audio_dict.keys())[int(len(audio_dict) * 0.98):], batch_size)
     
+    data = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_audio.npy', dtype=np.float16, mode='r', shape=(79188421662,))
     audio = torch.zeros(batch_size, max_samples, 1)
     mask = torch.zeros(batch_size, max_samples)
     bpms = torch.zeros(batch_size, 1)
-    for i, idx in enumerate(idxs):
-        x, sr = librosa.load(paths[idx], sr=None)
-        assert sr == rate
-        
-        measures = audio_dict[paths[idx]]
-        start, stop = measures[np.random.randint(len(measures))]
-        
+    for i, (start, stop) in enumerate(start_stops):
         num_samples = stop - start
-        duration = num_samples / sr
+        duration = num_samples / rate
         bpm = (4 / duration) * 60
         
-        audio[i, :stop - start] = x[start:stop]
+        audio[i, :stop - start] = data[start:stop]
         mask[i, :stop - start] = 1
         bpms[i] = bpm
     
