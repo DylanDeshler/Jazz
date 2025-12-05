@@ -258,9 +258,6 @@ class CrossAttention(nn.Module):
                 attn_mask=kv_mask.unsqueeze(1).unsqueeze(1) if kv_mask is not None else None,
                 dropout_p=self.attn_drop.p if self.training else 0.,
             )
-            if q_mask is not None:
-                print(x.shape, q_mask.shape)
-                x = x * q_mask
         else:
             raise NotImplementedError()
             # fallback: manual attention
@@ -275,6 +272,8 @@ class CrossAttention(nn.Module):
         x = x.transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
+        if q_mask is not None:
+            x = x * q_mask
         return x
 
 class SwiGLUMlp(nn.Module):
