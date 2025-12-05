@@ -184,7 +184,7 @@ class WindowAttention(nn.Module):
                 return window_match
             
             block_mask = create_block_mask(
-                score_mod(self.window_size), 
+                score_mod, 
                 B=None, H=None, Q_LEN=q.shape[2], KV_LEN=k.shape[2], 
                 device=q.device
             )
