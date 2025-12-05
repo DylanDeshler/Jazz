@@ -485,7 +485,7 @@ if __name__ == '__main__':
         encoder = Perciever(1, 512, 16, 8, 4, 4, 32).to('cuda:1')
         summary(encoder)
         
-        decoder = Reciever(1, 512, 16, 8, 8, 3, 32, 7).to('cuda:1')
+        decoder = Reciever(1, 512, 16, 8, 8, 3, 32, None, 7).to('cuda:1')
         summary(decoder)
         
         x = torch.randn((64, 1, 16000)).to('cuda:1')
