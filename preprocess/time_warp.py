@@ -298,7 +298,7 @@ def measures():
         
         for start, stop in start_stops:
             current_samples = stop - start
-            arr[curr_index:curr_index+current_samples] = y[frame_start:frame_end].astype(np.float16)
+            arr[curr_index:curr_index+current_samples] = y[start:stop].astype(np.float16)
             curr_index += current_samples
         
             audio_dict[audio_path].append((curr_index, curr_index + current_samples))
