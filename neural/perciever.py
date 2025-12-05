@@ -347,7 +347,7 @@ class ConvNeXtBlock(nn.Module):
         if self.gamma is not None:
             x = self.gamma.unsqueeze(0).unsqueeze(-1) * x
         if q_mask is not None:
-            x = q_mask * x
+            x = x * q_mask.unsqueeze(-1).repeat(1, 1, x.shape[-1])
         
         x = input + x
         x = x.transpose(1, 2)
