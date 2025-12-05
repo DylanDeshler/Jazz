@@ -302,7 +302,8 @@ def measures():
             curr_index += current_samples
         
             audio_dict[audio_path].append((curr_index, curr_index + current_samples))
-
+    
+    arr.flush()
     with open('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_songs.json', 'w') as f:
         json.dump(audio_dict, f)
 
