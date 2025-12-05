@@ -273,7 +273,8 @@ class CrossAttention(nn.Module):
         x = self.proj(x)
         x = self.proj_drop(x)
         if q_mask is not None:
-            x = x * q_mask
+            print(x.shape, q_mask.shape)
+            x = x * q_mask.unsqueeze(-1)
         return x
 
 class SwiGLUMlp(nn.Module):
