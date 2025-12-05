@@ -59,6 +59,26 @@ def apply_rotary_emb(x, freqs_cis):
     # x_out2 is now (bs, seqlen, n_heads, head_dim), e.g. (4, 8, 32, 128)
     return x_out2.type_as(x)
 
+class PositionalEmbedding(nn.Module):
+    def __init__(self, pe_dim=320, out_dim=1280, max_positions=10000, endpoint=True):
+        super().__init__()
+        self.num_channels = pe_dim
+        self.max_positions = max_positions
+        self.endpoint = endpoint
+        self.f_1 = nn.Linear(pe_dim, out_dim)
+        self.f_2 = nn.Linear(out_dim, out_dim)
+
+    def forward(self, x):
+        freqs = torch.arange(start=0, end=self.num_channels//2, dtype=torch.float32, device=x.device)
+        freqs = freqs / (self.num_channels // 2 - (1 if self.endpoint else 0))
+        freqs = (1 / self.max_positions) ** freqs
+        x = x.ger(freqs.to(x.dtype))
+        x = torch.cat([x.cos(), x.sin()], dim=1)
+        
+        x = self.f_1(x)
+        x = F.silu(x)
+        return self.f_2(x)
+
 class RMSNorm(nn.Module):
     def __init__(self, dim, eps=1e-6):
         super().__init__()
@@ -424,7 +444,7 @@ class Perciever(nn.Module):
         self.norm = RMSNorm(hidden_dim)
         self.out_proj = nn.Linear(hidden_dim, out_dim)
     
-    def forward(self, x, mask):
+    def forward(self, x, mask, t):
         B, C, L = x.shape
         
         x = x.transpose(1, 2)
@@ -448,6 +468,7 @@ class Reciever(nn.Module):
         assert (window_size and kernel_size is None) or (window_size is None and kernel_size)
         self.n_latents = n_latents
         
+        self.embed_time = PositionalEmbedding(320, hidden_dim)
         self.in_proj = nn.Linear(in_dim, hidden_dim)
         self.latent_proj = nn.Linear(latent_dim, hidden_dim)
         self.pos_emb = ContinuousPositionalEmbeddings(hidden_dim)
@@ -467,14 +488,17 @@ class Reciever(nn.Module):
         self.norm = RMSNorm(hidden_dim)
         self.out_proj = nn.Linear(hidden_dim, in_dim)
     
-    def forward(self, x, z, mask):
+    def forward(self, x, t, z, mask):
         B, C, L = x.shape
         
         x = x.transpose(1, 2)
         x = self.in_proj(x)
         x = x + self.pos_emb(torch.linspace(0, 1, steps=L, device=x.device).unsqueeze(0))
         
+        t = self.embed_time(t)
+        
         z = self.latent_proj(z)
+        z = torch.cat([t, z], dim=1)
         
         for layer in self.layers:
             x = layer(x, z, q_mask=mask)
