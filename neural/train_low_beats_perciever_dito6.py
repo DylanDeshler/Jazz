@@ -160,7 +160,7 @@ def get_batch(split='train'):
 iter_num = 0
 best_val_loss = 1e9
 
-model_args = dict(z_shape=(16, 32), in_dim=1, hidden_dim=512, latent_dim=16, n_heads=8, encoder_depth=4, encoder_n_interleave=2, decoder_depth=12, decoder_n_interleave=2, n_latents=32, kernel_size=7)
+model_args = dict(z_shape=(16, 32), in_dim=1, hidden_dim=512, latent_dim=16, n_heads=8, encoder_depth=4, encoder_n_interleave=2, decoder_depth=8, decoder_n_interleave=2, n_latents=32, kernel_size=7)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
