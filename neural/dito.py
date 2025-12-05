@@ -8,12 +8,12 @@ from fm import FM, FMEulerSampler
 from perciever import Perciever, Reciever
 
 class DiToV6(nn.Module):
-    def __init__(self, z_shape, in_dim, hidden_dim, out_dim, n_heads, depth, n_interleave, n_latents, kernel_size):
+    def __init__(self, z_shape, in_dim, hidden_dim, latent_dim, n_heads, depth, n_interleave, n_latents, kernel_size):
         super().__init__()
         self.z_shape = z_shape
-        self.encoder = Perciever(in_dim=in_dim, hidden_dim=hidden_dim, out_dim=out_dim, n_heads=n_heads, depth=depth, n_interleave=n_interleave, n_latents=n_latents)
+        self.encoder = Perciever(in_dim=in_dim, hidden_dim=hidden_dim, latent_dim=latent_dim, n_heads=n_heads, depth=depth, n_interleave=n_interleave, n_latents=n_latents)
         self.z_norm = nn.LayerNorm(self.z_shape[0], elementwise_affine=False)
-        self.decoder = Reciever(in_dim=in_dim, hidden_dim=hidden_dim, out_dim=out_dim, n_heads=n_heads, depth=depth*3, n_interleave=n_interleave//2, n_latents=n_latents, window_size=None, kernel_size=kernel_size)
+        self.decoder = Reciever(in_dim=in_dim, hidden_dim=hidden_dim, latent_dim=latent_dim, n_heads=n_heads, depth=depth*3, n_interleave=n_interleave//2, n_latents=n_latents, window_size=None, kernel_size=kernel_size)
 
         self.diffusion = FM(timescale=1000.0)
         self.sampler = FMEulerSampler(self.diffusion)

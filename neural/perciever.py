@@ -425,7 +425,7 @@ class ContinuousPositionalEmbeddings(nn.Module):
         return torch.cat([torch.sin(args), torch.cos(args)], dim=-1)
 
 class Perciever(nn.Module):
-    def __init__(self, in_dim, hidden_dim, out_dim, n_heads, depth, n_interleave, n_latents):
+    def __init__(self, in_dim, hidden_dim, latent_dim, n_heads, depth, n_interleave, n_latents):
         super().__init__()
         self.n_latents = n_latents
         
@@ -442,7 +442,7 @@ class Perciever(nn.Module):
         self.layers = nn.ModuleList(layers)
         
         self.norm = RMSNorm(hidden_dim)
-        self.out_proj = nn.Linear(hidden_dim, out_dim)
+        self.out_proj = nn.Linear(hidden_dim, latent_dim)
     
     def forward(self, x, mask, t):
         B, C, L = x.shape
