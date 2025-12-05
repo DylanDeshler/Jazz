@@ -133,7 +133,7 @@ def get_batch(split='train'):
     mask = torch.zeros(batch_size, max_samples)
     bpms = torch.zeros(batch_size, 1)
     for i, start_stop in enumerate(start_stops):
-        print(i, start_stop)
+        start, stop = start_stop[np.random.randint(len(start_stop))]
         num_samples = stop - start
         duration = num_samples / rate
         bpm = (4 / duration) * 60
