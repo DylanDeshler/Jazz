@@ -378,7 +378,7 @@ class SelfAttentionBlock(nn.Module):
         self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
     
     def forward(self, x, context=None, freqs_cis=None, kv_mask=None):
-        x = x + self.attn(self.norm1(x), freqs_cis=freqs_cis, attn_mask=kv_mask)
+        x = x + self.attn(self.norm1(x), freqs_cis=freqs_cis, attn_mask=None)
         x = x + self.mlp(self.norm2(x))
         return x
 
