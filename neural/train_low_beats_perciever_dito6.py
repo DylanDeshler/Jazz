@@ -124,15 +124,14 @@ with open('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_meas
 
 def get_batch(split='train'):
     if split == 'train':
-        start_stops = np.random.choice(list(audio_dict.keys())[:int(len(audio_dict) * 0.98)], batch_size)
+        start_stops = np.random.choice(list(audio_dict.values())[:int(len(audio_dict) * 0.98)], batch_size)
     else:
-        start_stops = np.random.choice(list(audio_dict.keys())[int(len(audio_dict) * 0.98):], batch_size)
+        start_stops = np.random.choice(list(audio_dict.values())[int(len(audio_dict) * 0.98):], batch_size)
     
     data = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_audio.npy', dtype=np.float16, mode='r', shape=(79188421662,))
     audio = torch.zeros(batch_size, max_samples, 1)
     mask = torch.zeros(batch_size, max_samples)
     bpms = torch.zeros(batch_size, 1)
-    print(start_stops)
     for i, (start, stop) in enumerate(start_stops):
         num_samples = stop - start
         duration = num_samples / rate
