@@ -330,7 +330,7 @@ class ConvNeXtBlock(nn.Module):
         self.pwconv1 = nn.Conv1d(dim, 4 * dim, kernel_size=1)
         self.act = nn.GELU()
         self.pwconv2 = nn.Conv1d(4 * dim, dim, kernel_size=1)
-        self.gamma = nn.Parameter(layer_scale_init_value * torch.ones((dim)), requires_grad=True).unsqueeze(0).unsqueeze(-1) if layer_scale_init_value > 0 else None
+        self.gamma = nn.Parameter(layer_scale_init_value * torch.ones((dim)), requires_grad=True) if layer_scale_init_value > 0 else None
 
     def forward(self, x, context=None):
         x = x.transpose(1, 2)
@@ -341,7 +341,7 @@ class ConvNeXtBlock(nn.Module):
         x = self.act(x)
         x = self.pwconv2(x)
         if self.gamma is not None:
-            x = self.gamma * x
+            x = self.gamma.unsqueeze(0).unsqueeze(-1) * x
 
         x = input + x
         x = x.transpose(1, 2)
