@@ -333,6 +333,7 @@ class ConvNeXtBlock(nn.Module):
         self.gamma = nn.Parameter(layer_scale_init_value * torch.ones((dim)), requires_grad=True) if layer_scale_init_value > 0 else None
 
     def forward(self, x, context=None):
+        x = x.transpose(1, 2)
         input = x
         x = self.dwconv(x)
         x = self.norm(x)
@@ -343,6 +344,7 @@ class ConvNeXtBlock(nn.Module):
             x = self.gamma * x
 
         x = input + x
+        x = x.transpose(1, 2)
         return x
 
 class CrossAttentionBlock(nn.Module):
