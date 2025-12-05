@@ -258,8 +258,8 @@ class CrossAttention(nn.Module):
                 attn_mask=kv_mask.unsqueeze(1).unsqueeze(1) if kv_mask is not None else None,
                 dropout_p=self.attn_drop.p if self.training else 0.,
             )
-            print(x.shape, q_mask.shape)
             if q_mask is not None:
+                print(x.shape, q_mask.shape)
                 x = x * q_mask
         else:
             raise NotImplementedError()
