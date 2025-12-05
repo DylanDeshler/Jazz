@@ -8,6 +8,7 @@ import soundfile as sf
 import pyrubberband as pyrb
 from concurrent.futures import ProcessPoolExecutor
 from tqdm import tqdm
+from collections import defaultdict
 
 TARGET_SR = 16000
 TARGET_SAMPLES = 24576
@@ -252,8 +253,9 @@ def measures():
 
     assert len(audio_paths) == len(beat_paths)
     
-    length = 0
-    audio_dict = {}
+    arr = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_audio.npy', dtype=np.float16, mode='w+', shape=(86630226506,))
+    curr_index = 0
+    audio_dict = defaultdict(list)
     for audio_path, beat_path in tqdm(zip(audio_paths, beat_paths), total=len(audio_paths)):
         beat_data = parse_beat_file(beat_path)
         
@@ -272,7 +274,6 @@ def measures():
             continue
 
         start_stops, stretch_ratios, instant_bpms = [], [], []
-        lengths = []
         for i in range(len(downbeat_indices) - 1):
             start_idx = downbeat_indices[i]
             end_idx = downbeat_indices[i+1]
@@ -291,14 +292,17 @@ def measures():
             start_stops.append((frame_start, frame_end))
             stretch_ratios.append(stretch_ratio)
             instant_bpms.append(instant_bpm)
-            lengths.append(current_samples)
         
         if np.mean(instant_bpms) < 40 or np.mean(instant_bpms) > 330:
             continue
         
-        audio_dict[audio_path] = start_stops
-        length += np.sum(lengths)
-    print('Total length: ', length)
+        for start, stop in start_stops:
+            current_samples = stop - start
+            arr[curr_index:curr_index+current_samples] = y[frame_start:frame_end].astype(np.float16)
+            curr_index += current_samples
+        
+            audio_dict[audio_path].append((curr_index, curr_index + current_samples))
+
     with open('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_songs.json', 'w') as f:
         json.dump(audio_dict, f)
 
