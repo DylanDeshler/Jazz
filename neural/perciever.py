@@ -406,9 +406,10 @@ class Reciever(nn.Module):
         self.out_proj = nn.Linear(hidden_dim, out_dim)
     
     def forward(self, x, z):
-        B, L, C = x.shape
+        B, C, L = x.shape
         
         print(x.shape, z.shape)
+        x = x.transpose(1, 2)
         x = self.in_proj(x)
         x = x + self.pos_emb(torch.linspace(0, 1, steps=L, device=x.device).unsqueeze(0))
         
