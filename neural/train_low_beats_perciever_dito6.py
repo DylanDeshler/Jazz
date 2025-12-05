@@ -136,7 +136,7 @@ def get_batch(split='train'):
     else:
         start_stops = [test_list[idx] for idx in np.random.randint(len(test_list), size=batch_size)]
     
-    data = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_audio.npy', dtype=np.float16, mode='r', shape=(79188421662,))
+    data = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_audio.npy', dtype=np.float16, mode='r', shape=(60062778671,))
     audio = torch.zeros(batch_size, max_samples)
     mask = torch.zeros(batch_size, max_samples)
     bpms = torch.zeros(batch_size, 1)
@@ -160,7 +160,7 @@ def get_batch(split='train'):
 iter_num = 0
 best_val_loss = 1e9
 
-model_args = dict(z_shape=(16, 32), in_dim=1, hidden_dim=384, latent_dim=16, n_heads=6, encoder_depth=4, encoder_n_interleave=2, decoder_depth=8, decoder_n_interleave=0, n_latents=32, kernel_size=7)
+model_args = dict(z_shape=(16, 32), in_dim=1, hidden_dim=384, latent_dim=16, n_heads=6, encoder_depth=4, encoder_n_interleave=4, decoder_depth=12, decoder_n_interleave=1, n_latents=32, kernel_size=7)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
