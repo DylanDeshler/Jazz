@@ -323,9 +323,9 @@ class ConvNeXtBlock(nn.Module):
         dim (int): Number of input channels.
         layer_scale_init_value (float): Init value for Layer Scale. Default: 1e-6.
     """
-    def __init__(self, dim, layer_scale_init_value=1e-6):
+    def __init__(self, dim, kernel_size, layer_scale_init_value=1e-6):
         super().__init__()
-        self.dwconv = nn.Conv1d(dim, dim, kernel_size=7, padding=3, groups=dim)
+        self.dwconv = nn.Conv1d(dim, dim, kernel_size=kernel_size, padding=kernel_size//2, groups=dim)
         self.norm = nn.GroupNorm(1, dim)
         self.pwconv1 = nn.Conv1d(dim, 4 * dim, kernel_size=1)
         self.act = nn.GELU()
@@ -449,10 +449,12 @@ class Reciever(nn.Module):
         layers = []
         for d in range(depth):
             layers.append(CrossAttentionBlock(hidden_dim, n_heads))
-            # for _ in range(n_interleave):
-            #     layers.append(SelfAttentionBlock(hidden_dim, n_heads, window_size=window_size))
-            for _ in range(n_interleave):
-                layers.append(ConvNeXtBlock(hidden_dim))
+            if window_size:
+                for _ in range(n_interleave):
+                    layers.append(SelfAttentionBlock(hidden_dim, n_heads, window_size=window_size))
+            else:
+                for _ in range(n_interleave):
+                    layers.append(ConvNeXtBlock(hidden_dim, kernel_size))
         
         self.layers = nn.ModuleList(layers)
         
@@ -483,7 +485,7 @@ if __name__ == '__main__':
         encoder = Perciever(1, 512, 16, 8, 4, 4, 32).to('cuda:1')
         summary(encoder)
         
-        decoder = Reciever(1, 512, 16, 8, 8, 2, 32, 7).to('cuda:1')
+        decoder = Reciever(1, 512, 16, 8, 8, 3, 32, 7).to('cuda:1')
         summary(decoder)
         
         x = torch.randn((64, 1, 16000)).to('cuda:1')
