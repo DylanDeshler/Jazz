@@ -122,11 +122,19 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 with open('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_songs.json', 'r') as f:
     audio_dict = json.load(f)
 
+train_list = []
+test_list = []
+for i, (k, v) in tqdm(audio_dict.items(), desc='Decomposing Metadata'):
+    if i < len(audio_dict) * 0.98:
+        train_list.append(v)
+    else:
+        test_list.append(v)
+
 def get_batch(split='train'):
     if split == 'train':
-        start_stops = np.random.choice(list(audio_dict.values())[:int(len(audio_dict) * 0.98)], batch_size)
+        start_stops = np.random.randint(len(train_list), batch_size)
     else:
-        start_stops = np.random.choice(list(audio_dict.values())[int(len(audio_dict) * 0.98):], batch_size)
+        start_stops = np.random.choice(len(test_list), batch_size)
     
     data = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_audio.npy', dtype=np.float16, mode='r', shape=(79188421662,))
     audio = torch.zeros(batch_size, max_samples)
