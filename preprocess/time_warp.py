@@ -254,7 +254,7 @@ def measures():
     
     length = 0
     audio_dict = {}
-    for audio_path, beat_path in tqdm(zip(audio_paths, beat_paths)):
+    for audio_path, beat_path in tqdm(zip(audio_paths, beat_paths), total=len(audio_paths)):
         beat_data = parse_beat_file(beat_path)
         
         downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
