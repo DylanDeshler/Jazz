@@ -195,7 +195,7 @@ def generate_audio_measures(paths):
         bpm=np.array(instant_bpms, dtype=np.float32)
     )
 
-def main():
+def time_warp_measures():
     print("Gathering files...")
     audio_paths = sorted(glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav'))
     beat_paths = sorted(glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats/*.beats'))
@@ -228,6 +228,75 @@ def main():
         list(tqdm(executor.map(generate_audio_measures, tasks), total=len(tasks)))
         
     print("Done!")
+
+def measures():
+    print("Gathering files...")
+    audio_paths = sorted(glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav'))
+    beat_paths = sorted(glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats/*.beats'))
+
+    valid_audio, valid_beats = [], []
+    print(f"Filtering for songs with Time Signature: 4/4 ...")
+    for audio_p, beat_p in zip(audio_paths, beat_paths):
+        beat_data = parse_beat_file(beat_p)
+        detected_sig = get_time_signature(beat_data)
+        
+        if detected_sig == TARGET_SIG:
+            valid_audio.append(audio_p)
+            valid_beats.append(beat_p)
+
+    print(f"Found {len(valid_beats)} matching songs (out of {len(audio_paths)} total).")
+    audio_paths = valid_audio
+    beat_paths = valid_beats
+    del valid_audio
+    del valid_beats
+
+    assert len(audio_paths) == len(beat_paths)
+    
+    audio_dict = {}
+    for audio_path, beat_path in zip(audio_paths, beat_paths):
+        beat_data = parse_beat_file(beat_path)
+        
+        downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
+        
+        if len(downbeat_indices) < 10:
+            return
+        
+        y, sr = librosa.load(audio_path, sr=None)
+        assert sr == TARGET_SR
+        
+        if len(y) < 1000:
+            return
+        
+        if np.max(np.abs(y)) < 0.001:
+            return
+
+        start_stops, stretch_ratios, instant_bpms = [], [], []
+        for i in range(len(downbeat_indices) - 1):
+            start_idx = downbeat_indices[i]
+            end_idx = downbeat_indices[i+1]
+            
+            t_start = beat_data[start_idx]['time']
+            t_end = beat_data[end_idx]['time']
+            
+            frame_start = int(t_start * sr)
+            frame_end = int(t_end * sr)
+            
+            current_samples = frame_end - frame_start
+            stretch_ratio = current_samples / TARGET_SAMPLES
+            duration_sec = current_samples / TARGET_SR
+            instant_bpm = (TARGET_SIG / duration_sec) * 60
+            
+            start_stops.append((frame_start, frame_end))
+            stretch_ratios.append(stretch_ratio)
+            instant_bpms.append(instant_bpm)
+        
+        if np.mean(instant_bpms) < 40 or np.mean(instant_bpms) > 330:
+            continue
+        
+        audio_dict[audio_path] = start_stops
+    
+    with open('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_songs.json', 'w') as f:
+        json.dump(audio_dict, f)
 
 def crunch(length=None):
     paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.npz')
@@ -295,6 +364,8 @@ if __name__ == "__main__":
     parser.add_argument("--n", type=int, default=20, help="The number of measures to test")
     parser.add_argument("--crunch", action='store_true', default=False, help="Squash npzs into a single memmap")
     parser.add_argument("--length", type=int, default=None, help="The number of samples to convert to memmap array")
+    parser.add_argument("--time-warp", action='store_true', default=False, help='Generate time warped npz 4/4 measures')
+    parser.add_argument("--measure", action='store_true', default=False, help="Generate 4/4 measure")
     
     args = parser.parse_args()
     
@@ -302,5 +373,7 @@ if __name__ == "__main__":
         test(args.n)
     elif args.crunch:
         crunch(args.length)
-    else:
-        main()
+    elif args.time_warp:
+        time_warp_measures()
+    elif args.measure:
+        measures()

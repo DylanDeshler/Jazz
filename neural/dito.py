@@ -5,6 +5,45 @@ import torch.nn.functional as F
 from consistency_decoder import ConsistencyDecoderUNet, ConsistencyDecoderUNetV2, DylanDecoderUNet, DylanDecoderUNet2
 from seanet import SEANetEncoder, DylanSEANetEncoder
 from fm import FM, FMEulerSampler
+from perciever import Perciever
+
+class DiToV6(nn.Module):
+    def __init__(self, z_shape, in_dim, hidden_dim, out_dim, n_heads, depth, n_interleave, n_latents, channels=[128, 256, 512], ratios=[8, 4, 4]):
+        super().__init__()
+        self.z_shape = z_shape
+        self.encoder = Perciever(in_dim=in_dim, hidden_dim=hidden_dim, out_dim=out_dim, n_heads=n_heads, depth=depth, n_interleave=n_interleave, n_latents=n_latents)
+        self.z_norm = nn.LayerNorm(self.z_shape[0], elementwise_affine=False)
+        self.unet = DylanDecoderUNet2(in_channels=in_dim, z_dec_channels=out_dim, channels=channels, ratios=ratios)
+
+        self.diffusion = FM(timescale=1000.0)
+        self.sampler = FMEulerSampler(self.diffusion)
+
+    def forward(self, x):
+        x, z = self.encode(x)
+        
+        # noise synchronization
+        t = torch.rand(z.shape[0], device=z.device)
+        post_t = t + torch.rand(z.shape[0], device=z.device) * (1 - t)
+        z_t, _ = self.diffusion.add_noise(z, t)
+        mask_aug = (torch.rand(z.shape[0], device=z.device) < 0.1).float()
+        z = mask_aug.view(-1, 1, 1) * z_t + (1 - mask_aug).view(-1, 1, 1) * z
+        t[mask_aug.long()] = post_t
+        
+        loss = self.diffusion.loss(self.unet, x, t, net_kwargs={'z_dec': z})
+        return loss
+    
+    def encode(self, x):
+        z = self.encoder(x)
+        z = self.z_norm(z).transpose(1, 2)
+        return x, z
+
+    def reconstruct(self, x, n_steps=50):
+        x, z = self.encode(x)
+        return self.decode(z, shape=x.shape, n_steps=n_steps)
+    
+    def decode(self, z, shape, n_steps=50):
+        x = self.sampler.sample(self.unet, (z.shape[0], *shape[-2:]), n_steps, net_kwargs={'z_dec': z})
+        return x
 
 class DiToV5(nn.Module):
     def __init__(self, z_shape, n_residual_layers, lstm, transformer, down_proj=None, in_channels=1, dimension=128, n_filters=32, ratios=[8, 5, 4, 2], dilation_base=2, channels=[128, 256, 512]):
