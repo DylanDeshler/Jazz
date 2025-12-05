@@ -255,7 +255,7 @@ class CrossAttention(nn.Module):
             # PyTorch 2.1+ scaled_dot_product_attention supports cross-attention
             x = F.scaled_dot_product_attention(
                 q, k, v,
-                attn_mask=kv_mask,
+                attn_mask=kv_mask.unsqueeze(1).unsqueeze(1),
                 dropout_p=self.attn_drop.p if self.training else 0.,
             )
             if kv_mask is not None:
