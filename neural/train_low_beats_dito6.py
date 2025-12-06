@@ -47,7 +47,7 @@ log_interval = 100
 eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -61,14 +61,14 @@ rate = 16000
 n_samples = 24576
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 1000000 # total number of training iterations
+max_iters = 90000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.999
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
-decay_lr = False # whether to decay the learning rate
-warmup_iters = 5000 # how many steps to warm up for
+decay_lr = True # whether to decay the learning rate
+warmup_iters = 75000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
@@ -118,19 +118,6 @@ ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torc
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 # poor man's data loader
-def process_measure(y):
-    current_samples = len(y)
-    stretch_factor = current_samples / n_samples
-    
-    y_warped = pyrb.time_stretch(y, rate, stretch_factor)
-
-    if len(y_warped) > n_samples:
-        y_warped = y_warped[:n_samples]
-    elif len(y_warped) < n_samples:
-        y_warped = np.pad(y_warped, (0, n_samples - len(y_warped)))
-        
-    return y_warped
-
 def get_batch(split='train'):
     data = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_audio.npy', dtype=np.float16, mode='r', shape=(3693787, n_samples))
     train_n = int(len(data) * 0.98)
@@ -295,14 +282,6 @@ if wandb_log and master_process:
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
-if eval_only:
-    gradient_accumulation_steps *= 2
-    model.eval()
-    losses = estimate_loss()
-    print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-    import sys
-    sys.exit()
-
 X = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
