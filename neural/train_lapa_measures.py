@@ -322,7 +322,8 @@ def generate_lam_vs_random_actions(step):
         
         B, T, N, D = x.shape
     
-    out = tokenizer.decode(torch.cat([x[:, 1], recon, random_recon], dim=0).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
+    with ctx:
+        out = tokenizer.decode(torch.cat([x[:, 1], recon, random_recon], dim=0).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
     x, recon, random_recon = [res.cpu().detach().float().numpy().squeeze(1) for res in out.split(B, dim=0)]
 
     recon_psnr = psnr(x, recon)
