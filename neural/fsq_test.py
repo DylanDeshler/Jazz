@@ -6,7 +6,7 @@ from vector_quantize_pytorch import FSQ
 from lapa import ActionTransformer
 
 if __name__ == '__main__':
-    hidden_size = 768
+    hidden_size = 768 * 6
     levels = [8, 6, 5]
     
     linear = nn.Linear(hidden_size, len(levels))
