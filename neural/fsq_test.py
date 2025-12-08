@@ -19,13 +19,16 @@ if __name__ == '__main__':
     linear.reset_parameters()
     
     norm = nn.LayerNorm(hidden_size, elementwise_affine=True)
+    norm2 = nn.LayerNorm(len(levels))
     
     vq = FSQ(levels=levels)
     
     x = torch.randn(512, hidden_size)
     x = norm(x)
     print(x.mean(), x.std())
-    x = linear(x).unsqueeze(1)
+    x = linear(x)
+    x = norm2(x)
+    x = x.unsqueeze(1)
     print(x.mean(), x.std())
     x, indices = vq(x)
     
