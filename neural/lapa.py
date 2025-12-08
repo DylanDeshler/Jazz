@@ -709,7 +709,7 @@ class DiT(nn.Module):
         
         x = self.x_embedder(x)
         t = self.t_embedder(t)
-        bpm = self.bpm_embedder(bpm.unsqueeze(-1))[:, 1]
+        bpm = self.bpm_embedder(bpm.unsqueeze(-1))[:, :, 1]
         # actions = self.action_embedder(actions)
         context = torch.cat([t.unsqueeze(1), bpm.squeeze(), actions], dim=1)
         
