@@ -47,8 +47,10 @@ arr = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large.bi
 with torch.no_grad():
     for i in tqdm(range(N // batch_size)):
         batch = torch.from_numpy(data[i*batch_size:(i+1)*batch_size].copy()).view(batch_size, n_samples).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+        print(batch.shape)
         with ctx:
             _, codes = model.encode(batch)
+        print(codes.shape)
         codes = codes.permute(0, 2, 1).cpu().detach().numpy()
         arr[i*batch_size:(i+1)*batch_size] = codes.astype(np.float16)
 
