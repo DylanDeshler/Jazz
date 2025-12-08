@@ -71,7 +71,7 @@ meta = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_m
 
 with torch.no_grad():
     for i in tqdm(range(N // batch_size)):
-        batch = torch.from_numpy(data[i*batch_size:(i+1)*batch_size].copy()).view(batch_size, n_samples).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+        batch = torch.from_numpy(data[i*batch_size:(i+1)*batch_size].copy()).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         with ctx:
             _, codes = model.encode(batch)
             # recon = model.reconstruct(batch, n_steps=100)
