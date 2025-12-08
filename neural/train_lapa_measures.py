@@ -323,9 +323,9 @@ def generate_lam_vs_random_actions(step):
         B, T, N, D = x.shape
     
     with ctx:
-        x = tokenizer.decode(x[:, 1].permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
-        recon = tokenizer.decode(recon.permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
-        random_recon = tokenizer.decode(random_recon.permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
+        x = tokenizer.decode(x[:, 1].permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=100)
+        recon = tokenizer.decode(recon.permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=100)
+        random_recon = tokenizer.decode(random_recon.permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=100)
     
     x = x.cpu().detach().float().numpy().squeeze(1)
     recon = recon.cpu().detach().float().numpy().squeeze(1)
