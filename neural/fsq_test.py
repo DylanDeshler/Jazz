@@ -9,7 +9,7 @@ if __name__ == '__main__':
     hidden_size = 768
     levels = [8, 6, 5]
     
-    linear = nn.Linear(hidden_size, len(levels), bias=False)
+    linear = nn.Linear(hidden_size, len(levels))
     fan_out = linear.weight.size(0)
     fan_in = linear.weight.size(1)
     std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
@@ -22,10 +22,10 @@ if __name__ == '__main__':
     
     vq = FSQ(levels=levels)
     
-    x = torch.randn(512, 1, hidden_size)
+    x = torch.randn(512, hidden_size)
     x = norm(x)
     print(x.mean(), x.std())
-    x = linear(x)
+    x = linear(x).unsqueeze(1)
     print(x.mean(), x.std())
     x, indices = vq(x)
     
