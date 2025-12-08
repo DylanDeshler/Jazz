@@ -626,7 +626,7 @@ class ActionTransformer(nn.Module):
         B, T, N, C = x.shape
         
         x = self.x_embedder(x)
-        bpm = self.bpm_embedder(bpm.unsqueeze(-1)).squeeze()
+        bpm = self.bpm_embedder(bpm.unsqueeze(-1))
         
         x = torch.cat([bpm, x], dim=2)
         x = rearrange(x, 'b t n c -> (b t) n c')
