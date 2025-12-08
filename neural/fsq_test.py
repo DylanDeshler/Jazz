@@ -6,7 +6,7 @@ from vector_quantize_pytorch import FSQ
 from lapa import ActionTransformer
 
 if __name__ == '__main__':
-    hidden_size = 768 * 6
+    hidden_size = 768
     levels = [8, 6, 5]
     
     linear = nn.Linear(hidden_size, len(levels))
@@ -39,6 +39,7 @@ if __name__ == '__main__':
     utilization = active_count / math.prod(levels)
 
     probs = counts / num_tokens
+    print(probs.min(), probs.mean(), probs.std(), probs.max())
     probs = probs + 1e-10
     entropy = -torch.sum(probs * torch.log(probs))
     perplexity = torch.exp(entropy).item()
