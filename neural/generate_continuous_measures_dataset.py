@@ -38,6 +38,7 @@ for k,v in list(state_dict.items()):
         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
 model.load_state_dict(state_dict)
 model.eval()
+torch.compile(model)
 
 N = 3693787
 data = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_audio.npy', dtype=np.float16, mode='r', shape=(N, n_samples))
@@ -48,8 +49,8 @@ with torch.no_grad():
         batch = torch.from_numpy(data[i*batch_size:(i+1)*batch_size].copy()).view(batch_size, n_samples).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         with ctx:
             _, codes = model.encode(batch)
-            recon = model.decode(codes)
-        print(((batch - recon) ** 2).mean())
+            loss = model(batch)
+        print(loss.item())
 #         codes = codes.permute(0, 2, 1).cpu().detach().numpy()
 #         arr[i*batch_size:(i+1)*batch_size] = codes.astype(np.float16)
 
