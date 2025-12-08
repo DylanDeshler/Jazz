@@ -245,7 +245,7 @@ def estimate_codebook_usage():
         usage = torch.zeros(eval_iters * gradient_accumulation_steps)
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
             X, ratio, bpm = get_batch(split)
-            with ctx:
+            with nullcontext:
                 _, indices = model(X, bpm)
                 
                 indices = indices.flatten()
