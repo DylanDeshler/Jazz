@@ -704,11 +704,11 @@ class DiT(nn.Module):
         """
         assert x.ndim == 3
         
-        print(x.shape, t.shape, bpm.shape)
         x = self.x_embedder(x)
         t = self.t_embedder(t)
         bpm = self.bpm_embedder(bpm.unsqueeze(-1))
         # actions = self.action_embedder(actions)
+        print(x.shape, t.shape, bpm.shape, actions.shape)
         context = torch.cat([t.unsqueeze(1), bpm, actions], dim=1)
         
         x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
