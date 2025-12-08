@@ -138,7 +138,7 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 # poor man's data loader
 def get_batch(split='train'):
-    data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large.bin', dtype=np.float16, mode='w+', shape=(3693787, 48, vae_embed_dim))
+    data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large.bin', dtype=np.float16, mode='r', shape=(3693787, 48, vae_embed_dim))
     meta = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_meta.npy', dtype=np.float32, mode='r', shape=(3693787, 2))
     if split == 'train':
         idxs = torch.randint(int(len(data) * 0.98) - temporal_window, (batch_size,))
@@ -231,7 +231,7 @@ def estimate_loss():
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
             X, ratio, bpm = get_batch(split)
             with ctx:
-                loss, _ = model(X, bpm)
+                loss, _ = model(X)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -245,8 +245,8 @@ def estimate_codebook_usage():
         usage = torch.zeros(eval_iters * gradient_accumulation_steps)
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
             X, ratio, bpm = get_batch(split)
-            with nullcontext():
-                _, indices = model(X, bpm)
+            with ctx:
+                _, indices = model(X)
                 
                 indices = indices.flatten()
                 num_tokens = indices.numel()
@@ -455,7 +455,7 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            loss, _ = model(X, bpm)
+            loss, _ = model(X)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, ratio, bpm = get_batch('train')
