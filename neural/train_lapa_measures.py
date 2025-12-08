@@ -250,14 +250,17 @@ def estimate_codebook_usage():
                 
                 indices = indices.flatten()
                 num_tokens = indices.numel()
+                print(indices.shape, num_tokens.shape)
             
                 counts = torch.bincount(indices, minlength=math.prod(levels)).float()
                 probs = counts / num_tokens
+                print(counts.min(), counts.mean(), counts.max())
                 
                 # Add epsilon to avoid log(0)
                 probs = probs + 1e-10
                 entropy = -torch.sum(probs * torch.log(probs))
                 perplexity = torch.exp(entropy).item()
+                print(perplexity)
             
             usage[k] = perplexity
         out[split] = usage.mean()
