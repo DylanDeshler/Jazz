@@ -520,11 +520,11 @@ class CNNEncoder(nn.Module):
             x = block(x)
         
         x = rearrange(x, 'n c l -> n (c l)')
-        print('pre norm: ', x.min(), x.mean(), x.std(), x.max())
+        print('pre norm: ', x.mean().item(), x.std().item())
         x = self.norm(x)
-        print('pre linear: ', x.min(), x.mean(), x.std(), x.max())
+        print('pre linear: ', x.mean().item(), x.std().item())
         x = self.fc(x)
-        print('pre quant: ', x.min(), x.mean(), x.std(), x.max())
+        print('pre quant: ', x.mean().item(), x.std().item())
         x = x.unsqueeze(1)
         return x
 
