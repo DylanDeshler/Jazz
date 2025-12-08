@@ -50,7 +50,7 @@ with torch.no_grad():
         with ctx:
             _, codes = model.encode(batch)
             loss = model(batch)
-        print(loss.item())
+        print(_.shape, loss.item())
 #         codes = codes.permute(0, 2, 1).cpu().detach().numpy()
 #         arr[i*batch_size:(i+1)*batch_size] = codes.astype(np.float16)
 
