@@ -9,7 +9,7 @@ if __name__ == '__main__':
     hidden_size = 768
     levels = [8, 6, 5]
     
-    linear = nn.Linear(hidden_size, len(levels))
+    linear = nn.Linear(hidden_size, len(levels), bias=False)
     fan_out = linear.weight.size(0)
     fan_in = linear.weight.size(1)
     std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
