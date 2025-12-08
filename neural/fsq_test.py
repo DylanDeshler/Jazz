@@ -6,7 +6,7 @@ from vector_quantize_pytorch import FSQ
 
 if __name__ == '__main__':
     hidden_size = 768
-    levels = [8, 8]
+    levels = [8, 6, 5]
     
     linear = nn.Linear(hidden_size, len(levels))
     fan_out = linear.weight.size(0)
