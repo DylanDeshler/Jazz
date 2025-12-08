@@ -16,7 +16,7 @@ if __name__ == '__main__':
     torch.nn.init.normal_(linear.weight, mean=0.0, std=std)
     if linear.bias is not None:
         torch.nn.init.zeros_(linear.bias)
-    linear.reset_parameters()
+    # linear.reset_parameters()
     
     norm = nn.LayerNorm(hidden_size, elementwise_affine=True)
     
@@ -39,7 +39,6 @@ if __name__ == '__main__':
     utilization = active_count / math.prod(levels)
 
     probs = counts / num_tokens
-    print(num_tokens, counts.shape, probs.shape)
     probs = probs + 1e-10
     entropy = -torch.sum(probs * torch.log(probs))
     perplexity = torch.exp(entropy).item()
