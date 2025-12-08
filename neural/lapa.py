@@ -513,6 +513,12 @@ class CNNEncoder(nn.Module):
         
         self.norm = nn.LayerNorm(in_size * spatial_window // math.prod(ratios))
         self.fc = nn.Linear(in_size * spatial_window // math.prod(ratios), out_size)
+
+        self.initialize_weights()
+    
+    def initialize_weights(self):
+        self.norm.reset_parameters()
+        self.fc.reset_parameters()
     
     def forward(self, x):
         x = rearrange(x, 'n l c -> n c l')
