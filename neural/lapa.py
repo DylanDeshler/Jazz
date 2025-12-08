@@ -512,7 +512,7 @@ class CNNEncoder(nn.Module):
         self.blocks = nn.ModuleList(blocks)
         
         self.norm = nn.LayerNorm(in_size * spatial_window // math.prod(ratios))
-        self.fc = nn.Linear(in_size * spatial_window // math.prod(ratios), out_size)
+        self.fc = nn.Linear(in_size * spatial_window // math.prod(ratios), out_size, bias=False)
 
         self.initialize_weights()
     
@@ -529,7 +529,7 @@ class CNNEncoder(nn.Module):
         print('pre norm: ', x.mean().item(), x.std().item())
         x = self.norm(x)
         print('pre linear: ', x.mean().item(), x.std().item())
-        print('weights: ', self.fc.weight.mean(), self.fc.weight.std(), self.fc.bias.mean(), self.fc.bias.std())
+        # print('weights: ', self.fc.weight.mean(), self.fc.weight.std(), self.fc.bias.mean(), self.fc.bias.std())
         x = self.fc(x)
         print('pre quant: ', x.mean().item(), x.std().item())
         x = x.unsqueeze(1)
