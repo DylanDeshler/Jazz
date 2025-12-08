@@ -513,8 +513,6 @@ class CNNEncoder(nn.Module):
         
         self.norm = nn.LayerNorm(in_size * spatial_window // math.prod(ratios))
         self.fc = nn.Linear(in_size * spatial_window // math.prod(ratios), out_size)
-        
-        self.fc.reset_parameters()
     
     def forward(self, x):
         x = rearrange(x, 'n l c -> n c l')
@@ -561,7 +559,6 @@ class ActionTransformer(nn.Module):
                  mlp_ratio=4,
                  ):
         super().__init__()
-        self.temporal_window = temporal_window
         
         self.x_embedder = nn.Sequential(nn.Linear(in_channels, hidden_size, bias=True), RMSNorm(hidden_size))
         self.bpm_embedder = TimestepEmbedder(hidden_size)
@@ -577,11 +574,11 @@ class ActionTransformer(nn.Module):
         #     nn.LayerNorm(spatial_window * hidden_size),
         #     nn.Linear(spatial_window * hidden_size, len(levels)),
         # )
-        # self.to_vq = nn.Sequential(
-        #     nn.LayerNorm(hidden_size),
-        #     nn.Linear(hidden_size, len(levels)),
-        # )
-        self.to_vq = CNNEncoder(hidden_size, len(levels), [4, 2], spatial_window)
+        self.to_vq = nn.Sequential(
+            nn.LayerNorm(hidden_size),
+            nn.Linear(hidden_size, len(levels)),
+        )
+        # self.to_vq = CNNEncoder(hidden_size, len(levels), [4, 2], spatial_window)
         self.vq = FSQ(levels=levels)
         # self.vq = ResidualFSQ(levels=levels, num_quantizers=)
         self.from_vq = nn.Linear(len(levels), hidden_size)
@@ -590,7 +587,7 @@ class ActionTransformer(nn.Module):
         self.spatial_pos = nn.Embedding(1 + spatial_window, hidden_size)
         self.temporal_pos = nn.Embedding(temporal_window, hidden_size)
         
-        # self.initialize_weights()
+        self.initialize_weights()
     
     def initialize_weights(self):
         self.apply(self._init_weights)
@@ -605,9 +602,9 @@ class ActionTransformer(nn.Module):
             torch.nn.init.zeros_(block.mlp.w3.weight)
             torch.nn.init.zeros_(block.attn.proj.weight)
         
-        # self.to_vq[1].reset_parameters()
+        self.to_vq[1].reset_parameters()
         self.from_vq.reset_parameters()
-        self.to_vq.fc.reset_parameters()
+        # self.to_vq.fc.reset_parameters()
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
@@ -670,7 +667,7 @@ class DiT(nn.Module):
         # self.action_embedder = nn.Embedding(num_actions, hidden_size)
         
         self.x_pos = nn.Embedding(max_input_size, hidden_size)
-        self.context_pos = nn.Embedding(4, hidden_size)
+        self.context_pos = nn.Embedding(3+48, hidden_size)
 
         self.blocks = nn.ModuleList([
             CrossAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
@@ -712,12 +709,12 @@ class DiT(nn.Module):
         
         x = self.x_embedder(x)
         t = self.t_embedder(t)
-        bpm = self.bpm_embedder(bpm.unsqueeze(-1))
+        bpm = self.bpm_embedder(bpm.unsqueeze(-1))[:, 1]
         # actions = self.action_embedder(actions)
         context = torch.cat([t.unsqueeze(1), bpm.squeeze(), actions], dim=1)
         
         x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
-        context = context + self.context_pos(torch.arange(4, device=x.device, dtype=torch.long).unsqueeze(0))
+        context = context + self.context_pos(torch.arange(3+48, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.blocks:
             x = block(x, context)
         
