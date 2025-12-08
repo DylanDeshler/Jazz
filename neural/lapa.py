@@ -627,8 +627,8 @@ class ActionTransformer(nn.Module):
         
         x = self.x_embedder(x)
         bpm = self.bpm_embedder(bpm.unsqueeze(-1)).transpose(1, 2)
-        
-        x = torch.cat([bpm, x], dim=2)
+        print(x.shape, bpm.shape)
+        x = torch.cat([bpm, x], dim=2);print(bpm.shape)
         x = rearrange(x, 'b t n c -> (b t) n c')
         x = x + self.spatial_pos(torch.arange(N + self.temporal_window, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.spatial_blocks:
