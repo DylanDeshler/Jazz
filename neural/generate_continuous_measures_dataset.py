@@ -20,7 +20,6 @@ ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torc
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 batch_size = 128
-rate = 16000
 n_samples = 24576
 
 out_prefix = 'low_measures_large'
@@ -42,14 +41,16 @@ model.eval()
 
 N = 3693787
 data = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_audio.npy', dtype=np.float16, mode='r', shape=(N, n_samples))
-arr = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large.bin', dtype=np.float16, mode='w+', shape=(N, 48, 16))
+# arr = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large.bin', dtype=np.float16, mode='w+', shape=(N, 48, 16))
 
 with torch.no_grad():
     for i in tqdm(range(N // batch_size)):
         batch = torch.from_numpy(data[i*batch_size:(i+1)*batch_size].copy()).view(batch_size, n_samples).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         with ctx:
             _, codes = model.encode(batch)
-        codes = codes.permute(0, 2, 1).cpu().detach().numpy()
-        arr[i*batch_size:(i+1)*batch_size] = codes.astype(np.float16)
+            recon = model.decode(codes)
+        print(((batch - recon) ** 2).mean())
+#         codes = codes.permute(0, 2, 1).cpu().detach().numpy()
+#         arr[i*batch_size:(i+1)*batch_size] = codes.astype(np.float16)
 
-arr.flush()
+# arr.flush()
