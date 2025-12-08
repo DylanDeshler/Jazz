@@ -534,17 +534,18 @@ class CNNDecoder(nn.Module):
             blocks.append(ConvBlock(in_size, 3))
         self.blocks = nn.ModuleList(blocks)
         
-        self.norm = nn.LayerNorm(in_size)
         self.fc = nn.Linear(in_size, out_size)
         
     def forward(self, x):
         print(x.shape)
+        
+        x = self.fc(x)
+        x = rearrange(x, 'n l c -> n c l')
         for block in self.blocks:
             x = block(x)
         
+        x = rearrange(x, 'n c l -> n l c')
         print(x.shape)
-        x = self.norm(x)
-        x = self.fc(x)
         return x
 
 class ActionTransformer(nn.Module):
