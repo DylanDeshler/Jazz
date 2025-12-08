@@ -28,7 +28,7 @@ if __name__ == '__main__':
     x = linear(x)
     print(x.mean(), x.std())
     x, indices = vq(x)
-    print(indices.shape)
+    
     indices = indices.flatten()
     num_tokens = indices.numel()
 
@@ -39,6 +39,7 @@ if __name__ == '__main__':
     utilization = active_count / math.prod(levels)
 
     probs = counts / num_tokens
+    print(num_tokens, counts.shape, probs.shape)
     probs = probs + 1e-10
     entropy = -torch.sum(probs * torch.log(probs))
     perplexity = torch.exp(entropy).item()
