@@ -630,7 +630,7 @@ class ActionTransformer(nn.Module):
         
         x = torch.cat([bpm, x], dim=2)
         x = rearrange(x, 'b t n c -> (b t) n c')
-        x = x + self.spatial_pos(torch.arange(N, device=x.device, dtype=torch.long).unsqueeze(0))
+        x = x + self.spatial_pos(torch.arange(N + self.temporal_window, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.spatial_blocks:
             x = block(x)
         
