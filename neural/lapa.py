@@ -513,6 +513,8 @@ class CNNEncoder(nn.Module):
         
         self.norm = nn.LayerNorm(in_size * spatial_window // math.prod(ratios))
         self.fc = nn.Linear(in_size * spatial_window // math.prod(ratios), out_size)
+        
+        self.fc.reset_parameters()
     
     def forward(self, x):
         x = rearrange(x, 'n l c -> n c l')
@@ -571,15 +573,15 @@ class ActionTransformer(nn.Module):
             SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth // 2)
         ])
         
-        self.to_vq = nn.Sequential(
-            nn.LayerNorm(spatial_window * hidden_size),
-            nn.Linear(spatial_window * hidden_size, len(levels)),
-        )
+        # self.to_vq = nn.Sequential(
+        #     nn.LayerNorm(spatial_window * hidden_size),
+        #     nn.Linear(spatial_window * hidden_size, len(levels)),
+        # )
         # self.to_vq = nn.Sequential(
         #     nn.LayerNorm(hidden_size),
         #     nn.Linear(hidden_size, len(levels)),
         # )
-        # self.to_vq = CNNEncoder(hidden_size, len(levels), [4, 2], spatial_window)
+        self.to_vq = CNNEncoder(hidden_size, len(levels), [4, 2], spatial_window)
         self.vq = FSQ(levels=levels)
         # self.vq = ResidualFSQ(levels=levels, num_quantizers=)
         self.from_vq = nn.Linear(len(levels), hidden_size)
@@ -603,9 +605,9 @@ class ActionTransformer(nn.Module):
             torch.nn.init.zeros_(block.mlp.w3.weight)
             torch.nn.init.zeros_(block.attn.proj.weight)
         
-        self.to_vq[1].reset_parameters()
+        # self.to_vq[1].reset_parameters()
         self.from_vq.reset_parameters()
-        # self.to_vq.fc.reset_parameters()
+        self.to_vq.fc.reset_parameters()
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
@@ -641,11 +643,11 @@ class ActionTransformer(nn.Module):
         
         x = rearrange(x, '(b n) t c -> b t n c', b=B, n=N + 1)
         first_frame, last_frame = x[:, 0, 1:], x[:, 1, 1:]
-        first_frame, last_frame = rearrange(first_frame, 'b n c -> b (n c)'), rearrange(last_frame, 'b n c -> b (n c)')
+        # first_frame, last_frame = rearrange(first_frame, 'b n c -> b (n c)'), rearrange(last_frame, 'b n c -> b (n c)')
         x = last_frame - first_frame
         # x = x.unsqueeze(1)
         
-        x = self.to_vq(x).unsqueeze(1)
+        x = self.to_vq(x)
         x, indices = self.vq(x)
         x = self.from_vq(x)
         return x, indices
