@@ -647,7 +647,7 @@ class ActionTransformer(nn.Module):
         x = last_frame - first_frame
         # x = x.unsqueeze(1)
         
-        x = self.to_vq(x)
+        x = self.to_vq(x) * 100
         x, indices = self.vq(x)
         x = self.from_vq(x)
         return x, indices
