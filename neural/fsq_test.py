@@ -34,7 +34,7 @@ if __name__ == '__main__':
     num_tokens = indices.numel()
 
     counts = torch.bincount(indices, minlength=math.prod(levels)).float()
-    
+    print('weight: ', linear.weight.mean(), linear.weight.std())
     active_mask = counts > 0
     active_count = active_mask.sum().item()
     utilization = active_count / math.prod(levels)
