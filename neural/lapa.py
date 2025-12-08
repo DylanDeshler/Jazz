@@ -590,7 +590,7 @@ class ActionTransformer(nn.Module):
         self.spatial_pos = nn.Embedding(1 + spatial_window, hidden_size)
         self.temporal_pos = nn.Embedding(temporal_window, hidden_size)
         
-        self.initialize_weights()
+        # self.initialize_weights()
     
     def initialize_weights(self):
         self.apply(self._init_weights)
@@ -647,7 +647,7 @@ class ActionTransformer(nn.Module):
         x = last_frame - first_frame
         # x = x.unsqueeze(1)
         
-        x = self.to_vq(x) * 100
+        x = self.to_vq(x)
         x, indices = self.vq(x)
         x = self.from_vq(x)
         return x, indices
