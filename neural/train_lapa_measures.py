@@ -335,7 +335,7 @@ def generate_lam_vs_random_actions(step):
     random_psnr = psnr(x, random_recon)
 
     for i in range(20):
-        og, y, random_y, r = x[i], recon[i], random_recon[i], ratio[i, 1].cpu().detach().numpy().item()
+        og, y, random_y, r = x[i], recon[i], random_recon[i], ratio[i, 0].cpu().detach().numpy().item()
 
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), restore_measure(og, r), 16000)
