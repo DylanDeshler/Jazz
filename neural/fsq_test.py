@@ -27,7 +27,7 @@ if __name__ == '__main__':
     x = norm(x)
     print(x.mean(), x.std())
     x = linear(x)
-    x = norm2(x)
+    x = norm2(x) * 0.4
     x = x.unsqueeze(1)
     print(x.mean(), x.std())
     x, indices = vq(x)
