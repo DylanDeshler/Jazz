@@ -527,13 +527,13 @@ class CNNEncoder(nn.Module):
             x = block(x)
         
         x = rearrange(x, 'n c l -> n (c l)')
-        print('pre norm: ', x.mean().item(), x.std().item())
+        print('pre norm: ', x.shape, x.mean().item(), x.std().item())
         x = self.norm(x)
-        print('pre linear: ', x.mean().item(), x.std().item())
+        print('pre linear: ', x.shape, x.mean().item(), x.std().item())
         # print('weights: ', self.fc.weight.mean(), self.fc.weight.std(), self.fc.bias.mean(), self.fc.bias.std())
         x = self.fc(x)
         # x = x[:, :3]
-        print('pre quant: ', x.mean().item(), x.std().item())
+        print('pre quant: ', x.shape, x.mean().item(), x.std().item())
         x = x.unsqueeze(1)
         return x
 
