@@ -67,7 +67,7 @@ wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
-batch_size = 192# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 256# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 temporal_window = 2
 spatial_window = 48
@@ -335,7 +335,7 @@ def generate_lam_vs_random_actions(step):
     random_psnr = psnr(x, random_recon)
 
     for i in range(20):
-        og, y, random_y, r = x[i], recon[i], random_recon[i], ratio[i, 0].cpu().detach().numpy().item()
+        og, y, random_y, r = x[i], recon[i], random_recon[i], ratio[i, 1].cpu().detach().numpy().item()
 
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), restore_measure(og, r), 16000)
@@ -404,10 +404,10 @@ while True:
         losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
-            with ctx:
-                metrics = generate_lam_vs_random_actions(iter_num)
+            # with ctx:
+            #     metrics = generate_lam_vs_random_actions(iter_num)
             model.train()
-            print(f"iter {iter_num}: delta PSNR {metrics['PSNR']:.3f}, delta Similarity {metrics['Similarity']:.3f}")
+            # print(f"iter {iter_num}: delta PSNR {metrics['PSNR']:.3f}, delta Similarity {metrics['Similarity']:.3f}")
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, train perplexity: {usage['train']:.2f}, val perplexity {usage['val']:.2f}")
         if wandb_log:
             wandb.log({
