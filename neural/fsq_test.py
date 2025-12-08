@@ -22,13 +22,13 @@ if __name__ == '__main__':
     
     vq = FSQ(levels=levels)
     
-    x = torch.randn(512, 1, hidden_size)# * 0.02
+    x = torch.randn(512, 1, hidden_size)
     x = norm(x)
     print(x.mean(), x.std())
     x = linear(x)
     print(x.mean(), x.std())
     x, indices = vq(x)
-    
+    print(indices.shape)
     indices = indices.flatten()
     num_tokens = indices.numel()
 
