@@ -571,15 +571,15 @@ class ActionTransformer(nn.Module):
             SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth // 2)
         ])
         
-        # self.to_vq = nn.Sequential(
-        #     nn.LayerNorm(spatial_window * hidden_size),
-        #     nn.Linear(spatial_window * hidden_size, len(levels)),
-        # )
+        self.to_vq = nn.Sequential(
+            nn.LayerNorm(spatial_window * hidden_size),
+            nn.Linear(spatial_window * hidden_size, len(levels)),
+        )
         # self.to_vq = nn.Sequential(
         #     nn.LayerNorm(hidden_size),
         #     nn.Linear(hidden_size, len(levels)),
         # )
-        self.to_vq = CNNEncoder(hidden_size, len(levels), [4, 2], spatial_window)
+        # self.to_vq = CNNEncoder(hidden_size, len(levels), [4, 2], spatial_window)
         self.vq = FSQ(levels=levels)
         # self.vq = ResidualFSQ(levels=levels, num_quantizers=)
         self.from_vq = nn.Linear(len(levels), hidden_size)
@@ -603,9 +603,9 @@ class ActionTransformer(nn.Module):
             torch.nn.init.zeros_(block.mlp.w3.weight)
             torch.nn.init.zeros_(block.attn.proj.weight)
         
-        # self.to_vq[1].reset_parameters()
+        self.to_vq[1].reset_parameters()
         self.from_vq.reset_parameters()
-        self.to_vq.fc.reset_parameters()
+        # self.to_vq.fc.reset_parameters()
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
