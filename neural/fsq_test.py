@@ -15,13 +15,13 @@ if __name__ == '__main__':
     torch.nn.init.normal_(linear.weight, mean=0.0, std=std)
     if linear.bias is not None:
         torch.nn.init.zeros_(linear.bias)
-    # linear.reset_parameters()
+    linear.reset_parameters()
     
     norm = nn.LayerNorm(hidden_size, elementwise_affine=True)
     
     vq = FSQ(levels=levels)
     
-    x = torch.randn(64, 32, hidden_size) * 0.02
+    x = torch.randn(64, 1, hidden_size) * 0.02
     x = norm(x)
     x = linear(x)
     x, indices = vq(x)
