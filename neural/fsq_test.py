@@ -19,28 +19,26 @@ if __name__ == '__main__':
     linear.reset_parameters()
     
     norm = nn.LayerNorm(hidden_size, elementwise_affine=True)
-    norm2 = nn.LayerNorm(len(levels))
     
     vq = FSQ(levels=levels)
     
-    x = torch.randn(512, hidden_size)
+    x = torch.randn(384, hidden_size)
     x = norm(x)
     print(x.mean(), x.std())
     x = linear(x)
-    x = norm2(x) * 0.6
     x = x.unsqueeze(1)
     print(x.mean(), x.std())
     x, indices = vq(x)
     
     indices = indices.flatten()
     num_tokens = indices.numel()
-    print(indices.shape, num_tokens)
 
     counts = torch.bincount(indices, minlength=math.prod(levels)).float()
     
     active_mask = counts > 0
     active_count = active_mask.sum().item()
     utilization = active_count / math.prod(levels)
+    print(active_mask.shape)
 
     probs = counts / num_tokens
     print(probs.min(), probs.mean(), probs.std(), probs.max())
