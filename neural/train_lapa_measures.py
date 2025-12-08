@@ -250,7 +250,6 @@ def estimate_codebook_usage():
                 
                 indices = indices.flatten()
                 num_tokens = indices.numel()
-                print(indices.shape, num_tokens)
             
                 counts = torch.bincount(indices, minlength=math.prod(levels)).float()
                 
@@ -260,7 +259,6 @@ def estimate_codebook_usage():
                 print(utilization)
                 
                 probs = counts / num_tokens
-                print(probs.min(), probs.mean(), probs.std(), probs.max())
                 
                 # Add epsilon to avoid log(0)
                 probs = probs + 1e-10
