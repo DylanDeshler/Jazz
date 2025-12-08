@@ -14,6 +14,12 @@ from dito import DiToV4 as Tokenizer
 
 device = torch.device('cuda')
 
+dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto 
+device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
+# note: float16 data type will automatically use a GradScaler
+ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
+ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
+
 batch_size = 128
 rate = 16000
 n_samples = 24576
@@ -42,7 +48,8 @@ arr = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large.bi
 with torch.no_grad():
     for i in tqdm(range(N // batch_size)):
         batch = torch.from_numpy(data[i*batch_size:(i+1)*batch_size].copy()).view(batch_size, n_samples).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-        _, codes = model.encode(batch)
+        with ctx:
+            _, codes = model.encode(batch)
         codes = codes.permute(0, 2, 1).cpu().detach().numpy()
         arr[i*batch_size:(i+1)*batch_size] = codes.astype(np.float16)
 
