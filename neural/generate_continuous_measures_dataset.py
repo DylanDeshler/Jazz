@@ -9,6 +9,8 @@ from torchinfo import summary
 
 import numpy as np
 import torch
+import soundfile as sf
+import pyrubberband as pyrb
 
 from dito import DiToV5 as Tokenizer
 
@@ -40,11 +42,6 @@ model.load_state_dict(state_dict)
 model.eval()
 model = torch.compile(model)
 
-N = 3693787
-data = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_audio.npy', dtype=np.float16, mode='r', shape=(N, n_samples))
-# arr = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large.bin', dtype=np.float16, mode='w+', shape=(N, 48, 16))
-meta = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_meta.npy', dtype=np.float32, mode='r', shape=(3693787, 2))
-
 def restore_measure(audio, stretch_ratio, sr=16000):
     """
     Restores a time-warped measure to its original duration.
@@ -67,19 +64,22 @@ def restore_measure(audio, stretch_ratio, sr=16000):
     y_restored = pyrb.time_stretch(audio, sr, restore_rate)
     return y_restored
 
-import soundfile as sf
-import pyrubberband as pyrb
+N = 3693787
+data = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_audio.npy', dtype=np.float16, mode='r', shape=(N, n_samples))
+arr = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large.bin', dtype=np.float16, mode='w+', shape=(N, 48, 16))
+meta = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_meta.npy', dtype=np.float32, mode='r', shape=(N, 2))
+
 with torch.no_grad():
     for i in tqdm(range(N // batch_size)):
         batch = torch.from_numpy(data[i*batch_size:(i+1)*batch_size].copy()).view(batch_size, n_samples).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         with ctx:
             _, codes = model.encode(batch)
-            recon = model.reconstruct(batch, n_steps=100)
-        batch = batch.cpu().detach().float().numpy()
-        recon = recon.cpu().detach().float().numpy()
-        sf.write('real.wav', restore_measure(batch[0].squeeze(), meta[i*batch_size:(i+1)*batch_size].copy()[0, 0].item()), 16000)
-        sf.write('recon.wav', restore_measure(recon[0].squeeze(), meta[i*batch_size:(i+1)*batch_size].copy()[0, 0].item()), 16000)
+            # recon = model.reconstruct(batch, n_steps=100)
+        # batch = batch.cpu().detach().float().numpy()
+        # recon = recon.cpu().detach().float().numpy()
+        # sf.write('real.wav', restore_measure(batch[0].squeeze(), meta[i*batch_size:(i+1)*batch_size].copy()[0, 0].item()), 16000)
+        # sf.write('recon.wav', restore_measure(recon[0].squeeze(), meta[i*batch_size:(i+1)*batch_size].copy()[0, 0].item()), 16000)
         codes = codes.permute(0, 2, 1).cpu().detach().numpy()
-#         arr[i*batch_size:(i+1)*batch_size] = codes.astype(np.float16)
+        arr[i*batch_size:(i+1)*batch_size] = codes.astype(np.float16)
 
-# arr.flush()
+arr.flush()
