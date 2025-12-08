@@ -326,6 +326,7 @@ def generate_lam_vs_random_actions(step):
         x = tokenizer.decode(x[:, 1].permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
         recon = tokenizer.decode(recon.permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
         random_recon = tokenizer.decode(random_recon.permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
+    
     x = x.cpu().detach().float().numpy().squeeze(1)
     recon = recon.cpu().detach().float().numpy().squeeze(1)
     random_recon = random_recon.cpu().detach().float().numpy().squeeze(1)
@@ -335,7 +336,7 @@ def generate_lam_vs_random_actions(step):
     random_psnr = psnr(x, random_recon)
 
     for i in range(20):
-        og, y, random_y, ratio = x[i], recon[i], random_recon[i], ratio[i].cpu().detach().numpy().item()
+        og, y, random_y, ratio = x[i], recon[i], random_recon[i], ratio[i, 1].cpu().detach().numpy().item()
 
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), restore_measure(og, ratio), 16000)
@@ -356,6 +357,7 @@ def generate_lam_vs_random_actions(step):
     x_inputs['attention_mask'] = x_inputs['attention_mask'].to(device)
     recon_inputs['attention_mask'] = recon_inputs['attention_mask'].to(device)
     random_recon_inputs['attention_mask'] = random_recon_inputs['attention_mask'].to(device)
+    
     with torch.no_grad():
         x_emb = emb_model(**x_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1).cpu().numpy()
         recon_emb = emb_model(**recon_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1).cpu().numpy()
