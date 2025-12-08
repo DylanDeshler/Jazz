@@ -529,6 +529,7 @@ class CNNEncoder(nn.Module):
         print('pre norm: ', x.mean().item(), x.std().item())
         x = self.norm(x)
         print('pre linear: ', x.mean().item(), x.std().item())
+        print('weights: ', self.fc.weight.mean(), self.fc.weight.std(), self.fc.bias.mean(), self.fc.bias.std())
         x = self.fc(x)
         print('pre quant: ', x.mean().item(), x.std().item())
         x = x.unsqueeze(1)
