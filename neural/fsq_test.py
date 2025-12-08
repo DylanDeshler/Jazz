@@ -31,6 +31,7 @@ if __name__ == '__main__':
     
     indices = indices.flatten()
     num_tokens = indices.numel()
+    print(indices.shape, num_tokens)
 
     counts = torch.bincount(indices, minlength=math.prod(levels)).float()
     
