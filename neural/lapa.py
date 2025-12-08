@@ -513,6 +513,7 @@ class CNNEncoder(nn.Module):
         
         self.norm = nn.LayerNorm(in_size * spatial_window // math.prod(ratios))
         self.fc = nn.Linear(in_size * spatial_window // math.prod(ratios), out_size)
+        self.norm2 = nn.LayerNorm(out_size)
 
         self.initialize_weights()
     
@@ -532,6 +533,7 @@ class CNNEncoder(nn.Module):
         print('pre linear: ', x.shape, x.mean().item(), x.std().item())
         # print('weights: ', self.fc.weight.mean(), self.fc.weight.std(), self.fc.bias.mean(), self.fc.bias.std())
         x = self.fc(x)
+        x = self.norm2(x)
         # x = x[:, :3]
         print(self.fc.weight.mean(), self.fc.weight.std())
         print('pre quant: ', x.shape, x.mean().item(), x.std().item())
