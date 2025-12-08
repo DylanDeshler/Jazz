@@ -10,7 +10,7 @@ from torchinfo import summary
 import numpy as np
 import torch
 
-from dito import DiToV4 as Tokenizer
+from dito import DiToV5 as Tokenizer
 
 device = 'cuda'
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto 
