@@ -42,7 +42,7 @@ model.eval()
 
 N = 3693787
 data = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_audio.npy', dtype=np.float16, mode='r', shape=(N, n_samples))
-arr = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large.bin', dtype=np.float16, mode='w+', shape=(N, 48))
+arr = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large.bin', dtype=np.float16, mode='w+', shape=(N, 48, 16))
 
 with torch.no_grad():
     for i in tqdm(range(N // batch_size)):
