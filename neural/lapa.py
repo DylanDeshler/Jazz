@@ -616,7 +616,7 @@ class ActionTransformer(nn.Module):
         # self.to_vq[1].reset_parameters()
         self.from_vq.reset_parameters()
         self.to_vq.fc.reset_parameters()
-        torch.nn.init.zeros_(self.to_vq.bias)
+        torch.nn.init.zeros_(self.to_vq.fc.bias)
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
