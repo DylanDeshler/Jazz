@@ -253,6 +253,12 @@ def estimate_codebook_usage():
                 print(indices.shape, num_tokens)
             
                 counts = torch.bincount(indices, minlength=math.prod(levels)).float()
+                
+                active_mask = counts > 0
+                active_count = active_mask.sum().item()
+                utilization = active_count / math.prod(levels)
+                print(utilization)
+                
                 probs = counts / num_tokens
                 print(probs.min(), probs.mean(), probs.std(), probs.max())
                 
