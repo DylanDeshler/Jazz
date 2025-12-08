@@ -802,7 +802,7 @@ class LAM(nn.Module):
         return z, indices
     
     def generate(self, x, bpm, actions, n_steps=50):
-        return self.decoder.sample(x, actions, n_steps=n_steps)
+        return self.decoder.sample(x, bpm, actions, n_steps=n_steps)
     
     def generate_random_different_actions(self, actions_indices, codebook_size, device):
         shape = actions_indices.shape
