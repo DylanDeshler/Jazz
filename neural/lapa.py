@@ -512,14 +512,14 @@ class CNNEncoder(nn.Module):
         self.blocks = nn.ModuleList(blocks)
         
         self.norm = nn.LayerNorm(in_size * spatial_window // math.prod(ratios))
-        self.fc = nn.Linear(in_size * spatial_window // math.prod(ratios), out_size)
+        self.fc = nn.Linear(in_size * spatial_window // math.prod(ratios), out_size, bias=False)
 
         self.initialize_weights()
     
     def initialize_weights(self):
-        self.norm.reset_parameters()
         self.fc.reset_parameters()
-        torch.nn.init.zeros_(self.fc.bias)
+        torch.nn.init.normal_(self.fc.weight, mean=0.0, std=1.)
+        # torch.nn.init.zeros_(self.fc.bias)
     
     def forward(self, x):
         x = rearrange(x, 'n l c -> n c l')
@@ -531,8 +531,8 @@ class CNNEncoder(nn.Module):
         x = self.norm(x)
         print('pre linear: ', x.mean().item(), x.std().item())
         # print('weights: ', self.fc.weight.mean(), self.fc.weight.std(), self.fc.bias.mean(), self.fc.bias.std())
-        # x = self.fc(x)
-        x = x[:, :3]
+        x = self.fc(x)
+        # x = x[:, :3]
         print('pre quant: ', x.mean().item(), x.std().item())
         x = x.unsqueeze(1)
         return x
@@ -615,9 +615,9 @@ class ActionTransformer(nn.Module):
             torch.nn.init.zeros_(block.attn.proj.weight)
         
         # self.to_vq[1].reset_parameters()
-        self.from_vq.reset_parameters()
-        self.to_vq.fc.reset_parameters()
-        torch.nn.init.zeros_(self.to_vq.fc.bias)
+        # self.from_vq.reset_parameters()
+        # self.to_vq.fc.reset_parameters()
+        # torch.nn.init.zeros_(self.to_vq.fc.bias)
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
