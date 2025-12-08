@@ -585,7 +585,7 @@ class ActionTransformer(nn.Module):
         self.from_vq = nn.Linear(len(levels), hidden_size)
         # self.from_vq = CNNDecoder(len(levels), hidden_size, [4, 2])
         
-        self.spatial_pos = nn.Embedding(temporal_window + spatial_window, hidden_size)
+        self.spatial_pos = nn.Embedding(1 + spatial_window, hidden_size)
         self.temporal_pos = nn.Embedding(temporal_window, hidden_size)
         
         self.initialize_weights()
@@ -627,10 +627,10 @@ class ActionTransformer(nn.Module):
         
         x = self.x_embedder(x)
         bpm = self.bpm_embedder(bpm.unsqueeze(-1)).transpose(1, 2)
-        print(x.shape, bpm.shape)
-        x = torch.cat([bpm, x], dim=2);print(bpm.shape)
+        
+        x = torch.cat([bpm, x], dim=2)
         x = rearrange(x, 'b t n c -> (b t) n c')
-        x = x + self.spatial_pos(torch.arange(N + self.temporal_window, device=x.device, dtype=torch.long).unsqueeze(0))
+        x = x + self.spatial_pos(torch.arange(N + 1, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.spatial_blocks:
             x = block(x)
         
@@ -640,7 +640,7 @@ class ActionTransformer(nn.Module):
             x = block(x, is_causal=True)
         
         x = rearrange(x, '(b n) t c -> b t n c', b=B, n=N)
-        first_frame, last_frame = x[:, 0, self.temporal_window:], x[:, 1, self.temporal_window:]
+        first_frame, last_frame = x[:, 0, 1:], x[:, 1, 1:]
         # first_frame, last_frame = rearrange(first_frame, 'b n c -> b (n c)'), rearrange(last_frame, 'b n c -> b (n c)')
         x = last_frame - first_frame
         # x = x.unsqueeze(1)
