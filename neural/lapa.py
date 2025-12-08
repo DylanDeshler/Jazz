@@ -512,13 +512,14 @@ class CNNEncoder(nn.Module):
         self.blocks = nn.ModuleList(blocks)
         
         self.norm = nn.LayerNorm(in_size * spatial_window // math.prod(ratios))
-        self.fc = nn.Linear(in_size * spatial_window // math.prod(ratios), out_size, bias=False)
+        self.fc = nn.Linear(in_size * spatial_window // math.prod(ratios), out_size)
 
         self.initialize_weights()
     
     def initialize_weights(self):
         self.norm.reset_parameters()
         self.fc.reset_parameters()
+        torch.nn.init.zeros_(self.fc.bias)
     
     def forward(self, x):
         x = rearrange(x, 'n l c -> n c l')
@@ -615,6 +616,7 @@ class ActionTransformer(nn.Module):
         # self.to_vq[1].reset_parameters()
         self.from_vq.reset_parameters()
         self.to_vq.fc.reset_parameters()
+        torch.nn.init.zeros_(self.to_vq.bias)
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
