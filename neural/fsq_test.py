@@ -3,6 +3,7 @@ import torch.nn as nn
 
 import math
 from vector_quantize_pytorch import FSQ
+from lapa import ActionTransformer
 
 if __name__ == '__main__':
     hidden_size = 768
@@ -21,7 +22,7 @@ if __name__ == '__main__':
     
     vq = FSQ(levels=levels)
     
-    x = torch.randn(64, 1, hidden_size) * 0.02
+    x = torch.randn(512, 1, hidden_size) * 0.02
     x = norm(x)
     print(x.mean(), x.std())
     x = linear(x)
@@ -43,4 +44,6 @@ if __name__ == '__main__':
     perplexity = torch.exp(entropy).item()
     
     print(perplexity)
+    
+    # model = ActionTransformer(16, hidden_size, levels, 48, 2)
     
