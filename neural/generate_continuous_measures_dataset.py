@@ -77,8 +77,8 @@ with torch.no_grad():
             recon = model.reconstruct(batch, n_steps=100)
         batch = batch.cpu().detach().float().numpy()
         recon = recon.cpu().detach().float().numpy()
-        sf.write('real.wav', restore_measure(batch[0], meta[i*batch_size:(i+1)*batch_size].copy()[0, 0].item()), 16000)
-        sf.write('recon.wav', restore_measure(recon[0], meta[i*batch_size:(i+1)*batch_size].copy()[0, 0].item()), 16000)
+        sf.write('real.wav', restore_measure(batch[0].squeeze(), meta[i*batch_size:(i+1)*batch_size].copy()[0, 0].item()), 16000)
+        sf.write('recon.wav', restore_measure(recon[0].squeeze(), meta[i*batch_size:(i+1)*batch_size].copy()[0, 0].item()), 16000)
         codes = codes.permute(0, 2, 1).cpu().detach().numpy()
 #         arr[i*batch_size:(i+1)*batch_size] = codes.astype(np.float16)
 
