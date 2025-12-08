@@ -536,6 +536,7 @@ class CNNEncoder(nn.Module):
         print(self.fc.weight.mean(), self.fc.weight.std())
         print('pre quant: ', x.shape, x.mean().item(), x.std().item())
         x = x.unsqueeze(1)
+        print(x.shape)
         return x
 
 class CNNDecoder(nn.Module):
