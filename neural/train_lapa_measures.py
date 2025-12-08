@@ -256,7 +256,6 @@ def estimate_codebook_usage():
                 active_mask = counts > 0
                 active_count = active_mask.sum().item()
                 utilization = active_count / math.prod(levels)
-                print(utilization)
                 
                 probs = counts / num_tokens
                 
@@ -264,7 +263,6 @@ def estimate_codebook_usage():
                 probs = probs + 1e-10
                 entropy = -torch.sum(probs * torch.log(probs))
                 perplexity = torch.exp(entropy).item()
-                print(perplexity)
             
             usage[k] = perplexity
         out[split] = usage.mean()
