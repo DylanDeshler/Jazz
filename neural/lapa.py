@@ -511,7 +511,7 @@ class CNNEncoder(nn.Module):
             blocks.append(DownsampleV3(in_size, in_size, ratio))
         self.blocks = nn.ModuleList(blocks)
         
-        self.norm = nn.LayerNorm(in_size * spatial_window // math.prod(ratios))
+        self.norm = nn.LayerNorm(in_size * spatial_window // math.prod(ratios), elementwise_affine=False)
         self.fc = nn.Linear(in_size * spatial_window // math.prod(ratios), out_size)
     
     def forward(self, x):
