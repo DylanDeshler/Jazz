@@ -330,18 +330,18 @@ def generate_lam_vs_random_actions(step):
     x = x.cpu().detach().float().numpy().squeeze(1)
     recon = recon.cpu().detach().float().numpy().squeeze(1)
     random_recon = random_recon.cpu().detach().float().numpy().squeeze(1)
-    print(x.shape, recon.shape, random_recon.shape)
+    print(x.shape, recon.shape, random_recon.shape, ratio.shape)
 
     recon_psnr = psnr(x, recon)
     random_psnr = psnr(x, random_recon)
 
     for i in range(20):
-        og, y, random_y, ratio = x[i], recon[i], random_recon[i], ratio[i, 1].cpu().detach().numpy().item()
+        og, y, random_y, r = x[i], recon[i], random_recon[i], ratio[i, 1].cpu().detach().numpy().item()
 
         # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), restore_measure(og, ratio), 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), restore_measure(y, ratio), 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), restore_measure(random_y, ratio), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), restore_measure(og, r), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), restore_measure(y, r), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), restore_measure(random_y, r), 16000)
     
     x = [row for row in resampler(torch.from_numpy(x)).numpy()]
     recon = [row for row in resampler(torch.from_numpy(recon)).numpy()]
