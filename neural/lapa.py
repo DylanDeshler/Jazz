@@ -518,7 +518,7 @@ class CNNEncoder(nn.Module):
     
     def initialize_weights(self):
         self.fc.reset_parameters()
-        torch.nn.init.normal_(self.fc.weight, mean=0.0, std=1.)
+        # torch.nn.init.normal_(self.fc.weight, mean=0.0, std=1.)
         # torch.nn.init.zeros_(self.fc.bias)
     
     def forward(self, x):
