@@ -600,7 +600,7 @@ class ActionTransformer(nn.Module):
         self.spatial_pos = nn.Embedding(1 + spatial_window, hidden_size)
         self.temporal_pos = nn.Embedding(temporal_window, hidden_size)
         
-        self.initialize_weights()
+        # self.initialize_weights()
     
     def initialize_weights(self):
         self.apply(self._init_weights)
