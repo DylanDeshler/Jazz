@@ -779,9 +779,9 @@ class LAM(nn.Module):
         self.levels = levels
         
         # tie weights
-        self.decoder.net.x_embedder[0].weight = self.action_model.x_embedder[0].weight
-        self.decoder.net.x_embedder[0].bias = self.action_model.x_embedder[0].bias
-        self.decoder.net.x_embedder[1].weight = self.action_model.x_embedder[1].weight
+        # self.decoder.net.x_embedder[0].weight = self.action_model.x_embedder[0].weight
+        # self.decoder.net.x_embedder[0].bias = self.action_model.x_embedder[0].bias
+        # self.decoder.net.x_embedder[1].weight = self.action_model.x_embedder[1].weight
     
     def forward(self, x, bpm):
         """

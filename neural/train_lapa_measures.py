@@ -330,7 +330,6 @@ def generate_lam_vs_random_actions(step):
     x = x.cpu().detach().float().numpy().squeeze(1)
     recon = recon.cpu().detach().float().numpy().squeeze(1)
     random_recon = random_recon.cpu().detach().float().numpy().squeeze(1)
-    print(x.shape, recon.shape, random_recon.shape, ratio.shape)
 
     recon_psnr = psnr(x, recon)
     random_psnr = psnr(x, random_recon)
