@@ -39,6 +39,7 @@ import soundfile as sf
 from transformers import Wav2Vec2FeatureExtractor, AutoModel
 import torch
 import torchaudio
+import pyrubberband as pyrb
 from sklearn.metrics.pairwise import paired_cosine_distances
 
 emb_model_id = "m-a-p/MERT-v1-330M"
@@ -144,8 +145,9 @@ def get_batch(split='train'):
     else:
         idxs = torch.randint(int(len(data) * 0.98), len(data) - temporal_window, (batch_size,))
     x = torch.from_numpy(np.stack([data[idx:idx+temporal_window] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    bpm = torch.from_numpy(np.stack([meta[idx:idx+temporal_window, 0] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    return x, bpm
+    ratio = torch.from_numpy(np.stack([meta[idx:idx+temporal_window, 0] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    bpm = torch.from_numpy(np.stack([meta[idx:idx+temporal_window, 1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    return x, ratio, bpm
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
@@ -227,9 +229,9 @@ def estimate_loss():
     for i, split in enumerate(['train', 'val']):
         losses = torch.zeros(eval_iters * gradient_accumulation_steps)
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
-            X, bpm = get_batch(split)
+            X, ratio, bpm = get_batch(split)
             with ctx:
-                loss, _ = model(X)
+                loss, _ = model(X, bpm)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -242,9 +244,9 @@ def estimate_codebook_usage():
     for i, split in enumerate(['train', 'val']):
         usage = torch.zeros(eval_iters * gradient_accumulation_steps)
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
-            X, bpm = get_batch(split)
+            X, ratio, bpm = get_batch(split)
             with ctx:
-                _, indices = model(X)
+                _, indices = model(X, bpm)
                 
                 indices = indices.flatten()
                 num_tokens = indices.numel()
@@ -276,12 +278,34 @@ def get_lr(it):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
 
+def restore_measure(audio, stretch_ratio, sr=16000):
+    """
+    Restores a time-warped measure to its original duration.
+    
+    Args:
+        audio (np.array): The fixed-length audio (from VAE or .npy file).
+                          Can be shape (1, 24576) or (24576,).
+        stretch_ratio (float): The ratio saved in your metadata 
+                               (Original Length / Target Length).
+        sr (int): Sampling rate (default 16000).
+        
+    Returns:
+        np.array: The restored audio array at original duration.
+    """
+    
+    if audio.dtype == np.float16:
+        audio = audio.astype(np.float32)
+    restore_rate = 1.0 / stretch_ratio
+    
+    y_restored = pyrb.time_stretch(audio, sr, restore_rate)
+    return y_restored
+
 @torch.no_grad()
 def generate_lam_vs_random_actions(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
     
-    x = get_batch('val')
+    x, ratio, bpm = get_batch('val')
 
     B, T, N, D = x.shape
 
@@ -298,19 +322,19 @@ def generate_lam_vs_random_actions(step):
         
         B, T, N, D = x.shape
     
-    out = tokenizer.decode(torch.cat([x[:, 1], recon, random_recon], dim=0).permute(0, 2, 1), shape=(1, 16384 * cut_seconds), n_steps=50)
-    x, recon, random_recon = [res.cpu().detach().numpy().squeeze(1) for res in out.split(B, dim=0)]
+    out = tokenizer.decode(torch.cat([x[:, 1], recon, random_recon], dim=0).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
+    x, recon, random_recon = [res.cpu().detach().float().numpy().squeeze(1) for res in out.split(B, dim=0)]
 
     recon_psnr = psnr(x, recon)
     random_psnr = psnr(x, random_recon)
 
     for i in range(20):
-        og, y, random_y = x[i], recon[i], random_recon[i]
+        og, y, random_y, ratio = x[i], recon[i], random_recon[i], ratio[i].cpu().detach().numpy().item()
 
         # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), og, 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_y, 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), restore_measure(og, ratio), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), restore_measure(y, ratio), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), restore_measure(random_y, ratio), 16000)
     
     x = [row for row in resampler(torch.from_numpy(x)).numpy()]
     recon = [row for row in resampler(torch.from_numpy(recon)).numpy()]
@@ -347,7 +371,7 @@ if wandb_log and master_process:
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
-X, bpm = get_batch('train') # fetch the very first batch
+X, ratio, bpm = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
@@ -417,10 +441,10 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            loss, _ = model(X)
+            loss, _ = model(X, bpm)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
-        X, bpm = get_batch('train')
+        X, ratio, bpm = get_batch('train')
         # backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
     # clip the gradient
