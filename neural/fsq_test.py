@@ -38,7 +38,7 @@ if __name__ == '__main__':
     active_mask = counts > 0
     active_count = active_mask.sum().item()
     utilization = active_count / math.prod(levels)
-    print(active_mask.shape)
+    print(utilization)
 
     probs = counts / num_tokens
     print(probs.min(), probs.mean(), probs.std(), probs.max())
