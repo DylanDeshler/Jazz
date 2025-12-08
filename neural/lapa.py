@@ -534,9 +534,8 @@ class CNNDecoder(nn.Module):
             blocks.append(ConvBlock(in_size, 3))
         self.blocks = nn.ModuleList(blocks)
         
+        self.norm = nn.LayerNorm(in_size)
         self.fc = nn.Linear(in_size, out_size)
-        
-        self.initialize_weights()
         
     def forward(self, x):
         print(x.shape)
@@ -544,6 +543,7 @@ class CNNDecoder(nn.Module):
             x = block(x)
         
         print(x.shape)
+        x = self.norm(x)
         x = self.fc(x)
         return x
 
