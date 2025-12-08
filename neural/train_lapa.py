@@ -50,7 +50,7 @@ resampler = torchaudio.transforms.Resample(16000, 24000)
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'LAPA_B_FSQ_16_noagg'
+out_dir = 'test'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -58,7 +58,7 @@ save_interval = 5000
 eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -78,14 +78,14 @@ vae_embed_dim = 16
 levels = [5, 3]
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 125000 # total number of training iterations
+max_iters = 1000000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
-decay_lr = True # whether to decay the learning rate
-warmup_iters = 105000 # how many steps to warm up for
+decay_lr = False # whether to decay the learning rate
+warmup_iters = 5000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
