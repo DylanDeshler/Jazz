@@ -23,7 +23,9 @@ if __name__ == '__main__':
     
     x = torch.randn(64, 1, hidden_size) * 0.02
     x = norm(x)
+    print(x.mean(), x.std())
     x = linear(x)
+    print(x.mean(), x.std())
     x, indices = vq(x)
     
     indices = indices.flatten()
