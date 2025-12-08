@@ -617,7 +617,7 @@ class ActionTransformer(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
-    def forward(self, x):
+    def forward(self, x, bpm):
         """
         x: (B, 2, N, C) latents
         """
@@ -660,10 +660,11 @@ class DiT(nn.Module):
         
         self.x_embedder = nn.Sequential(nn.Linear(in_channels, hidden_size, bias=True), RMSNorm(hidden_size))
         self.t_embedder = TimestepEmbedder(hidden_size)
+        self.bpm_embedder = TimestepEmbedder(hidden_size)
         # self.action_embedder = nn.Embedding(num_actions, hidden_size)
         
         self.x_pos = nn.Embedding(max_input_size, hidden_size)
-        self.context_pos = nn.Embedding(1, hidden_size)
+        self.context_pos = nn.Embedding(3, hidden_size)
 
         self.blocks = nn.ModuleList([
             CrossAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
@@ -695,7 +696,7 @@ class DiT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
-    def forward(self, x, t, actions):
+    def forward(self, x, bpm, t, actions):
         """
         x: (B, N, C) latents to be denoised
         t: (B) noise level for x
@@ -705,11 +706,12 @@ class DiT(nn.Module):
         
         x = self.x_embedder(x)
         t = self.t_embedder(t)
+        bpm = self.bpm_embedder(bpm)
         # actions = self.action_embedder(actions)
-        context = torch.cat([t.unsqueeze(1), actions], dim=1)
+        context = torch.cat([t.unsqueeze(1), bpm.unsqueeze(1), actions], dim=1)
         
         x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
-        context = context + self.context_pos(torch.arange(1, device=x.device, dtype=torch.long).unsqueeze(0))
+        context = context + self.context_pos(torch.arange(3, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.blocks:
             x = block(x, context)
         
@@ -736,11 +738,11 @@ class DiTWrapper(nn.Module):
         self.apply(_basic_init)
         self.net.initialize_weights()
     
-    def forward(self, x, actions, t=None):
-        return self.diffusion.loss(self.net, x, t=t, net_kwargs={'actions': actions})
+    def forward(self, x, bpm, actions, t=None):
+        return self.diffusion.loss(self.net, x, t=t, net_kwargs={'actions': actions, 'bpm': bpm})
     
-    def sample(self, x, actions, n_steps=50):
-        return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions})
+    def sample(self, x, bpm, actions, n_steps=50):
+        return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm})
 
 class LAM(nn.Module):
     def __init__(self,
@@ -777,29 +779,29 @@ class LAM(nn.Module):
         self.decoder.net.x_embedder[0].bias = self.action_model.x_embedder[0].bias
         self.decoder.net.x_embedder[1].weight = self.action_model.x_embedder[1].weight
     
-    def forward(self, x):
+    def forward(self, x, bpm):
         """
         x: (B, T, N, C) latents
         alpha: (B) noise level for history latents
         """
         assert x.ndim == 4
         
-        z, indices = self.action_model(x)
+        z, indices = self.action_model(x, bpm)
         
-        x = self.decoder(x[:, 1], z)
+        x = self.decoder(x[:, 1], bpm, z)
         return x, indices
     
-    def enocde_actions(self, x):
+    def enocde_actions(self, x, bpm):
         """
         x: (B, T, N, C) latents
         alpha: (B) noise level for history latents
         """
         assert x.ndim == 4
         
-        z, indices = self.action_model(x)
+        z, indices = self.action_model(x, bpm)
         return z, indices
     
-    def generate(self, x, actions, n_steps=50):
+    def generate(self, x, bpm, actions, n_steps=50):
         return self.decoder.sample(x, actions, n_steps=n_steps)
     
     def generate_random_different_actions(self, actions_indices, codebook_size, device):
@@ -815,12 +817,12 @@ class LAM(nn.Module):
 
         return random_actions
     
-    def lam_vs_random_actions(self, x, n_steps=50):
-        z, indices = self.action_model(x)
+    def lam_vs_random_actions(self, x, bpm, n_steps=50):
+        z, indices = self.action_model(x, bpm)
         
         random_actions = self.generate_random_different_actions(indices, math.prod(self.levels), x.device)
-        recon = self.generate(x[:, 1], z, n_steps=n_steps)
-        random = self.generate(x[:, 1], self.action_model.from_vq(self.action_model.vq.indices_to_codes(random_actions)), n_steps=n_steps)
+        recon = self.generate(x[:, 1], bpm, z, n_steps=n_steps)
+        random = self.generate(x[:, 1], bpm, self.action_model.from_vq(self.action_model.vq.indices_to_codes(random_actions)), n_steps=n_steps)
         
         return recon, random
 
