@@ -310,7 +310,7 @@ def generate_lam_vs_random_actions(step):
     B, T, N, D = x.shape
 
     with ctx:
-        recon, random_recon = raw_model.lam_vs_random_actions(x.clone(), n_steps=50)
+        recon, random_recon = raw_model.lam_vs_random_actions(x.clone(), bpm, n_steps=50)
     
     if decoder_window > spatial_window:
         raise NotImplementedError()
@@ -393,8 +393,8 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        usage = estimate_codebook_usage()
-        losses = estimate_loss()
+        # usage = estimate_codebook_usage()
+        # losses = estimate_loss()
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
             with ctx:
