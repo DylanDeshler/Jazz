@@ -621,7 +621,7 @@ class ActionTransformer(nn.Module):
         """
         B, T, N, C = x.shape
         
-        x = self.x_embedder(x);print(bpm.shape)
+        x = self.x_embedder(x)
         bpm = self.bpm_embedder(bpm.flatten()).view(B, T, 1, -1)
         
         x = torch.cat([bpm, x], dim=2)
