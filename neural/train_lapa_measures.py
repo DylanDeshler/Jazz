@@ -407,12 +407,12 @@ while True:
     if iter_num % eval_interval == 0 and master_process:
         usage = estimate_codebook_usage()
         losses = estimate_loss()
-        # if iter_num % sample_interval == 0 and master_process:
-        #     model.eval()
-        #     with ctx:
-        #         metrics = generate_lam_vs_random_actions(iter_num)
-        #     model.train()
-        #     print(f"iter {iter_num}: delta PSNR {metrics['PSNR']:.3f}, delta Similarity {metrics['Similarity']:.3f}")
+        if iter_num % sample_interval == 0 and master_process:
+            model.eval()
+            with ctx:
+                metrics = generate_lam_vs_random_actions(iter_num)
+            model.train()
+            print(f"iter {iter_num}: delta PSNR {metrics['PSNR']:.3f}, delta Similarity {metrics['Similarity']:.3f}")
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, train perplexity: {usage['train']:.2f}, val perplexity {usage['val']:.2f}")
         if wandb_log:
             wandb.log({
