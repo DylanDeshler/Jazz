@@ -635,7 +635,7 @@ class ActionTransformer(nn.Module):
         for block in self.temporal_blocks:
             x = block(x, is_causal=True)
         
-        x = rearrange(x, '(b n) t c -> b t n c', b=B, n=N)
+        x = rearrange(x, '(b n) t c -> b t n c', b=B, n=N+1)
         first_frame, last_frame = x[:, 0, 1:], x[:, 1, 1:]
         # first_frame, last_frame = rearrange(first_frame, 'b n c -> b (n c)'), rearrange(last_frame, 'b n c -> b (n c)')
         x = last_frame - first_frame
