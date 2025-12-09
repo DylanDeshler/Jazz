@@ -315,7 +315,7 @@ def generate_lam_vs_random_actions(step):
     B, T, N, D = x.shape
 
     with ctx:
-        recon, random_recon = raw_model.lam_vs_random_actions(x.clone(), n_steps=50)
+        recon, random_recon = raw_model.lam_vs_random_actions(x.clone(), bpm, n_steps=50)
     
     if decoder_window > spatial_window:
         raise NotImplementedError()
