@@ -31,7 +31,7 @@ from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
 from lapa import LAM_B as net
-from dito import DiToV4 as Tokenizer
+from dito import DiToV5 as Tokenizer
 
 import matplotlib.pyplot as plt
 import soundfile as sf
