@@ -556,6 +556,7 @@ class ActionTransformer(nn.Module):
                  levels,
                  spatial_window,
                  temporal_window,
+                 ratios, 
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4,
@@ -580,11 +581,11 @@ class ActionTransformer(nn.Module):
         #     nn.LayerNorm(hidden_size),
         #     nn.Linear(hidden_size, len(levels)),
         # )
-        self.to_vq = CNNEncoder(hidden_size, len(levels), [4, 2], spatial_window)
+        self.to_vq = CNNEncoder(hidden_size, len(levels), ratios, spatial_window)
         self.vq = FSQ(levels=levels)
         # self.vq = ResidualFSQ(levels=levels, num_quantizers=)
         self.from_vq = nn.Linear(len(levels), hidden_size)
-        # self.from_vq = CNNDecoder(len(levels), hidden_size, [4, 2])
+        # self.from_vq = CNNDecoder(len(levels), hidden_size, ratios)
         
         self.spatial_pos = nn.Embedding(spatial_window + 1, hidden_size)
         self.temporal_pos = nn.Embedding(temporal_window, hidden_size)
@@ -662,6 +663,7 @@ class DiT(nn.Module):
                  mlp_ratio=4,
                  ):
         super().__init__()
+        self.num_actions = num_actions
         
         self.x_embedder = nn.Sequential(nn.Linear(in_channels, hidden_size, bias=True), RMSNorm(hidden_size))
         self.t_embedder = TimestepEmbedder(hidden_size)
@@ -669,7 +671,7 @@ class DiT(nn.Module):
         # self.action_embedder = nn.Embedding(num_actions, hidden_size)
         
         self.x_pos = nn.Embedding(max_input_size, hidden_size)
-        self.context_pos = nn.Embedding(2 + 6, hidden_size)
+        self.context_pos = nn.Embedding(2 + num_actions, hidden_size)
 
         self.blocks = nn.ModuleList([
             CrossAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
@@ -716,7 +718,7 @@ class DiT(nn.Module):
         context = torch.cat([t.unsqueeze(1), bpm.unsqueeze(1), actions], dim=1)
         
         x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
-        context = context + self.context_pos(torch.arange(2 + 6, device=x.device, dtype=torch.long).unsqueeze(0))
+        context = context + self.context_pos(torch.arange(2 + self.num_actions, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.blocks:
             x = block(x, context)
         
@@ -756,6 +758,7 @@ class LAM(nn.Module):
                  levels,
                  spatial_window,
                  temporal_window,
+                 ratios,
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4,
@@ -766,12 +769,13 @@ class LAM(nn.Module):
                                               levels=levels, 
                                               spatial_window=spatial_window, 
                                               temporal_window=temporal_window, 
+                                              ratios=ratios,
                                               num_heads=num_heads, 
                                               depth=depth, 
                                               mlp_ratio=mlp_ratio)
         self.decoder = DiTWrapper(in_channels=in_channels, 
                                   hidden_size=hidden_size, 
-                                  num_actions=math.prod(levels), 
+                                  num_actions=spatial_window // math.prod(ratios), 
                                   max_input_size=spatial_window,
                                   num_heads=num_heads, 
                                   depth=int(depth * 3 // 2), # balance encoder decoder parameters 
