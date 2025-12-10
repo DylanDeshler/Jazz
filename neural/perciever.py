@@ -387,18 +387,15 @@ class CrossAttentionBlock(nn.Module):
         return x
 
 class SelfAttentionBlock(nn.Module):
-    def __init__(self, hidden_size, num_heads, window_size=None, mlp_ratio=4.0, **block_kwargs):
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
         super().__init__()
         self.norm1 = RMSNorm(hidden_size)
-        if window_size is None:
-            self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
-        else:
-            self.attn = WindowAttention(hidden_size, window_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
+        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
         self.norm2 = RMSNorm(hidden_size)
         self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
     
-    def forward(self, x, context=None, freqs_cis=None, kv_mask=None):
-        x = x + self.attn(self.norm1(x), freqs_cis=freqs_cis, attn_mask=None)
+    def forward(self, x, context=None, freqs_cis=None, kv_mask=None, q_mask=None):
+        x = x + self.attn(self.norm1(x), freqs_cis=freqs_cis, attn_mask=q_mask)
         x = x + self.mlp(self.norm2(x))
         return x
 
@@ -425,11 +422,11 @@ class ContinuousPositionalEmbeddings(nn.Module):
         return torch.cat([torch.sin(args), torch.cos(args)], dim=-1)
 
 class Perciever(nn.Module):
-    def __init__(self, in_dim, hidden_dim, latent_dim, n_heads, depth, n_interleave, n_latents):
+    def __init__(self, in_dim, patch_size, hidden_dim, latent_dim, n_heads, depth, n_interleave, n_latents):
         super().__init__()
         self.n_latents = n_latents
         
-        self.in_proj = nn.Linear(in_dim, hidden_dim)
+        self.in_proj = nn.Conv1d(in_dim, hidden_dim, kernel_size=patch_size, stride=patch_size)
         self.latents = nn.Embedding(n_latents, hidden_dim)
         self.pos_emb = ContinuousPositionalEmbeddings(hidden_dim)
         
@@ -463,36 +460,36 @@ class Perciever(nn.Module):
         return x
 
 class Reciever(nn.Module):
-    def __init__(self, in_dim, hidden_dim, latent_dim, n_heads, depth, n_interleave, n_latents, window_size=None, kernel_size=None):
+    def __init__(self, in_dim, patch_size, hidden_dim, latent_dim, n_heads, depth, n_interleave, n_latents, kernel_size=None):
         super().__init__()
-        assert (window_size and kernel_size is None) or (window_size is None and kernel_size)
         self.n_latents = n_latents
         
         self.embed_time = PositionalEmbedding(320, hidden_dim)
-        self.in_proj = nn.Linear(in_dim, hidden_dim)
+        self.in_proj = nn.Conv1d(in_dim, hidden_dim, kernel_size=patch_size, stride=patch_size)
         self.latent_proj = nn.Linear(latent_dim, hidden_dim)
         self.pos_emb = ContinuousPositionalEmbeddings(hidden_dim)
         
         layers = []
         for d in range(depth):
             layers.append(CrossAttentionBlock(hidden_dim, n_heads))
-            # if window_size:
-            #     for _ in range(n_interleave):
-            #         layers.append(SelfAttentionBlock(hidden_dim, n_heads, window_size=window_size))
-            # else:
-            for _ in range(n_interleave):
-                layers.append(ConvNeXtBlock(hidden_dim, kernel_size))
+            if kernel_size:
+                for _ in range(n_interleave):
+                    layers.append(ConvNeXtBlock(hidden_dim, kernel_size))
+            else:
+                for _ in range(n_interleave):
+                    layers.append(SelfAttentionBlock(hidden_dim, n_heads))
+                
         
         self.layers = nn.ModuleList(layers)
         
         self.norm = RMSNorm(hidden_dim)
-        self.out_proj = nn.Conv1d(hidden_dim, in_dim, kernel_size=7, padding=kernel_size//2)
+        self.out_proj = nn.ConvTranspose1d(hidden_dim, in_dim, kernel_size=patch_size, padding=patch_size)
     
     def forward(self, x, t, z, mask):
         B, C, L = x.shape
         
-        x = x.transpose(1, 2)
         x = self.in_proj(x)
+        x = x.transpose(1, 2)
         x = x + self.pos_emb(torch.linspace(0, 1, steps=L, device=x.device).unsqueeze(0))
         
         t = self.embed_time(t)
@@ -504,17 +501,18 @@ class Reciever(nn.Module):
             x = layer(x, z, q_mask=mask)
         
         x = self.norm(x)
-        x = self.out_proj(x.transpose(1, 2))
+        x = x.transpose(1, 2)
+        x = self.out_proj(x)
         return x
 
 if __name__ == '__main__':
     from torchinfo import summary
     
     with torch.no_grad():
-        encoder = Perciever(1, 512, 16, 8, 4, 4, 32).to('cuda:1')
+        encoder = Perciever(in_dim=1, patch_size=128, hidden_dim=512, latent_dim=16, n_heads=8, depth=4, n_interleave=4, n_latents=32).to('cuda:1')
         summary(encoder)
         
-        decoder = Reciever(1, 512, 16, 8, 8, 3, 32, None, 7).to('cuda:1')
+        decoder = Reciever(in_dim=1, patch_size=128, hidden_dim=512, latent_dim=16, n_heads=8, depth=4, n_interleave=4, n_latents=32).to('cuda:1')
         summary(decoder)
         
         x = torch.randn((64, 1, 16000)).to('cuda:1')
