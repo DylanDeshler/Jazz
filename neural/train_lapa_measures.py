@@ -59,7 +59,7 @@ save_interval = 5000
 eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -81,14 +81,14 @@ vae_embed_dim = 16
 levels = [8, 6, 5]
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 1000000 # total number of training iterations
+max_iters = 90000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
-decay_lr = False # whether to decay the learning rate
-warmup_iters = 5000 # how many steps to warm up for
+decay_lr = True # whether to decay the learning rate
+warmup_iters = 80000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
@@ -138,6 +138,7 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 # poor man's data loader
 def get_batch(split='train'):
+    # TODO: sample within songs (this can go over boundaries)
     data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large.bin', dtype=np.float16, mode='r', shape=(3693787, 48, vae_embed_dim))
     meta = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_meta.npy', dtype=np.float32, mode='r', shape=(3693787, 2))
     if split == 'train':
