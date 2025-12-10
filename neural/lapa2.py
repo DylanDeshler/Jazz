@@ -758,7 +758,7 @@ class LAM(nn.Module):
                  levels,
                  spatial_window,
                  temporal_window,
-                 ratios,
+                 ratios=[4,2],
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4,
