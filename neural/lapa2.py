@@ -511,8 +511,11 @@ class CNNEncoder(nn.Module):
             blocks.append(DownsampleV3(in_size, in_size, ratio))
         self.blocks = nn.ModuleList(blocks)
         
-        self.norm = nn.LayerNorm(in_size * spatial_window // math.prod(ratios))
-        self.fc = nn.Linear(in_size * spatial_window // math.prod(ratios), out_size)
+        # self.norm = nn.LayerNorm(in_size * spatial_window // math.prod(ratios))
+        # self.fc = nn.Linear(in_size * spatial_window // math.prod(ratios), out_size)
+        
+        self.norm = nn.LayerNorm(in_size)
+        self.fc = nn.Linear(in_size, out_size)
     
     def forward(self, x):
         x = rearrange(x, 'n l c -> n c l')
@@ -522,11 +525,11 @@ class CNNEncoder(nn.Module):
         x = rearrange(x, 'n c l -> n (c l)')
         x = self.norm(x)
         x = self.fc(x)
-        x = x.unsqueeze(1)
+        # x = x.unsqueeze(1)
         return x
 
 class CNNDecoder(nn.Module):
-    def __init__(self, in_size, out_size, ratios):
+    def __init__(self, in_size, out_size, ratios, spatial_window):
         super().__init__()
         blocks = []
         for ratio in ratios:
@@ -534,15 +537,16 @@ class CNNDecoder(nn.Module):
             blocks.append(ConvBlock(in_size, 3))
         self.blocks = nn.ModuleList(blocks)
         
-        self.fc = nn.Linear(in_size, out_size)
-        
-        self.initialize_weights()
+        self.fc = nn.Linear(in_size * spatial_window // math.prod(ratios), out_size)
         
     def forward(self, x):
+        x = self.fc(x)
+        
+        x = rearrange(x, 'n l c -> n c l')
         for block in self.blocks:
             x = block(x)
         
-        x = self.fc(x)
+        x = rearrange(x, 'n c l -> n l c')
         return x
 
 class ActionTransformer(nn.Module):
@@ -575,7 +579,7 @@ class ActionTransformer(nn.Module):
         #     nn.LayerNorm(hidden_size),
         #     nn.Linear(hidden_size, len(levels)),
         # )
-        self.to_vq = CNNEncoder(hidden_size, len(levels), [4, 2], spatial_window)
+        self.to_vq = CNNEncoder(hidden_size, len(levels), [4, 2, 2], spatial_window)
         self.vq = FSQ(levels=levels)
         # self.vq = ResidualFSQ(levels=levels, num_quantizers=)
         self.from_vq = nn.Linear(len(levels), hidden_size)
@@ -664,7 +668,7 @@ class DiT(nn.Module):
         # self.action_embedder = nn.Embedding(num_actions, hidden_size)
         
         self.x_pos = nn.Embedding(max_input_size, hidden_size)
-        self.context_pos = nn.Embedding(2 + 1, hidden_size)
+        self.context_pos = nn.Embedding(2 + 3, hidden_size)
 
         self.blocks = nn.ModuleList([
             CrossAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
@@ -711,7 +715,7 @@ class DiT(nn.Module):
         context = torch.cat([t.unsqueeze(1), bpm.unsqueeze(1), actions], dim=1)
         
         x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
-        context = context + self.context_pos(torch.arange(2 + 1, device=x.device, dtype=torch.long).unsqueeze(0))
+        context = context + self.context_pos(torch.arange(2 + 3, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.blocks:
             x = block(x, context)
         
