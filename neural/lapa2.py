@@ -522,7 +522,8 @@ class CNNEncoder(nn.Module):
         for block in self.blocks:
             x = block(x)
         
-        x = rearrange(x, 'n c l -> n (c l)')
+        # x = rearrange(x, 'n c l -> n (c l)')
+        x = rearrange(x, 'n c l -> n l c')
         x = self.norm(x)
         x = self.fc(x)
         # x = x.unsqueeze(1)
