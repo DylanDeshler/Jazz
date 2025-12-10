@@ -580,7 +580,7 @@ class ActionTransformer(nn.Module):
         #     nn.LayerNorm(hidden_size),
         #     nn.Linear(hidden_size, len(levels)),
         # )
-        self.to_vq = CNNEncoder(hidden_size, len(levels), [4, 4], spatial_window)
+        self.to_vq = CNNEncoder(hidden_size, len(levels), [4, 2], spatial_window)
         self.vq = FSQ(levels=levels)
         # self.vq = ResidualFSQ(levels=levels, num_quantizers=)
         self.from_vq = nn.Linear(len(levels), hidden_size)
@@ -669,7 +669,7 @@ class DiT(nn.Module):
         # self.action_embedder = nn.Embedding(num_actions, hidden_size)
         
         self.x_pos = nn.Embedding(max_input_size, hidden_size)
-        self.context_pos = nn.Embedding(2 + 3, hidden_size)
+        self.context_pos = nn.Embedding(2 + 6, hidden_size)
 
         self.blocks = nn.ModuleList([
             CrossAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
@@ -716,7 +716,7 @@ class DiT(nn.Module):
         context = torch.cat([t.unsqueeze(1), bpm.unsqueeze(1), actions], dim=1)
         
         x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
-        context = context + self.context_pos(torch.arange(2 + 3, device=x.device, dtype=torch.long).unsqueeze(0))
+        context = context + self.context_pos(torch.arange(2 + 6, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.blocks:
             x = block(x, context)
         
@@ -774,7 +774,7 @@ class LAM(nn.Module):
                                   num_actions=math.prod(levels), 
                                   max_input_size=spatial_window,
                                   num_heads=num_heads, 
-                                  depth=depth, 
+                                  depth=int(depth * 3 // 2), # balance encoder decoder parameters 
                                   mlp_ratio=mlp_ratio)
         
         self.levels = levels
