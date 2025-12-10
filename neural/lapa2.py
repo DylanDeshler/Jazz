@@ -580,7 +580,7 @@ class ActionTransformer(nn.Module):
         #     nn.LayerNorm(hidden_size),
         #     nn.Linear(hidden_size, len(levels)),
         # )
-        self.to_vq = CNNEncoder(hidden_size, len(levels), [4, 2, 2], spatial_window)
+        self.to_vq = CNNEncoder(hidden_size, len(levels), [4, 4], spatial_window)
         self.vq = FSQ(levels=levels)
         # self.vq = ResidualFSQ(levels=levels, num_quantizers=)
         self.from_vq = nn.Linear(len(levels), hidden_size)
