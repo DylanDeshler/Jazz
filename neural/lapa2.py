@@ -73,7 +73,7 @@ class TimestepEmbedder(nn.Module):
     """
     Embeds scalar timesteps into vector representations.
     """
-    def __init__(self, hidden_size, frequency_embedding_size=256):
+    def __init__(self, hidden_size, frequency_embedding_size=256, max_period=10000):
         super().__init__()
         self.mlp = nn.Sequential(
             nn.Linear(frequency_embedding_size, hidden_size, bias=True),
@@ -81,6 +81,7 @@ class TimestepEmbedder(nn.Module):
             nn.Linear(hidden_size, hidden_size, bias=True),
         )
         self.frequency_embedding_size = frequency_embedding_size
+        self.max_period = max_period
 
     @staticmethod
     def timestep_embedding(t, dim, max_period=10000):
@@ -104,7 +105,7 @@ class TimestepEmbedder(nn.Module):
         return embedding
 
     def forward(self, t):
-        t_freq = self.timestep_embedding(t, self.frequency_embedding_size)
+        t_freq = self.timestep_embedding(t, self.frequency_embedding_size, max_period=self.max_period)
         t_emb = self.mlp(t_freq)
         return t_emb
 
@@ -564,7 +565,7 @@ class ActionTransformer(nn.Module):
         super().__init__()
         
         self.x_embedder = nn.Sequential(nn.Linear(in_channels, hidden_size, bias=True), RMSNorm(hidden_size))
-        self.bpm_embedder = TimestepEmbedder(hidden_size)
+        self.bpm_embedder = TimestepEmbedder(hidden_size, max_period=1000)
         
         self.spatial_blocks = nn.ModuleList([
             SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
@@ -667,7 +668,7 @@ class DiT(nn.Module):
         
         self.x_embedder = nn.Sequential(nn.Linear(in_channels, hidden_size, bias=True), RMSNorm(hidden_size))
         self.t_embedder = TimestepEmbedder(hidden_size)
-        self.bpm_embedder = TimestepEmbedder(hidden_size)
+        self.bpm_embedder = TimestepEmbedder(hidden_size, max_period=1000)
         # self.action_embedder = nn.Embedding(num_actions, hidden_size)
         
         self.x_pos = nn.Embedding(max_input_size, hidden_size)
