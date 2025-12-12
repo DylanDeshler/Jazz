@@ -446,7 +446,7 @@ class DiT(nn.Module):
         
         max_input_size = spatial_window * n_chunks
         self.x_pos = nn.Embedding(max_input_size, hidden_size)
-        self.context_pos = nn.Embedding(n_chunks * (2 + num_actions), hidden_size)
+        self.context_pos = nn.Embedding(n_chunks * (2 + n_chunks), hidden_size)
 
         self.blocks = nn.ModuleList([
             CrossAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
