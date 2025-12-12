@@ -461,13 +461,49 @@ def token_drop(labels, null_token, dropout_prob, force_drop_ids=None):
         drop_ids = torch.rand(*labels.shape[:-1], device=labels.device, dtype=labels.dtype) < dropout_prob
     else:
         drop_ids = force_drop_ids == 1
-    print(drop_ids.shape, labels.shape, null_token.shape)
+    
     shape = [1] * (labels.ndim - 1) + [labels.shape[-1]]
-    print(null_token.view(shape).shape)
-    # labels = torch.where(drop_ids, null_token.view(shape), labels)
-    print(labels.dtype, drop_ids.dtype, null_token.dtype)
     labels[drop_ids] = null_token.to(labels.dtype).view(shape)
     return labels
+
+def token_drop(labels, null_token, prob_uncond=0.1, prob_ind=0.15):
+    """
+    Implements tri-state training to learn:
+    1. Unconditional (All dropped) -> via prob_uncond
+    2. Partial (Some dropped)      -> via prob_ind
+    3. Conditional (Remaining kept)
+    
+    Args:
+        labels: Input tensor (B, L, D) or (B, L, N, D)
+        null_token: Learnable null vector
+        prob_uncond: Probability of dropping the ENTIRE sequence (CFG style).
+        prob_ind: Probability of dropping individual tokens (Partial style).
+    """
+    B = labels.shape[0]
+    device = labels.device
+    
+    # --- 1. Whole-Sample Mask (Standard CFG) ---
+    # Shape: (B, 1, ..., 1) - Broadcasts to all tokens in a batch item
+    # This ensures we occasionally see a FULLY empty context.
+    mask_shape_whole = (B,) + (1,) * (labels.ndim - 2)
+    mask_whole = torch.rand(mask_shape_whole, device=device) < prob_uncond
+
+    # --- 2. Independent Token Mask (Partial Conditioning) ---
+    # Shape: (B, L, ..., 1) - Independent drop decision per token
+    # This creates the "partial" view.
+    mask_shape_ind = labels.shape[:-1] + (1,)
+    mask_ind = torch.rand(mask_shape_ind, device=device) < prob_ind
+    
+    # --- 3. Combine Masks ---
+    # A token is dropped if EITHER the whole sample is dropped OR the specific token is dropped.
+    # Logic: final_drop = drop_whole OR drop_ind
+    final_mask = torch.logical_or(mask_whole, mask_ind)
+    
+    # --- 4. Apply Replacement ---
+    null_token = null_token.to(labels.dtype)
+    
+    # Functional replacement (graph-break free)
+    return torch.where(final_mask, null_token, labels)
 
 class DiT(nn.Module):
     def __init__(self,
@@ -546,8 +582,8 @@ class DiT(nn.Module):
         t = self.t_embedder(t)
         
         print(self.null_embeddings.weight.shape, self.bpm_embedder(bpm).shape, self.action_embedder(actions).shape)
-        bpm = token_drop(self.bpm_embedder(bpm), self.null_embeddings.weight[0], 0.1)
-        actions = token_drop(self.action_embedder(actions), self.null_embeddings.weight[1], 0.1)
+        bpm = token_drop(self.bpm_embedder(bpm), self.null_embeddings.weight[0])
+        actions = token_drop(self.action_embedder(actions), self.null_embeddings.weight[1])
         context = torch.cat([t.unsqueeze(-2), bpm.unsqueeze(-2), actions], dim=-2).view(t.shape[0], self.n_chunks * (2 + self.action_length), t.shape[-1]).contiguous()
         
         x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
