@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from diffusion_forcing import DiT_M as net
+from diffusion_forcing import DiT_L as net
 from dito import DiToV5 as Tokenizer
 
 import matplotlib.pyplot as plt
@@ -45,7 +45,7 @@ from sklearn.metrics.pairwise import paired_cosine_distances
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'DiT_measures_bpm_M_16_6'
+out_dir = 'DiT_measures_bpm_L_16_6'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
