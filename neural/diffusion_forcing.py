@@ -202,18 +202,18 @@ class TimestepEmbedder(nn.Module):
     def timestep_embedding(t, dim, max_period=10000):
         """
         Create sinusoidal timestep embeddings.
-        :param t: a 1-D Tensor of N indices, one per batch element.
+        :param t: a 2-D Tensor of (N, T) indices, one per batch element.
                           These may be fractional.
         :param dim: the dimension of the output.
         :param max_period: controls the minimum frequency of the embeddings.
-        :return: an (N, D) Tensor of positional embeddings.
+        :return: an (N, T, D) Tensor of positional embeddings.
         """
         # https://github.com/openai/glide-text2im/blob/main/glide_text2im/nn.py
         half = dim // 2
         freqs = torch.exp(
             -math.log(max_period) * torch.arange(start=0, end=half, dtype=torch.float32) / half
         ).to(device=t.device)
-        args = t[:, None].float() * freqs[None]
+        args = t[:, :, None].float() * freqs[None]
         embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
         if dim % 2:
             embedding = torch.cat([embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
@@ -487,11 +487,12 @@ class DiT(nn.Module):
         if self.training and is_causal is None:
             is_causal = (torch.rand(1) < 0.5).item()
         
+        print(x.shape, t.shape, bpm.shape, actions.shape)
         x = self.x_embedder(x)
         t = self.t_embedder(t)
-        bpm = self.bpm_embedder(bpm.squeeze())
+        bpm = self.bpm_embedder(bpm)
         actions = self.action_embedder(actions)
-        context = torch.cat([t.unsqueeze(1), bpm.unsqueeze(1), actions], dim=1)
+        context = torch.cat([t, bpm, actions], dim=1)
         
         x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
         context = context + self.context_pos(torch.arange(2 + self.num_actions, device=x.device, dtype=torch.long).unsqueeze(0))
