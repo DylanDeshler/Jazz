@@ -516,7 +516,7 @@ class DiT(nn.Module):
         ])
         
         self.null_embeddings = nn.Embedding(2, hidden_size)
-        self.final_layer = nn.Sequential(RMSNorm(hidden_size), nn.Linear(hidden_size, in_channels, bias=True), RMSNorm(in_channels))
+        self.final_layer = nn.Sequential(RMSNorm(hidden_size), nn.Linear(hidden_size, in_channels, bias=True))
 
         self.initialize_weights()
         self.register_buffer('block_causal_mask', create_block_causal_mask(spatial_window, n_chunks))
