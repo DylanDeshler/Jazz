@@ -435,7 +435,9 @@ class DiT(nn.Module):
                  mlp_ratio=4,
                  ):
         super().__init__()
+        self.n_chunks = n_chunks
         self.num_actions = num_actions
+        self.action_length = action_length
         
         self.x_embedder = nn.Sequential(nn.Linear(in_channels, hidden_size, bias=True), RMSNorm(hidden_size))
         self.t_embedder = TimestepEmbedder(hidden_size)
@@ -493,7 +495,7 @@ class DiT(nn.Module):
         bpm = self.bpm_embedder(bpm)
         actions = self.action_embedder(actions)
         print(t.shape, bpm.shape, actions.shape)
-        context = torch.cat([t.unsqueeze(-2), bpm.unsqueeze(-2), actions], dim=-2).view(t.shape[0], t.shape[1] * (2 + self.num_actions), t.shape[-1]).contiguous()
+        context = torch.cat([t.unsqueeze(-2), bpm.unsqueeze(-2), actions], dim=-2).view(t.shape[0], self.n_chunks * (2 + self.action_length), t.shape[-1]).contiguous()
         
         x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
         context = context + self.context_pos(torch.arange(t.shape[1] * (2 + self.num_actions), device=x.device, dtype=torch.long).unsqueeze(0))
