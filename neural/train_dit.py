@@ -42,12 +42,6 @@ import torchaudio
 import pyrubberband as pyrb
 from sklearn.metrics.pairwise import paired_cosine_distances
 
-emb_model_id = "m-a-p/MERT-v1-330M"
-emb_model = AutoModel.from_pretrained(emb_model_id, trust_remote_code=True)
-processor = Wav2Vec2FeatureExtractor.from_pretrained(emb_model_id, trust_remote_code=True)
-
-resampler = torchaudio.transforms.Resample(16000, 24000)
-
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
@@ -72,6 +66,7 @@ batch_size = 192# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micr
 spatial_window = 48
 n_chunks = 10
 max_seq_len = spatial_window * n_chunks
+action_length = 3
 vae_embed_dim = 16
 # 2^4 2^6 2^8 2^9 2^10 2^11 2^12 2^14 2^16
 # [5, 3] [8, 8] [8, 6, 5] [8, 8, 8] [8, 5, 5, 5] [8, 8, 6, 5] [7, 5, 5, 5] [8, 8, 8, 6, 5] [8, 8, 8, 5, 5, 5]
@@ -138,7 +133,7 @@ def get_batch(split='train'):
     # TODO: sample within songs (this can go over boundaries)
     data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large.bin', dtype=np.float16, mode='r', shape=(3693787, 48, vae_embed_dim))
     meta = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_meta.npy', dtype=np.float32, mode='r', shape=(3693787, 2))
-    actions = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large_actions_16_15_3.bin', dtype=np.int8, mode='r', shape=(3693787, 3))
+    actions = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large_actions_16_15_3.bin', dtype=np.int8, mode='r', shape=(3693787, action_length))
     if split == 'train':
         idxs = torch.randint(int(len(data) * 0.98) - n_chunks, (batch_size,))
     else:
@@ -168,9 +163,7 @@ for k,v in list(state_dict.items()):
 tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 
-emb_model = emb_model.to(device)
-
-model_args = dict(in_channels=vae_embed_dim, n_chunks=n_chunks,  spatial_window=spatial_window, num_actions=math.prod(levels))
+model_args = dict(in_channels=vae_embed_dim, n_chunks=n_chunks, spatial_window=spatial_window, num_actions=math.prod(levels), action_length=action_length)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
