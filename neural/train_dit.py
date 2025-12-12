@@ -46,7 +46,7 @@ from sklearn.metrics.pairwise import paired_cosine_distances
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
 out_dir = 'DiT_measures_bpm_L_16_6'
-eval_interval = 5000
+eval_interval = 2500
 sample_interval = 5000
 log_interval = 100
 save_interval = 5000
