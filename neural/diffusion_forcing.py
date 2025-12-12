@@ -541,7 +541,7 @@ class DiT(nn.Module):
         t = self.t_embedder(t)
         
         print(self.null_embeddings.weight.shape)
-        bpm = token_drop(self.bpm_embedder(bpm), self.null_embeddings.weight[0])
+        bpm = token_drop(self.bpm_embedder(bpm), self.null_embeddings.weight[0], 0.1)
         actions = token_drop(self.action_embedder(actions), self.null_embeddings.weight[1], 0.1)
         context = torch.cat([t.unsqueeze(-2), bpm.unsqueeze(-2), actions], dim=-2).view(t.shape[0], self.n_chunks * (2 + self.action_length), t.shape[-1]).contiguous()
         
