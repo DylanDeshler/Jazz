@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 import math
 from typing import Optional, List, Callable
@@ -526,9 +527,11 @@ class DiT(nn.Module):
         assert x.ndim == 3
         
         if self.training and attn_mask is None:
-            mask = torch.rand(x.shape[0], device=x.device) < 0.2
-            mask = mask.view(x.shape[0], 1, 1)
-            attn_mask = torch.where(mask, self.block_causal_mask, torch.ones_like(self.block_causal_mask))
+            if np.random.rand() < 0.2:
+                attn_mask = self.block_causal_mask
+            # mask = torch.rand(x.shape[0], device=x.device) < 0.2
+            # mask = mask.view(x.shape[0], 1, 1)
+            # attn_mask = torch.where(mask, self.block_causal_mask, torch.ones_like(self.block_causal_mask))
         elif attn_mask:
             attn_mask = self.block_causal_mask
         
