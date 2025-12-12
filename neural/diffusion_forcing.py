@@ -465,6 +465,7 @@ def token_drop(labels, null_token, dropout_prob, force_drop_ids=None):
     shape = [1] * (labels.ndim - 1) + [labels.shape[-1]]
     print(null_token.view(shape).shape)
     # labels = torch.where(drop_ids, null_token.view(shape), labels)
+    print(labels.dtype, drop_ids.dtype, null_token.dtype)
     labels[drop_ids] = null_token.view(shape)
     return labels
 
