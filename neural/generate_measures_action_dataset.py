@@ -1,16 +1,10 @@
 import os
-import time
 import math
-import json
-import pickle
 from contextlib import nullcontext
 from tqdm import tqdm
-from torchinfo import summary
 
 import numpy as np
 import torch
-import soundfile as sf
-import pyrubberband as pyrb
 
 from lapa2 import LAM_B as net
 
@@ -23,7 +17,7 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 batch_size = 128
 
-ckpt_path = os.path.join('tokenizer_low_measures_large', 'ckpt.pt')
+ckpt_path = os.path.join('LAPA_measures_bpm_B_FSQ_16_3', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 model_args = checkpoint['model_args']
 vae_embed_dim = model_args['in_channels']
