@@ -479,7 +479,7 @@ def token_drop(labels, null_token, training, p_uncond=0.1, p_full=0.3, p_ind_wid
     mask_drop_all = batch_rand < p_uncond
     mask_partial_mode = batch_rand >= (p_uncond + p_full)
     
-    sample_specific_drop_rates = torch.rand(batch_rand_shape, device=device) * p_ind_width + p_ind_width / 2
+    sample_specific_drop_rates = torch.rand(batch_rand_shape, device=device) * p_ind_width + (1 - p_ind_width) / 2
     token_noise = torch.rand(labels.shape[:-1], device=device)
     mask_token_drop = token_noise < sample_specific_drop_rates
     
