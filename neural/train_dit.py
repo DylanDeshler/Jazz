@@ -45,7 +45,7 @@ from sklearn.metrics.pairwise import paired_cosine_distances
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'DiT_measures_bpm_L_16_6'
+out_dir = 'DiT_measures_bpm_L_16_6_5'
 eval_interval = 2500
 sample_interval = 5000
 log_interval = 100
@@ -60,11 +60,11 @@ wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 3 # used to simulate larger batch sizes
-batch_size = 64# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+gradient_accumulation_steps = 1 # used to simulate larger batch sizes
+batch_size = 192# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 spatial_window = 48
-n_chunks = 10
+n_chunks = 5
 max_seq_len = spatial_window * n_chunks
 action_length = 3
 vae_embed_dim = 16
@@ -86,7 +86,7 @@ min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/
 # DDP settings
 backend = 'gloo' # 'nccl', 'gloo', etc.
 # system
-device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+device = 'cuda:1' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
