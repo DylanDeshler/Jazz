@@ -485,7 +485,7 @@ def token_drop(labels, null_token, prob_uncond=0.1, prob_ind=0.15):
     # --- 1. Whole-Sample Mask (Standard CFG) ---
     # Shape: (B, 1, ..., 1) - Broadcasts to all tokens in a batch item
     # This ensures we occasionally see a FULLY empty context.
-    mask_shape_whole = (B,) + (1,) * (labels.ndim - 2)
+    mask_shape_whole = (B,) + (1,) * (labels.ndim - 1)
     mask_whole = torch.rand(mask_shape_whole, device=device) < prob_uncond
 
     # --- 2. Independent Token Mask (Partial Conditioning) ---
