@@ -501,9 +501,10 @@ class DiT(nn.Module):
 class DiTWrapper(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
+        chunk_size = kwargs['spatial_window'].pop()
         self.net = DiT(**kwargs)
         
-        self.diffusion = FM(chunk_size=kwargs['spatial_window'], timescale=1000.0)
+        self.diffusion = FM(chunk_size=chunk_size, timescale=1000.0)
         self.sampler = FMEulerSampler(self.diffusion)
         
         self.initialize_weights()
