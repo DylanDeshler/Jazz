@@ -458,11 +458,13 @@ def token_drop(labels, null_token, dropout_prob, force_drop_ids=None):
     Drops labels to enable classifier-free guidance.
     """
     if force_drop_ids is None:
-        drop_ids = torch.rand(labels.shape[0], labels.shape[1], device=labels.device) < dropout_prob
+        drop_ids = torch.rand(*labels.shape[:-1], device=labels.device) < dropout_prob
     else:
         drop_ids = force_drop_ids == 1
-    print(labels.shape, null_token.shape)
-    labels = torch.where(drop_ids, null_token, labels)
+    print(drop_ids.shape, labels.shape, null_token.shape)
+    shape = [1] * (labels.ndim() - 1) + [labels.shape[-1]]
+    print(null_token.view(shape).shape)
+    labels = torch.where(drop_ids, null_token.view(shape), labels)
     return labels
 
 class DiT(nn.Module):
