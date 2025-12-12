@@ -461,6 +461,7 @@ def token_drop(labels, null_token, dropout_prob, force_drop_ids=None):
         drop_ids = torch.rand(labels.shape[0], labels.shape[1], device=labels.device) < dropout_prob
     else:
         drop_ids = force_drop_ids == 1
+    print(labels.shape, null_token.shape)
     labels = torch.where(drop_ids, null_token, labels)
     return labels
 
@@ -540,7 +541,7 @@ class DiT(nn.Module):
         x = self.x_embedder(x)
         t = self.t_embedder(t)
         
-        print(self.null_embeddings.weight.shape)
+        print(self.null_embeddings.weight.shape, self.bpm_embedder(bpm).shape, self.action_embedder(actions).shape)
         bpm = token_drop(self.bpm_embedder(bpm), self.null_embeddings.weight[0], 0.1)
         actions = token_drop(self.action_embedder(actions), self.null_embeddings.weight[1], 0.1)
         context = torch.cat([t.unsqueeze(-2), bpm.unsqueeze(-2), actions], dim=-2).view(t.shape[0], self.n_chunks * (2 + self.action_length), t.shape[-1]).contiguous()
