@@ -453,7 +453,7 @@ def create_block_causal_mask(block_size: int, num_blocks: int, dtype=torch.float
     mask_bool = row_ids >= col_ids
     return mask_bool
 
-def token_drop(labels, null_token, p_uncond=0.1, p_full=0.3, p_ind_drop=0.5):
+def token_drop(labels, null_token, training, p_uncond=0.1, p_full=0.3, p_ind_width=0.6):
     """
     Partitions the batch into three mutually exclusive training modes:
     1. Unconditional (Drop All)
@@ -467,6 +467,9 @@ def token_drop(labels, null_token, p_uncond=0.1, p_full=0.3, p_ind_drop=0.5):
         p_full: Probability of the Full Conditional mode.
         p_ind_drop: Probability of dropping a token *given* we are in Partial mode.
     """
+    if not training:
+        return labels
+    
     B = labels.shape[0]
     device = labels.device
     
@@ -476,7 +479,7 @@ def token_drop(labels, null_token, p_uncond=0.1, p_full=0.3, p_ind_drop=0.5):
     mask_drop_all = batch_rand < p_uncond
     mask_partial_mode = batch_rand >= (p_uncond + p_full)
     
-    sample_specific_drop_rates = torch.rand(batch_rand_shape, device=device)
+    sample_specific_drop_rates = torch.rand(batch_rand_shape, device=device) * p_ind_width + p_ind_width / 2
     token_noise = torch.rand(labels.shape[:-1], device=device)
     mask_token_drop = token_noise < sample_specific_drop_rates
     
@@ -561,8 +564,8 @@ class DiT(nn.Module):
         x = self.x_embedder(x)
         t = self.t_embedder(t)
         
-        bpm = token_drop(self.bpm_embedder(bpm), self.null_embeddings.weight[0])
-        actions = token_drop(self.action_embedder(actions), self.null_embeddings.weight[1])
+        bpm = token_drop(self.bpm_embedder(bpm), self.null_embeddings.weight[0], self.training)
+        actions = token_drop(self.action_embedder(actions), self.null_embeddings.weight[1], self.training)
         context = torch.cat([t.unsqueeze(-2), bpm.unsqueeze(-2), actions], dim=-2).view(t.shape[0], self.n_chunks * (2 + self.action_length), t.shape[-1]).contiguous()
         
         x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
