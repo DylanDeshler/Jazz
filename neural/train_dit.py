@@ -141,7 +141,7 @@ def get_batch(split='train'):
     # TODO: sample within songs (this can go over boundaries)
     data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large.bin', dtype=np.float16, mode='r', shape=(3693787, 48, vae_embed_dim))
     meta = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_meta.npy', dtype=np.float32, mode='r', shape=(3693787, 2))
-    actions = np.memmap('/home/dylan.d/research/music/Jazz/latent/low_measures_large_actions_16_6.bin', dtype=np.int8, mode='r', shape=(3693787, 6))
+    actions = np.memmap('/home/dylan.d/research/music/Jazz/latent/low_measures_large_actions_16_15_3.bin', dtype=np.int8, mode='r', shape=(3693787, 3))
     if split == 'train':
         idxs = torch.randint(int(len(data) * 0.98) - temporal_window, (batch_size,))
     else:
