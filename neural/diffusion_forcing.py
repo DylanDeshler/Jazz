@@ -529,9 +529,6 @@ class DiT(nn.Module):
         if self.training and attn_mask is None:
             if np.random.rand() < 0.2:
                 attn_mask = self.block_causal_mask
-            # mask = torch.rand(x.shape[0], device=x.device) < 0.2
-            # mask = mask.view(x.shape[0], 1, 1)
-            # attn_mask = torch.where(mask, self.block_causal_mask, torch.ones_like(self.block_causal_mask))
         elif attn_mask:
             attn_mask = self.block_causal_mask
         
