@@ -482,7 +482,7 @@ def token_drop(labels, null_token, p_uncond=0.1, p_full=0.3, p_ind_drop=0.5):
     print(sample_specific_drop_rates.shape, token_noise.shape, mask_token_drop.shape)
     
     print(mask_drop_all.shape, mask_partial_mode.shape, mask_token_drop.shape)
-    final_mask = mask_drop_all | (mask_partial_mode.unsqueeze(-1) & mask_token_drop.unsqueeze(-1))
+    final_mask = mask_drop_all.unsqueeze(-1) | (mask_partial_mode.unsqueeze(-1) & mask_token_drop.unsqueeze(-1))
     null_token = null_token.to(labels.dtype)
     
     return torch.where(final_mask, null_token, labels)
