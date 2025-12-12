@@ -15,7 +15,7 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
-batch_size = 128
+batch_size = 256
 
 ckpt_path = os.path.join('LAPA_measures_bpm_B_FSQ_16_3', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
@@ -43,8 +43,8 @@ arr = np.memmap(f'/home/dylan.d/research/music/Jazz/latents/low_measures_large_a
 
 with torch.no_grad():
     for i in tqdm(range(N // batch_size)):
-        batch = torch.from_numpy(data[i*batch_size:(i+1)*batch_size].copy()).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-        bpm = torch.from_numpy(meta[i*batch_size:(i+1)*batch_size, 1].copy()).pin_memory().to(device, non_blocking=True)
+        batch = torch.from_numpy(data[i*batch_size:(i+1)*batch_size].copy()).unsqueeze(1).view(batch_size // 2, 2, 48, vae_embed_dim).pin_memory().to(device, non_blocking=True)
+        bpm = torch.from_numpy(meta[i*batch_size:(i+1)*batch_size, 1].copy()).view(batch_size // 2, 2, 48, vae_embed_dim).pin_memory().to(device, non_blocking=True)
         
         print(batch.shape, bpm.shape)
         with ctx:
