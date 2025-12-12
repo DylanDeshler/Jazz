@@ -453,20 +453,7 @@ def create_block_causal_mask(block_size: int, num_blocks: int, dtype=torch.float
     mask_bool = row_ids >= col_ids
     return mask_bool
 
-def token_drop(labels, null_token, dropout_prob, force_drop_ids=None):
-    """
-    Drops labels to enable classifier-free guidance.
-    """
-    if force_drop_ids is None:
-        drop_ids = torch.rand(*labels.shape[:-1], device=labels.device, dtype=labels.dtype) < dropout_prob
-    else:
-        drop_ids = force_drop_ids == 1
-    
-    shape = [1] * (labels.ndim - 1) + [labels.shape[-1]]
-    labels[drop_ids] = null_token.to(labels.dtype).view(shape)
-    return labels
-
-def token_drop(labels, null_token, prob_uncond=0.1, prob_ind=0.15):
+def token_drop(labels, null_token, prob_uncond=0.1, prob_ind=0.15, prob_cond=0.3):
     """
     Implements tri-state training to learn:
     1. Unconditional (All dropped) -> via prob_uncond
@@ -478,32 +465,55 @@ def token_drop(labels, null_token, prob_uncond=0.1, prob_ind=0.15):
         null_token: Learnable null vector
         prob_uncond: Probability of dropping the ENTIRE sequence (CFG style).
         prob_ind: Probability of dropping individual tokens (Partial style).
+        prob_cond: Probability of enforcing conditional sequence.
     """
     B = labels.shape[0]
     device = labels.device
     
-    # --- 1. Whole-Sample Mask (Standard CFG) ---
-    # Shape: (B, 1, ..., 1) - Broadcasts to all tokens in a batch item
-    # This ensures we occasionally see a FULLY empty context.
     mask_shape_whole = (B,) + (1,) * (labels.ndim - 1)
     mask_whole = torch.rand(mask_shape_whole, device=device) < prob_uncond
 
-    # --- 2. Independent Token Mask (Partial Conditioning) ---
-    # Shape: (B, L, ..., 1) - Independent drop decision per token
-    # This creates the "partial" view.
     mask_shape_ind = labels.shape[:-1] + (1,)
     mask_ind = torch.rand(mask_shape_ind, device=device) < prob_ind
     
-    # --- 3. Combine Masks ---
-    # A token is dropped if EITHER the whole sample is dropped OR the specific token is dropped.
-    # Logic: final_drop = drop_whole OR drop_ind
-    print(mask_whole.shape, mask_ind.shape)
-    final_mask = torch.logical_or(mask_whole, mask_ind)
+    mask_cond = torch.rand(mask_shape_whole, device=device) < prob_cond
     
-    # --- 4. Apply Replacement ---
+    final_mask = torch.logical_or(mask_whole, mask_ind)
     null_token = null_token.to(labels.dtype)
     
-    # Functional replacement (graph-break free)
+    return torch.where(final_mask, null_token, labels)
+
+
+def token_drop(labels, null_token, p_uncond=0.1, p_full=0.1, p_ind_drop=0.5):
+    """
+    Partitions the batch into three mutually exclusive training modes:
+    1. Unconditional (Drop All)
+    2. Full Conditional (Keep All)
+    3. Partial Conditional (Drop Individual Tokens)
+    
+    Args:
+        labels: (B, ...) Input tensor
+        null_token: Learnable null vector
+        p_uncond: Probability of the Unconditional mode.
+        p_full: Probability of the Full Conditional mode.
+        p_ind_drop: Probability of dropping a token *given* we are in Partial mode.
+    """
+    B = labels.shape[0]
+    device = labels.device
+    
+    batch_rand_shape = (B,) + (1,) * (labels.ndim - 1)
+    batch_rand = torch.rand(batch_rand_shape, device=device)
+    
+    mask_drop_all = batch_rand < p_uncond
+    
+    mask_partial_mode = (batch_rand >= p_uncond & batch_rand < p_full)
+    
+    token_noise = torch.rand(labels.shape[:-1], device=device)
+    mask_token_drop = token_noise < p_ind_drop
+    
+    final_mask = mask_drop_all | (mask_partial_mode.unsqueeze(-1) & mask_token_drop.unsqueeze(-1))
+    null_token = null_token.to(labels.dtype)
+    
     return torch.where(final_mask, null_token, labels)
 
 class DiT(nn.Module):
