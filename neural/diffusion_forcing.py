@@ -40,7 +40,9 @@ class FM:
         
         if t is None:
             t = torch.rand(x.shape[0], x.shape[1] // self.chunk_size, device=x.device)
+            print(t.shape)
             t = torch.repeat_interleave(t, repeats=self.chunk_size, dim=1)
+            print(t.shape)
         x_t, noise = self.add_noise(x, t)
         
         pred = net(x_t, t=t * self.timescale, **net_kwargs)
