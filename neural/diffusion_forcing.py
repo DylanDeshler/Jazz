@@ -497,7 +497,6 @@ class DiT(nn.Module):
         print(t.shape, bpm.shape, actions.shape)
         context = torch.cat([t.unsqueeze(-2), bpm.unsqueeze(-2), actions], dim=-2).view(t.shape[0], self.n_chunks * (2 + self.action_length), t.shape[-1]).contiguous()
         
-        print(x.shape, context.shape)
         x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
         context = context + self.context_pos(torch.arange(self.n_chunks * (2 + self.action_length), device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.blocks:
