@@ -501,7 +501,7 @@ class DiT(nn.Module):
 class DiTWrapper(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
-        chunk_size = kwargs['spatial_window'].pop()
+        chunk_size = kwargs.pop('spatial_window')
         self.net = DiT(**kwargs)
         
         self.diffusion = FM(chunk_size=chunk_size, timescale=1000.0)
