@@ -491,7 +491,7 @@ class DiT(nn.Module):
         t = self.t_embedder(t)
         bpm = self.bpm_embedder(bpm)
         actions = self.action_embedder(actions)
-        context = torch.cat([t.unsqueeze(-1), bpm.unsqueeze(-1), actions], dim=-1).view(t.shape[0], t.shape[1] * (2 + self.num_actions))
+        context = torch.cat([t.unsqueeze(-2), bpm.unsqueeze(-2), actions], dim=-2).view(t.shape[0], t.shape[1] * (2 + self.num_actions)).contiguous()
         
         x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
         context = context + self.context_pos(torch.arange(t.shape[1] * (2 + self.num_actions), device=x.device, dtype=torch.long).unsqueeze(0))
