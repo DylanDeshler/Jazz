@@ -470,7 +470,7 @@ def token_drop(labels, null_token, p_uncond=0.1, p_full=0.3, p_ind_drop=0.5):
     B = labels.shape[0]
     device = labels.device
     
-    batch_rand_shape = (B,) + (1,) * (labels.ndim - 1)
+    batch_rand_shape = (B,) + (1,) * (labels.ndim - 2)
     batch_rand = torch.rand(batch_rand_shape, device=device)
     
     mask_drop_all = batch_rand < p_uncond
