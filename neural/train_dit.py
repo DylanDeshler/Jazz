@@ -70,7 +70,8 @@ gradient_accumulation_steps = 2 # used to simulate larger batch sizes
 batch_size = 192# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 spatial_window = 48
-max_seq_len = spatial_window * 10
+n_chunks = 10
+max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
 # 2^4 2^6 2^8 2^9 2^10 2^11 2^12 2^14 2^16
 # [5, 3] [8, 8] [8, 6, 5] [8, 8, 8] [8, 5, 5, 5] [8, 8, 6, 5] [7, 5, 5, 5] [8, 8, 8, 6, 5] [8, 8, 8, 5, 5, 5]
@@ -137,15 +138,15 @@ def get_batch(split='train'):
     # TODO: sample within songs (this can go over boundaries)
     data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large.bin', dtype=np.float16, mode='r', shape=(3693787, 48, vae_embed_dim))
     meta = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_meta.npy', dtype=np.float32, mode='r', shape=(3693787, 2))
-    actions = np.memmap('/home/dylan.d/research/music/Jazz/latent/low_measures_large_actions_16_15_3.bin', dtype=np.int8, mode='r', shape=(3693787, 3))
+    actions = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large_actions_16_15_3.bin', dtype=np.int8, mode='r', shape=(3693787, 3))
     if split == 'train':
-        idxs = torch.randint(int(len(data) * 0.98) - temporal_window, (batch_size,))
+        idxs = torch.randint(int(len(data) * 0.98) - n_chunks, (batch_size,))
     else:
-        idxs = torch.randint(int(len(data) * 0.98), len(data) - temporal_window, (batch_size,))
-    x = torch.from_numpy(np.stack([data[idx:idx+temporal_window] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    ratio = torch.from_numpy(np.stack([meta[idx:idx+temporal_window, 0] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    bpm = torch.from_numpy(np.stack([meta[idx:idx+temporal_window, 1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    actions = torch.from_numpy(np.stack([actions[idx:idx+temporal_window] for idx in idxs], axis=0)).long().pin_memory().to(device, non_blocking=True)
+        idxs = torch.randint(int(len(data) * 0.98), len(data) - n_chunks, (batch_size,))
+    x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    ratio = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 0] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    bpm = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    actions = torch.from_numpy(np.stack([actions[idx:idx+n_chunks] for idx in idxs], axis=0)).long().pin_memory().to(device, non_blocking=True)
     return x, ratio, bpm, actions
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
