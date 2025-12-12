@@ -527,10 +527,12 @@ class DiT(nn.Module):
         
         if self.training and attn_mask is None:
             if (torch.rand(1) < 0.2).item():
-                attn_mask = self.block_causal_mask
+                mask = torch.rand(x.shape[0], device=x.device) < 0.2
+                mask = mask.unsqueeze(-1)
+                attn_mask = torch.where(mask, self.block_causal_mask, torch.ones_like(self.block_causal_mask))
         elif attn_mask:
             attn_mask = self.block_causal_mask
-            
+        
         x = self.x_embedder(x)
         t = self.t_embedder(t)
         bpm = self.bpm_embedder(bpm)
