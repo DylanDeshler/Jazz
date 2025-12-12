@@ -23,6 +23,9 @@ model_args = checkpoint['model_args']
 vae_embed_dim = model_args['in_channels']
 levels = model_args['levels']
 temporal_window = model_args['temporal_window']
+spatial_window = model_args['spatial_window']
+ratios = model_args['ratios']
+action_length = spatial_window // math.prod(ratios)
 
 model = net(**model_args).to(device)
 state_dict = checkpoint['model']
@@ -40,7 +43,7 @@ N = 3693787
 
 data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large.bin', dtype=np.float16, mode='r', shape=(N, 48, vae_embed_dim))
 meta = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_meta.npy', dtype=np.float32, mode='r', shape=(N, 2))
-arr = np.memmap(f'/home/dylan.d/research/music/Jazz/latents/low_measures_large_actions_{vae_embed_dim}_{math.prod(levels)}.bin', dtype=np.int8, mode='w+', shape=(N, math.prod(levels)))
+arr = np.memmap(f'/home/dylan.d/research/music/Jazz/latents/low_measures_large_actions_{vae_embed_dim}_{action_length}.bin', dtype=np.int8, mode='w+', shape=(N, action_length))
 
 with torch.no_grad():
     for i in tqdm(range(N // batch_size)):
