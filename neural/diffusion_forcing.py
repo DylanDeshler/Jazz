@@ -497,6 +497,7 @@ def token_drop(labels, null_token, prob_uncond=0.1, prob_ind=0.15):
     # --- 3. Combine Masks ---
     # A token is dropped if EITHER the whole sample is dropped OR the specific token is dropped.
     # Logic: final_drop = drop_whole OR drop_ind
+    print(mask_whole.shape, mask_ind.shape)
     final_mask = torch.logical_or(mask_whole, mask_ind)
     
     # --- 4. Apply Replacement ---
