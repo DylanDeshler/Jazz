@@ -22,6 +22,7 @@ checkpoint = torch.load(ckpt_path, map_location=device)
 model_args = checkpoint['model_args']
 vae_embed_dim = model_args['in_channels']
 levels = model_args['levels']
+temporal_window = model_args['temporal_window']
 
 model = net(**model_args).to(device)
 state_dict = checkpoint['model']
@@ -43,8 +44,8 @@ arr = np.memmap(f'/home/dylan.d/research/music/Jazz/latents/low_measures_large_a
 
 with torch.no_grad():
     for i in tqdm(range(N // batch_size)):
-        batch = torch.from_numpy(data[i*batch_size:(i+1)*batch_size].copy()).unsqueeze(1).view(batch_size // 2, 2, 48, vae_embed_dim).pin_memory().to(device, non_blocking=True)
-        bpm = torch.from_numpy(meta[i*batch_size:(i+1)*batch_size, 1].copy()).view(batch_size // 2, 2).pin_memory().to(device, non_blocking=True)
+        batch = torch.from_numpy(np.concatenate([data[j:j+temporal_window] for j in range(i*batch_size, (i+1)*batch_size)])).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+        bpm = torch.from_numpy(np.concatenate([meta[j:j+temporal_window, 1] for j in range(i*batch_size, (i+1)*batch_size)])).pin_memory().to(device, non_blocking=True)
         
         print(batch.shape, bpm.shape)
         with ctx:
