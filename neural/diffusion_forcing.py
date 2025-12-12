@@ -429,6 +429,7 @@ class DiT(nn.Module):
                  num_actions,
                  spatial_window,
                  n_chunks,
+                 action_length,
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4,
