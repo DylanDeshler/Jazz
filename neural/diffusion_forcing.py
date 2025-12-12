@@ -525,7 +525,7 @@ class DiT(nn.Module):
         """
         assert x.ndim == 3
         
-        if self.training and attn_mask is None:
+        if self.training and attn_mask is None or attn_mask:
             attn_mask = self.block_mask
         
         x = self.x_embedder(x)
