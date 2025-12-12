@@ -216,7 +216,7 @@ if ddp:
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
-def estimate_loss(is_causal):
+def estimate_loss(is_causal=None):
     out = {}
     model.eval()
     for i, split in enumerate(['train', 'val']):
@@ -325,7 +325,7 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        noncausal_losses = estimate_loss(False)
+        noncausal_losses = estimate_loss()
         causal_losses = estimate_loss(True)
         # if iter_num % sample_interval == 0 and master_process:
         #     model.eval()

@@ -527,7 +527,7 @@ class DiT(nn.Module):
         
         if (self.training and attn_mask is None) or attn_mask:
             attn_mask = self.block_mask
-        print(attn_mask)
+            
         x = self.x_embedder(x)
         t = self.t_embedder(t)
         bpm = self.bpm_embedder(bpm)
