@@ -50,11 +50,9 @@ with torch.no_grad():
         batch = torch.from_numpy(np.stack([data[j:j+temporal_window] for j in range(i*batch_size, (i+1)*batch_size)])).pin_memory().to(device, non_blocking=True)
         bpm = torch.from_numpy(np.stack([meta[j:j+temporal_window, 1] for j in range(i*batch_size, (i+1)*batch_size)])).pin_memory().to(device, non_blocking=True)
         
-        print(batch.shape, bpm.shape)
         with ctx:
            _, actions = model.enocde_actions(batch, bpm)
         
-        print(actions.shape, actions[0])
         arr[i*batch_size:(i+1)*batch_size] = actions.cpu().detach().numpy().astype(np.float16)
 
 arr.flush()
