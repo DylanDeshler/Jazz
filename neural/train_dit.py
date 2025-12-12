@@ -224,7 +224,7 @@ def estimate_loss(is_causal):
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
             X, ratio, bpm, actions = get_batch(split)
             with ctx:
-                loss = model(X, bpm, actions, is_causal=is_causal)
+                loss = model(X, bpm, actions, attn_mask=is_causal)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
