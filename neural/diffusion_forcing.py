@@ -452,13 +452,17 @@ def create_block_causal_mask(block_size: int, num_blocks: int, dtype=torch.float
     # This allows full bidirectional attention within the block
     mask_bool = row_ids >= col_ids
     return mask_bool
-    
-    # 4. Convert to additive attention mask format (0.0 for allow, -inf for mask)
-    # This is standard for PyTorch Transformer modules
-    mask = torch.zeros((seq_len, seq_len), dtype=dtype)
-    mask = mask.masked_fill(~mask_bool, float('-inf'))
-    
-    return mask
+
+def token_drop(labels, null_token, dropout_prob, force_drop_ids=None):
+    """
+    Drops labels to enable classifier-free guidance.
+    """
+    if force_drop_ids is None:
+        drop_ids = torch.rand(labels.shape[0], labels.shape[1], device=labels.device) < dropout_prob
+    else:
+        drop_ids = force_drop_ids == 1
+    labels = torch.where(drop_ids, null_token, labels)
+    return labels
 
 class DiT(nn.Module):
     def __init__(self,
@@ -490,6 +494,7 @@ class DiT(nn.Module):
             CrossAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
         
+        self.null_embeddings = nn.Embedding(2, hidden_size)
         self.final_layer = nn.Sequential(RMSNorm(hidden_size), nn.Linear(hidden_size, in_channels, bias=True))
 
         self.initialize_weights()
@@ -534,8 +539,10 @@ class DiT(nn.Module):
         
         x = self.x_embedder(x)
         t = self.t_embedder(t)
-        bpm = self.bpm_embedder(bpm)
-        actions = self.action_embedder(actions)
+        
+        print(self.null_embeddings.weight.shape)
+        bpm = token_drop(self.bpm_embedder(bpm), self.null_embeddings.weight[0])
+        actions = token_drop(self.action_embedder(actions), self.null_embeddings.weight[1], 0.1)
         context = torch.cat([t.unsqueeze(-2), bpm.unsqueeze(-2), actions], dim=-2).view(t.shape[0], self.n_chunks * (2 + self.action_length), t.shape[-1]).contiguous()
         
         x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
