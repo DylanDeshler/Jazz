@@ -69,12 +69,8 @@ dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
 batch_size = 192# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
-temporal_window = 2
 spatial_window = 48
-decoder_window = 48
-cut_seconds = 10
-cut_len = decoder_window * cut_seconds
-max_seq_len = temporal_window * cut_len
+max_seq_len = spatial_window * 10
 vae_embed_dim = 16
 # 2^4 2^6 2^8 2^9 2^10 2^11 2^12 2^14 2^16
 # [5, 3] [8, 8] [8, 6, 5] [8, 8, 8] [8, 5, 5, 5] [8, 8, 6, 5] [7, 5, 5, 5] [8, 8, 8, 6, 5] [8, 8, 8, 5, 5, 5]
@@ -173,7 +169,7 @@ tokenizer.eval()
 
 emb_model = emb_model.to(device)
 
-model_args = dict(in_channels=vae_embed_dim, spatial_window=spatial_window, temporal_window=temporal_window,  num_actions=math.prod(levels))
+model_args = dict(in_channels=vae_embed_dim, max_input_size=max_seq_len,  num_actions=math.prod(levels))
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
