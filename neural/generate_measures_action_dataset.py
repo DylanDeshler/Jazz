@@ -44,7 +44,7 @@ arr = np.memmap(f'/home/dylan.d/research/music/Jazz/latents/low_measures_large_a
 with torch.no_grad():
     for i in tqdm(range(N // batch_size)):
         batch = torch.from_numpy(data[i*batch_size:(i+1)*batch_size].copy()).unsqueeze(1).view(batch_size // 2, 2, 48, vae_embed_dim).pin_memory().to(device, non_blocking=True)
-        bpm = torch.from_numpy(meta[i*batch_size:(i+1)*batch_size, 1].copy()).view(batch_size // 2, 2, 48, vae_embed_dim).pin_memory().to(device, non_blocking=True)
+        bpm = torch.from_numpy(meta[i*batch_size:(i+1)*batch_size, 1].copy()).view(batch_size // 2, 2).pin_memory().to(device, non_blocking=True)
         
         print(batch.shape, bpm.shape)
         with ctx:
