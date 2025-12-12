@@ -403,8 +403,8 @@ class CrossAttentionBlock(nn.Module):
         self.norm3 = RMSNorm(hidden_size)
         self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
     
-    def forward(self, x, context, freqs_cis=None, is_causal=False):
-        x = x + self.attn(self.norm1(x), freqs_cis=freqs_cis[:x.shape[1]] if freqs_cis is not None else None, is_causal=is_causal)
+    def forward(self, x, context, freqs_cis=None, attn_mask=False):
+        x = x + self.attn(self.norm1(x), freqs_cis=freqs_cis[:x.shape[1]] if freqs_cis is not None else None, attn_mask=attn_mask)
         x = x + self.cross(self.norm2(x), context, freqs_cis=freqs_cis[:max(x.shape[1], context.shape[1])] if freqs_cis is not None else None)
         x = x + self.mlp(self.norm3(x))
         return x
@@ -417,10 +417,47 @@ class SelfAttentionBlock(nn.Module):
         self.norm2 = RMSNorm(hidden_size)
         self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
     
-    def forward(self, x, freqs_cis=None, is_causal=False):
-        x = x + self.attn(self.norm1(x), is_causal=is_causal, freqs_cis=freqs_cis[:x.shape[1]] if freqs_cis is not None else None)
+    def forward(self, x, freqs_cis=None, attn_mask=False):
+        x = x + self.attn(self.norm1(x), attn_mask=attn_mask, freqs_cis=freqs_cis[:x.shape[1]] if freqs_cis is not None else None)
         x = x + self.mlp(self.norm2(x))
         return x
+
+def create_block_causal_mask(block_size: int, num_blocks: int, dtype=torch.float32):
+    """
+    Creates a block causal mask where tokens can attend to their own block 
+    and all previous blocks, but not future blocks.
+    
+    Args:
+        block_size (int): The length of each block.
+        num_blocks (int): The number of blocks.
+        dtype: The data type for the mask (default: torch.float32).
+        
+    Returns:
+        torch.Tensor: A mask of shape (seq_len, seq_len) where 
+                      0.0 indicates 'attend' and -inf indicates 'mask'.
+                      (seq_len = block_size * num_blocks)
+    """
+    seq_len = block_size * num_blocks
+    
+    # 1. Create a vector of block IDs: [0, 0, ..., 1, 1, ..., 2, 2, ...]
+    block_ids = torch.arange(num_blocks).repeat_interleave(block_size)
+    
+    # 2. Broadcast to create a grid of block comparisons
+    # Shape becomes (seq_len, 1) and (1, seq_len) for broadcasting
+    row_ids = block_ids.unsqueeze(1)
+    col_ids = block_ids.unsqueeze(0)
+    
+    # 3. Create boolean mask: True if row_block >= col_block (Past or Current Block)
+    # This allows full bidirectional attention within the block
+    mask_bool = row_ids >= col_ids
+    return mask_bool
+    
+    # 4. Convert to additive attention mask format (0.0 for allow, -inf for mask)
+    # This is standard for PyTorch Transformer modules
+    mask = torch.zeros((seq_len, seq_len), dtype=dtype)
+    mask = mask.masked_fill(~mask_bool, float('-inf'))
+    
+    return mask
 
 class DiT(nn.Module):
     def __init__(self,
@@ -455,6 +492,7 @@ class DiT(nn.Module):
         self.final_layer = nn.Sequential(RMSNorm(hidden_size), nn.Linear(hidden_size, in_channels, bias=True))
 
         self.initialize_weights()
+        self.register_buffer('block_causal_mask', create_block_causal_mask(spatial_window, n_chunks))
     
     def initialize_weights(self):
         self.apply(self._init_weights)
@@ -478,7 +516,7 @@ class DiT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
-    def forward(self, x, t, bpm, actions, is_causal=None):
+    def forward(self, x, t, bpm, actions, attn_mask=None):
         """
         x: (B, N, C) latents to be denoised
         t: (B, T) noise level for x at t
@@ -487,20 +525,19 @@ class DiT(nn.Module):
         """
         assert x.ndim == 3
         
-        if self.training and is_causal is None:
-            is_causal = (torch.rand(1) < 0.5).item()
+        if self.training and attn_mask is None:
+            attn_mask = self.block_mask
         
         x = self.x_embedder(x)
         t = self.t_embedder(t)
         bpm = self.bpm_embedder(bpm)
         actions = self.action_embedder(actions)
-        print(t.shape, bpm.shape, actions.shape)
         context = torch.cat([t.unsqueeze(-2), bpm.unsqueeze(-2), actions], dim=-2).view(t.shape[0], self.n_chunks * (2 + self.action_length), t.shape[-1]).contiguous()
         
         x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
         context = context + self.context_pos(torch.arange(self.n_chunks * (2 + self.action_length), device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.blocks:
-            x = block(x, context, is_causal=is_causal)
+            x = block(x, context, attn_mask=attn_mask)
         
         x = self.final_layer(x)
         return x
@@ -525,8 +562,8 @@ class DiTWrapper(nn.Module):
         self.apply(_basic_init)
         self.net.initialize_weights()
     
-    def forward(self, x, bpm, actions, t=None, is_causal=None):
-        return self.diffusion.loss(self.net, x, t=t, net_kwargs={'actions': actions, 'bpm': bpm, 'is_causal': is_causal})
+    def forward(self, x, bpm, actions, t=None, attn_mask=None):
+        return self.diffusion.loss(self.net, x, t=t, net_kwargs={'actions': actions, 'bpm': bpm, 'attn_mask': attn_mask})
     
     def sample(self, x, bpm, actions, n_steps=50):
         return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm})
