@@ -39,6 +39,7 @@ class FM:
             net_kwargs = {}
         
         if t is None:
+            print(x.shape)
             t = torch.rand(x.shape[0], x.shape[1] // self.chunk_size, device=x.device)
             print(t.shape)
             t = torch.repeat_interleave(t, repeats=self.chunk_size, dim=1)
