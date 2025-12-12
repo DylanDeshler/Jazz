@@ -526,7 +526,7 @@ class DiT(nn.Module):
         assert x.ndim == 3
         
         if (self.training and attn_mask is None) or attn_mask:
-            attn_mask = self.block_mask
+            attn_mask = self.block_causal_mask
             
         x = self.x_embedder(x)
         t = self.t_embedder(t)
