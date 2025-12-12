@@ -525,7 +525,10 @@ class DiT(nn.Module):
         """
         assert x.ndim == 3
         
-        if (self.training and attn_mask is None) or attn_mask:
+        if self.training and attn_mask is None:
+            if (torch.rand(1) < 0.2).item():
+                attn_mask = self.block_causal_mask
+        elif attn_mask:
             attn_mask = self.block_causal_mask
             
         x = self.x_embedder(x)
