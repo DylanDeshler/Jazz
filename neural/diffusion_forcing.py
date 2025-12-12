@@ -453,38 +453,7 @@ def create_block_causal_mask(block_size: int, num_blocks: int, dtype=torch.float
     mask_bool = row_ids >= col_ids
     return mask_bool
 
-def token_drop(labels, null_token, prob_uncond=0.1, prob_ind=0.15, prob_cond=0.3):
-    """
-    Implements tri-state training to learn:
-    1. Unconditional (All dropped) -> via prob_uncond
-    2. Partial (Some dropped)      -> via prob_ind
-    3. Conditional (Remaining kept)
-    
-    Args:
-        labels: Input tensor (B, L, D) or (B, L, N, D)
-        null_token: Learnable null vector
-        prob_uncond: Probability of dropping the ENTIRE sequence (CFG style).
-        prob_ind: Probability of dropping individual tokens (Partial style).
-        prob_cond: Probability of enforcing conditional sequence.
-    """
-    B = labels.shape[0]
-    device = labels.device
-    
-    mask_shape_whole = (B,) + (1,) * (labels.ndim - 1)
-    mask_whole = torch.rand(mask_shape_whole, device=device) < prob_uncond
-
-    mask_shape_ind = labels.shape[:-1] + (1,)
-    mask_ind = torch.rand(mask_shape_ind, device=device) < prob_ind
-    
-    mask_cond = torch.rand(mask_shape_whole, device=device) < prob_cond
-    
-    final_mask = torch.logical_or(mask_whole, mask_ind)
-    null_token = null_token.to(labels.dtype)
-    
-    return torch.where(final_mask, null_token, labels)
-
-
-def token_drop(labels, null_token, p_uncond=0.1, p_full=0.1, p_ind_drop=0.5):
+def token_drop(labels, null_token, p_uncond=0.1, p_full=0.3, p_ind_drop=0.5):
     """
     Partitions the batch into three mutually exclusive training modes:
     1. Unconditional (Drop All)
@@ -505,11 +474,11 @@ def token_drop(labels, null_token, p_uncond=0.1, p_full=0.1, p_ind_drop=0.5):
     batch_rand = torch.rand(batch_rand_shape, device=device)
     
     mask_drop_all = batch_rand < p_uncond
+    mask_partial_mode = batch_rand >= (p_uncond + p_full)
     
-    mask_partial_mode = (batch_rand >= p_uncond & batch_rand < p_full)
-    
+    sample_specific_drop_rates = torch.rand(batch_rand_shape, device=device)
     token_noise = torch.rand(labels.shape[:-1], device=device)
-    mask_token_drop = token_noise < p_ind_drop
+    mask_token_drop = token_noise < sample_specific_drop_rates
     
     final_mask = mask_drop_all | (mask_partial_mode.unsqueeze(-1) & mask_token_drop.unsqueeze(-1))
     null_token = null_token.to(labels.dtype)
