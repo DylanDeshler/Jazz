@@ -51,9 +51,9 @@ with torch.no_grad():
         with ctx:
            _, actions = model.enocde_actions(batch, bpm)
         
-        print(actions.shape)
+        print(actions.shape, actions[0])
         actions = model.action_model.vq.indices_to_level_indices(actions)
-        print(actions.shape)
+        print(actions.shape, actions[0])
         arr[i*batch_size:(i+1)*batch_size] = actions.cpu().detach().numpy().astype(np.float16)
 
 arr.flush()
