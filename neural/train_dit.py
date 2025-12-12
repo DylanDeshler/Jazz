@@ -146,8 +146,7 @@ def get_batch(split='train'):
     x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).view(batch_size, max_seq_len, vae_embed_dim).pin_memory().to(device, non_blocking=True)
     ratio = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 0] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     bpm = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    actions = torch.from_numpy(np.stack([actions[idx:idx+n_chunks] for idx in idxs], axis=0)).long().view(batch_size, -1).pin_memory().to(device, non_blocking=True)
-    print(x.shape, ratio.shape, bpm.shape, actions.shape)
+    actions = torch.from_numpy(np.stack([actions[idx:idx+n_chunks] for idx in idxs], axis=0)).long().pin_memory().to(device, non_blocking=True)
     return x, ratio, bpm, actions
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
@@ -171,7 +170,7 @@ tokenizer.eval()
 
 emb_model = emb_model.to(device)
 
-model_args = dict(in_channels=vae_embed_dim, max_input_size=max_seq_len,  spatial_window=spatial_window, num_actions=math.prod(levels))
+model_args = dict(in_channels=vae_embed_dim, n_chunks=n_chunks,  spatial_window=spatial_window, num_actions=math.prod(levels))
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")

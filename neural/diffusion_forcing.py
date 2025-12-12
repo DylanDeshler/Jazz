@@ -427,7 +427,8 @@ class DiT(nn.Module):
                  in_channels,
                  hidden_size,
                  num_actions,
-                 max_input_size,
+                 spatial_window,
+                 n_chunks,
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4,
@@ -440,8 +441,9 @@ class DiT(nn.Module):
         self.bpm_embedder = TimestepEmbedder(hidden_size, max_period=1000)
         self.action_embedder = nn.Embedding(num_actions, hidden_size)
         
+        max_input_size = spatial_window * n_chunks
         self.x_pos = nn.Embedding(max_input_size, hidden_size)
-        self.context_pos = nn.Embedding(2 + num_actions, hidden_size)
+        self.context_pos = nn.Embedding(n_chunks * (2 + num_actions), hidden_size)
 
         self.blocks = nn.ModuleList([
             CrossAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
@@ -476,23 +478,23 @@ class DiT(nn.Module):
     def forward(self, x, t, bpm, actions, is_causal=None):
         """
         x: (B, N, C) latents to be denoised
-        t: (B) noise level for x
-        actions: (B, T) frame actions
+        t: (B, T) noise level for x at t
+        bpm: (B, T) bpm for x at t
+        actions: (B, T, A) actions for x at t
         """
         assert x.ndim == 3
         
         if self.training and is_causal is None:
             is_causal = (torch.rand(1) < 0.5).item()
         
-        print(x.shape, t.shape, bpm.shape, actions.shape)
         x = self.x_embedder(x)
         t = self.t_embedder(t)
         bpm = self.bpm_embedder(bpm)
         actions = self.action_embedder(actions)
-        context = torch.cat([t, bpm, actions], dim=1)
+        context = torch.cat([t.unsqueeze(-1), bpm.unsqueeze(-1), actions], dim=-1).view(t.shape[0], t.shape[1] * (2 + self.num_actions))
         
         x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
-        context = context + self.context_pos(torch.arange(2 + self.num_actions, device=x.device, dtype=torch.long).unsqueeze(0))
+        context = context + self.context_pos(torch.arange(t.shape[1] * (2 + self.num_actions), device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.blocks:
             x = block(x, context, is_causal=is_causal)
         
@@ -502,10 +504,9 @@ class DiT(nn.Module):
 class DiTWrapper(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
-        chunk_size = kwargs.pop('spatial_window')
         self.net = DiT(**kwargs)
         
-        self.diffusion = FM(chunk_size=chunk_size, timescale=1000.0)
+        self.diffusion = FM(chunk_size=kwargs['spatial_window'], timescale=1000.0)
         self.sampler = FMEulerSampler(self.diffusion)
         
         self.initialize_weights()
