@@ -15,7 +15,7 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
-batch_size = 2**12
+batch_size = 2**11
 
 ckpt_path = os.path.join('LAPA_measures_bpm_B_FSQ_16_3', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
