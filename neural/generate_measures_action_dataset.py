@@ -43,7 +43,7 @@ N = 3693787
 
 data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large.bin', dtype=np.float16, mode='r', shape=(N, 48, vae_embed_dim))
 meta = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_meta.npy', dtype=np.float32, mode='r', shape=(N, 2))
-arr = np.memmap(f'/home/dylan.d/research/music/Jazz/latents/low_measures_large_actions_{vae_embed_dim}_{action_length}.bin', dtype=np.int8, mode='w+', shape=(N, action_length))
+arr = np.memmap(f'/home/dylan.d/research/music/Jazz/latents/low_measures_large_actions_{vae_embed_dim}_{math.prod(levels)}_{action_length}.bin', dtype=np.int8, mode='w+', shape=(N, action_length))
 
 with torch.no_grad():
     for i in tqdm(range(N // batch_size)):
@@ -54,8 +54,6 @@ with torch.no_grad():
         with ctx:
            _, actions = model.enocde_actions(batch, bpm)
         
-        print(actions.shape, actions[0])
-        actions = model.action_model.vq.indices_to_level_indices(actions)
         print(actions.shape, actions[0])
         arr[i*batch_size:(i+1)*batch_size] = actions.cpu().detach().numpy().astype(np.float16)
 
