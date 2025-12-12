@@ -46,6 +46,7 @@ with torch.no_grad():
         batch = torch.from_numpy(data[i*batch_size:(i+1)*batch_size].copy()).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         bpm = torch.from_numpy(meta[i*batch_size:(i+1)*batch_size, 1].copy()).pin_memory().to(device, non_blocking=True)
         
+        print(batch.shape, bpm.shape)
         with ctx:
            _, actions = model.enocde_actions(batch, bpm)
         
