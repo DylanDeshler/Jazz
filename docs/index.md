@@ -72,7 +72,10 @@ The first tokenizer I trained compressed 16000Hz into 50 continuous tokens of di
 ## Beats and Bars
 Operating over arbitrary seconds of music seems reasonable at first. But music is continuous and its information density can vary substantially over time. Further, with the goal of tokenizing musical frames into sets of actions, it becomes more obvious that we want our compressed representations to contain some full fundamental unit of music. We do not want to be predicting tokens across musical boundaries. As best as possible we want our learning task to approximate predicting the next frame from a video.
 
-Beats are a base unit of music and bars (or measures) are sets of beats. Using [Beat This!](https://github.com/CPJKU/beat_this) I was able to label beats and measures in my dataset with reasonable accuracy.
+Beats are a base unit of music and bars (or measures) are sets of beats. Using [Beat This!](https://github.com/CPJKU/beat_this) I was able to label beats and measures in my dataset with reasonable accuracy. Then clips can be segmented into measures for training. This reduces the amount of training data by several orders of magnitude and yet substantially improves validation performance. In the future augmentation could be applied to the measure segmentating pipeline to increase the scale of the measures dataset. This can only be attributed to the simplification of the training process because of the added structure and consistency that training on measures enforces.
+
+## Fully Transformer
+[Perciever](https://arxiv.org/pdf/2103.03206)
 
 # Latent Action Model (LAM)
 Questions to consider:
@@ -103,8 +106,12 @@ The latent action space cardinality must be defined prior to training. It can al
 The input latent is a sequence, this lets us produce action vectors for any element in the sequence, introducing an extremely important trade-off between controlability, fidelity, and ease of use. Increasing the action sequence and codebook size increase the controlability and fidelity of the generation at the cost of usability. These hyperparameters define the number of knobs and the degrees of (knob) freedom the user has to play with. We want to target a high level of expressitivity while being manageable. Emperically I found that a single action, even with a large codebook, was not sufficient for high fidelity and controlable gneration. There action encoder simply cannot squeeze enough information into a single discrete action token. However, even with a small codebook, a sequence of few action tokens can be highly expressive.
 
 # Dynamics Model
-
+The dynamics model is a simple Diffusion Transformer trained with timestep, BPM, and actions as conditioning via cross-attention for each input chunk. The model is trained with [Diffusion Forcing](https://arxiv.org/pdf/2407.01392) where seperate noise levels are sampled for each chunk during training. This lets a single model do autoregressive generation, bidirectional generation, and in-painting simply by varying the noise levels. The independent noise levels also help solve the compounding error problem by applying a small amount of noise to past chunks when generating sequences longer than seen during training. While not strictly nessecary, I train with block causal masking 20% (following [FIM](https://arxiv.org/pdf/2207.14255) of the time (all tokens within a chunk can attend to eachother and all previous chunks). The conditioning information is also dropped out in such a way to allow for unconditional, partial conditional, and fully conditional generation at inference time. Meaning this model has the ability to generate and edit music with varying levels of conditioning information. Applying Classifier Free Guidance (GFG) lets the user specify the desired intensity for each action. 
 
 # All Together Now
 
-# For my not so technical friends
+# For My Less Technical Friends
+
+
+# Future Work
+Scale! Scale! Scale! I am very interested to see what action set could be learned across a much larger and more diverse dataset. I would also like to have finegrained instrument annotations to condition the action model on to make actions more general and seperate from instruments. Improving generation quality from model, data, and compute scaling. Drastically increasing the maximum context length to support generation of more musical structure.
