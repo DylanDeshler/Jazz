@@ -426,7 +426,7 @@ class Perciever(nn.Module):
         super().__init__()
         self.n_latents = n_latents
         
-        self.in_proj = nn.Conv1d(in_dim, hidden_dim, kernel_size=patch_size, stride=patch_size)
+        self.in_proj = nn.Conv1d(in_dim, hidden_dim, kernel_size=patch_size, stride=patch_size, padding=patch_size//2)
         self.latents = nn.Embedding(n_latents, hidden_dim)
         self.pos_emb = ContinuousPositionalEmbeddings(hidden_dim)
         
@@ -446,13 +446,14 @@ class Perciever(nn.Module):
         data = data.transpose(1, 2)
         
         B, L, C = data.shape
-        print(data.shape, torch.linspace(0, 1, steps=L).unsqueeze(0).shape)
         data = data + self.pos_emb(torch.linspace(0, 1, steps=L, device=x.device).unsqueeze(0))
         
         x = self.latents(torch.arange(self.n_latents, device=x.device, dtype=torch.long).unsqueeze(0))
         x = x + self.pos_emb(torch.linspace(0, 1, steps=x.shape[1], device=x.device).unsqueeze(0))
         x = x.repeat((B, 1, 1))
         
+        mask = mask.view(B, L, -1)
+        mask = mask.any(dim=-1)
         for layer in self.layers:
             x = layer(x, data, kv_mask=mask)
         
@@ -466,7 +467,7 @@ class Reciever(nn.Module):
         self.n_latents = n_latents
         
         self.embed_time = PositionalEmbedding(320, hidden_dim)
-        self.in_proj = nn.Conv1d(in_dim, hidden_dim, kernel_size=patch_size, stride=patch_size)
+        self.in_proj = nn.Conv1d(in_dim, hidden_dim, kernel_size=patch_size, stride=patch_size, padding=patch_size//2)
         self.latent_proj = nn.Linear(latent_dim, hidden_dim)
         self.pos_emb = ContinuousPositionalEmbeddings(hidden_dim)
         
@@ -484,13 +485,13 @@ class Reciever(nn.Module):
         self.layers = nn.ModuleList(layers)
         
         self.norm = RMSNorm(hidden_dim)
-        self.out_proj = nn.ConvTranspose1d(hidden_dim, in_dim, kernel_size=patch_size, padding=patch_size)
+        self.out_proj = nn.ConvTranspose1d(hidden_dim, in_dim, kernel_size=patch_size, padding=patch_size//2)
     
     def forward(self, x, t, z, mask):
-        B, C, L = x.shape
-        
         x = self.in_proj(x)
         x = x.transpose(1, 2)
+        
+        B, L, C = x.shape
         x = x + self.pos_emb(torch.linspace(0, 1, steps=L, device=x.device).unsqueeze(0))
         
         t = self.embed_time(t)
@@ -498,6 +499,8 @@ class Reciever(nn.Module):
         z = self.latent_proj(z)
         z = torch.cat([t.unsqueeze(1), z], dim=1)
         
+        mask = mask.view(B, L, -1)
+        mask = mask.any(dim=-1)
         for layer in self.layers:
             x = layer(x, z, q_mask=mask)
         
