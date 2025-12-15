@@ -526,7 +526,7 @@ if __name__ == '__main__':
         mask = mask.bool().to('cuda:1')
         y = encoder(x, mask)
         print(x.shape, y.shape)
-        z = decoder(x, y, t, mask)
+        z = decoder(x, t, y, mask)
         print(z.shape)
         
         x = torch.randn((32, 1, 48000)).to('cuda:1')
@@ -535,5 +535,5 @@ if __name__ == '__main__':
         mask = mask.bool().to('cuda:1')
         y = encoder(x, mask)
         print(x.shape, y.shape)
-        z = decoder(x, y, t, mask)
+        z = decoder(x, t, y, mask)
         print(z.shape)
