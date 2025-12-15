@@ -452,7 +452,6 @@ class Perciever(nn.Module):
         x = x + self.pos_emb(torch.linspace(0, 1, steps=x.shape[1], device=x.device).unsqueeze(0))
         x = x.repeat((B, 1, 1))
         
-        mask = F.pad(mask)
         mask = mask.view(B, L, -1)
         mask = mask.any(dim=-1)
         for layer in self.layers:
@@ -500,7 +499,6 @@ class Reciever(nn.Module):
         z = self.latent_proj(z)
         z = torch.cat([t.unsqueeze(1), z], dim=1)
         
-        mask = F.pad(mask)
         mask = mask.view(B, L, -1)
         mask = mask.any(dim=-1)
         for layer in self.layers:
