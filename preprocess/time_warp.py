@@ -254,7 +254,7 @@ def measures(length=None, max_samples=None):
     assert len(audio_paths) == len(beat_paths)
     
     if length is not None:
-        arr = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_audio.npy', dtype=np.float16, mode='w+', shape=(length,))
+        arr = np.memmap(f'/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_{max_samples}_audio.npy', dtype=np.float16, mode='w+', shape=(length,))
     
     curr_index = 0
     total_length = 0
@@ -317,7 +317,7 @@ def measures(length=None, max_samples=None):
     print(total_length)
     if length is not None:
         arr.flush()
-        with open('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_songs.json', 'w') as f:
+        with open(f'/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_{max_samples}_songs.json', 'w') as f:
             json.dump(audio_dict, f)
 
 def crunch(length=None):
