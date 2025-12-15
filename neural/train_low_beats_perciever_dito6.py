@@ -42,7 +42,7 @@ import glob
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'tokenizer_low_measures_perciever'
+out_dir = 'tokenizer_low_measures_perciever_large'
 eval_interval = 5000
 log_interval = 100
 eval_iters = 200
