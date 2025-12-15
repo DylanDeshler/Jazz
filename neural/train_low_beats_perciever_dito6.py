@@ -42,7 +42,7 @@ import glob
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'tokenizer_low_measures_perciever_large'
+out_dir = 'tokenizer_low_measures_perciever'
 eval_interval = 5000
 log_interval = 100
 eval_iters = 200
@@ -56,10 +56,10 @@ wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 8 # used to simulate larger batch sizes
-batch_size = 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 32 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
-max_samples = 32000
+max_samples = 48000
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
@@ -160,7 +160,7 @@ def get_batch(split='train'):
 iter_num = 0
 best_val_loss = 1e9
 
-model_args = dict(z_shape=(16, 32), in_dim=1, hidden_dim=512, latent_dim=16, n_heads=8, encoder_depth=4, encoder_n_interleave=4, decoder_depth=8, decoder_n_interleave=0, n_latents=32, kernel_size=7)
+model_args = dict(z_shape=(16, 32), in_dim=1, hidden_dim=512, latent_dim=16, n_heads=8, encoder_depth=4, encoder_n_interleave=4, decoder_depth=6, decoder_n_interleave=4, n_latents=48, patch_size=128)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
