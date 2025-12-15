@@ -497,6 +497,7 @@ class Reciever(nn.Module):
         t = self.embed_time(t)
         
         z = self.latent_proj(z)
+        print(t.shape, z.shape)
         z = torch.cat([t.unsqueeze(1), z], dim=1)
         
         mask = mask.view(B, L, -1)
