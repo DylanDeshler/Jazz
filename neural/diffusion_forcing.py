@@ -599,8 +599,8 @@ class DiTWrapper(nn.Module):
     def forward(self, x, bpm, actions, t=None, attn_mask=None):
         return self.diffusion.loss(self.net, x, t=t, net_kwargs={'actions': actions, 'bpm': bpm, 'attn_mask': attn_mask})
     
-    def sample(self, x, bpm, actions, n_steps=50):
-        return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm})
+    def sample(self, x, bpm, actions, attn_mask=None, n_steps=50):
+        return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm, 'attn_mask': attn_mask})
 
 def DiT_L(**kwargs):
     return DiTWrapper(depth=24, hidden_size=1024, num_heads=16, **kwargs)
