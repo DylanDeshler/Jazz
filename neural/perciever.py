@@ -513,19 +513,20 @@ if __name__ == '__main__':
     from torchinfo import summary
     
     with torch.no_grad():
-        encoder = Perciever(in_dim=1, patch_size=128, hidden_dim=512, latent_dim=16, n_heads=8, depth=4, n_interleave=4, n_latents=32).to('cuda:1')
+        encoder = Perciever(in_dim=1, patch_size=128, hidden_dim=512, latent_dim=16, n_heads=8, depth=4, n_interleave=4, n_latents=48).to('cuda:1')
         summary(encoder)
         
-        decoder = Reciever(in_dim=1, patch_size=128, hidden_dim=512, latent_dim=16, n_heads=8, depth=4, n_interleave=4, n_latents=32).to('cuda:1')
+        decoder = Reciever(in_dim=1, patch_size=128, hidden_dim=512, latent_dim=16, n_heads=8, depth=4, n_interleave=4, n_latents=48).to('cuda:1')
         summary(decoder)
         
         x = torch.randn((64, 1, 16000)).to('cuda:1')
+        t = torch.rand((64)).to('cuda:1')
         mask = torch.zeros((64, 16000))
         mask[:14000] = 1
         mask = mask.bool().to('cuda:1')
         y = encoder(x, mask)
         print(x.shape, y.shape)
-        z = decoder(x, y, mask)
+        z = decoder(x, y, t, mask)
         print(z.shape)
         
         x = torch.randn((32, 1, 48000)).to('cuda:1')
@@ -534,5 +535,5 @@ if __name__ == '__main__':
         mask = mask.bool().to('cuda:1')
         y = encoder(x, mask)
         print(x.shape, y.shape)
-        z = decoder(x, y, mask)
+        z = decoder(x, y, t, mask)
         print(z.shape)
