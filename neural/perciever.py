@@ -485,7 +485,7 @@ class Reciever(nn.Module):
         self.layers = nn.ModuleList(layers)
         
         self.norm = RMSNorm(hidden_dim)
-        self.out_proj = nn.ConvTranspose1d(hidden_dim, in_dim, kernel_size=patch_size)
+        self.out_proj = nn.ConvTranspose1d(hidden_dim, in_dim, kernel_size=patch_size, stride=patch_size)
     
     def forward(self, x, t, z, mask):
         x = self.in_proj(x)
@@ -497,7 +497,6 @@ class Reciever(nn.Module):
         t = self.embed_time(t)
         
         z = self.latent_proj(z)
-        print(t.shape, z.shape)
         z = torch.cat([t.unsqueeze(1), z], dim=1)
         
         mask = mask.view(B, L, -1)
