@@ -13,7 +13,7 @@ class DiToV6(nn.Module):
         self.z_shape = z_shape
         self.encoder = Perciever(in_dim=in_dim, hidden_dim=hidden_dim, latent_dim=latent_dim, n_heads=n_heads, depth=encoder_depth, n_interleave=encoder_n_interleave, n_latents=n_latents, patch_size=patch_size)
         self.z_norm = nn.LayerNorm(self.z_shape[0], elementwise_affine=False)
-        self.decoder = Reciever(in_dim=in_dim, hidden_dim=hidden_dim, latent_dim=latent_dim, n_heads=n_heads, depth=decoder_depth, n_interleave=decoder_n_interleave, n_latents=n_latents, window_size=None, patch_size=patch_size, kernel_size=kernel_size)
+        self.decoder = Reciever(in_dim=in_dim, hidden_dim=hidden_dim, latent_dim=latent_dim, n_heads=n_heads, depth=decoder_depth, n_interleave=decoder_n_interleave, n_latents=n_latents, patch_size=patch_size, kernel_size=kernel_size)
 
         self.diffusion = FM(timescale=1000.0)
         self.sampler = FMEulerSampler(self.diffusion)
