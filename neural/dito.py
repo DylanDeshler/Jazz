@@ -8,7 +8,7 @@ from fm import FM, FMEulerSampler
 from perciever import Perciever, Reciever
 
 class DiToV6(nn.Module):
-    def __init__(self, z_shape, in_dim, hidden_dim, latent_dim, n_heads, encoder_depth, encoder_n_interleave, decoder_depth, decoder_n_interleave, n_latents, kernel_size):
+    def __init__(self, z_shape, in_dim, hidden_dim, latent_dim, n_heads, encoder_depth, encoder_n_interleave, decoder_depth, decoder_n_interleave, n_latents, patch_size, kernel_size=None):
         super().__init__()
         self.z_shape = z_shape
         self.encoder = Perciever(in_dim=in_dim, hidden_dim=hidden_dim, latent_dim=latent_dim, n_heads=n_heads, depth=encoder_depth, n_interleave=encoder_n_interleave, n_latents=n_latents)
