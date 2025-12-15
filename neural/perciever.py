@@ -444,8 +444,9 @@ class Perciever(nn.Module):
     def forward(self, x, mask):
         B, C, L = x.shape
         
-        x = x.transpose(1, 2)
+        print(data.shape)
         data = self.in_proj(x)
+        x = x.transpose(1, 2)
         data = data + self.pos_emb(torch.linspace(0, 1, steps=L, device=x.device).unsqueeze(0))
         
         x = self.latents(torch.arange(self.n_latents, device=x.device, dtype=torch.long).unsqueeze(0))
