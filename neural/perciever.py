@@ -443,9 +443,9 @@ class Perciever(nn.Module):
     
     def forward(self, x, mask):
         data = self.in_proj(x)
-        x = x.transpose(1, 2)
+        data = data.transpose(1, 2)
         
-        B, L, C = x.shape
+        B, L, C = data.shape
         print(data.shape, torch.linspace(0, 1, steps=L).unsqueeze(0).shape)
         data = data + self.pos_emb(torch.linspace(0, 1, steps=L, device=x.device).unsqueeze(0))
         
