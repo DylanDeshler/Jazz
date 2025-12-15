@@ -399,6 +399,35 @@ class SelfAttentionBlock(nn.Module):
         x = x + self.mlp(self.norm2(x))
         return x
 
+@torch.compile
+def modulate(x, shift, scale):
+    if scale.ndim == 3:
+        return x * (1 + scale) + shift
+    else:
+        return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
+
+class LightningDiTBlock(nn.Module):
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
+        super().__init__()
+        self.norm1 = RMSNorm(hidden_size)
+        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
+        self.norm2 = RMSNorm(hidden_size)
+        self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
+        self.adaLN_modulation = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(hidden_size, 6 * hidden_size, bias=True)
+        )
+    
+    def forward(self, x, c=None, context=None, freqs_cis=None, kv_mask=None, q_mask=None):
+        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(c).chunk(6, dim=-1)
+        if c.ndim == 3:
+            x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask)
+            x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
+        else:
+            x = x + gate_msa.unsqueeze(1) * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask)
+            x = x + gate_mlp.unsqueeze(1) * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
+        return x
+
 class ContinuousPositionalEmbeddings(nn.Module):
     def __init__(self, dim, max_freq=10):
         super().__init__()
@@ -479,7 +508,7 @@ class Reciever(nn.Module):
                     layers.append(ConvNeXtBlock(hidden_dim, kernel_size))
             else:
                 for _ in range(n_interleave):
-                    layers.append(SelfAttentionBlock(hidden_dim, n_heads))
+                    layers.append(LightningDiTBlock(hidden_dim, n_heads))
                 
         
         self.layers = nn.ModuleList(layers)
@@ -502,7 +531,7 @@ class Reciever(nn.Module):
         mask = mask.view(B, L, -1)
         mask = mask.any(dim=-1)
         for layer in self.layers:
-            x = layer(x, z, q_mask=mask)
+            x = layer(x, context=z, c=t, q_mask=mask)
         
         x = self.norm(x)
         x = x.transpose(1, 2)
