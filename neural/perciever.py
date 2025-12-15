@@ -531,7 +531,10 @@ class Reciever(nn.Module):
         mask = mask.view(B, L, -1)
         mask = mask.any(dim=-1)
         for layer in self.layers:
-            x = layer(x, context=z, c=t, q_mask=mask)
+            if isinstance(layer, LightningDiTBlock):
+                x = layer(x, context=z, c=t, q_mask=mask)
+            else:
+                x = layer(x, z, q_mask=mask)
         
         x = self.norm(x)
         x = x.transpose(1, 2)
