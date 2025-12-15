@@ -119,7 +119,7 @@ ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torc
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 # poor man's data loader
-with open('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_songs.json', 'r') as f:
+with open(f'/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_{max_samples}_songs.json', 'r') as f:
     audio_dict = json.load(f)
 
 train_list = []
@@ -136,7 +136,7 @@ def get_batch(split='train'):
     else:
         start_stops = [test_list[idx] for idx in np.random.randint(len(test_list), size=batch_size)]
     
-    data = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_audio.npy', dtype=np.float16, mode='r', shape=(60062778671,))
+    data = np.memmap(f'/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_measures_{max_samples}_audio.npy', dtype=np.float16, mode='r', shape=(79188421662,))
     audio = torch.zeros(batch_size, max_samples)
     mask = torch.zeros(batch_size, max_samples)
     bpms = torch.zeros(batch_size, 1)
