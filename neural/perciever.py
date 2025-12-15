@@ -530,8 +530,8 @@ if __name__ == '__main__':
         z = decoder(x, t, y, mask)
         print(z.shape)
         
-        x = torch.randn((32, 1, 48000)).to('cuda:1')
-        mask = torch.zeros((32, 48000))
+        x = torch.randn((64, 1, 48000)).to('cuda:1')
+        mask = torch.zeros((64, 48000))
         mask[:, :41000] = 1
         mask = mask.bool().to('cuda:1')
         y = encoder(x, mask)
