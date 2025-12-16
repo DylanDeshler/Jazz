@@ -125,11 +125,11 @@ with open(f'/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_raw_mea
 train_list = []
 test_list = []
 for i, (k, v) in enumerate(audio_dict.items()):
-    print(v)
+    valid = [[start, stop] for start, stop in v if stop - start > rate // 10]
     if i < len(audio_dict) * 0.98:
-        train_list.append(v)
+        train_list.append(valid)
     else:
-        test_list.append(v)
+        test_list.append(valid)
 
 def get_batch(split='train'):
     if split == 'train':
