@@ -143,14 +143,18 @@ def get_batch(split='train'):
     mask = torch.zeros(batch_size, max_samples)
     bpms = torch.zeros(batch_size, 1)
     for i, start_stop in enumerate(start_stops):
-        start, stop = start_stop[np.random.randint(len(start_stop))]
-        num_samples = stop - start
-        duration = num_samples / rate
-        bpm = (4 / duration) * 60
-        
-        audio[i, :stop - start] = torch.from_numpy(data[start:stop].astype(np.float32))
-        mask[i, :stop - start] = 1
-        bpms[i] = bpm
+        try:
+            start, stop = start_stop[np.random.randint(len(start_stop))]
+            num_samples = stop - start
+            duration = num_samples / rate
+            bpm = (4 / duration) * 60
+            
+            audio[i, :stop - start] = torch.from_numpy(data[start:stop].astype(np.float32))
+            mask[i, :stop - start] = 1
+            bpms[i] = bpm
+        except:
+            print(f'Error loading data with start, stop {start}, {stop}')
+            continue
     
     audio = audio.unsqueeze(1).pin_memory().to(device, non_blocking=True)
     mask = mask.bool().pin_memory().to(device, non_blocking=True)
