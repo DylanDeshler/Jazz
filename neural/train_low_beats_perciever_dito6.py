@@ -126,10 +126,11 @@ train_list = []
 test_list = []
 for i, (k, v) in enumerate(audio_dict.items()):
     valid = [[start, stop] for start, stop in v if stop - start > rate // 10]
-    if i < len(audio_dict) * 0.98:
-        train_list.append(valid)
-    else:
-        test_list.append(valid)
+    if len(valid) > 5:
+        if i < len(audio_dict) * 0.98:
+            train_list.append(valid)
+        else:
+            test_list.append(valid)
 
 def get_batch(split='train'):
     if split == 'train':
@@ -161,7 +162,7 @@ def get_batch(split='train'):
 iter_num = 0
 best_val_loss = 1e9
 
-model_args = dict(z_shape=(16, 32), in_dim=1, hidden_dim=512, latent_dim=16, n_heads=8, encoder_depth=4, encoder_n_interleave=4, decoder_depth=6, decoder_n_interleave=4, n_latents=48, patch_size=128)
+model_args = dict(z_shape=(16, 48), in_dim=1, hidden_dim=512, latent_dim=16, n_heads=8, encoder_depth=5, encoder_n_interleave=6, decoder_depth=8, decoder_n_interleave=6, n_latents=48, patch_size=128)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
