@@ -263,7 +263,7 @@ def save_samples(step):
     Y = Y.cpu().detach().float().numpy()
     
     for i in range(min(10, len(X))):
-        x, y = X[i].squeeze(), X[i].squeeze()
+        x, y = X[i].squeeze(), Y[i].squeeze()
 
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, rate)
