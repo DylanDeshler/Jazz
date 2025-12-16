@@ -29,7 +29,7 @@ class FM:
         x_t = self.alpha(t).view(*s) * x + self.sigma(t).view(*s) * noise
         return x_t, noise
     
-    def loss(self, net, x, t=None, net_kwargs=None, return_loss_unreduced=False, return_all=False):
+    def loss(self, net, x, t=None, net_kwargs=None, return_loss_unreduced=False, return_all=False, mask=None):
         if net_kwargs is None:
             net_kwargs = {}
         
@@ -47,7 +47,10 @@ class FM:
             else:
                 return loss, t
         else:
-            loss = ((pred.float() - target.float()) ** 2).mean()
+            loss = ((pred.float() - target.float()) ** 2)#.mean()
+            if mask is not None:
+                loss = loss * mask.unsqueeze(-1)
+            loss = loss.mean()
             if return_all:
                 return loss, x_t, pred
             else:

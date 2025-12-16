@@ -29,7 +29,7 @@ class DiToV6(nn.Module):
         z = mask_aug.view(-1, 1, 1) * z_t + (1 - mask_aug).view(-1, 1, 1) * z
         t[mask_aug.long()] = post_t
         
-        loss = self.diffusion.loss(self.decoder, x, t, net_kwargs={'z': z, 'mask': mask})
+        loss = self.diffusion.loss(self.decoder, x, t, net_kwargs={'z': z, 'mask': mask}, mask=mask)
         return loss
     
     def encode(self, x, mask):
