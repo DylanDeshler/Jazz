@@ -521,14 +521,14 @@ class Perciever(nn.Module):
         data = data.transpose(1, 2)
         
         B, L, C = data.shape
+        mask = mask.view(B, L, -1)
+        mask = mask.any(dim=-1)
         data = data + self.pos_emb(masked_pos_emb(mask))#self.pos_emb(torch.linspace(0, 1, steps=L, device=x.device).unsqueeze(0))
         
         x = self.latents(torch.arange(self.n_latents, device=x.device, dtype=torch.long).unsqueeze(0))
         x = x + self.pos_emb(torch.linspace(0, 1, steps=x.shape[1], device=x.device).unsqueeze(0))
         x = x.repeat((B, 1, 1))
         
-        mask = mask.view(B, L, -1)
-        mask = mask.any(dim=-1)
         for layer in self.layers:
             x = layer(x, data, kv_mask=mask)
         
@@ -593,6 +593,8 @@ class Reciever(nn.Module):
         x = x.transpose(1, 2)
         
         B, L, C = x.shape
+        mask = mask.view(B, L, -1)
+        mask = mask.any(dim=-1)
         x = x + self.pos_emb(masked_pos_emb(mask))#self.pos_emb(torch.linspace(0, 1, steps=L, device=x.device).unsqueeze(0))
         
         t = self.embed_time(t)
@@ -600,8 +602,6 @@ class Reciever(nn.Module):
         z = self.latent_proj(z)
         z = torch.cat([t.unsqueeze(1), z], dim=1)
         
-        mask = mask.view(B, L, -1)
-        mask = mask.any(dim=-1)
         for layer in self.layers:
             if isinstance(layer, LightningDiTBlock):
                 x = layer(x, context=z, c=t, q_mask=mask)
