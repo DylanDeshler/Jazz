@@ -30,16 +30,28 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from gamengen import LAM_M as net
-from dito import DiToV4 as Tokenizer
+from lapa2 import LAM_B as net
+from dito import DiToV5 as Tokenizer
 
 import matplotlib.pyplot as plt
 import soundfile as sf
 
+from transformers import Wav2Vec2FeatureExtractor, AutoModel
+import torch
+import torchaudio
+import pyrubberband as pyrb
+from sklearn.metrics.pairwise import paired_cosine_distances
+
+emb_model_id = "m-a-p/MERT-v1-330M"
+emb_model = AutoModel.from_pretrained(emb_model_id, trust_remote_code=True)
+processor = Wav2Vec2FeatureExtractor.from_pretrained(emb_model_id, trust_remote_code=True)
+
+resampler = torchaudio.transforms.Resample(16000, 24000)
+
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'LAM_M_FSQ_relative'
+out_dir = 'LAPA_measures_bpm_B_FSQ_16_6'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -47,43 +59,45 @@ save_interval = 5000
 eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 2 # used to simulate larger batch sizes
-batch_size = 128# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+gradient_accumulation_steps = 1 # used to simulate larger batch sizes
+batch_size = 384# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 temporal_window = 2
-spatial_window = 32
-decoder_window = 32
+spatial_window = 48
+decoder_window = 48
 cut_seconds = 1
 cut_len = decoder_window * cut_seconds
 max_seq_len = temporal_window * cut_len
 vae_embed_dim = 16
-levels = [8, 8]
-max_alpha_t = 0.7
+# 2^4 2^6 2^8 2^9 2^10 2^11 2^12 2^14 2^16
+# [5, 3] [8, 8] [8, 6, 5] [8, 8, 8] [8, 5, 5, 5] [8, 8, 6, 5] [7, 5, 5, 5] [8, 8, 8, 6, 5] [8, 8, 8, 5, 5, 5]
+levels = [5, 3]
+ratios = [4, 2]
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 1000000 # total number of training iterations
+max_iters = 85000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
-decay_lr = False # whether to decay the learning rate
-warmup_iters = 5000 # how many steps to warm up for
+decay_lr = True # whether to decay the learning rate
+warmup_iters = 70000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
 backend = 'gloo' # 'nccl', 'gloo', etc.
 # system
-device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+device = 'cuda:1' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
-compile = False # use PyTorch 2.0 to compile the model to be faster
+compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 # exec(open('configurator.py').read()) # overrides from command line or config file
@@ -125,23 +139,23 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 # poor man's data loader
 def get_batch(split='train'):
+    # TODO: sample within songs (this can go over boundaries)
+    data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large.bin', dtype=np.float16, mode='r', shape=(3693787, 48, vae_embed_dim))
+    meta = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_meta.npy', dtype=np.float32, mode='r', shape=(3693787, 2))
     if split == 'train':
-        data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_large_train.bin', dtype=np.float32, mode='r', shape=(204654816, vae_embed_dim))
-        idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
-        x = torch.from_numpy(np.stack([np.stack([data[idx+i*spatial_window:idx+(i+1)*spatial_window] for i in range(temporal_window)], axis=0) for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-        return x
-    
+        idxs = torch.randint(int(len(data) * 0.98) - temporal_window, (batch_size,))
     else:
-        data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_large_val.bin', dtype=np.float32, mode='r', shape=(4446944, vae_embed_dim))
-        idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
-        x = torch.from_numpy(np.stack([np.stack([data[idx+i*spatial_window:idx+(i+1)*spatial_window] for i in range(temporal_window)], axis=0) for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-        return x
+        idxs = torch.randint(int(len(data) * 0.98), len(data) - temporal_window, (batch_size,))
+    x = torch.from_numpy(np.stack([data[idx:idx+temporal_window] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    ratio = torch.from_numpy(np.stack([meta[idx:idx+temporal_window, 0] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    bpm = torch.from_numpy(np.stack([meta[idx:idx+temporal_window, 1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    return x, ratio, bpm
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
 best_val_loss = 1e9
 
-ckpt_path = os.path.join('tokenizer_low_large', 'ckpt.pt')
+ckpt_path = os.path.join('tokenizer_low_measures_large', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 tokenizer_args = checkpoint['model_args']
 
@@ -156,7 +170,9 @@ for k,v in list(state_dict.items()):
 tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 
-model_args = dict(in_channels=vae_embed_dim, levels=levels, spatial_window=spatial_window, temporal_window=temporal_window, max_alpha_t=max_alpha_t)
+emb_model = emb_model.to(device)
+
+model_args = dict(in_channels=vae_embed_dim, levels=levels, spatial_window=spatial_window, temporal_window=temporal_window, ratios=ratios)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -215,9 +231,9 @@ def estimate_loss():
     for i, split in enumerate(['train', 'val']):
         losses = torch.zeros(eval_iters * gradient_accumulation_steps)
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
-            X = get_batch(split)
+            X, ratio, bpm = get_batch(split)
             with ctx:
-                loss = model(X)
+                loss, _ = model(X, bpm)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -230,15 +246,27 @@ def estimate_codebook_usage():
     for i, split in enumerate(['train', 'val']):
         usage = torch.zeros(eval_iters * gradient_accumulation_steps)
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
-            X = get_batch(split)
+            X, ratio, bpm = get_batch(split)
             with ctx:
-                actions = model.encode_actions(X)
+                _, indices = model(X, bpm)
+                
+                indices = indices.flatten()
+                num_tokens = indices.numel()
             
-            unique_elements, counts = torch.unique(actions, return_counts=True)
-            total_elements = actions.numel()
-            percentage_unique = (len(unique_elements) / total_elements) * 100
+                counts = torch.bincount(indices, minlength=math.prod(levels)).float()
+                
+                active_mask = counts > 0
+                active_count = active_mask.sum().item()
+                utilization = active_count / math.prod(levels)
+                
+                probs = counts / num_tokens
+                
+                # Add epsilon to avoid log(0)
+                probs = probs + 1e-10
+                entropy = -torch.sum(probs * torch.log(probs))
+                perplexity = torch.exp(entropy).item()
             
-            usage[k] = percentage_unique.item()
+            usage[k] = perplexity
         out[split] = usage.mean()
     model.train()
     return out
@@ -257,23 +285,42 @@ def get_lr(it):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
 
+def restore_measure(audio, stretch_ratio, sr=16000):
+    """
+    Restores a time-warped measure to its original duration.
+    
+    Args:
+        audio (np.array): The fixed-length audio (from VAE or .npy file).
+                          Can be shape (1, 24576) or (24576,).
+        stretch_ratio (float): The ratio saved in your metadata 
+                               (Original Length / Target Length).
+        sr (int): Sampling rate (default 16000).
+        
+    Returns:
+        np.array: The restored audio array at original duration.
+    """
+    
+    if audio.dtype == np.float16:
+        audio = audio.astype(np.float32)
+    restore_rate = 1.0 / stretch_ratio
+    
+    y_restored = pyrb.time_stretch(audio, sr, restore_rate)
+    return y_restored
+
 @torch.no_grad()
 def generate_lam_vs_random_actions(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
-
-    n_autoregressive_steps = 5 * decoder_window // spatial_window
     
-    data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_large_val.bin', dtype=np.float32, mode='r', shape=(4446944, vae_embed_dim))
-    idxs = torch.randint(len(data) - max_seq_len - n_autoregressive_steps, (10,))
-    x = torch.from_numpy(np.stack([np.stack([data[idx+i*spatial_window:idx+(i+1)*spatial_window] for i in range(temporal_window + n_autoregressive_steps)], axis=0) for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    x, ratio, bpm = get_batch('val')
 
     B, T, N, D = x.shape
 
-    alpha = torch.ones(B, device=x.device) * 0.3
-    recon, random_recon = raw_model.lam_vs_random_actions(x[:, :-n_autoregressive_steps].clone(), alpha, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=100, guidance=3)
+    with ctx:
+        recon, random_recon = raw_model.lam_vs_random_actions(x.clone(), bpm, n_steps=50)
     
     if decoder_window > spatial_window:
+        raise NotImplementedError()
         t2 = decoder_window // spatial_window
         t1 = (temporal_window // t2) + (n_autoregressive_steps // t2)
         x = rearrange(x, 'b (t1 t2) n c -> b t1 (t2 n) c', t1=t1, t2=t2)
@@ -282,24 +329,50 @@ def generate_lam_vs_random_actions(step):
         
         B, T, N, D = x.shape
     
-    batches = []
-    for cut in tqdm(range(T), desc='Decoding'):
-        batch = torch.cat([x[:, cut], recon[:, cut], random_recon[:, cut]], dim=0).permute(0, 2, 1)
-        batches.append(tokenizer.decode(batch, shape=(1, 16384 * cut_seconds), n_steps=100))
-    x, recon, random_recon = [res.cpu().detach().numpy().squeeze(1) for res in torch.cat(batches, dim=-1).split(B, dim=0)]
+    with ctx:
+        x = tokenizer.decode(x[:, 1].permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
+        recon = tokenizer.decode(recon.permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
+        random_recon = tokenizer.decode(random_recon.permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
+    
+    x = x.cpu().detach().float().numpy().squeeze(1)
+    recon = recon.cpu().detach().float().numpy().squeeze(1)
+    random_recon = random_recon.cpu().detach().float().numpy().squeeze(1)
 
-    recon_psnr = psnr(x[:, -n_autoregressive_steps * 16000:], recon[:, -n_autoregressive_steps * 16000:])
-    random_psnr = psnr(x[:, -n_autoregressive_steps * 16000:], random_recon[:, -n_autoregressive_steps * 16000:])
+    recon_psnr = psnr(x, recon)
+    random_psnr = psnr(x, random_recon)
 
-    for i in range(B):
-        og, y, random_y = x[i], recon[i], random_recon[i]
+    for i in range(20):
+        og, y, random_y, r = x[i], recon[i], random_recon[i], ratio[i, 1].cpu().detach().numpy().item()
 
         # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), og, 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_y, 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), restore_measure(og, r), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), restore_measure(y, r), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), restore_measure(random_y, r), 16000)
     
-    return np.mean(recon_psnr - random_psnr).item()
+    x = [row for row in resampler(torch.from_numpy(x)).numpy()]
+    recon = [row for row in resampler(torch.from_numpy(recon)).numpy()]
+    random_recon = [row for row in resampler(torch.from_numpy(random_recon)).numpy()]
+
+    x_inputs = processor(x, sampling_rate=24000, return_tensors="pt")
+    recon_inputs = processor(recon, sampling_rate=24000, return_tensors="pt")
+    random_recon_inputs = processor(random_recon, sampling_rate=24000, return_tensors="pt")
+    
+    x_inputs['input_values'] = x_inputs['input_values'].to(device)
+    recon_inputs['input_values'] = recon_inputs['input_values'].to(device)
+    random_recon_inputs['input_values'] = random_recon_inputs['input_values'].to(device)
+    x_inputs['attention_mask'] = x_inputs['attention_mask'].to(device)
+    recon_inputs['attention_mask'] = recon_inputs['attention_mask'].to(device)
+    random_recon_inputs['attention_mask'] = random_recon_inputs['attention_mask'].to(device)
+    
+    with torch.no_grad():
+        x_emb = emb_model(**x_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1).cpu().numpy()
+        recon_emb = emb_model(**recon_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1).cpu().numpy()
+        random_recon_emb = emb_model(**random_recon_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1).cpu().numpy()
+
+    recon_sim = 1 - paired_cosine_distances(x_emb, recon_emb)
+    random_sim = 1 - paired_cosine_distances(x_emb, random_recon_emb)
+    
+    return {'PSNR': np.mean(recon_psnr - random_psnr).item(), 'Similarity': np.mean(recon_sim - random_sim).item()}
 
 def psnr(y_true, y_pred, max_val=1.):
     mse = np.mean((y_true - y_pred) ** 2, axis=1)  # (B,)
@@ -312,7 +385,7 @@ if wandb_log and master_process:
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
-X = get_batch('train') # fetch the very first batch
+X, ratio, bpm = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
@@ -339,10 +412,10 @@ while True:
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
             with ctx:
-                delta_psnr = generate_lam_vs_random_actions(iter_num)
+                metrics = generate_lam_vs_random_actions(iter_num)
             model.train()
-            print(f"iter {iter_num}: delta PSNR {delta_psnr:.3f}")
-        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, train usage: {usage['train']:.2f}, val usage {['val']:.2f}")
+            print(f"iter {iter_num}: delta PSNR {metrics['PSNR']:.3f}, delta Similarity {metrics['Similarity']:.3f}")
+        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, train perplexity: {usage['train']:.2f}, val perplexity {usage['val']:.2f}")
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
@@ -382,10 +455,10 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            loss = model(X)
+            loss, _ = model(X, bpm)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
-        X = get_batch('train')
+        X, ratio, bpm = get_batch('train')
         # backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
     # clip the gradient

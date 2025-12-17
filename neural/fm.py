@@ -29,7 +29,7 @@ class FM:
         x_t = self.alpha(t).view(*s) * x + self.sigma(t).view(*s) * noise
         return x_t, noise
     
-    def loss(self, net, x, t=None, net_kwargs=None, return_loss_unreduced=False, return_all=False):
+    def loss(self, net, x, t=None, net_kwargs=None, return_loss_unreduced=False, return_all=False, mask=None):
         if net_kwargs is None:
             net_kwargs = {}
         
@@ -40,6 +40,33 @@ class FM:
         pred = net(x_t, t=t * self.timescale, **net_kwargs)
         
         target = self.A(t) * x + self.B(t) * noise # -dxt/dt
+        if return_loss_unreduced:
+            loss = ((pred.float() - target.float()) ** 2).mean(dim=[1, 2])
+            if return_all:
+                return loss, t, x_t, pred
+            else:
+                return loss, t
+        else:
+            loss = ((pred.float() - target.float()) ** 2)#.mean()
+            if mask is not None:
+                loss = loss * mask.unsqueeze(1)
+            loss = loss.mean()
+            if return_all:
+                return loss, x_t, pred
+            else:
+                return loss
+    
+    def target_loss(self, net, x, target, t=None, net_kwargs=None, return_loss_unreduced=False, return_all=False):
+        if net_kwargs is None:
+            net_kwargs = {}
+        
+        if t is None:
+            t = torch.rand(x.shape[0], device=x.device)
+        x_t, noise = self.add_noise(x, t)
+        
+        pred = net(x_t, t=t * self.timescale, **net_kwargs)
+        
+        target = self.A(t) * target + self.B(t) * noise # -dxt/dt
         if return_loss_unreduced:
             loss = ((pred.float() - target.float()) ** 2).mean(dim=[1, 2])
             if return_all:

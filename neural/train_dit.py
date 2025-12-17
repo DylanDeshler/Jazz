@@ -28,21 +28,29 @@ import numpy as np
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
+from einops import rearrange
 
-from dit import DiT_B_2 as dit
-from dito import DiTo as Tokenizer
+from diffusion_forcing import DiT_L as net
+from dito import DiToV5 as Tokenizer
 
 import matplotlib.pyplot as plt
 import soundfile as sf
 
+from transformers import Wav2Vec2FeatureExtractor, AutoModel
+import torch
+import torchaudio
+import pyrubberband as pyrb
+from sklearn.metrics.pairwise import paired_cosine_distances
+
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'dit'
-eval_interval = 1000
+out_dir = 'DiT_measures_bpm_L_16_6'
+eval_interval = 2500
+sample_interval = 5000
 log_interval = 100
-save_interval = 10000
-eval_iters = 100
+save_interval = 5000
+eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
@@ -52,13 +60,17 @@ wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 2 # used to simulate larger batch sizes
-batch_size = 48# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+gradient_accumulation_steps = 3 # used to simulate larger batch sizes
+batch_size = 64# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
-max_seq_len = 50 * 5
-codebook_size = 16
-codebook_dim = 32
-vae_embed_dim = 128
+spatial_window = 48
+n_chunks = 10
+max_seq_len = spatial_window * n_chunks
+action_length = 3
+vae_embed_dim = 16
+# 2^4 2^6 2^8 2^9 2^10 2^11 2^12 2^14 2^16
+# [5, 3] [8, 8] [8, 6, 5] [8, 8, 8] [8, 5, 5, 5] [8, 8, 6, 5] [7, 5, 5, 5] [8, 8, 8, 6, 5] [8, 8, 8, 5, 5, 5]
+levels = [5, 3]
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
@@ -68,15 +80,15 @@ beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
 decay_lr = False # whether to decay the learning rate
-warmup_iters = 10000 # how many steps to warm up for
+warmup_iters = 5000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
-backend = 'nccl' # 'nccl', 'gloo', etc.
+backend = 'gloo' # 'nccl', 'gloo', etc.
 # system
-device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+device = 'cuda:0' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
-compile = False # use PyTorch 2.0 to compile the model to be faster
+compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 # exec(open('configurator.py').read()) # overrides from command line or config file
@@ -116,27 +128,27 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
-# Writing train with shape:  (318575607, 128)
-# Writing val with shape:  (6501543, 128)
 # poor man's data loader
 def get_batch(split='train'):
+    # TODO: sample within songs (this can go over boundaries)
+    data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large.bin', dtype=np.float16, mode='r', shape=(3693787, 48, vae_embed_dim))
+    meta = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_meta.npy', dtype=np.float32, mode='r', shape=(3693787, 2))
+    actions = np.memmap(f'/home/dylan.d/research/music/Jazz/latents/low_measures_large_actions_{vae_embed_dim}_{math.prod(levels)}_{action_length}.bin', dtype=np.int8, mode='r', shape=(3693787, action_length))
     if split == 'train':
-        data = np.memmap('/home/dylan.d/research/music/Jazz/latents/train.bin', dtype=np.float32, mode='r', shape=(318575607, 128))
-        idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
-        batch = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).to(device)
-        return batch
-    
+        idxs = torch.randint(int(len(data) * 0.98) - n_chunks, (batch_size,))
     else:
-        data = np.memmap('/home/dylan.d/research/music/Jazz/latents/val.bin', dtype=np.float32, mode='r', shape=(6501543, 128))
-        idxs = torch.randint(len(data) - max_seq_len, (batch_size,))
-        batch = torch.from_numpy(np.stack([data[idx:idx+max_seq_len] for idx in idxs], axis=0)).to(device)
-        return batch
+        idxs = torch.randint(int(len(data) * 0.98), len(data) - n_chunks, (batch_size,))
+    x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).view(batch_size, max_seq_len, vae_embed_dim).pin_memory().to(device, non_blocking=True)
+    ratio = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 0] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    bpm = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    actions = torch.from_numpy(np.stack([actions[idx:idx+n_chunks] for idx in idxs], axis=0)).long().pin_memory().to(device, non_blocking=True)
+    return x, ratio, bpm, actions
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
 best_val_loss = 1e9
 
-ckpt_path = os.path.join('tokenizer10', 'ckpt.pt')
+ckpt_path = os.path.join('tokenizer_low_measures_large', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 tokenizer_args = checkpoint['model_args']
 
@@ -151,11 +163,11 @@ for k,v in list(state_dict.items()):
 tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 
-model_args = dict(vae_embed_dim=vae_embed_dim, seq_len=max_seq_len, codebook_size=codebook_size, codebook_dim=codebook_dim)
+model_args = dict(in_channels=vae_embed_dim, n_chunks=n_chunks, spatial_window=spatial_window, num_actions=math.prod(levels), action_length=action_length)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
-    model = dit(**model_args)
+    model = net(**model_args)
     tokens_trained = 0
 elif init_from == 'resume':
     print(f"Resuming training from {out_dir}")
@@ -164,7 +176,7 @@ elif init_from == 'resume':
     checkpoint = torch.load(ckpt_path, map_location=device)
     model_args = checkpoint['model_args']
 
-    model = dit(**model_args)
+    model = net(**model_args)
     state_dict = checkpoint['model']
     # fix the keys of the state dictionary :(
     # honestly no idea how checkpoints sometimes get this prefix, have to debug more
@@ -180,7 +192,7 @@ elif init_from.startswith('gpt2'):
     print(f"Initializing from OpenAI GPT-2 weights: {init_from}")
     # initialize from OpenAI GPT-2 weights
     override_args = dict(dropout=dropout)
-    model = mar.from_pretrained(init_from, override_args)
+    model = net.from_pretrained(init_from, override_args)
     # read off the created config params, so we can store them into checkpoint correctly
     for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
         model_args[k] = getattr(model.config, k)
@@ -191,35 +203,28 @@ summary(model)
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 
-# optimizer
-# optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
-optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, betas=(beta1, beta2))
-if init_from == 'resume':
-    optimizer.load_state_dict(checkpoint['optimizer'])
-checkpoint = None # free up memory
-
 # compile the model
 if compile and 'cuda' in device:
     print("compiling the model... (takes a ~minute)")
     unoptimized_model = model
     model = torch.compile(model) # requires PyTorch 2.0
+    tokenizer = torch.compile(tokenizer)
 
 # wrap model into DDP container
 if ddp:
     model = DDP(model, device_ids=[ddp_local_rank])
-    # tokenizer = DDP(tokenizer, device_ids=[ddp_local_rank])
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
-def estimate_loss():
+def estimate_loss(is_causal=None):
     out = {}
     model.eval()
-    for split in ['train', 'val']:
+    for i, split in enumerate(['train', 'val']):
         losses = torch.zeros(eval_iters * gradient_accumulation_steps)
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
-            X = get_batch(split)
+            X, ratio, bpm, actions = get_batch(split)
             with ctx:
-                loss = model(X)
+                loss = model(X, bpm, actions, attn_mask=is_causal)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -239,30 +244,58 @@ def get_lr(it):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
 
+def restore_measure(audio, stretch_ratio, sr=16000):
+    """
+    Restores a time-warped measure to its original duration.
+    
+    Args:
+        audio (np.array): The fixed-length audio (from VAE or .npy file).
+                          Can be shape (1, 24576) or (24576,).
+        stretch_ratio (float): The ratio saved in your metadata 
+                               (Original Length / Target Length).
+        sr (int): Sampling rate (default 16000).
+        
+    Returns:
+        np.array: The restored audio array at original duration.
+    """
+    
+    if audio.dtype == np.float16:
+        audio = audio.astype(np.float32)
+    restore_rate = 1.0 / stretch_ratio
+    
+    y_restored = pyrb.time_stretch(audio, sr, restore_rate)
+    return y_restored
+
 @torch.no_grad()
-def save_samples(xs, ys, step):
+def save_samples(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
+    
+    x, ratio, bpm, actions = get_batch('val')
+    x = x[:10]
 
-    assert xs.shape == ys.shape, f'shapes should match but got {xs.shape} != {ys.shape}'
+    B, T, N, D = x.shape
+    
+    with ctx:
+        recon = raw_model.generate(x.clone(), bpm, actions, n_steps=50)
+        x = tokenizer.decode(x.permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
+        recon = tokenizer.decode(recon.permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
+    
+    x = x.cpu().detach().float().numpy().squeeze(1)
+    recon = recon.cpu().detach().float().numpy().squeeze(1)
+    ratio = ratio.cpu().detach().numpy()
 
-    B, L, D = xs.shape
+    for i in range(10):
+        og, y, r = x[i], recon[i], ratio[i].item()
 
-    # reconstruct wavform in series (could be smart and reshape into a batch for speed)
-    n_cuts = L // 50
-    x_cuts, y_cuts = [], []
-    for cut in tqdm(range(n_cuts), desc='Decoding'):
-        x_cuts.append(tokenizer.decode(xs[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
-        y_cuts.append(tokenizer.decode(ys[:, cut * 50: (cut + 1) * 50].permute(0, 2, 1)))
-    xs = torch.cat(x_cuts, dim=-1).cpu().detach().numpy()
-    ys = torch.cat(y_cuts, dim=-1).cpu().detach().numpy()
-
-    for i in range(B):
-        x, y = xs[i].squeeze(), ys[i].squeeze()
-
+        og_ms, y_ms = [], []
+        for og_m, y_m, r_m in zip(og, y, r):
+            og_ms.append(restore_measure(og_m, r_m))
+            y_ms.append(restore_measure(y_m, r))
+        
         # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), x, 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_gen.wav'), y, 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), np.concatenate(og_ms), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), np.concatenate(y_ms), 16000)
 
 # logging
 if wandb_log and master_process:
@@ -270,16 +303,17 @@ if wandb_log and master_process:
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
-step1 = 5001
-step2 = 10001
-step3 = 20001
-step4 = 50001
-
-X = get_batch('train') # fetch the very first batch
+X, ratio, bpm, actions = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
+
+# optimizer
+optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, betas=(beta1, beta2))
+if init_from == 'resume':
+    optimizer.load_state_dict(checkpoint['optimizer'])
+checkpoint = None # free up memory
 while True:
 
     # determine and set the learning rate for this iteration
@@ -287,28 +321,22 @@ while True:
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
     
-    if iter_num == step1 or local_iter_num == 0 and iter_num >= step1:
-        batch_size *= 2
-    if iter_num == step2 or local_iter_num == 0 and iter_num >= step2:
-        batch_size *= 2
-    if iter_num == step3 or local_iter_num == 0 and iter_num >= step3:
-        batch_size *= 2 #batch_size = 256
-    #     # batch_size *= 4
-    # if iter_num == step4 or local_iter_num == 0 and iter_num >= step4:
-    #     gradient_accumulation_steps *= 2
-    
     tokens_trained += batch_size * gradient_accumulation_steps * max_seq_len
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        X = get_batch('test')[:8]
-        model.eval()
-        with ctx:
-            samples = raw_model.sample(X.shape)
-        save_samples(X, samples, iter_num)
-        model.train()
-        losses = estimate_loss()
-        print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        noncausal_losses = estimate_loss()
+        causal_losses = estimate_loss(True)
+        # if iter_num % sample_interval == 0 and master_process:
+        #     model.eval()
+        #     with ctx:
+        #         metrics = save_samples(iter_num)
+        #     model.train()
+        #     print(f"iter {iter_num}: delta PSNR {metrics['PSNR']:.3f}, delta Similarity {metrics['Similarity']:.3f}")
+        print(f"iter {iter_num}: train loss {noncausal_losses['train']:.6f}, val loss {noncausal_losses['val']:.6f}, train causal loss {causal_losses['train']:.6f}, val causal loss {causal_losses['val']:.6f}")
+        losses = {}
+        for k in causal_losses.keys():
+            losses[k] = (causal_losses[k] + noncausal_losses[k]) / 2
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
@@ -333,7 +361,7 @@ while True:
                 print(f"saving checkpoint to {out_dir}")
                 torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
 
-                if iter_num % save_interval == 0:
+                if iter_num % save_interval == 0 and master_process == 0:
                     torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
     if iter_num == 0 and eval_only:
         break
@@ -348,10 +376,10 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            loss = model(X)
+            loss = model(X, bpm, actions)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
-        X = get_batch('train')
+        X, ratio, bpm, actions = get_batch('train')
         # backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
     # clip the gradient

@@ -1,14 +1,12 @@
-# https://arxiv.org/pdf/2408.14837
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 import math
-from tqdm import tqdm
-from typing import Optional, Callable
+from typing import Optional, List, Callable
 
 from einops import rearrange
-from vector_quantize_pytorch import FSQ
+from vector_quantize_pytorch import FSQ, ResidualFSQ
 from fm import FM, FMEulerSampler
 
 @torch.compile
@@ -75,7 +73,7 @@ class TimestepEmbedder(nn.Module):
     """
     Embeds scalar timesteps into vector representations.
     """
-    def __init__(self, hidden_size, frequency_embedding_size=256):
+    def __init__(self, hidden_size, frequency_embedding_size=256, max_period=10000):
         super().__init__()
         self.mlp = nn.Sequential(
             nn.Linear(frequency_embedding_size, hidden_size, bias=True),
@@ -83,6 +81,7 @@ class TimestepEmbedder(nn.Module):
             nn.Linear(hidden_size, hidden_size, bias=True),
         )
         self.frequency_embedding_size = frequency_embedding_size
+        self.max_period = max_period
 
     @staticmethod
     def timestep_embedding(t, dim, max_period=10000):
@@ -106,7 +105,7 @@ class TimestepEmbedder(nn.Module):
         return embedding
 
     def forward(self, t):
-        t_freq = self.timestep_embedding(t, self.frequency_embedding_size)
+        t_freq = self.timestep_embedding(t, self.frequency_embedding_size, max_period=self.max_period)
         t_emb = self.mlp(t_freq)
         return t_emb
 
@@ -326,8 +325,8 @@ class CrossAttentionBlock(nn.Module):
         self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
     
     def forward(self, x, context, freqs_cis=None):
-        x = x + self.attn(self.norm1(x), freqs_cis=freqs_cis[:x.shape[1]])
-        x = x + self.cross(self.norm2(x), context, freqs_cis=freqs_cis[:max(x.shape[1], context.shape[1])])
+        x = x + self.attn(self.norm1(x), freqs_cis=freqs_cis[:x.shape[1]] if freqs_cis is not None else None)
+        x = x + self.cross(self.norm2(x), context, freqs_cis=freqs_cis[:max(x.shape[1], context.shape[1])] if freqs_cis is not None else None)
         x = x + self.mlp(self.norm3(x))
         return x
 
@@ -339,40 +338,226 @@ class SelfAttentionBlock(nn.Module):
         self.norm2 = RMSNorm(hidden_size)
         self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
     
-    def forward(self, x, freqs_cis=None):
-        x = x + self.attn(self.norm1(x), freqs_cis=freqs_cis[:x.shape[1]])
+    def forward(self, x, freqs_cis=None, is_causal=False):
+        x = x + self.attn(self.norm1(x), is_causal=is_causal, freqs_cis=freqs_cis[:x.shape[1]] if freqs_cis is not None else None)
         x = x + self.mlp(self.norm2(x))
         return x
 
-class STAttentionBlock(nn.Module):
-    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
-        super().__init__()
-        self.norm1 = RMSNorm(hidden_size)
-        self.spatial_attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
-        self.norm2 = RMSNorm(hidden_size)
-        self.temporal_attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
-        self.norm3 = RMSNorm(hidden_size)
-        self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
-    
-    def forward(self, x, freqs_cis=None):
-        B, T, N, C = x.shape
-        x = rearrange(x, 'b t n c -> (b t) n c')
-        x = x + self.spatial_attn(self.norm1(x), freqs_cis=freqs_cis[:x.shape[1]])
-        x = rearrange(x, '(b t) n c -> (b n) t c', b=B, t=T)
-        x = x + self.temporal_attn(self.norm2(x), freqs_cis=freqs_cis[:x.shape[1]], is_causal=True)
-        x = rearrange(x, '(b n) t c -> b t n c', b=B, n=N)
-        x = x + self.mlp(self.norm3(x))
+class PixelShuffle1D(torch.nn.Module):
+    """
+    1D pixel shuffler. https://arxiv.org/pdf/1609.05158.pdf
+    Upscales sample length, downscales channel length
+    "short" is input, "long" is output
+    """
+    def __init__(self, upscale_factor):
+        super(PixelShuffle1D, self).__init__()
+        self.upscale_factor = upscale_factor
+
+    def forward(self, x):
+        batch_size = x.shape[0]
+        short_channel_len = x.shape[1]
+        short_width = x.shape[2]
+
+        long_channel_len = short_channel_len // self.upscale_factor
+        long_width = self.upscale_factor * short_width
+
+        x = x.contiguous().view([batch_size, self.upscale_factor, long_channel_len, short_width])
+        x = x.permute(0, 2, 3, 1).contiguous()
+        x = x.view(batch_size, long_channel_len, long_width)
+
         return x
 
-# 2^4       2^6     2^8         2^9         2^10            2^11            2^12            2^14                2^16
-# [5, 3]    [8, 8] [8, 6, 5]    [8, 8, 8]   [8, 5, 5, 5]    [8, 8, 6, 5]    [7, 5, 5, 5]    [8, 8, 8, 6, 5]     [8, 8, 8, 5, 5, 5]
+class PixelUnshuffle1D(torch.nn.Module):
+    """
+    Inverse of 1D pixel shuffler
+    Upscales channel length, downscales sample length
+    "long" is input, "short" is output
+    """
+    def __init__(self, downscale_factor):
+        super(PixelUnshuffle1D, self).__init__()
+        self.downscale_factor = downscale_factor
+
+    def forward(self, x):
+        batch_size = x.shape[0]
+        long_channel_len = x.shape[1]
+        long_width = x.shape[2]
+
+        short_channel_len = long_channel_len * self.downscale_factor
+        short_width = long_width // self.downscale_factor
+        x = x.contiguous().view([batch_size, long_channel_len, short_width, self.downscale_factor])
+        x = x.permute(0, 3, 1, 2).contiguous()
+        x = x.view([batch_size, short_channel_len, short_width])
+        return x
+
+class ConvPixelUnshuffleDownSampleLayer(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        factor: int,
+        kernel_size: int = 3
+    ):
+        super().__init__()
+        assert out_channels % factor == 0, f'{out_channels}, {factor}'
+        self.norm = nn.GroupNorm(1, in_channels)
+        self.conv = nn.Conv1d(in_channels, out_channels // factor, kernel_size=kernel_size, padding=kernel_size // 2)
+        self.pixel_unshuffle = PixelUnshuffle1D(factor)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.norm(x)
+        x = self.conv(x)
+        x = self.pixel_unshuffle(x)
+        return x
+
+class PixelUnshuffleChannelAveragingDownSampleLayer(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        factor: int,
+    ):
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        assert in_channels * factor % out_channels == 0, f'{in_channels} {factor} {out_channels}'
+        self.group_size = in_channels * factor // out_channels
+        self.pixel_unshuffle = PixelUnshuffle1D(factor)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.pixel_unshuffle(x)
+        B, C, L = x.shape
+        x = x.view(B, self.out_channels, self.group_size, L)
+        x = x.mean(dim=2)
+        return x
+
+class DownsampleV3(nn.Module):
+    def __init__(self, in_channels, out_channels, ratio):
+        super().__init__()
+        self.conv = ConvPixelUnshuffleDownSampleLayer(in_channels, out_channels, ratio, ratio * 2 + 1)
+        self.shortcut = PixelUnshuffleChannelAveragingDownSampleLayer(in_channels, out_channels, ratio)
+    
+    def forward(self, x, t=None):
+        x = self.conv(x) + self.shortcut(x)
+        return x
+
+class ConvPixelShuffleUpSampleLayer(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        factor: int,
+        kernel_size: int = 3
+    ):
+        super().__init__()
+        self.norm = nn.GroupNorm(1, in_channels)
+        self.conv = nn.Conv1d(in_channels, out_channels * factor, kernel_size=kernel_size, padding=kernel_size // 2)
+        self.pixel_shuffle = PixelShuffle1D(factor)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.norm(x)
+        x = self.conv(x)
+        x = self.pixel_shuffle(x)
+        return x
+
+class ChannelDuplicatingPixelUnshuffleUpSampleLayer(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        factor: int,
+    ):
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        assert out_channels * factor % in_channels == 0, f'{out_channels} {factor} {in_channels}'
+        self.repeats = out_channels * factor // in_channels
+        self.pixel_shuffle = PixelShuffle1D(factor)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x.repeat_interleave(self.repeats, dim=1)
+        x = self.pixel_shuffle(x)
+        return x
+
+class UpsampleV3(nn.Module):
+    def __init__(self, in_channels, out_channels, ratio):
+        super().__init__()
+        self.conv = ConvPixelShuffleUpSampleLayer(in_channels, out_channels, ratio, ratio * 2 + 1)
+        self.shortcut = ChannelDuplicatingPixelUnshuffleUpSampleLayer(in_channels, out_channels, ratio)
+    
+    def forward(self, x, t=None):
+        x = self.conv(x) + self.shortcut(x)
+        return x
+
+class ConvBlock(nn.Module):
+    def __init__(self, hidden_size, kernel_size):
+        super().__init__()
+        self.norm = nn.GroupNorm(1, hidden_size)
+        self.conv1 = nn.Conv1d(hidden_size, hidden_size, kernel_size, padding=kernel_size//2)
+        self.conv2 = nn.Conv1d(hidden_size, hidden_size, kernel_size, padding=kernel_size//2)
+    
+    def forward(self, x):
+        x_skip = x
+        x = self.norm(x)
+        x = self.conv1(x)
+        x = F.silu(x)
+        x = self.conv2(x)
+        return x_skip + x
+
+class CNNEncoder(nn.Module):
+    def __init__(self, in_size, out_size, ratios, spatial_window):
+        super().__init__()
+        blocks = []
+        for ratio in ratios:
+            blocks.append(ConvBlock(in_size, 3))
+            blocks.append(DownsampleV3(in_size, in_size, ratio))
+        self.blocks = nn.ModuleList(blocks)
+        
+        # self.norm = nn.LayerNorm(in_size * spatial_window // math.prod(ratios))
+        # self.fc = nn.Linear(in_size * spatial_window // math.prod(ratios), out_size)
+        
+        self.norm = nn.LayerNorm(in_size)
+        self.fc = nn.Linear(in_size, out_size)
+    
+    def forward(self, x):
+        x = rearrange(x, 'n l c -> n c l')
+        for block in self.blocks:
+            x = block(x)
+        
+        # x = rearrange(x, 'n c l -> n (c l)')
+        x = rearrange(x, 'n c l -> n l c')
+        x = self.norm(x)
+        x = self.fc(x)
+        # x = x.unsqueeze(1)
+        return x
+
+class CNNDecoder(nn.Module):
+    def __init__(self, in_size, out_size, ratios, spatial_window):
+        super().__init__()
+        blocks = []
+        for ratio in ratios:
+            blocks.append(UpsampleV3(in_size, in_size, ratio))
+            blocks.append(ConvBlock(in_size, 3))
+        self.blocks = nn.ModuleList(blocks)
+        
+        self.fc = nn.Linear(in_size * spatial_window // math.prod(ratios), out_size)
+        
+    def forward(self, x):
+        x = self.fc(x)
+        
+        x = rearrange(x, 'n l c -> n c l')
+        for block in self.blocks:
+            x = block(x)
+        
+        x = rearrange(x, 'n c l -> n l c')
+        return x
+
 class ActionTransformer(nn.Module):
-    def __init__(self,
-                 in_channels,
+    def __init__(self,in_channels,
                  hidden_size,
                  levels,
                  spatial_window,
                  temporal_window,
+                 ratios, 
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4,
@@ -380,37 +565,50 @@ class ActionTransformer(nn.Module):
         super().__init__()
         
         self.x_embedder = nn.Sequential(nn.Linear(in_channels, hidden_size, bias=True), RMSNorm(hidden_size))
+        self.bpm_embedder = TimestepEmbedder(hidden_size, max_period=1000)
         
-        self.blocks = nn.ModuleList([
-            STAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+        self.spatial_blocks = nn.ModuleList([
+            SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
-        self.to_vq = nn.Sequential(
-            RMSNorm(spatial_window * hidden_size),
-            nn.Linear(spatial_window * hidden_size, len(levels))
-        )
+        self.temporal_blocks = nn.ModuleList([
+            SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth // 2)
+        ])
+        
+        # self.to_vq = nn.Sequential(
+        #     nn.LayerNorm(spatial_window * hidden_size),
+        #     nn.Linear(spatial_window * hidden_size, len(levels)),
+        # )
+        # self.to_vq = nn.Sequential(
+        #     nn.LayerNorm(hidden_size),
+        #     nn.Linear(hidden_size, len(levels)),
+        # )
+        self.to_vq = CNNEncoder(hidden_size, len(levels), ratios, spatial_window)
         self.vq = FSQ(levels=levels)
+        # self.vq = ResidualFSQ(levels=levels, num_quantizers=)
+        self.from_vq = nn.Linear(len(levels), hidden_size)
+        # self.from_vq = CNNDecoder(len(levels), hidden_size, ratios)
         
-        self.spatial_window = spatial_window
-        self.temporal_window = temporal_window
+        self.spatial_pos = nn.Embedding(spatial_window + 1, hidden_size)
+        self.temporal_pos = nn.Embedding(temporal_window, hidden_size)
         
-        freqs_cis = precompute_freqs_cis(
-            hidden_size // num_heads,
-            max(spatial_window, temporal_window) * 2,
-            10000,
-            False,
-        )
-        self.register_buffer('freqs_cis', freqs_cis)
         self.initialize_weights()
     
     def initialize_weights(self):
         self.apply(self._init_weights)
         # zero out classifier weights
-        torch.nn.init.zeros_(self.to_vq[-1].weight)
+        # torch.nn.init.zeros_(self.to_vq[-1].weight)
         # zero out c_proj weights in all blocks
-        for block in self.blocks:
+        for block in self.spatial_blocks:
             torch.nn.init.zeros_(block.mlp.w3.weight)
-            torch.nn.init.zeros_(block.spatial_attn.proj.weight)
-            torch.nn.init.zeros_(block.temporal_attn.proj.weight)
+            torch.nn.init.zeros_(block.attn.proj.weight)
+        
+        for block in self.temporal_blocks:
+            torch.nn.init.zeros_(block.mlp.w3.weight)
+            torch.nn.init.zeros_(block.attn.proj.weight)
+        
+        # self.to_vq[1].reset_parameters()
+        # self.from_vq.reset_parameters()
+        self.to_vq.fc.reset_parameters()
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
@@ -422,55 +620,38 @@ class ActionTransformer(nn.Module):
             if module.bias is not None:
                 torch.nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=1.0)
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
-    def forward(self, x):
+    def forward(self, x, bpm):
         """
-        x: (B, T, N, C) latents
+        x: (B, 2, N, C) latents
         """
         B, T, N, C = x.shape
-        assert T == self.temporal_window
-        assert N == self.spatial_window
         
         x = self.x_embedder(x)
+        bpm = self.bpm_embedder(bpm.flatten()).view(B, T, 1, -1)
         
-        for block in self.blocks:
-            x = block(x, freqs_cis=self.freqs_cis)
+        x = torch.cat([bpm, x], dim=2)
+        x = rearrange(x, 'b t n c -> (b t) n c')
+        x = x + self.spatial_pos(torch.arange(N+1, device=x.device, dtype=torch.long).unsqueeze(0))
+        for block in self.spatial_blocks:
+            x = block(x)
         
-        x = rearrange(x, 'b t n c -> b t (n c)')
-        x = x[:, 1:] - x[:, :-1]
-        x = rearrange(x, 'b t (n c) -> (b t) (n c)')
+        x = rearrange(x, '(b t) n c -> (b n) t c', b=B, t=T)
+        x = x + self.temporal_pos(torch.arange(T, device=x.device, dtype=torch.long).unsqueeze(0))
+        for block in self.temporal_blocks:
+            x = block(x, is_causal=True)
+        
+        x = rearrange(x, '(b n) t c -> b t n c', b=B, n=N+1)
+        first_frame, last_frame = x[:, 0, 1:], x[:, 1, 1:]
+        # first_frame, last_frame = rearrange(first_frame, 'b n c -> b (n c)'), rearrange(last_frame, 'b n c -> b (n c)')
+        x = last_frame - first_frame
+        # x = x.unsqueeze(1)
+        
         x = self.to_vq(x)
         x, indices = self.vq(x)
-        return indices
-
-class PatchEmbedder(nn.Module):
-    def __init__(self, in_channels, hidden_size, num_history_tokens, max_input_size, dropout_prob):
-        super().__init__()
-        self.proj = nn.Linear(in_channels * num_history_tokens, hidden_size, bias=True)
-        self.norm = RMSNorm(hidden_size)
-        
-        self.dropout_prob = dropout_prob
-        self.null_history_token = nn.Parameter(torch.randn(1, 1, 1, in_channels))
-    
-    def _init_weights(self, module):
-        nn.init.normal_(self.null_history_token, std=0.02)
-    
-    def forward(self, x, history, force_drop=False):
-        if self.training:
-            drop_ids = torch.rand(history.shape[0], device=x.device) < self.dropout_prob
-            history = torch.where(drop_ids.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1), self.null_history_token, history)
-        elif force_drop:
-            drop_ids = torch.ones(history.shape[0], device=x.device).bool()
-            history = torch.where(drop_ids.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1), self.null_history_token, history)
-
-        history = rearrange(history, 'b t n c -> b n (t c)')
-        x = torch.cat([history, x], dim=-1) # are historical latents concated before or after projection?
-        
-        x = self.proj(x)
-        x = self.norm(x)
-        
-        return x
+        x = self.from_vq(x)
+        return x, indices
 
 class DiT(nn.Module):
     def __init__(self,
@@ -478,19 +659,20 @@ class DiT(nn.Module):
                  hidden_size,
                  num_actions,
                  max_input_size,
-                 num_history_tokens,
-                 max_alpha_t=0.7,
-                 history_dropout_prob=0.1,
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4,
                  ):
         super().__init__()
+        self.num_actions = num_actions
         
-        self.x_embedder = PatchEmbedder(in_channels, hidden_size, num_history_tokens, max_input_size, history_dropout_prob)
+        self.x_embedder = nn.Sequential(nn.Linear(in_channels, hidden_size, bias=True), RMSNorm(hidden_size))
         self.t_embedder = TimestepEmbedder(hidden_size)
-        self.alpha_embedder = NoiseEmbedder(10, hidden_size, max_t=max_alpha_t)
-        self.action_embedder = ClassEmbedder(num_actions, hidden_size)
+        self.bpm_embedder = TimestepEmbedder(hidden_size, max_period=1000)
+        # self.action_embedder = nn.Embedding(num_actions, hidden_size)
+        
+        self.x_pos = nn.Embedding(max_input_size, hidden_size)
+        self.context_pos = nn.Embedding(2 + num_actions, hidden_size)
 
         self.blocks = nn.ModuleList([
             CrossAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
@@ -498,16 +680,6 @@ class DiT(nn.Module):
         
         self.final_layer = nn.Sequential(RMSNorm(hidden_size), nn.Linear(hidden_size, in_channels, bias=True))
 
-        self.max_alpha_t = max_alpha_t
-        self.num_history_tokens = num_history_tokens
-        
-        freqs_cis = precompute_freqs_cis(
-            hidden_size // num_heads,
-            max(max_input_size, num_history_tokens) * 2,
-            10000,
-            False,
-        )
-        self.register_buffer('freqs_cis', freqs_cis)
         self.initialize_weights()
     
     def initialize_weights(self):
@@ -530,26 +702,26 @@ class DiT(nn.Module):
             if module.bias is not None:
                 torch.nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=1.0)
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
-    def forward(self, x, t, history, actions, alpha, force_drop_actions=False, force_drop_history=False):
+    def forward(self, x, t, bpm, actions):
         """
         x: (B, N, C) latents to be denoised
         t: (B) noise level for x
-        history: (B, T, N, C) T historyical latent frames
         actions: (B, T) frame actions
-        alpha: (B) noise level for historical latent frames 
         """
-        assert history.shape[1] == self.num_history_tokens - 1
-
-        x = self.x_embedder(x, history, force_drop=force_drop_history)
-        t = self.t_embedder(t)
-        alpha = self.alpha_embedder(alpha)
-        actions = self.action_embedder(actions, force_drop=force_drop_actions)
-        context = torch.cat([t.unsqueeze(1), alpha.unsqueeze(1), actions], dim=1)
+        assert x.ndim == 3
         
+        x = self.x_embedder(x)
+        t = self.t_embedder(t)
+        bpm = self.bpm_embedder(bpm.squeeze())
+        # actions = self.action_embedder(actions)
+        context = torch.cat([t.unsqueeze(1), bpm.unsqueeze(1), actions], dim=1)
+        
+        x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
+        context = context + self.context_pos(torch.arange(2 + self.num_actions, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.blocks:
-            x = block(x, context, freqs_cis=self.freqs_cis)
+            x = block(x, context)
         
         x = self.final_layer(x)
         return x
@@ -558,7 +730,6 @@ class DiTWrapper(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
         self.net = DiT(**kwargs)
-        self.max_alpha_t = kwargs['max_alpha_t']
         
         self.diffusion = FM(timescale=1000.0)
         self.sampler = FMEulerSampler(self.diffusion)
@@ -575,21 +746,11 @@ class DiTWrapper(nn.Module):
         self.apply(_basic_init)
         self.net.initialize_weights()
     
-    def forward(self, x, history, actions, t=None, alpha=None):
-        if alpha is None:
-            alpha = torch.rand(x.shape[0], device=x.device) * self.max_alpha_t
-        history, _ = self.diffusion.add_noise(history, alpha)
-        return self.diffusion.loss(self.net, x, t=t, net_kwargs={'history': history, 'actions': actions, 'alpha': alpha})
+    def forward(self, x, bpm, actions, t=None):
+        return self.diffusion.loss(self.net, x, t=t, net_kwargs={'actions': actions, 'bpm': bpm})
     
-    def sample(self, shape, history, actions, alpha, guidance=1, n_steps=50):
-        if alpha is None:
-            alpha = torch.rand(history.shape[0], device=history.device) * self.max_alpha_t
-        history, _ = self.diffusion.add_noise(history, alpha)
-
-        net_kwargs={'history': history, 'actions': actions, 'alpha': alpha}
-        uncond_net_kwargs={'history': history, 'actions': actions, 'alpha': alpha, 'force_drop_actions': True, 'force_drop_history': True}
-        
-        return self.sampler.sample(self.net, shape, n_steps, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, guidance=guidance)
+    def sample(self, x, bpm, actions, n_steps=50):
+        return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm})
 
 class LAM(nn.Module):
     def __init__(self,
@@ -598,7 +759,7 @@ class LAM(nn.Module):
                  levels,
                  spatial_window,
                  temporal_window,
-                 max_alpha_t=0.7,
+                 ratios=[4,2],
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4,
@@ -609,57 +770,49 @@ class LAM(nn.Module):
                                               levels=levels, 
                                               spatial_window=spatial_window, 
                                               temporal_window=temporal_window, 
+                                              ratios=ratios,
                                               num_heads=num_heads, 
                                               depth=depth, 
                                               mlp_ratio=mlp_ratio)
         self.decoder = DiTWrapper(in_channels=in_channels, 
                                   hidden_size=hidden_size, 
-                                  num_actions=math.prod(levels), 
-                                  max_input_size=spatial_window, 
-                                  num_history_tokens=temporal_window, 
-                                  max_alpha_t=max_alpha_t, 
+                                  num_actions=spatial_window // math.prod(ratios), 
+                                  max_input_size=spatial_window,
                                   num_heads=num_heads, 
-                                  depth=depth, 
+                                  depth=int(depth * 3 // 2), # balance encoder decoder parameters 
                                   mlp_ratio=mlp_ratio)
         
         self.levels = levels
+        
+        # tie weights
+        self.decoder.net.x_embedder[0].weight = self.action_model.x_embedder[0].weight
+        self.decoder.net.x_embedder[0].bias = self.action_model.x_embedder[0].bias
+        self.decoder.net.x_embedder[1].weight = self.action_model.x_embedder[1].weight
     
-    def forward(self, x):
+    def forward(self, x, bpm):
         """
         x: (B, T, N, C) latents
         alpha: (B) noise level for history latents
         """
         assert x.ndim == 4
         
-        actions = self.action_model(x)  # (B, T-1)
-        history = x[:, :-1] # (B, T-1, N, C)
-        x = x[:, -1]    # (B, N, C)
+        z, indices = self.action_model(x, bpm)
         
-        x = self.decoder(x, history, actions)
-        return x
+        x = self.decoder(x[:, 1], bpm[:, 1], z)
+        return x, indices
     
-    def generate(self, history, alpha, actions, n_autoregressive_steps, n_diffusion_steps=50, guidance=1):
+    def enocde_actions(self, x, bpm):
         """
-        history: (B, T, N, C) latents
+        x: (B, T, N, C) latents
         alpha: (B) noise level for history latents
         """
-        assert history.ndim == 4
-        
-        cur_actions = self.action_model(history)
-        res = history.clone()
-        history = history[:, 1:]
-        for step in tqdm(range(n_autoregressive_steps), desc='Generating'):
-            cur_actions = torch.cat([cur_actions[:, 1:], actions[:, [step]]], dim=1)
-            out = self.decoder.sample(history[:, 0].shape, history, cur_actions, alpha, guidance=guidance, n_steps=n_diffusion_steps)
-            history = torch.cat([history[:, 1:], out.unsqueeze(1)], dim=1)
-            res = torch.cat([res, out.unsqueeze(1)], dim=1)
-        return res
-    
-    def encode_actions(self, x):
         assert x.ndim == 4
         
-        actions = self.action_model(x)
-        return actions
+        z, indices = self.action_model(x, bpm)
+        return z, indices
+    
+    def generate(self, x, bpm, actions, n_steps=50):
+        return self.decoder.sample(x, bpm, actions, n_steps=n_steps)
     
     def generate_random_different_actions(self, actions_indices, codebook_size, device):
         shape = actions_indices.shape
@@ -674,12 +827,12 @@ class LAM(nn.Module):
 
         return random_actions
     
-    def lam_vs_random_actions(self, x, alpha, n_autoregressive_steps, n_diffusion_steps=50, guidance=1):
-        actions = self.action_model(x)
+    def lam_vs_random_actions(self, x, bpm, n_steps=50):
+        z, indices = self.action_model(x, bpm)
         
-        random_actions = self.generate_random_different_actions(actions, math.prod(self.levels), x.device)
-        recon = self.generate(x, alpha, actions, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=n_diffusion_steps, guidance=guidance)
-        random = self.generate(x, alpha, random_actions, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=n_diffusion_steps, guidance=guidance)
+        random_actions = self.generate_random_different_actions(indices, math.prod(self.levels), x.device)
+        recon = self.generate(x[:, 1], bpm[:, 1], z, n_steps=n_steps)
+        random = self.generate(x[:, 1], bpm[:, 1], self.action_model.from_vq(self.action_model.vq.indices_to_codes(random_actions)), n_steps=n_steps)
         
         return recon, random
 

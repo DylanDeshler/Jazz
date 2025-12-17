@@ -1,0 +1,635 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.nn.attention.flex_attention import flex_attention, create_block_mask
+
+import math
+from typing import Optional, List, Callable
+
+def apply_scaling(freqs: torch.Tensor):
+    # RoPE scaling (values obtained from grid search)
+    scale_factor = 8
+    low_freq_factor = 1
+    high_freq_factor = 4
+    old_context_len = 8192  # original llama3 length
+    low_freq_wavelen = old_context_len / low_freq_factor
+    high_freq_wavelen = old_context_len / high_freq_factor
+    new_freqs = []
+    for freq in freqs:
+        wavelen = 2 * math.pi / freq
+        if wavelen < high_freq_wavelen:
+            new_freqs.append(freq)
+        elif wavelen > low_freq_wavelen:
+            new_freqs.append(freq / scale_factor)
+        else:
+            assert low_freq_wavelen != high_freq_wavelen
+            smooth = (old_context_len / wavelen - low_freq_factor) / (
+                high_freq_factor - low_freq_factor
+            )
+            new_freqs.append((1 - smooth) * freq / scale_factor + smooth * freq)
+    return torch.tensor(new_freqs, dtype=freqs.dtype, device=freqs.device)
+
+def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0, use_scaled: bool = False):
+    freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
+    t = torch.arange(end, device=freqs.device, dtype=torch.float32)
+    if use_scaled:
+        freqs = apply_scaling(freqs)
+    freqs = torch.outer(t, freqs)
+    freqs_cis = torch.polar(torch.ones_like(freqs), freqs)  # complex64
+    freqs_cis_real = torch.stack([freqs_cis.real, freqs_cis.imag], dim=-1)
+    return freqs_cis_real
+
+def apply_rotary_emb(x, freqs_cis):
+    # shape gymnastics let's go
+    # x is (bs, seqlen, n_heads, head_dim), e.g. (4, 8, 32, 128)
+    # freqs_cis is (seq_len, head_dim/2, 2), e.g. (8, 64, 2)
+    xshaped = x.float().reshape(*x.shape[:-1], -1, 2)
+    # xshaped is (bs, seqlen, n_heads, head_dim/2, 2), e.g. (4, 8, 32, 64, 2)
+    freqs_cis = freqs_cis.view(1, xshaped.size(1), 1, xshaped.size(3), 2)
+    # freqs_cis becomes (1, seqlen, 1, head_dim/2, 2), e.g. (1, 8, 1, 64, 2)
+    x_out2 = torch.stack(
+        [
+            xshaped[..., 0] * freqs_cis[..., 0] - xshaped[..., 1] * freqs_cis[..., 1],
+            xshaped[..., 1] * freqs_cis[..., 0] + xshaped[..., 0] * freqs_cis[..., 1],
+        ],
+        -1,
+    )
+    # x_out2 at this point is (bs, seqlen, n_heads, head_dim/2, 2), e.g. (4, 8, 32, 64, 2)
+    x_out2 = x_out2.flatten(3)
+    # x_out2 is now (bs, seqlen, n_heads, head_dim), e.g. (4, 8, 32, 128)
+    return x_out2.type_as(x)
+
+class PositionalEmbedding(nn.Module):
+    def __init__(self, pe_dim=320, out_dim=1280, max_positions=10000, endpoint=True):
+        super().__init__()
+        self.num_channels = pe_dim
+        self.max_positions = max_positions
+        self.endpoint = endpoint
+        self.f_1 = nn.Linear(pe_dim, out_dim)
+        self.f_2 = nn.Linear(out_dim, out_dim)
+
+    def forward(self, x):
+        freqs = torch.arange(start=0, end=self.num_channels//2, dtype=torch.float32, device=x.device)
+        freqs = freqs / (self.num_channels // 2 - (1 if self.endpoint else 0))
+        freqs = (1 / self.max_positions) ** freqs
+        x = x.ger(freqs.to(x.dtype))
+        x = torch.cat([x.cos(), x.sin()], dim=1)
+        
+        x = self.f_1(x)
+        x = F.silu(x)
+        return self.f_2(x)
+
+class RMSNorm(nn.Module):
+    def __init__(self, dim, eps=1e-6):
+        super().__init__()
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(dim))
+    
+    def _norm(self, x):
+        return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+
+    def forward(self, x):
+        output = self._norm(x.float()).type_as(x)
+        return output * self.weight
+
+class Attention(nn.Module):
+    def __init__(
+            self,
+            dim: int,
+            num_heads: int = 8,
+            qkv_bias: bool = False,
+            proj_bias: bool = True,
+            attn_drop: float = 0.,
+            proj_drop: float = 0.,
+    ) -> None:
+        super().__init__()
+        assert dim % num_heads == 0, 'dim should be divisible by num_heads'
+        self.num_heads = num_heads
+        self.head_dim = dim // num_heads
+        self.scale = self.head_dim ** -0.5
+        self.fused_attn = True
+
+        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(dim, dim, bias=proj_bias)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+    def forward(
+            self,
+            x: torch.Tensor,
+            freqs_cis: Optional[torch.Tensor] = None,
+            attn_mask = None,
+            is_causal: bool = False
+    ) -> torch.Tensor:
+        B, N, C = x.shape
+        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+        q, k, v = qkv.unbind(0)
+        
+        # RoPE
+        if freqs_cis is not None:
+            q = apply_rotary_emb(q.transpose(1, 2), freqs_cis).transpose(1, 2)
+            k = apply_rotary_emb(k.transpose(1, 2), freqs_cis).transpose(1, 2)
+
+        if self.fused_attn:
+            x = F.scaled_dot_product_attention(
+                q, k, v,
+                attn_mask=attn_mask.unsqueeze(1).unsqueeze(1) if attn_mask is not None else None,
+                is_causal=is_causal,
+                dropout_p=self.attn_drop.p if self.training else 0.,
+            )
+        else:
+            raise NotImplementedError()
+            q = q * self.scale
+            attn = q @ k.transpose(-2, -1)
+            attn = maybe_add_mask(attn, attn_mask)
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x = attn @ v
+
+        x = x.transpose(1, 2).reshape(B, N, C)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        return x
+
+class WindowAttention(nn.Module):
+    def __init__(
+            self,
+            dim: int,
+            window_size: int,
+            num_heads: int = 8,
+            qkv_bias: bool = False,
+            proj_bias: bool = True,
+            attn_drop: float = 0.,
+            proj_drop: float = 0.,
+    ) -> None:
+        super().__init__()
+        assert dim % num_heads == 0, 'dim should be divisible by num_heads'
+        self.num_heads = num_heads
+        self.head_dim = dim // num_heads
+        self.scale = self.head_dim ** -0.5
+        self.fused_attn = True
+        self.window_size = window_size
+
+        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(dim, dim, bias=proj_bias)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+    def forward(
+            self,
+            x: torch.Tensor,
+            freqs_cis: Optional[torch.Tensor] = None,
+            attn_mask = None,
+    ) -> torch.Tensor:
+        B, N, C = x.shape
+        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+        q, k, v = qkv.unbind(0)
+        
+        # RoPE
+        if freqs_cis is not None:
+            q = apply_rotary_emb(q.transpose(1, 2), freqs_cis).transpose(1, 2)
+            k = apply_rotary_emb(k.transpose(1, 2), freqs_cis).transpose(1, 2)
+
+        if self.fused_attn:
+            def score_mod(b, h, q_idx, kv_idx):
+                window_match = torch.abs(q_idx - kv_idx) <= self.window_size // 2
+                
+                if attn_mask is not None:
+                    is_valid = attn_mask[b, kv_idx]
+                    return window_match & is_valid
+                
+                return window_match
+            
+            block_mask = create_block_mask(
+                score_mod, 
+                B=None, H=None, Q_LEN=q.shape[2], KV_LEN=k.shape[2], 
+                device=q.device
+            )
+            
+            x = flex_attention(q, k, v, block_mask=block_mask)
+        else:
+            raise NotImplementedError()
+            q = q * self.scale
+            attn = q @ k.transpose(-2, -1)
+            attn = maybe_add_mask(attn, attn_mask)
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x = attn @ v
+
+        x = x.transpose(1, 2).reshape(B, N, C)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        return x
+
+class CrossAttention(nn.Module):
+    """
+    Multi-head cross-attention module.
+    Query: x
+    Key/Value: context
+    """
+    def __init__(
+            self,
+            dim: int,
+            num_heads: int = 8,
+            qkv_bias: bool = False,
+            proj_bias: bool = True,
+            attn_drop: float = 0.,
+            proj_drop: float = 0.,
+    ) -> None:
+        super().__init__()
+        assert dim % num_heads == 0, 'dim should be divisible by num_heads'
+        self.num_heads = num_heads
+        self.head_dim = dim // num_heads
+        self.scale = self.head_dim ** -0.5
+        self.fused_attn = True
+
+        # Separate linear layers for query (from x) and key/value (from context)
+        self.q = nn.Linear(dim, dim, bias=qkv_bias)
+        self.kv = nn.Linear(dim, dim * 2, bias=qkv_bias)
+
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(dim, dim, bias=proj_bias)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+    def forward(
+            self,
+            x: torch.Tensor,
+            context: torch.Tensor,
+            q_mask = None,
+            kv_mask = None,
+    ) -> torch.Tensor:
+        """
+        x: [B, N, C] query sequence
+        context: [B, M, C] key/value sequence
+        attn_mask: optional [B, N, M] mask
+        """
+        B, N, C = x.shape
+        _, M, _ = context.shape
+
+        # Linear projections
+        q = self.q(x).reshape(B, N, self.num_heads, self.head_dim).permute(0, 2, 1, 3)  # [B, H, N, D]
+        kv = self.kv(context).reshape(B, M, 2, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+        k, v = kv.unbind(0)  # [B, H, M, D]
+
+        if self.fused_attn:
+            # PyTorch 2.1+ scaled_dot_product_attention supports cross-attention
+            x = F.scaled_dot_product_attention(
+                q, k, v,
+                attn_mask=kv_mask.unsqueeze(1).unsqueeze(1) if kv_mask is not None else None,
+                dropout_p=self.attn_drop.p if self.training else 0.,
+            )
+        else:
+            raise NotImplementedError()
+            # fallback: manual attention
+            q = q * self.scale
+            attn = q @ k.transpose(-2, -1)  # [B, H, N, M]
+            if attn_mask is not None:
+                attn = attn.masked_fill(attn_mask.bool(), float('-inf'))
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x = attn @ v  # [B, H, N, D]
+
+        x = x.transpose(1, 2).reshape(B, N, C)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        if q_mask is not None:
+            x = x * q_mask.unsqueeze(-1).repeat(1, 1, C)
+        return x
+
+class SwiGLUMlp(nn.Module):
+    def __init__(
+        self,
+        in_features: int,
+        hidden_features: Optional[int] = None,
+        out_features: Optional[int] = None,
+        act_layer: Callable[..., nn.Module] = None,
+        drop: float = 0.0,
+        bias: bool = True,
+    ) -> None:
+        super().__init__()
+        out_features = out_features or in_features
+        hidden_features = hidden_features or in_features
+        self.w12 = nn.Linear(in_features, 2 * hidden_features, bias=bias)
+        self.w3 = nn.Linear(hidden_features, out_features, bias=bias)
+
+    @torch.compile
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x12 = self.w12(x)
+        x1, x2 = x12.chunk(2, dim=-1)
+        hidden = F.silu(x1) * x2
+        return self.w3(hidden)
+
+class ConvBlock(nn.Module):
+    def __init__(self, dim, kernel_size):
+        super().__init__()
+        self.norm = nn.GroupNorm(1, dim)
+        self.conv1 = nn.Conv1d(dim, dim, kernel_size=kernel_size, padding=kernel_size//2)
+        self.act = nn.GELU()
+        self.conv2 = nn.Conv1d(dim, dim, kernel_size=kernel_size, padding=kernel_size//2)
+    
+    def forward(self, x):
+        res = x
+        x = self.norm(x)
+        x = self.conv1(x)
+        x = self.act(x)
+        x = self.conv2(x)
+        x = res + x
+        return x
+
+class ConvNeXtBlock(nn.Module):
+    r""" ConvNeXt Block. There are two equivalent implementations:
+    (1) DwConv -> LayerNorm (channels_first) -> 1x1 Conv -> GELU -> 1x1 Conv; all in (N, C, H, W)
+    (2) DwConv -> Permute to (N, H, W, C); LayerNorm (channels_last) -> Linear -> GELU -> Linear; Permute back
+    We use (2) as we find it slightly faster in PyTorch
+    
+    Args:
+        dim (int): Number of input channels.
+        layer_scale_init_value (float): Init value for Layer Scale. Default: 1e-6.
+    """
+    def __init__(self, dim, kernel_size, layer_scale_init_value=1e-6):
+        super().__init__()
+        self.dwconv = nn.Conv1d(dim, dim, kernel_size=kernel_size, padding=kernel_size//2, groups=dim)
+        self.norm = nn.GroupNorm(1, dim)
+        self.pwconv1 = nn.Conv1d(dim, 4 * dim, kernel_size=1)
+        self.act = nn.GELU()
+        self.pwconv2 = nn.Conv1d(4 * dim, dim, kernel_size=1)
+        self.gamma = nn.Parameter(layer_scale_init_value * torch.ones((dim)), requires_grad=True) if layer_scale_init_value > 0 else None
+
+    def forward(self, x, context=None, q_mask=None):
+        x = x.transpose(1, 2)
+        input = x
+        x = self.dwconv(x)
+        x = self.norm(x)
+        x = self.pwconv1(x)
+        x = self.act(x)
+        x = self.pwconv2(x)
+        
+        if self.gamma is not None:
+            x = self.gamma.unsqueeze(0).unsqueeze(-1) * x
+        if q_mask is not None:
+            x = x * q_mask.unsqueeze(1).repeat(1, x.shape[1], 1)
+        
+        x = input + x
+        x = x.transpose(1, 2)
+        return x
+
+class CrossAttentionBlock(nn.Module):
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
+        super().__init__()
+        self.norm1 = RMSNorm(hidden_size)
+        self.attn = CrossAttention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
+        self.norm2 = RMSNorm(hidden_size)
+        self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
+    
+    def forward(self, x, context, freqs_cis=None, q_mask=None, kv_mask=None):
+        x = x + self.attn(self.norm1(x), context, q_mask=q_mask, kv_mask=kv_mask)
+        x = x + self.mlp(self.norm2(x))
+        return x
+
+class SelfAttentionBlock(nn.Module):
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
+        super().__init__()
+        self.norm1 = RMSNorm(hidden_size)
+        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
+        self.norm2 = RMSNorm(hidden_size)
+        self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
+    
+    def forward(self, x, context=None, freqs_cis=None, kv_mask=None, q_mask=None):
+        x = x + self.attn(self.norm1(x), freqs_cis=freqs_cis, attn_mask=q_mask)
+        x = x + self.mlp(self.norm2(x))
+        return x
+
+@torch.compile
+def modulate(x, shift, scale):
+    if scale.ndim == 3:
+        return x * (1 + scale) + shift
+    else:
+        return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
+
+class LightningDiTBlock(nn.Module):
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
+        super().__init__()
+        self.norm1 = RMSNorm(hidden_size)
+        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
+        self.norm2 = RMSNorm(hidden_size)
+        self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
+        self.adaLN_modulation = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(hidden_size, 6 * hidden_size, bias=True)
+        )
+    
+    def forward(self, x, c=None, context=None, freqs_cis=None, kv_mask=None, q_mask=None):
+        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(c).chunk(6, dim=-1)
+        if c.ndim == 3:
+            x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=q_mask)
+            x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
+        else:
+            x = x + gate_msa.unsqueeze(1) * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=q_mask)
+            x = x + gate_mlp.unsqueeze(1) * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
+        return x
+
+class LightningFinalLayer(nn.Module):
+    def __init__(self, hidden_size, out_channels, patch_size):
+        super().__init__()
+        self.norm_final = RMSNorm(hidden_size)
+        self.linear = nn.ConvTranspose1d(hidden_size, out_channels, kernel_size=patch_size, stride=patch_size)
+        self.adaLN_modulation = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(hidden_size, 2 * hidden_size, bias=True)
+        )
+
+    def forward(self, x, c):
+        shift, scale = self.adaLN_modulation(c).chunk(2, dim=-1)
+        x = modulate(self.norm_final(x), shift, scale)
+        x = self.linear(x)
+        return x
+
+class ContinuousPositionalEmbeddings(nn.Module):
+    def __init__(self, dim, max_freq=10):
+        super().__init__()
+        self.dim = dim
+        
+        half_dim = dim // 2
+        freqs = torch.exp(
+            torch.arange(half_dim, dtype=torch.float32) * -(math.log(max_freq) / half_dim)
+        )
+        self.register_buffer('freqs', freqs)
+
+    def forward(self, x):
+        """
+        x: Input tensor of positions (Batch, Seq_Len) in range [0, 1]
+        Returns: (Batch, Seq_Len, Dim)
+        """
+        # (B, L, 1) * (D/2) -> (B, L, D/2)
+        args = x.unsqueeze(-1) * self.freqs * 2 * math.pi
+        
+        # Concatenate sin and cos -> (B, L, Dim)
+        return torch.cat([torch.sin(args), torch.cos(args)], dim=-1)
+
+class Perciever(nn.Module):
+    def __init__(self, in_dim, patch_size, hidden_dim, latent_dim, n_heads, depth, n_interleave, n_latents):
+        super().__init__()
+        self.n_latents = n_latents
+        
+        self.in_proj = nn.Conv1d(in_dim, hidden_dim, kernel_size=patch_size, stride=patch_size) # probably should have normalization here
+        self.latents = nn.Embedding(n_latents, hidden_dim)
+        self.pos_emb = ContinuousPositionalEmbeddings(hidden_dim)
+        
+        layers = []
+        for d in range(depth):
+            layers.append(CrossAttentionBlock(hidden_dim, n_heads))
+            for _ in range(n_interleave):
+                layers.append(SelfAttentionBlock(hidden_dim, n_heads))
+        
+        self.layers = nn.ModuleList(layers)
+        
+        self.norm = RMSNorm(hidden_dim)
+        self.out_proj = nn.Linear(hidden_dim, latent_dim)
+        
+        self.initialize_weights()
+    
+    def initialize_weights(self):
+        self.apply(self._init_weights)
+        # zero out classifier weights
+        torch.nn.init.zeros_(self.out_proj.weight)
+        # zero out c_proj weights in all blocks
+        for block in self.layers:
+            torch.nn.init.zeros_(block.mlp.w3.weight)
+            torch.nn.init.zeros_(block.attn.proj.weight)
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            # https://arxiv.org/pdf/2310.17813
+            fan_out = module.weight.size(0)
+            fan_in = module.weight.size(1)
+            std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
+            torch.nn.init.normal_(module.weight, mean=0.0, std=std)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+    
+    def forward(self, x, mask):
+        data = self.in_proj(x)
+        data = data.transpose(1, 2)
+        
+        B, L, C = data.shape
+        data = data + self.pos_emb(torch.linspace(0, 1, steps=L, device=x.device).unsqueeze(0))
+        
+        x = self.latents(torch.arange(self.n_latents, device=x.device, dtype=torch.long).unsqueeze(0))
+        x = x + self.pos_emb(torch.linspace(0, 1, steps=x.shape[1], device=x.device).unsqueeze(0))
+        x = x.repeat((B, 1, 1))
+        
+        mask = mask.view(B, L, -1)
+        mask = mask.any(dim=-1)
+        for layer in self.layers:
+            x = layer(x, data, kv_mask=mask)
+        
+        x = self.norm(x)
+        x = self.out_proj(x)
+        return x
+
+class Reciever(nn.Module):
+    def __init__(self, in_dim, patch_size, hidden_dim, latent_dim, n_heads, depth, n_interleave, n_latents, kernel_size=None):
+        super().__init__()
+        self.n_latents = n_latents
+        
+        self.embed_time = PositionalEmbedding(320, hidden_dim)
+        self.in_proj = nn.Conv1d(in_dim, hidden_dim, kernel_size=patch_size, stride=patch_size)
+        self.latent_proj = nn.Linear(latent_dim, hidden_dim)
+        self.pos_emb = ContinuousPositionalEmbeddings(hidden_dim)
+        
+        layers = []
+        for d in range(depth):
+            layers.append(CrossAttentionBlock(hidden_dim, n_heads))
+            if kernel_size:
+                for _ in range(n_interleave):
+                    layers.append(ConvNeXtBlock(hidden_dim, kernel_size))
+            else:
+                for _ in range(n_interleave):
+                    layers.append(LightningDiTBlock(hidden_dim, n_heads))
+                
+        
+        self.layers = nn.ModuleList(layers)
+        
+        self.norm = RMSNorm(hidden_dim)
+        self.out_proj = nn.ConvTranspose1d(hidden_dim, in_dim, kernel_size=patch_size, stride=patch_size)
+        
+        self.initialize_weights()
+    
+    def initialize_weights(self):
+        self.apply(self._init_weights)
+        # zero out classifier weights
+        torch.nn.init.zeros_(self.out_proj.weight)
+        # zero out c_proj weights in all blocks
+        for block in self.layers:
+            torch.nn.init.zeros_(block.mlp.w3.weight)
+            torch.nn.init.zeros_(block.attn.proj.weight)
+            torch.nn.init.zeros_(block.adaLN_modulation[-1].weight)
+            torch.nn.init.zeros_(block.adaLN_modulation[-1].bias)
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            # https://arxiv.org/pdf/2310.17813
+            fan_out = module.weight.size(0)
+            fan_in = module.weight.size(1)
+            std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
+            torch.nn.init.normal_(module.weight, mean=0.0, std=std)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+    
+    def forward(self, x, t, z, mask):
+        x = self.in_proj(x)
+        x = x.transpose(1, 2)
+        
+        B, L, C = x.shape
+        x = x + self.pos_emb(torch.linspace(0, 1, steps=L, device=x.device).unsqueeze(0))
+        
+        t = self.embed_time(t)
+        
+        z = self.latent_proj(z)
+        z = torch.cat([t.unsqueeze(1), z], dim=1)
+        
+        mask = mask.view(B, L, -1)
+        mask = mask.any(dim=-1)
+        for layer in self.layers:
+            if isinstance(layer, LightningDiTBlock):
+                x = layer(x, context=z, c=t, q_mask=mask)
+            else:
+                x = layer(x, z, q_mask=mask)
+        
+        x = self.norm(x)
+        x = x.transpose(1, 2)
+        x = self.out_proj(x)
+        return x
+
+if __name__ == '__main__':
+    from torchinfo import summary
+    
+    with torch.no_grad():
+        encoder = Perciever(in_dim=1, patch_size=128, hidden_dim=512, latent_dim=16, n_heads=8, depth=4, n_interleave=4, n_latents=48).to('cuda:1')
+        summary(encoder)
+        
+        decoder = Reciever(in_dim=1, patch_size=128, hidden_dim=512, latent_dim=16, n_heads=8, depth=4, n_interleave=4, n_latents=48).to('cuda:1')
+        summary(decoder)
+        
+        x = torch.randn((64, 1, 16000)).to('cuda:1')
+        t = torch.rand((64)).to('cuda:1')
+        mask = torch.zeros((64, 16000))
+        mask[:14000] = 1
+        mask = mask.bool().to('cuda:1')
+        y = encoder(x, mask)
+        print(x.shape, y.shape)
+        z = decoder(x, t, y, mask)
+        print(z.shape)
+        
+        x = torch.randn((64, 1, 48000)).to('cuda:1')
+        mask = torch.zeros((64, 48000))
+        mask[:, :41000] = 1
+        mask = mask.bool().to('cuda:1')
+        y = encoder(x, mask)
+        print(x.shape, y.shape)
+        z = decoder(x, t, y, mask)
+        print(z.shape)

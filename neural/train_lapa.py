@@ -30,16 +30,27 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from gamengen import LAM_M as net
+from lapa import LAM_B as net
 from dito import DiToV4 as Tokenizer
 
 import matplotlib.pyplot as plt
 import soundfile as sf
 
+from transformers import Wav2Vec2FeatureExtractor, AutoModel
+import torch
+import torchaudio
+from sklearn.metrics.pairwise import paired_cosine_distances
+
+emb_model_id = "m-a-p/MERT-v1-330M"
+emb_model = AutoModel.from_pretrained(emb_model_id, trust_remote_code=True)
+processor = Wav2Vec2FeatureExtractor.from_pretrained(emb_model_id, trust_remote_code=True)
+
+resampler = torchaudio.transforms.Resample(16000, 24000)
+
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'LAM_M_FSQ_relative'
+out_dir = 'test'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -55,7 +66,7 @@ wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 2 # used to simulate larger batch sizes
-batch_size = 128# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 192# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 temporal_window = 2
 spatial_window = 32
@@ -64,8 +75,7 @@ cut_seconds = 1
 cut_len = decoder_window * cut_seconds
 max_seq_len = temporal_window * cut_len
 vae_embed_dim = 16
-levels = [8, 8]
-max_alpha_t = 0.7
+levels = [5, 3]
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
@@ -81,9 +91,9 @@ min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/
 # DDP settings
 backend = 'gloo' # 'nccl', 'gloo', etc.
 # system
-device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+device = 'cuda:1' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
-compile = False # use PyTorch 2.0 to compile the model to be faster
+compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 # exec(open('configurator.py').read()) # overrides from command line or config file
@@ -156,7 +166,9 @@ for k,v in list(state_dict.items()):
 tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 
-model_args = dict(in_channels=vae_embed_dim, levels=levels, spatial_window=spatial_window, temporal_window=temporal_window, max_alpha_t=max_alpha_t)
+emb_model = emb_model.to(device)
+
+model_args = dict(in_channels=vae_embed_dim, levels=levels, spatial_window=spatial_window, temporal_window=temporal_window)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -217,7 +229,7 @@ def estimate_loss():
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
             X = get_batch(split)
             with ctx:
-                loss = model(X)
+                loss, _ = model(X)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -232,13 +244,20 @@ def estimate_codebook_usage():
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
             X = get_batch(split)
             with ctx:
-                actions = model.encode_actions(X)
+                _, indices = model(X)
+                
+                indices = indices.flatten()
+                num_tokens = indices.numel()
             
-            unique_elements, counts = torch.unique(actions, return_counts=True)
-            total_elements = actions.numel()
-            percentage_unique = (len(unique_elements) / total_elements) * 100
+                counts = torch.bincount(indices, minlength=math.prod(levels)).float()
+                probs = counts / num_tokens
+                
+                # Add epsilon to avoid log(0)
+                probs = probs + 1e-10
+                entropy = -torch.sum(probs * torch.log(probs))
+                perplexity = torch.exp(entropy).item()
             
-            usage[k] = percentage_unique.item()
+            usage[k] = perplexity
         out[split] = usage.mean()
     model.train()
     return out
@@ -261,19 +280,16 @@ def get_lr(it):
 def generate_lam_vs_random_actions(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
-
-    n_autoregressive_steps = 5 * decoder_window // spatial_window
     
-    data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_large_val.bin', dtype=np.float32, mode='r', shape=(4446944, vae_embed_dim))
-    idxs = torch.randint(len(data) - max_seq_len - n_autoregressive_steps, (10,))
-    x = torch.from_numpy(np.stack([np.stack([data[idx+i*spatial_window:idx+(i+1)*spatial_window] for i in range(temporal_window + n_autoregressive_steps)], axis=0) for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    x = get_batch('val')
 
     B, T, N, D = x.shape
 
-    alpha = torch.ones(B, device=x.device) * 0.3
-    recon, random_recon = raw_model.lam_vs_random_actions(x[:, :-n_autoregressive_steps].clone(), alpha, n_autoregressive_steps=n_autoregressive_steps, n_diffusion_steps=100, guidance=3)
+    with ctx:
+        recon, random_recon = raw_model.lam_vs_random_actions(x.clone(), n_steps=50)
     
     if decoder_window > spatial_window:
+        raise NotImplementedError()
         t2 = decoder_window // spatial_window
         t1 = (temporal_window // t2) + (n_autoregressive_steps // t2)
         x = rearrange(x, 'b (t1 t2) n c -> b t1 (t2 n) c', t1=t1, t2=t2)
@@ -282,16 +298,13 @@ def generate_lam_vs_random_actions(step):
         
         B, T, N, D = x.shape
     
-    batches = []
-    for cut in tqdm(range(T), desc='Decoding'):
-        batch = torch.cat([x[:, cut], recon[:, cut], random_recon[:, cut]], dim=0).permute(0, 2, 1)
-        batches.append(tokenizer.decode(batch, shape=(1, 16384 * cut_seconds), n_steps=100))
-    x, recon, random_recon = [res.cpu().detach().numpy().squeeze(1) for res in torch.cat(batches, dim=-1).split(B, dim=0)]
+    out = tokenizer.decode(torch.cat([x[:, 1], recon, random_recon], dim=0).permute(0, 2, 1), shape=(1, 16384 * cut_seconds), n_steps=50)
+    x, recon, random_recon = [res.cpu().detach().numpy().squeeze(1) for res in out.split(B, dim=0)]
 
-    recon_psnr = psnr(x[:, -n_autoregressive_steps * 16000:], recon[:, -n_autoregressive_steps * 16000:])
-    random_psnr = psnr(x[:, -n_autoregressive_steps * 16000:], random_recon[:, -n_autoregressive_steps * 16000:])
+    recon_psnr = psnr(x, recon)
+    random_psnr = psnr(x, random_recon)
 
-    for i in range(B):
+    for i in range(20):
         og, y, random_y = x[i], recon[i], random_recon[i]
 
         # save .wavs
@@ -299,7 +312,29 @@ def generate_lam_vs_random_actions(step):
         sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, 16000)
         sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_y, 16000)
     
-    return np.mean(recon_psnr - random_psnr).item()
+    x = [row for row in resampler(torch.from_numpy(x)).numpy()]
+    recon = [row for row in resampler(torch.from_numpy(recon)).numpy()]
+    random_recon = [row for row in resampler(torch.from_numpy(random_recon)).numpy()]
+
+    x_inputs = processor(x, sampling_rate=24000, return_tensors="pt")
+    recon_inputs = processor(recon, sampling_rate=24000, return_tensors="pt")
+    random_recon_inputs = processor(random_recon, sampling_rate=24000, return_tensors="pt")
+    
+    x_inputs['input_values'] = x_inputs['input_values'].to(device)
+    recon_inputs['input_values'] = recon_inputs['input_values'].to(device)
+    random_recon_inputs['input_values'] = random_recon_inputs['input_values'].to(device)
+    x_inputs['attention_mask'] = x_inputs['attention_mask'].to(device)
+    recon_inputs['attention_mask'] = recon_inputs['attention_mask'].to(device)
+    random_recon_inputs['attention_mask'] = random_recon_inputs['attention_mask'].to(device)
+    with torch.no_grad():
+        x_emb = emb_model(**x_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1).cpu().numpy()
+        recon_emb = emb_model(**recon_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1).cpu().numpy()
+        random_recon_emb = emb_model(**random_recon_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1).cpu().numpy()
+
+    recon_sim = 1 - paired_cosine_distances(x_emb, recon_emb)
+    random_sim = 1 - paired_cosine_distances(x_emb, random_recon_emb)
+    
+    return {'PSNR': np.mean(recon_psnr - random_psnr).item(), 'Similarity': np.mean(recon_sim - random_sim).item()}
 
 def psnr(y_true, y_pred, max_val=1.):
     mse = np.mean((y_true - y_pred) ** 2, axis=1)  # (B,)
@@ -339,10 +374,10 @@ while True:
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
             with ctx:
-                delta_psnr = generate_lam_vs_random_actions(iter_num)
+                metrics = generate_lam_vs_random_actions(iter_num)
             model.train()
-            print(f"iter {iter_num}: delta PSNR {delta_psnr:.3f}")
-        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, train usage: {usage['train']:.2f}, val usage {['val']:.2f}")
+            print(f"iter {iter_num}: delta PSNR {metrics['PSNR']:.3f}, delta Similarity {metrics['Similarity']:.3f}")
+        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, train perplexity: {usage['train']:.2f}, val perplexity {usage['val']:.2f}")
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
@@ -382,7 +417,7 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            loss = model(X)
+            loss, _ = model(X)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X = get_batch('train')
