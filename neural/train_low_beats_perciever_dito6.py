@@ -48,15 +48,15 @@ log_interval = 100
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 3 # used to simulate larger batch sizes
-batch_size = 48 # if gradient_accumulation_steps > 1, this is the micro-batch size
+gradient_accumulation_steps = 2 # used to simulate larger batch sizes
+batch_size = 64 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
 max_samples = 48000
@@ -166,7 +166,7 @@ def get_batch(split='train'):
 iter_num = 0
 best_val_loss = 1e9
 
-model_args = dict(z_shape=(16, 48), in_dim=1, hidden_dim=512, latent_dim=16, n_heads=8, encoder_depth=5, encoder_n_interleave=6, decoder_depth=8, decoder_n_interleave=6, n_latents=48, patch_size=96)
+model_args = dict(z_shape=(16, 48), in_dim=1, hidden_dim=512, latent_dim=16, n_heads=8, encoder_depth=5, encoder_n_interleave=6, decoder_depth=8, decoder_n_interleave=6, n_latents=48, patch_size=128)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
