@@ -42,7 +42,7 @@ class DiToV6(nn.Module):
         return self.decode(z, mask, shape=x.shape, n_steps=n_steps)
     
     def decode(self, z, mask, shape, n_steps=50):
-        x = self.sampler.sample(self.decoder, (z.shape[0], *shape[-2:]), n_steps, net_kwargs={'z': z, 'mask': mask})
+        x = self.sampler.sample(self.decoder, (z.shape[0], *shape[-2:]), n_steps, net_kwargs={'z': z, 'mask': mask}) * mask.unsqueeze(1)
         return x
 
 class DiToV5(nn.Module):
