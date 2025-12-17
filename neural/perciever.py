@@ -466,6 +466,13 @@ class ContinuousPositionalEmbeddings(nn.Module):
         # Concatenate sin and cos -> (B, L, Dim)
         return torch.cat([torch.sin(args), torch.cos(args)], dim=-1)
 
+def masked_pos_emb(mask):
+    lengths = mask.float().sum(dim=1, keepdim=True)
+    indices = torch.arange(mask.shape[1], device=mask.device).unsqueeze(0)
+    linspace = indices / lengths.clamp(min=1)
+    output = torch.where(mask.bool(), linspace, torch.tensor(2, device=mask.device))
+    return output
+
 class Perciever(nn.Module):
     def __init__(self, in_dim, patch_size, hidden_dim, latent_dim, n_heads, depth, n_interleave, n_latents):
         super().__init__()
@@ -514,7 +521,7 @@ class Perciever(nn.Module):
         data = data.transpose(1, 2)
         
         B, L, C = data.shape
-        data = data + self.pos_emb(torch.linspace(0, 1, steps=L, device=x.device).unsqueeze(0))
+        data = data + self.pos_emb(masked_pos_emb(mask))#self.pos_emb(torch.linspace(0, 1, steps=L, device=x.device).unsqueeze(0))
         
         x = self.latents(torch.arange(self.n_latents, device=x.device, dtype=torch.long).unsqueeze(0))
         x = x + self.pos_emb(torch.linspace(0, 1, steps=x.shape[1], device=x.device).unsqueeze(0))
@@ -586,7 +593,7 @@ class Reciever(nn.Module):
         x = x.transpose(1, 2)
         
         B, L, C = x.shape
-        x = x + self.pos_emb(torch.linspace(0, 1, steps=L, device=x.device).unsqueeze(0))
+        x = x + self.pos_emb(masked_pos_emb(mask))#self.pos_emb(torch.linspace(0, 1, steps=L, device=x.device).unsqueeze(0))
         
         t = self.embed_time(t)
         
