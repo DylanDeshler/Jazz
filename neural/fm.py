@@ -47,10 +47,12 @@ class FM:
             else:
                 return loss, t
         else:
-            loss = ((pred.float() - target.float()) ** 2)#.mean()
-            if mask is not None:
-                loss = loss * mask.unsqueeze(1)
-            loss = loss.mean()
+            if mask is None:
+                loss = ((pred.float() - target.float()) ** 2).mean()
+            else:
+                loss = ((pred.float() - target.float()) ** 2) * mask.unsqueeze(1)
+                loss = loss.sum() / mask.sum()
+                print(loss)
             if return_all:
                 return loss, x_t, pred
             else:
