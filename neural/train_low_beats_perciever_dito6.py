@@ -55,8 +55,8 @@ wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 2 # used to simulate larger batch sizes
-batch_size = 64 # if gradient_accumulation_steps > 1, this is the micro-batch size
+gradient_accumulation_steps = 3 # used to simulate larger batch sizes
+batch_size = 48 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
 max_samples = 48000
@@ -262,7 +262,7 @@ def save_samples(step):
     X, mask = get_batch('test')
     model.eval()
     with ctx:
-        Y = raw_model.reconstruct(X, mask, n_steps=100)
+        Y = raw_model.reconstruct(X, mask, n_steps=50)
     model.train()
 
     X = X.cpu().detach().float().numpy()
