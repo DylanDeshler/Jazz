@@ -423,6 +423,22 @@ class SelfAttentionBlock(nn.Module):
         x = x + self.mlp(self.norm2(x))
         return x
 
+class LightningFinalLayer(nn.Module):
+    def __init__(self, hidden_size, out_channels):
+        super().__init__()
+        self.norm_final = RMSNorm(hidden_size)
+        self.linear = nn.Linear(hidden_size, out_channels)
+        self.adaLN_modulation = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(hidden_size, 2 * hidden_size, bias=True)
+        )
+
+    def forward(self, x, c):
+        shift, scale = self.adaLN_modulation(c).chunk(2, dim=-1)
+        x = modulate(self.norm_final(x), shift, scale)
+        x = self.linear(x)
+        return x
+
 def create_block_causal_mask(block_size: int, num_blocks: int, dtype=torch.float32):
     """
     Creates a block causal mask where tokens can attend to their own block 
@@ -520,6 +536,7 @@ class DiT(nn.Module):
         
         self.null_embeddings = nn.Embedding(2, hidden_size)
         self.final_layer = nn.Sequential(RMSNorm(hidden_size), nn.Linear(hidden_size, in_channels, bias=True))
+        # self.final_layer = LightningFinalLayer(hidden_size, in_channels)
 
         self.initialize_weights()
         self.register_buffer('block_causal_mask', create_block_causal_mask(spatial_window, n_chunks))
@@ -527,7 +544,12 @@ class DiT(nn.Module):
     def initialize_weights(self):
         self.apply(self._init_weights)
         # zero out classifier weights
-        torch.nn.init.zeros_(self.final_layer[-1].weight)
+        if isinstance(self.final_layer, LightningFinalLayer):
+            torch.nn.init.zeros_(self.final_layer.linear.weight)
+            torch.nn.init.zeros_(self.final_layer.adaLN_modulation[-1].weight)
+            torch.nn.init.zeros_(self.final_layer.adaLN_modulation[-1].bias)
+        else:
+            torch.nn.init.zeros_(self.final_layer[-1].weight)
         # zero out c_proj weights in all blocks
         for block in self.blocks:
             torch.nn.init.zeros_(block.mlp.w3.weight)
