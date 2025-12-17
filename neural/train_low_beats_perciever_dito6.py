@@ -262,7 +262,7 @@ def save_samples(step):
     X, mask = get_batch('test')
     model.eval()
     with ctx:
-        Y = raw_model.reconstruct(X, mask, n_steps=50)
+        Y = raw_model.reconstruct(X, mask, n_steps=100)
     model.train()
 
     X = X.cpu().detach().float().numpy()
