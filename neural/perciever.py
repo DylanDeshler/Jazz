@@ -565,8 +565,9 @@ class Reciever(nn.Module):
         for block in self.layers:
             torch.nn.init.zeros_(block.mlp.w3.weight)
             torch.nn.init.zeros_(block.attn.proj.weight)
-            torch.nn.init.zeros_(block.adaLN_modulation[-1].weight)
-            torch.nn.init.zeros_(block.adaLN_modulation[-1].bias)
+            if isinstance(block, LightningDiTBlock):
+                torch.nn.init.zeros_(block.adaLN_modulation[-1].weight)
+                torch.nn.init.zeros_(block.adaLN_modulation[-1].bias)
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
