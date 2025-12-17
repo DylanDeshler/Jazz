@@ -428,6 +428,22 @@ class LightningDiTBlock(nn.Module):
             x = x + gate_mlp.unsqueeze(1) * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
         return x
 
+class LightningFinalLayer(nn.Module):
+    def __init__(self, hidden_size, out_channels, patch_size):
+        super().__init__()
+        self.norm_final = RMSNorm(hidden_size)
+        self.linear = nn.ConvTranspose1d(hidden_size, out_channels, kernel_size=patch_size, stride=patch_size)
+        self.adaLN_modulation = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(hidden_size, 2 * hidden_size, bias=True)
+        )
+
+    def forward(self, x, c):
+        shift, scale = self.adaLN_modulation(c).chunk(2, dim=-1)
+        x = modulate(self.norm_final(x), shift, scale)
+        x = self.linear(x)
+        return x
+
 class ContinuousPositionalEmbeddings(nn.Module):
     def __init__(self, dim, max_freq=10):
         super().__init__()
@@ -455,7 +471,7 @@ class Perciever(nn.Module):
         super().__init__()
         self.n_latents = n_latents
         
-        self.in_proj = nn.Conv1d(in_dim, hidden_dim, kernel_size=patch_size, stride=patch_size)
+        self.in_proj = nn.Conv1d(in_dim, hidden_dim, kernel_size=patch_size, stride=patch_size) # probably should have normalization here
         self.latents = nn.Embedding(n_latents, hidden_dim)
         self.pos_emb = ContinuousPositionalEmbeddings(hidden_dim)
         
@@ -469,6 +485,29 @@ class Perciever(nn.Module):
         
         self.norm = RMSNorm(hidden_dim)
         self.out_proj = nn.Linear(hidden_dim, latent_dim)
+        
+        self.initialize_weights()
+    
+    def initialize_weights(self):
+        self.apply(self._init_weights)
+        # zero out classifier weights
+        torch.nn.init.zeros_(self.out_proj.weight)
+        # zero out c_proj weights in all blocks
+        for block in self.layers:
+            torch.nn.init.zeros_(block.mlp.w3.weight)
+            torch.nn.init.zeros_(block.attn.proj.weight)
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            # https://arxiv.org/pdf/2310.17813
+            fan_out = module.weight.size(0)
+            fan_in = module.weight.size(1)
+            std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
+            torch.nn.init.normal_(module.weight, mean=0.0, std=std)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
     def forward(self, x, mask):
         data = self.in_proj(x)
@@ -515,6 +554,31 @@ class Reciever(nn.Module):
         
         self.norm = RMSNorm(hidden_dim)
         self.out_proj = nn.ConvTranspose1d(hidden_dim, in_dim, kernel_size=patch_size, stride=patch_size)
+        
+        self.initialize_weights()
+    
+    def initialize_weights(self):
+        self.apply(self._init_weights)
+        # zero out classifier weights
+        torch.nn.init.zeros_(self.out_proj.weight)
+        # zero out c_proj weights in all blocks
+        for block in self.layers:
+            torch.nn.init.zeros_(block.mlp.w3.weight)
+            torch.nn.init.zeros_(block.attn.proj.weight)
+            torch.nn.init.zeros_(block.adaLN_modulation[-1].weight)
+            torch.nn.init.zeros_(block.adaLN_modulation[-1].bias)
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            # https://arxiv.org/pdf/2310.17813
+            fan_out = module.weight.size(0)
+            fan_in = module.weight.size(1)
+            std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
+            torch.nn.init.normal_(module.weight, mean=0.0, std=std)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
     def forward(self, x, t, z, mask):
         x = self.in_proj(x)
