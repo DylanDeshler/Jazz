@@ -52,7 +52,6 @@ class FM:
             else:
                 loss = ((pred.float() - target.float()) ** 2) * mask.unsqueeze(1)
                 loss = loss.sum() / mask.sum()
-                print(loss)
             if return_all:
                 return loss, x_t, pred
             else:
