@@ -644,8 +644,7 @@ class ModernDiT(nn.Module):
         self.action_embedder = nn.Embedding(num_actions, action_channels)
 
         self.proj = nn.Linear(in_channels + action_channels, hidden_size, bias=True)
-        # self.x_embedder = Patcher(hidden_size, hidden_size)
-        self.x_embedder = nn.Sequential(nn.Linear(hidden_size, hidden_size), nn.LayerNorm(hidden_size))
+        self.x_embedder = Patcher(hidden_size, hidden_size)
         
         self.t_block = nn.Sequential(
             nn.SiLU(),
@@ -709,9 +708,9 @@ class ModernDiT(nn.Module):
         
         x = torch.cat([x, actions], dim=-1)
         x = self.proj(x)
-        # x = rearrange(x, 'b l c -> b c l')
+        x = rearrange(x, 'b l c -> b c l')
         x = self.x_embedder(x)
-        # x = rearrange(x, 'b c l -> b l c')
+        x = rearrange(x, 'b c l -> b l c')
         
         t = self.t_embedder(t) + bpm
         t = repeat(t, 'b t c -> b (t l) c', l=self.spatial_window)
@@ -722,7 +721,7 @@ class ModernDiT(nn.Module):
             x = block(x, t0, freqs_cis=freqs_cis, attn_mask=attn_mask)
         
         # SAM Audio doesnt use a non-linearity on t here
-        shift, scale = (self.final_layer_scale_shift_table[None, None] + F.silu(t[:, :, None])).chunk(
+        shift, scale = (self.final_layer_scale_shift_table[None, None] + t[:, :, None]).chunk(
             2, dim=2
         )
         x = modulate(self.norm(x), shift.squeeze(2), scale.squeeze(2))
