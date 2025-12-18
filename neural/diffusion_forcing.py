@@ -705,7 +705,8 @@ class ModernDiT(nn.Module):
         actions = token_drop(self.action_embedder(actions), self.null_embeddings.weight[1], self.training)
         # Assuming position in action sequence is correlated to position in latent sequence
         # Could also experiment with concatenating every action to every latent position
-        actions = torch.repeat_interleave(actions, self.spatial_window // self.action_length, dim=1).contiguous()
+        actions = torch.repeat_interleave(actions, self.spatial_window // self.action_length, dim=2).contiguous()
+        actions = rearrange(actions, 'b t l c -> b (t l) c')
         
         x = torch.cat([x, actions], dim=-1)
         x = self.proj(x)
