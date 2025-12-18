@@ -720,8 +720,8 @@ class ModernDiT(nn.Module):
         for block in self.blocks:
             x = block(x, t0, freqs_cis=freqs_cis, attn_mask=attn_mask)
         
-        # SAM Audio doesnt use a non-linearity on t here
-        shift, scale = (self.final_layer_scale_shift_table[None, None] + t[:, :, None]).chunk(
+        # SAM Audio does not use a non-linearity on t here
+        shift, scale = (self.final_layer_scale_shift_table[None, None] + F.silu(t[:, :, None])).chunk(
             2, dim=2
         )
         x = modulate(self.norm(x), shift.squeeze(2), scale.squeeze(2))
