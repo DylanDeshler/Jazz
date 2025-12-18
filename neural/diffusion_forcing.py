@@ -125,7 +125,6 @@ class FMEulerSampler:
 
 @torch.compile
 def modulate(x: torch.Tensor, shift: torch.Tensor, scale: torch.Tensor):
-    print(x.shape, scale.shape, shift.shape)
     return x * (1 + scale) + shift
 
 def apply_scaling(freqs: torch.Tensor):
@@ -271,6 +270,7 @@ class Attention(nn.Module):
         q, k, v = qkv.unbind(0)
         # RoPE
         if freqs_cis is not None:
+            print(x.shape, freqs_cis.shape, q.shape)
             q = apply_rotary_emb(q.transpose(1, 2), freqs_cis).transpose(1, 2)
             k = apply_rotary_emb(k.transpose(1, 2), freqs_cis).transpose(1, 2)
 
