@@ -453,6 +453,7 @@ class DiTBlock(nn.Module):
     
     def forward(self, x, t, freqs_cis=None, attn_mask=False):
         biases = self.scale_shift_table[None, None] + t.reshape(x.size(0), x.size(1), 6, -1)
+        print(biases.shape)
         (
             shift_msa,
             scale_msa,
@@ -460,7 +461,7 @@ class DiTBlock(nn.Module):
             shift_mlp,
             scale_mlp,
             gate_mlp,
-        ) = biases.chunk(6, dim=1)
+        ) = biases.chunk(6, dim=2)
         
         x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask)
         x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
@@ -713,9 +714,7 @@ class ModernDiT(nn.Module):
         
         t = self.t_embedder(t) + bpm
         t = repeat(t, 'b t c -> b (t l) c', l=self.spatial_window)
-        print(t.shape)
         t0 = self.t_block(t)
-        print(x.shape, t0.shape)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
         for block in self.blocks:
