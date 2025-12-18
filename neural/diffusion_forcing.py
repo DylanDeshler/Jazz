@@ -666,7 +666,7 @@ class ModernDiT(nn.Module):
         
         self.initialize_weights()
         self.register_buffer('block_causal_mask', create_block_causal_mask(spatial_window, n_chunks))
-        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size, max_input_size))
+        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
     
     def initialize_weights(self):
         self.apply(self._init_weights)
