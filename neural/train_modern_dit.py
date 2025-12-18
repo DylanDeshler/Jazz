@@ -56,7 +56,7 @@ wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 1 # used to simulate larger batch sizes
-batch_size = 128 # * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 64 # * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 spatial_window = 48
 n_chunks = 10
