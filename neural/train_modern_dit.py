@@ -63,7 +63,7 @@ n_chunks = 10
 max_seq_len = spatial_window * n_chunks
 action_length = 3
 vae_embed_dim = 16
-action_channels = vae_embed_dim * 4
+action_channels = vae_embed_dim * 4 # extremely arbitrary choice balancing capacity and tradeoff with input noise
 # 2^4 2^6 2^8 2^9 2^10 2^11 2^12 2^14 2^16
 # [5, 3] [8, 8] [8, 6, 5] [8, 8, 8] [8, 5, 5, 5] [8, 8, 6, 5] [7, 5, 5, 5] [8, 8, 8, 6, 5] [8, 8, 8, 5, 5, 5]
 levels = [5, 3]
@@ -321,47 +321,47 @@ while True:
     tokens_trained += batch_size * gradient_accumulation_steps * max_seq_len
 
     # evaluate the loss on train/val sets and write checkpoints
-    if iter_num % eval_interval == 0 and master_process:
-        noncausal_losses = estimate_loss()
-        causal_losses = estimate_loss(True)
-        # if iter_num % sample_interval == 0 and master_process:
-        #     model.eval()
-        #     with ctx:
-        #         metrics = save_samples(iter_num)
-        #     model.train()
-        #     print(f"iter {iter_num}: delta PSNR {metrics['PSNR']:.3f}, delta Similarity {metrics['Similarity']:.3f}")
-        print(f"iter {iter_num}: train loss {noncausal_losses['train']:.6f}, val loss {noncausal_losses['val']:.6f}, train causal loss {causal_losses['train']:.6f}, val causal loss {causal_losses['val']:.6f}")
-        losses = {}
-        for k in causal_losses.keys():
-            losses[k] = (causal_losses[k] + noncausal_losses[k]) / 2
-        if wandb_log:
-            wandb.log({
-                "iter": iter_num,
-                "train/loss": losses['train'],
-                "val/loss": losses['val'],
-                "lr": lr,
-                "mfu": running_mfu*100, # convert to percentage
-                "tokens": tokens_trained,
-            })
-        if losses['val'] < best_val_loss or always_save_checkpoint:
-            best_val_loss = losses['val']
-            if iter_num > 0:
-                checkpoint = {
-                    'model': raw_model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'model_args': model_args,
-                    'iter_num': iter_num,
-                    'best_val_loss': best_val_loss,
-                    'config': config,
-                    'tokens': tokens_trained,
-                }
-                print(f"saving checkpoint to {out_dir}")
-                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+    # if iter_num % eval_interval == 0 and master_process:
+    #     noncausal_losses = estimate_loss()
+    #     causal_losses = estimate_loss(True)
+    #     # if iter_num % sample_interval == 0 and master_process:
+    #     #     model.eval()
+    #     #     with ctx:
+    #     #         metrics = save_samples(iter_num)
+    #     #     model.train()
+    #     #     print(f"iter {iter_num}: delta PSNR {metrics['PSNR']:.3f}, delta Similarity {metrics['Similarity']:.3f}")
+    #     print(f"iter {iter_num}: train loss {noncausal_losses['train']:.6f}, val loss {noncausal_losses['val']:.6f}, train causal loss {causal_losses['train']:.6f}, val causal loss {causal_losses['val']:.6f}")
+    #     losses = {}
+    #     for k in causal_losses.keys():
+    #         losses[k] = (causal_losses[k] + noncausal_losses[k]) / 2
+    #     if wandb_log:
+    #         wandb.log({
+    #             "iter": iter_num,
+    #             "train/loss": losses['train'],
+    #             "val/loss": losses['val'],
+    #             "lr": lr,
+    #             "mfu": running_mfu*100, # convert to percentage
+    #             "tokens": tokens_trained,
+    #         })
+    #     if losses['val'] < best_val_loss or always_save_checkpoint:
+    #         best_val_loss = losses['val']
+    #         if iter_num > 0:
+    #             checkpoint = {
+    #                 'model': raw_model.state_dict(),
+    #                 'optimizer': optimizer.state_dict(),
+    #                 'model_args': model_args,
+    #                 'iter_num': iter_num,
+    #                 'best_val_loss': best_val_loss,
+    #                 'config': config,
+    #                 'tokens': tokens_trained,
+    #             }
+    #             print(f"saving checkpoint to {out_dir}")
+    #             torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
 
-                if iter_num % save_interval == 0 and master_process == 0:
-                    torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
-    if iter_num == 0 and eval_only:
-        break
+    #             if iter_num % save_interval == 0 and master_process == 0:
+    #                 torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
+    # if iter_num == 0 and eval_only:
+    #     break
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
