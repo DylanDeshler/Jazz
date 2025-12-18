@@ -270,7 +270,6 @@ class Attention(nn.Module):
         q, k, v = qkv.unbind(0)
         # RoPE
         if freqs_cis is not None:
-            print(x.shape, freqs_cis.shape, q.shape)
             q = apply_rotary_emb(q.transpose(1, 2), freqs_cis).transpose(1, 2)
             k = apply_rotary_emb(k.transpose(1, 2), freqs_cis).transpose(1, 2)
 
@@ -721,7 +720,8 @@ class ModernDiT(nn.Module):
             x = block(x, t0, freqs_cis=freqs_cis, attn_mask=attn_mask)
         
         # SAM Audio uses no non-linearity on t here
-        shift, scale = (self.final_layer_scale_shift_table[None] + F.silu(t[:, None])).chunk(
+        print(self.final_layer_scale_shift_table[None].shape, t.shape, t[:, None].shape)
+        shift, scale = (self.final_layer_scale_shift_table[None] + F.silu(t[:, :, None])).chunk(
             2, dim=1
         )
         x = modulate(self.norm(x), shift, scale)
