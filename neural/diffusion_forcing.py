@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from einops import rearrange
 
 import math
 from typing import Optional, List, Callable
@@ -186,12 +187,15 @@ class TimestepEmbedder(nn.Module):
     """
     Embeds scalar timesteps into vector representations.
     """
-    def __init__(self, hidden_size, frequency_embedding_size=256, max_period=10000):
+    def __init__(self, hidden_size, frequency_embedding_size=256, max_period=10000, bias=True, swiglu=False):
         super().__init__()
-        self.mlp = nn.Sequential(
-            nn.Linear(frequency_embedding_size, hidden_size, bias=True),
+        if swiglu:
+            self.mlp = SwiGLUMlp(frequency_embedding_size, int(2 / 3 * 4 * hidden_size), hidden_size, bias=bias)
+        else:
+            self.mlp = nn.Sequential(
+            nn.Linear(frequency_embedding_size, hidden_size, bias=bias),
             nn.SiLU(),
-            nn.Linear(hidden_size, hidden_size, bias=True),
+            nn.Linear(hidden_size, hidden_size, bias=bias),
         )
         self.frequency_embedding_size = frequency_embedding_size
         self.max_period = max_period
@@ -424,10 +428,10 @@ class SelfAttentionBlock(nn.Module):
         return x
 
 class LightningFinalLayer(nn.Module):
-    def __init__(self, hidden_size, out_channels):
+    def __init__(self, hidden_size, out_channels, bias=False):
         super().__init__()
         self.norm_final = RMSNorm(hidden_size)
-        self.linear = nn.Linear(hidden_size, out_channels)
+        self.linear = nn.Linear(hidden_size, out_channels, bias=bias)
         self.adaLN_modulation = nn.Sequential(
             nn.SiLU(),
             nn.Linear(hidden_size, 2 * hidden_size, bias=True)
@@ -437,6 +441,32 @@ class LightningFinalLayer(nn.Module):
         shift, scale = self.adaLN_modulation(c).chunk(2, dim=-1)
         x = modulate(self.norm_final(x), shift, scale)
         x = self.linear(x)
+        return x
+
+class DiTBlock(nn.Module):
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
+        super().__init__()
+        self.norm1 = RMSNorm(hidden_size)
+        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=False, proj_bias=False, **block_kwargs)
+        self.norm2 = RMSNorm(hidden_size)
+        self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), bias=False)
+        self.scale_shift_table = nn.Parameter(
+            torch.randn(6, hidden_size) / hidden_size ** 0.5,
+        )
+    
+    def forward(self, x, t, freqs_cis=None, attn_mask=False):
+        biases = self.scale_shift_table[None] + t.reshape(x.size(0), 6, -1)
+        (
+            shift_msa,
+            scale_msa,
+            gate_msa,
+            shift_mlp,
+            scale_mlp,
+            gate_mlp,
+        ) = biases.chunk(6, dim=1)
+        
+        x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask)
+        x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
         return x
 
 def create_block_causal_mask(block_size: int, num_blocks: int, dtype=torch.float32):
@@ -454,8 +484,6 @@ def create_block_causal_mask(block_size: int, num_blocks: int, dtype=torch.float
                       0.0 indicates 'attend' and -inf indicates 'mask'.
                       (seq_len = block_size * num_blocks)
     """
-    seq_len = block_size * num_blocks
-    
     # 1. Create a vector of block IDs: [0, 0, ..., 1, 1, ..., 2, 2, ...]
     block_ids = torch.arange(num_blocks).repeat_interleave(block_size)
     
@@ -503,6 +531,202 @@ def token_drop(labels, null_token, training, p_uncond=0.1, p_full=0.3, p_ind_wid
     null_token = null_token.to(labels.dtype)
     
     return torch.where(final_mask, null_token, labels)
+
+class ConvBlock1d(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        *,
+        kernel_size: int = 3,
+        stride: int = 1,
+        dilation: int = 1,
+        num_groups: int = 8,
+    ) -> None:
+        super().__init__()
+
+        self.groupnorm = nn.GroupNorm(
+            num_groups=num_groups, num_channels=in_channels
+        )
+        self.activation = nn.SiLU()
+        self.project = nn.Conv1d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            dilation=dilation,
+        )
+
+    def forward(
+        self,
+        x: torch.Tensor,
+    ) -> torch.Tensor:
+        x = self.groupnorm(x)
+        x = self.activation(x)
+        return self.project(x)
+
+
+class ResnetBlock1d(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        *,
+        kernel_size: int = 3,
+        stride: int = 1,
+        dilation: int = 1,
+        num_groups: int = 8,
+    ) -> None:
+        super().__init__()
+
+        self.block1 = ConvBlock1d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            dilation=dilation,
+            num_groups=num_groups,
+        )
+
+        self.block2 = ConvBlock1d(
+            in_channels=out_channels,
+            out_channels=out_channels,
+            num_groups=num_groups,
+        )
+
+        self.to_out = (
+            nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=1)
+            if in_channels != out_channels
+            else nn.Identity()
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h = self.block1(x)
+        h = self.block2(h)
+        return h + self.to_out(x)
+
+
+class Patcher(torch.nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+    ):
+        super().__init__()
+        self.block = ResnetBlock1d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            num_groups=1,
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.block(x)
+        return x
+
+class ModernDiT(nn.Module):
+    def __init__(self,
+                 in_channels,
+                 action_channels,
+                 hidden_size,
+                 out_channels,
+                 num_actions,
+                 spatial_window,
+                 n_chunks,
+                 action_length,
+                 num_heads=12,
+                 depth=12,
+                 mlp_ratio=4,
+                 ):
+        super().__init__()
+        self.n_chunks = n_chunks
+        self.num_actions = num_actions
+        self.action_length = action_length
+        self.spatial_window = spatial_window
+        
+        max_input_size = spatial_window * n_chunks
+        
+        self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
+        self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
+        self.action_embedder = nn.Embedding(num_actions, hidden_size)
+
+        self.proj = nn.Linear(in_channels + action_channels, hidden_size, bias=True)
+        self.x_embedder = Patcher(hidden_size, hidden_size)
+        
+        self.t_block = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(hidden_size, hidden_size * 6, bias=True),
+        )
+        
+        self.null_embeddings = nn.Embedding(2, hidden_size)
+        
+        self.blocks = nn.ModuleList([
+            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+        ])
+
+        self.norm = RMSNorm(hidden_size)
+        self.final_layer_scale_shift_table = nn.Parameter(
+            torch.randn(2, hidden_size) / hidden_size ** 0.5,
+        )
+        self.fc = nn.Linear(hidden_size, out_channels)
+        
+        self.initialize_weights()
+        self.register_buffer('block_causal_mask', create_block_causal_mask(spatial_window, n_chunks))
+        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size, max_input_size))
+    
+    def initialize_weights(self):
+        self.apply(self._init_weights)
+        # zero out classifier weights
+        torch.nn.init.zeros_(self.fc.weight)
+        torch.nn.init.zeros_(self.t_block[-1].weight)
+        torch.nn.init.zeros_(self.t_block[-1].bias)
+        # zero out c_proj weights in all blocks
+        for block in self.blocks:
+            torch.nn.init.zeros_(block.mlp.w3.weight)
+            torch.nn.init.zeros_(block.attn.proj.weight)
+    
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            # https://arxiv.org/pdf/2310.17813
+            fan_out = module.weight.size(0)
+            fan_in = module.weight.size(1)
+            std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
+            torch.nn.init.normal_(module.weight, mean=0.0, std=std)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+    
+    def forward(self, x, t, bpm, actions, attn_mask=None):
+        
+        if self.training and attn_mask is None:
+            if np.random.rand() < 0.2:
+                attn_mask = self.block_causal_mask
+        elif attn_mask:
+            attn_mask = self.block_causal_mask
+        
+        bpm = token_drop(self.bpm_embedder(bpm), self.null_embeddings.weight[0], self.training)
+        actions = token_drop(self.action_embedder(actions), self.null_embeddings.weight[1], self.training)
+        actions = torch.repeat_interleave(actions, self.spatial_window // self.action_length, dim=1).contiguous()
+        
+        x = torch.cat([x, actions], dim=-1)
+        x = self.proj(x)
+        x = rearrange(x, 'b l c -> b c l')
+        x = self.x_embedder(x)
+        x = rearrange(x, 'b c l -> b l c')
+        
+        t = self.t_embedder(t) + bpm
+        t0 = self.t_block(t)
+        
+        freqs_cis = self.freqs_cis[:x.shape[1]]
+        for block in self.blocks:
+            x = block(x, t0, freqs_cis=freqs_cis, attn_mask=attn_mask)
+        
+        shift, scale = (self.final_layer_scale_shift_table[None] + t[:, None]).chunk(
+            2, dim=1
+        )
+        x = modulate(self.norm(x), shift, scale)
+        x = self.fc(x)
+        return x
 
 class DiT(nn.Module):
     def __init__(self,
@@ -632,3 +856,20 @@ def DiT_M(**kwargs):
 
 def DiT_B(**kwargs):
     return DiTWrapper(depth=12, hidden_size=768, num_heads=12, **kwargs)
+
+class ModernDiTWrapper(nn.Module):
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.net = ModernDiT(**kwargs)
+        
+        self.diffusion = FM(chunk_size=kwargs['spatial_window'], timescale=1000.0)
+        self.sampler = FMEulerSampler(self.diffusion)
+    
+    def forward(self, x, bpm, actions, t=None, attn_mask=None):
+        return self.diffusion.loss(self.net, x, t=t, net_kwargs={'actions': actions, 'bpm': bpm, 'attn_mask': attn_mask})
+    
+    def sample(self, x, bpm, actions, attn_mask=None, n_steps=50):
+        return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm, 'attn_mask': attn_mask})
+
+def ModernDiT_small(**kwargs):
+    return ModernDiTWrapper(depth=12, hidden_size=1024, num_heads=16, **kwargs)
