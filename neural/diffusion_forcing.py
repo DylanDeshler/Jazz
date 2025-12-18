@@ -453,7 +453,7 @@ class DiTBlock(nn.Module):
         )
     
     def forward(self, x, t, freqs_cis=None, attn_mask=False):
-        biases = self.scale_shift_table[None, None] + t.reshape(x.size(0), x.size(1), 6, -1)
+        biases = self.scale_shift_table[None] + t.reshape(x.size(0), x.size(1), 6, -1)
         print(biases.shape)
         (
             shift_msa,
@@ -722,7 +722,7 @@ class ModernDiT(nn.Module):
             x = block(x, t0, freqs_cis=freqs_cis, attn_mask=attn_mask)
         
         # SAM Audio uses no non-linearity on t here
-        shift, scale = (self.final_layer_scale_shift_table[None, None] + F.silu(t[:, None])).chunk(
+        shift, scale = (self.final_layer_scale_shift_table[None] + F.silu(t[:, None])).chunk(
             2, dim=1
         )
         x = modulate(self.norm(x), shift, scale)
