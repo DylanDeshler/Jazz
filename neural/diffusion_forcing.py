@@ -715,6 +715,7 @@ class ModernDiT(nn.Module):
         t = repeat(t, 'b t c -> b (t l) c', l=self.spatial_window)
         print(t.shape)
         t0 = self.t_block(t)
+        print(x.shape, t0.shape)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
         for block in self.blocks:
