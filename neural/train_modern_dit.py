@@ -55,14 +55,15 @@ wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 3 # used to simulate larger batch sizes
-batch_size = 64# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+gradient_accumulation_steps = 1 # used to simulate larger batch sizes
+batch_size = 128 # * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 spatial_window = 48
 n_chunks = 10
 max_seq_len = spatial_window * n_chunks
 action_length = 3
 vae_embed_dim = 16
+action_channels = vae_embed_dim * 4
 # 2^4 2^6 2^8 2^9 2^10 2^11 2^12 2^14 2^16
 # [5, 3] [8, 8] [8, 6, 5] [8, 8, 8] [8, 5, 5, 5] [8, 8, 6, 5] [7, 5, 5, 5] [8, 8, 8, 6, 5] [8, 8, 8, 5, 5, 5]
 levels = [5, 3]
@@ -158,7 +159,7 @@ for k,v in list(state_dict.items()):
 tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 
-model_args = dict(in_channels=vae_embed_dim, action_channels=vae_embed_dim * 4, n_chunks=n_chunks, spatial_window=spatial_window, num_actions=math.prod(levels), action_length=action_length)
+model_args = dict(in_channels=vae_embed_dim, action_channels=action_channels, n_chunks=n_chunks, spatial_window=spatial_window, num_actions=math.prod(levels), action_length=action_length)
 
 if init_from == 'scratch':
     # init a new model from scratch
