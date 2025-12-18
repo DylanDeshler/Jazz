@@ -651,7 +651,9 @@ class ModernDiT(nn.Module):
             nn.Linear(hidden_size, hidden_size * 6, bias=True),
         )
         
-        self.null_embeddings = nn.Embedding(2, hidden_size)
+        # self.null_embeddings = nn.Embedding(2, hidden_size)
+        self.null_bpm = nn.Parameter(torch.randn(1, hidden_size))
+        self.null_action = nn.Parameter(torch.randn(1, action_channels))
         
         self.blocks = nn.ModuleList([
             DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
@@ -698,8 +700,8 @@ class ModernDiT(nn.Module):
         elif attn_mask:
             attn_mask = self.block_causal_mask
         
-        bpm = token_drop(self.bpm_embedder(bpm), self.null_embeddings.weight[0], self.training)
-        actions = token_drop(self.action_embedder(actions), self.null_embeddings.weight[1], self.training)
+        bpm = token_drop(self.bpm_embedder(bpm), self.null_bpm, self.training)
+        actions = token_drop(self.action_embedder(actions), self.null_action, self.training)
         # Assuming position in action sequence is correlated to position in latent sequence
         # Could also experiment with concatenating every action to every latent position
         actions = torch.repeat_interleave(actions, self.spatial_window // self.action_length, dim=2).contiguous()
