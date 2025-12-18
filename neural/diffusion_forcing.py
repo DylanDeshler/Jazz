@@ -712,7 +712,7 @@ class ModernDiT(nn.Module):
         x = rearrange(x, 'b c l -> b l c')
         
         t = self.t_embedder(t) + bpm
-        t = repeat(t, 'b t -> b (t l)', l=self.spatial_window)
+        t = repeat(t, 'b t c -> b (t l) c', l=self.spatial_window)
         t0 = self.t_block(t)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
