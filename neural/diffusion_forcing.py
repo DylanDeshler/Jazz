@@ -555,6 +555,7 @@ class ConvBlock1d(nn.Module):
             kernel_size=kernel_size,
             stride=stride,
             dilation=dilation,
+            padding=kernel_size//2
         )
 
     def forward(
