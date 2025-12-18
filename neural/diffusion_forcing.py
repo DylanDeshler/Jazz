@@ -637,8 +637,6 @@ class ModernDiT(nn.Module):
                  mlp_ratio=4,
                  ):
         super().__init__()
-        self.n_chunks = n_chunks
-        self.num_actions = num_actions
         self.action_length = action_length
         self.spatial_window = spatial_window
         
@@ -666,7 +664,7 @@ class ModernDiT(nn.Module):
         self.final_layer_scale_shift_table = nn.Parameter(
             torch.randn(2, hidden_size) / hidden_size ** 0.5,
         )
-        self.fc = nn.Linear(hidden_size, in_channels)
+        self.fc = nn.Linear(hidden_size, in_channels, bias=False)
         
         self.initialize_weights()
         self.register_buffer('block_causal_mask', create_block_causal_mask(spatial_window, n_chunks))
@@ -705,6 +703,8 @@ class ModernDiT(nn.Module):
         
         bpm = token_drop(self.bpm_embedder(bpm), self.null_embeddings.weight[0], self.training)
         actions = token_drop(self.action_embedder(actions), self.null_embeddings.weight[1], self.training)
+        # Assuming position in action sequence is correlated to position in latent sequence
+        # Could also experiment with concatenating every action to every latent position
         actions = torch.repeat_interleave(actions, self.spatial_window // self.action_length, dim=1).contiguous()
         
         x = torch.cat([x, actions], dim=-1)
@@ -720,6 +720,7 @@ class ModernDiT(nn.Module):
         for block in self.blocks:
             x = block(x, t0, freqs_cis=freqs_cis, attn_mask=attn_mask)
         
+        # Why no non-linearity on t?
         shift, scale = (self.final_layer_scale_shift_table[None] + t[:, None]).chunk(
             2, dim=1
         )
