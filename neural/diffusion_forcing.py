@@ -646,7 +646,7 @@ class ModernDiT(nn.Module):
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
         self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
-        self.action_embedder = nn.Embedding(num_actions, hidden_size)
+        self.action_embedder = nn.Embedding(num_actions, action_channels)
 
         self.proj = nn.Linear(in_channels + action_channels, hidden_size, bias=True)
         self.x_embedder = Patcher(hidden_size, hidden_size)
