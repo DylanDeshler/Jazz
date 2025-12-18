@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from einops import rearrange
+from einops import rearrange, repeat
 
 import math
 from typing import Optional, List, Callable
@@ -124,11 +124,8 @@ class FMEulerSampler:
         return x_t
 
 @torch.compile
-def modulate(x, shift, scale):
-    if scale.ndim == 3:
-        return x * (1 + scale) + shift
-    else:
-        return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
+def modulate(x: torch.Tensor, shift: torch.Tensor, scale: torch.Tensor):
+    return x * (1 + scale) + shift
 
 def apply_scaling(freqs: torch.Tensor):
     # RoPE scaling (values obtained from grid search)
@@ -455,7 +452,7 @@ class DiTBlock(nn.Module):
         )
     
     def forward(self, x, t, freqs_cis=None, attn_mask=False):
-        biases = self.scale_shift_table[None] + t.reshape(x.size(0), 6, -1)
+        biases = self.scale_shift_table[None, None] + t.reshape(x.size(0), x.size(1), 6, -1)
         (
             shift_msa,
             scale_msa,
@@ -640,7 +637,6 @@ class ModernDiT(nn.Module):
         super().__init__()
         self.action_length = action_length
         self.spatial_window = spatial_window
-        
         max_input_size = spatial_window * n_chunks
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
@@ -716,6 +712,7 @@ class ModernDiT(nn.Module):
         x = rearrange(x, 'b c l -> b l c')
         
         t = self.t_embedder(t) + bpm
+        t = repeat(t, 'b t -> b (t l)', l=self.spatial_window)
         t0 = self.t_block(t)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
@@ -723,7 +720,7 @@ class ModernDiT(nn.Module):
             x = block(x, t0, freqs_cis=freqs_cis, attn_mask=attn_mask)
         
         # SAM Audio uses no non-linearity on t here
-        shift, scale = (self.final_layer_scale_shift_table[None] + F.silu(t[:, None])).chunk(
+        shift, scale = (self.final_layer_scale_shift_table[None, None] + F.silu(t[:, None])).chunk(
             2, dim=1
         )
         x = modulate(self.norm(x), shift, scale)
