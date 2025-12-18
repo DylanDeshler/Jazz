@@ -651,9 +651,8 @@ class ModernDiT(nn.Module):
             nn.Linear(hidden_size, hidden_size * 6, bias=True),
         )
         
-        # self.null_embeddings = nn.Embedding(2, hidden_size)
-        self.null_bpm = nn.Parameter(torch.randn(1, hidden_size))
-        self.null_action = nn.Parameter(torch.randn(1, action_channels))
+        self.null_bpm = nn.Parameter(torch.randn(1, hidden_size) / hidden_size ** 0.5)
+        self.null_action = nn.Parameter(torch.randn(1, action_channels) / action_channels ** 0.5)
         
         self.blocks = nn.ModuleList([
             DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
@@ -672,13 +671,13 @@ class ModernDiT(nn.Module):
     def initialize_weights(self):
         self.apply(self._init_weights)
         # zero out classifier weights
-        torch.nn.init.zeros_(self.fc.weight)
-        torch.nn.init.zeros_(self.t_block[-1].weight)
-        torch.nn.init.zeros_(self.t_block[-1].bias)
+        nn.init.zeros_(self.fc.weight)
+        nn.init.zeros_(self.t_block[-1].weight)
+        nn.init.zeros_(self.t_block[-1].bias)
         # zero out c_proj weights in all blocks
         for block in self.blocks:
-            torch.nn.init.zeros_(block.mlp.w3.weight)
-            torch.nn.init.zeros_(block.attn.proj.weight)
+            nn.init.zeros_(block.mlp.w3.weight)
+            nn.init.zeros_(block.attn.proj.weight)
     
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
@@ -686,11 +685,11 @@ class ModernDiT(nn.Module):
             fan_out = module.weight.size(0)
             fan_in = module.weight.size(1)
             std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
-            torch.nn.init.normal_(module.weight, mean=0.0, std=std)
+            nn.init.normal_(module.weight, mean=0.0, std=std)
             if module.bias is not None:
-                torch.nn.init.zeros_(module.bias)
+                nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
     def forward(self, x, t, bpm, actions, attn_mask=None):
         
@@ -721,7 +720,7 @@ class ModernDiT(nn.Module):
         for block in self.blocks:
             x = block(x, t0, freqs_cis=freqs_cis, attn_mask=attn_mask)
         
-        # SAM Audio uses no non-linearity on t here
+        # SAM Audio doesnt use a non-linearity on t here
         shift, scale = (self.final_layer_scale_shift_table[None, None] + F.silu(t[:, :, None])).chunk(
             2, dim=2
         )
