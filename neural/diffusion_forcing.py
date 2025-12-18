@@ -662,7 +662,7 @@ class ModernDiT(nn.Module):
         self.final_layer_scale_shift_table = nn.Parameter(
             torch.randn(2, hidden_size) / hidden_size ** 0.5,
         )
-        self.fc = nn.Linear(hidden_size, in_channels, bias=False)
+        self.fc = nn.Linear(hidden_size, in_channels, bias=True)
         
         self.initialize_weights()
         self.register_buffer('block_causal_mask', create_block_causal_mask(spatial_window, n_chunks))
