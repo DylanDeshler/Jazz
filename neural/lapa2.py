@@ -755,8 +755,98 @@ class DiTBlock(nn.Module):
         x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
         return x
 
+class ConvBlock1d(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        *,
+        kernel_size: int = 3,
+        stride: int = 1,
+        dilation: int = 1,
+        num_groups: int = 8,
+    ) -> None:
+        super().__init__()
 
-from diffusion_forcing import Patcher
+        self.groupnorm = nn.GroupNorm(
+            num_groups=num_groups, num_channels=in_channels
+        )
+        self.activation = nn.SiLU()
+        self.project = nn.Conv1d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            dilation=dilation,
+            padding=kernel_size//2
+        )
+
+    def forward(
+        self,
+        x: torch.Tensor,
+    ) -> torch.Tensor:
+        x = self.groupnorm(x)
+        x = self.activation(x)
+        return self.project(x)
+
+
+class ResnetBlock1d(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        *,
+        kernel_size: int = 3,
+        stride: int = 1,
+        dilation: int = 1,
+        num_groups: int = 8,
+    ) -> None:
+        super().__init__()
+
+        self.block1 = ConvBlock1d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            dilation=dilation,
+            num_groups=num_groups,
+        )
+
+        self.block2 = ConvBlock1d(
+            in_channels=out_channels,
+            out_channels=out_channels,
+            num_groups=num_groups,
+        )
+
+        self.to_out = (
+            nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=1)
+            if in_channels != out_channels
+            else nn.Identity()
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h = self.block1(x)
+        h = self.block2(h)
+        return h + self.to_out(x)
+
+
+class Patcher(torch.nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+    ):
+        super().__init__()
+        self.block = ResnetBlock1d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            num_groups=1,
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.block(x)
+        return x
+
 class ModernDiT(nn.Module):
     def __init__(self,
                  in_channels,
