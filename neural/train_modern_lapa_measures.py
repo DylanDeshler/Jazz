@@ -95,7 +95,7 @@ min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/
 # DDP settings
 backend = 'gloo' # 'nccl', 'gloo', etc.
 # system
-device = 'cuda:1' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = False # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
@@ -132,7 +132,7 @@ if master_process:
 torch.manual_seed(1337 + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
-device_type = 'cuda:1' if 'cuda' in device else 'cpu' # for later use in torch.autocast
+device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
 # note: float16 data type will automatically use a GradScaler
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
@@ -149,7 +149,6 @@ def get_batch(split='train'):
     x = torch.from_numpy(np.stack([data[idx:idx+temporal_window] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     ratio = torch.from_numpy(np.stack([meta[idx:idx+temporal_window, 0] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     bpm = torch.from_numpy(np.stack([meta[idx:idx+temporal_window, 1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    print(x.shape, ratio.shape, bpm.shape)
     return x, ratio, bpm
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
