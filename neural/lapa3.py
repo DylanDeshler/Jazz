@@ -10,11 +10,8 @@ from vector_quantize_pytorch import FSQ, ResidualFSQ
 from fm import FM, FMEulerSampler
 
 @torch.compile
-def modulate(x, shift, scale):
-    if scale.ndim == 3:
-        return x * (1 + scale) + shift
-    else:
-        return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
+def modulate(x: torch.Tensor, shift: torch.Tensor, scale: torch.Tensor):
+    return x * (1 + scale) + shift
 
 def apply_scaling(freqs: torch.Tensor):
     # RoPE scaling (values obtained from grid search)
@@ -741,6 +738,7 @@ class DiTBlock(nn.Module):
         )
     
     def forward(self, x, t, freqs_cis=None, attn_mask=False):
+        print(t.shape)
         biases = self.scale_shift_table[None] + t.reshape(x.size(0), 6, -1)
         (
             shift_msa,
@@ -749,7 +747,7 @@ class DiTBlock(nn.Module):
             shift_mlp,
             scale_mlp,
             gate_mlp,
-        ) = [chunk.squeeze(2) for chunk in biases.chunk(6, dim=2)]
+        ) = [chunk for chunk in biases.chunk(6, dim=2)]
         
         x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask)
         x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
@@ -913,9 +911,7 @@ class ModernDiT(nn.Module):
     
     def forward(self, x, t, bpm, actions, clean_x):
         bpm = self.bpm_embedder(bpm)
-        print(actions.shape)
         actions = torch.repeat_interleave(actions, self.spatial_window // self.action_length, dim=1).contiguous()
-        # actions = rearrange(actions, 'b t l c -> b (t l) c')
         
         x = torch.cat([x, clean_x, actions], dim=-1)
         x = self.proj(x)
@@ -924,7 +920,6 @@ class ModernDiT(nn.Module):
         x = rearrange(x, 'b c l -> b l c')
         
         t = self.t_embedder(t) + bpm
-        # t = repeat(t, 'b t c -> b (t l) c', l=self.spatial_window)
         t0 = self.t_block(t)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
