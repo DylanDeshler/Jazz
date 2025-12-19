@@ -172,7 +172,7 @@ tokenizer.eval()
 
 emb_model = emb_model.to(device)
 
-model_args = dict(in_channels=vae_embed_dim, levels=levels, spatial_window=spatial_window, temporal_window=temporal_window, ratios=ratios)
+model_args = dict(in_channels=vae_embed_dim, levels=levels, spatial_window=spatial_window, temporal_window=temporal_window, ratios=ratios, action_length=spatial_window//math.prod(ratios))
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")

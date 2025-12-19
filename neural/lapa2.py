@@ -732,7 +732,6 @@ class ModernDiT(nn.Module):
                  in_channels,
                  hidden_size,
                  spatial_window,
-                 n_chunks,
                  action_length,
                  num_heads=12,
                  depth=12,
@@ -741,7 +740,6 @@ class ModernDiT(nn.Module):
         super().__init__()
         self.action_length = action_length
         self.spatial_window = spatial_window
-        max_input_size = spatial_window * n_chunks
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
         self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
@@ -768,7 +766,7 @@ class ModernDiT(nn.Module):
         self.fc = nn.Linear(hidden_size, in_channels, bias=False)
         
         self.initialize_weights()
-        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
+        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, spatial_window))
     
     def initialize_weights(self):
         self.apply(self._init_weights)
@@ -961,6 +959,7 @@ class ModernLAM(nn.Module):
                  levels,
                  spatial_window,
                  temporal_window,
+                 action_length=3,
                  ratios=[4,2],
                  num_heads=12,
                  depth=12,
@@ -978,8 +977,8 @@ class ModernLAM(nn.Module):
                                               mlp_ratio=mlp_ratio)
         self.decoder = ModernDiTWrapper(in_channels=in_channels, 
                                   hidden_size=hidden_size, 
-                                  num_actions=spatial_window // math.prod(ratios), 
                                   max_input_size=spatial_window,
+                                  action_length=action_length,
                                   num_heads=num_heads, 
                                   depth=int(depth * 3 // 2), # balance encoder decoder parameters 
                                   mlp_ratio=mlp_ratio)
