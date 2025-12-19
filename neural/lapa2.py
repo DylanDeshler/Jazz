@@ -977,7 +977,7 @@ class ModernLAM(nn.Module):
                                               mlp_ratio=mlp_ratio)
         self.decoder = ModernDiTWrapper(in_channels=in_channels, 
                                   hidden_size=hidden_size, 
-                                  max_input_size=spatial_window,
+                                  spatial_window=spatial_window,
                                   action_length=action_length,
                                   num_heads=num_heads, 
                                   depth=int(depth * 3 // 2), # balance encoder decoder parameters 
