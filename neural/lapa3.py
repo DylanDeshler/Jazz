@@ -11,6 +11,7 @@ from fm import FM, FMEulerSampler
 
 @torch.compile
 def modulate(x: torch.Tensor, shift: torch.Tensor, scale: torch.Tensor):
+    print(x.shape, scale.shape, shift.shape)
     return x * (1 + scale) + shift
 
 def apply_scaling(freqs: torch.Tensor):
@@ -747,7 +748,7 @@ class DiTBlock(nn.Module):
             shift_mlp,
             scale_mlp,
             gate_mlp,
-        ) = [chunk for chunk in biases.chunk(6, dim=2)]
+        ) = [chunk for chunk in biases.chunk(6, dim=1)]
         
         x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask)
         x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
