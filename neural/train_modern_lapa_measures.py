@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from lapa2 import LAM_B as net
+from lapa2 import ModernLAM_B as net
 from dito import DiToV5 as Tokenizer
 
 import matplotlib.pyplot as plt
@@ -51,7 +51,7 @@ resampler = torchaudio.transforms.Resample(16000, 24000)
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'LAPA_measures_bpm_B_FSQ_16_6'
+out_dir = 'ModernLAPA_measures_bpm_B_FSQ_16_3'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -59,7 +59,7 @@ save_interval = 5000
 eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -67,7 +67,7 @@ wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 1 # used to simulate larger batch sizes
-batch_size = 384# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 8#384# * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 temporal_window = 2
 spatial_window = 48
@@ -79,17 +79,17 @@ vae_embed_dim = 16
 # 2^4 2^6 2^8 2^9 2^10 2^11 2^12 2^14 2^16
 # [5, 3] [8, 8] [8, 6, 5] [8, 8, 8] [8, 5, 5, 5] [8, 8, 6, 5] [7, 5, 5, 5] [8, 8, 8, 6, 5] [8, 8, 8, 5, 5, 5]
 levels = [5, 3]
-ratios = [4, 2]
+ratios = [4, 4]
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 85000 # total number of training iterations
+max_iters = 1000000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
-decay_lr = True # whether to decay the learning rate
-warmup_iters = 70000 # how many steps to warm up for
+decay_lr = False # whether to decay the learning rate
+warmup_iters = 5000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
@@ -97,7 +97,7 @@ backend = 'gloo' # 'nccl', 'gloo', etc.
 # system
 device = 'cuda:1' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
-compile = True # use PyTorch 2.0 to compile the model to be faster
+compile = False # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 # exec(open('configurator.py').read()) # overrides from command line or config file
@@ -149,6 +149,7 @@ def get_batch(split='train'):
     x = torch.from_numpy(np.stack([data[idx:idx+temporal_window] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     ratio = torch.from_numpy(np.stack([meta[idx:idx+temporal_window, 0] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     bpm = torch.from_numpy(np.stack([meta[idx:idx+temporal_window, 1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    print(x.shape, ratio.shape, bpm.shape)
     return x, ratio, bpm
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
@@ -172,7 +173,7 @@ tokenizer.eval()
 
 emb_model = emb_model.to(device)
 
-model_args = dict(in_channels=vae_embed_dim, levels=levels, spatial_window=spatial_window, temporal_window=temporal_window, ratios=ratios)
+model_args = dict(in_channels=vae_embed_dim, levels=levels, spatial_window=spatial_window, temporal_window=temporal_window, ratios=ratios, action_length=spatial_window//math.prod(ratios))
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -313,6 +314,7 @@ def generate_lam_vs_random_actions(step):
     os.makedirs(batch_dir, exist_ok=True)
     
     x, ratio, bpm = get_batch('val')
+    x, ratio, bpm = x[:20], ratio[:20], bpm[:20]
 
     B, T, N, D = x.shape
 
@@ -330,10 +332,12 @@ def generate_lam_vs_random_actions(step):
         B, T, N, D = x.shape
     
     with ctx:
-        x = tokenizer.decode(x[:, 1].permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
+        x = tokenizer.decode(torch.cat([x[:, 0], x[:, 1]], dim=0).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
         recon = tokenizer.decode(recon.permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
         random_recon = tokenizer.decode(random_recon.permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
     
+    x0, x = x.chunk(2, dim=0)
+    x0 = x0.cpu().detach().float().numpy().squeeze(1)
     x = x.cpu().detach().float().numpy().squeeze(1)
     recon = recon.cpu().detach().float().numpy().squeeze(1)
     random_recon = random_recon.cpu().detach().float().numpy().squeeze(1)
@@ -342,12 +346,12 @@ def generate_lam_vs_random_actions(step):
     random_psnr = psnr(x, random_recon)
 
     for i in range(20):
-        og, y, random_y, r = x[i], recon[i], random_recon[i], ratio[i, 1].cpu().detach().numpy().item()
+        og0, og, y, random_y, r0, r = x0[i], x[i], recon[i], random_recon[i], ratio[i, 0].cpu().detach().numpy().item(), ratio[i, 1].cpu().detach().numpy().item()
 
         # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), restore_measure(og, r), 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), restore_measure(y, r), 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), restore_measure(random_y, r), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), np.concatenate([restore_measure(og0, r0), restore_measure(og, r)]), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), np.concatenate([restore_measure(og0, r0), restore_measure(y, r)]), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), np.concatenate([restore_measure(og0, r0), restore_measure(random_y, r)]), 16000)
     
     x = [row for row in resampler(torch.from_numpy(x)).numpy()]
     recon = [row for row in resampler(torch.from_numpy(recon)).numpy()]
