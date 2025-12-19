@@ -11,7 +11,6 @@ from fm import FM, FMEulerSampler
 
 @torch.compile
 def modulate(x: torch.Tensor, shift: torch.Tensor, scale: torch.Tensor):
-    print(x.shape, scale.shape, shift.shape)
     return x * (1 + scale) + shift
 
 def apply_scaling(freqs: torch.Tensor):
@@ -920,11 +919,8 @@ class ModernDiT(nn.Module):
         x = self.x_embedder(x)
         x = rearrange(x, 'b c l -> b l c')
         
-        print(t.shape, bpm.shape)
         t = self.t_embedder(t) + bpm
-        print(t.shape)
         t0 = self.t_block(t)
-        print(t0.shape)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
         for block in self.blocks:
@@ -932,7 +928,7 @@ class ModernDiT(nn.Module):
         
         # SAM Audio does not use a non-linearity on t here
         shift, scale = (self.final_layer_scale_shift_table[None] + F.silu(t[:, None])).chunk(
-            2, dim=2
+            2, dim=1
         )
         x = modulate(self.norm(x), shift, scale)
         x = self.fc(x)
