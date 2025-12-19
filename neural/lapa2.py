@@ -824,8 +824,8 @@ class ModernDiT(nn.Module):
     def forward(self, x, t, bpm, actions, clean_x):
         bpm = self.bpm_embedder(bpm)
         print(actions.shape)
-        actions = torch.repeat_interleave(actions, self.spatial_window // self.action_length, dim=2).contiguous()
-        actions = rearrange(actions, 'b t l c -> b (t l) c')
+        actions = torch.repeat_interleave(actions, self.spatial_window // self.action_length, dim=1).contiguous()
+        # actions = rearrange(actions, 'b t l c -> b (t l) c')
         
         x = torch.cat([x, clean_x, actions], dim=-1)
         x = self.proj(x)
