@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import math
 from typing import Optional, List, Callable
 
-from einops import rearrange, repeat
+from einops import rearrange
 from vector_quantize_pytorch import FSQ, ResidualFSQ
 from fm import FM, FMEulerSampler
 
@@ -73,15 +73,12 @@ class TimestepEmbedder(nn.Module):
     """
     Embeds scalar timesteps into vector representations.
     """
-    def __init__(self, hidden_size, frequency_embedding_size=256, max_period=10000, bias=True, swiglu=False):
+    def __init__(self, hidden_size, frequency_embedding_size=256, max_period=10000):
         super().__init__()
-        if swiglu:
-            self.mlp = SwiGLUMlp(frequency_embedding_size, int(2 / 3 * 4 * hidden_size), hidden_size, bias=bias)
-        else:
-            self.mlp = nn.Sequential(
-            nn.Linear(frequency_embedding_size, hidden_size, bias=bias),
+        self.mlp = nn.Sequential(
+            nn.Linear(frequency_embedding_size, hidden_size, bias=True),
             nn.SiLU(),
-            nn.Linear(hidden_size, hidden_size, bias=bias),
+            nn.Linear(hidden_size, hidden_size, bias=True),
         )
         self.frequency_embedding_size = frequency_embedding_size
         self.max_period = max_period
@@ -90,11 +87,11 @@ class TimestepEmbedder(nn.Module):
     def timestep_embedding(t, dim, max_period=10000):
         """
         Create sinusoidal timestep embeddings.
-        :param t: a 2-D Tensor of (N, T) indices, one per batch element.
+        :param t: a 1-D Tensor of N indices, one per batch element.
                           These may be fractional.
         :param dim: the dimension of the output.
         :param max_period: controls the minimum frequency of the embeddings.
-        :return: an (N, T, D) Tensor of positional embeddings.
+        :return: an (N, D) Tensor of positional embeddings.
         """
         # https://github.com/openai/glide-text2im/blob/main/glide_text2im/nn.py
         half = dim // 2
@@ -729,216 +726,6 @@ class DiT(nn.Module):
         x = self.final_layer(x)
         return x
 
-class DiTBlock(nn.Module):
-    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
-        super().__init__()
-        self.norm1 = RMSNorm(hidden_size)
-        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=False, proj_bias=False, **block_kwargs)
-        self.norm2 = RMSNorm(hidden_size)
-        self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), bias=False)
-        self.scale_shift_table = nn.Parameter(
-            torch.randn(6, hidden_size) / hidden_size ** 0.5,
-        )
-    
-    def forward(self, x, t, freqs_cis=None, attn_mask=False):
-        biases = self.scale_shift_table[None] + t.reshape(x.size(0), 6, -1)
-        (
-            shift_msa,
-            scale_msa,
-            gate_msa,
-            shift_mlp,
-            scale_mlp,
-            gate_mlp,
-        ) = [chunk.squeeze(2) for chunk in biases.chunk(6, dim=2)]
-        
-        x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask)
-        x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
-        return x
-
-class ConvBlock1d(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        *,
-        kernel_size: int = 3,
-        stride: int = 1,
-        dilation: int = 1,
-        num_groups: int = 8,
-    ) -> None:
-        super().__init__()
-
-        self.groupnorm = nn.GroupNorm(
-            num_groups=num_groups, num_channels=in_channels
-        )
-        self.activation = nn.SiLU()
-        self.project = nn.Conv1d(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            kernel_size=kernel_size,
-            stride=stride,
-            dilation=dilation,
-            padding=kernel_size//2
-        )
-
-    def forward(
-        self,
-        x: torch.Tensor,
-    ) -> torch.Tensor:
-        x = self.groupnorm(x)
-        x = self.activation(x)
-        return self.project(x)
-
-
-class ResnetBlock1d(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        *,
-        kernel_size: int = 3,
-        stride: int = 1,
-        dilation: int = 1,
-        num_groups: int = 8,
-    ) -> None:
-        super().__init__()
-
-        self.block1 = ConvBlock1d(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            kernel_size=kernel_size,
-            stride=stride,
-            dilation=dilation,
-            num_groups=num_groups,
-        )
-
-        self.block2 = ConvBlock1d(
-            in_channels=out_channels,
-            out_channels=out_channels,
-            num_groups=num_groups,
-        )
-
-        self.to_out = (
-            nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=1)
-            if in_channels != out_channels
-            else nn.Identity()
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h = self.block1(x)
-        h = self.block2(h)
-        return h + self.to_out(x)
-
-
-class Patcher(torch.nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-    ):
-        super().__init__()
-        self.block = ResnetBlock1d(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            num_groups=1,
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.block(x)
-        return x
-
-class ModernDiT(nn.Module):
-    def __init__(self,
-                 in_channels,
-                 hidden_size,
-                 spatial_window,
-                 action_length,
-                 num_heads=12,
-                 depth=12,
-                 mlp_ratio=4,
-                 ):
-        super().__init__()
-        self.action_length = action_length
-        self.spatial_window = spatial_window
-        
-        self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
-        self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True, max_period=1000)
-
-        self.proj = nn.Linear(2 * in_channels + hidden_size, hidden_size, bias=True)
-        self.x_embedder = Patcher(hidden_size, hidden_size)
-        
-        self.t_block = nn.Sequential(
-            nn.SiLU(),
-            nn.Linear(hidden_size, hidden_size * 6, bias=True),
-        )
-        
-        self.null_bpm = nn.Parameter(torch.randn(1, hidden_size) / hidden_size ** 0.5)
-        self.null_action = nn.Parameter(torch.randn(1, hidden_size) / hidden_size ** 0.5)
-        
-        self.blocks = nn.ModuleList([
-            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
-        ])
-
-        self.norm = RMSNorm(hidden_size)
-        self.final_layer_scale_shift_table = nn.Parameter(
-            torch.randn(2, hidden_size) / hidden_size ** 0.5,
-        )
-        self.fc = nn.Linear(hidden_size, in_channels, bias=False)
-        
-        self.initialize_weights()
-        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, spatial_window))
-    
-    def initialize_weights(self):
-        self.apply(self._init_weights)
-        # zero out classifier weights
-        nn.init.zeros_(self.fc.weight)
-        nn.init.zeros_(self.t_block[-1].weight)
-        nn.init.zeros_(self.t_block[-1].bias)
-        # zero out c_proj weights in all blocks
-        for block in self.blocks:
-            nn.init.zeros_(block.mlp.w3.weight)
-            nn.init.zeros_(block.attn.proj.weight)
-    
-    def _init_weights(self, module):
-        if isinstance(module, nn.Linear):
-            # https://arxiv.org/pdf/2310.17813
-            fan_out = module.weight.size(0)
-            fan_in = module.weight.size(1)
-            std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
-            nn.init.normal_(module.weight, mean=0.0, std=std)
-            if module.bias is not None:
-                nn.init.zeros_(module.bias)
-        elif isinstance(module, nn.Embedding):
-            nn.init.normal_(module.weight, mean=0.0, std=0.02)
-    
-    def forward(self, x, t, bpm, actions, clean_x):
-        bpm = self.bpm_embedder(bpm)
-        print(actions.shape)
-        actions = torch.repeat_interleave(actions, self.spatial_window // self.action_length, dim=1).contiguous()
-        # actions = rearrange(actions, 'b t l c -> b (t l) c')
-        
-        x = torch.cat([x, clean_x, actions], dim=-1)
-        x = self.proj(x)
-        x = rearrange(x, 'b l c -> b c l')
-        x = self.x_embedder(x)
-        x = rearrange(x, 'b c l -> b l c')
-        
-        t = self.t_embedder(t) + bpm
-        t = repeat(t, 'b t c -> b (t l) c', l=self.spatial_window)
-        t0 = self.t_block(t)
-        
-        freqs_cis = self.freqs_cis[:x.shape[1]]
-        for block in self.blocks:
-            x = block(x, t0, freqs_cis=freqs_cis, attn_mask=None)
-        
-        # SAM Audio does not use a non-linearity on t here
-        shift, scale = (self.final_layer_scale_shift_table[None] + F.silu(t[:, None])).chunk(
-            2, dim=2
-        )
-        x = modulate(self.norm(x), shift, scale)
-        x = self.fc(x)
-        return x
-
 class DiTWrapper(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
@@ -964,21 +751,6 @@ class DiTWrapper(nn.Module):
     
     def sample(self, x, bpm, actions, n_steps=50):
         return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm})
-
-class ModernDiTWrapper(nn.Module):
-    def __init__(self, **kwargs):
-        super().__init__()
-        self.net = ModernDiT(**kwargs)
-        
-        self.diffusion = FM(timescale=1000.0)
-        self.sampler = FMEulerSampler(self.diffusion)
-    
-    def forward(self, x, bpm, actions, clean_x, t=None):
-        return self.diffusion.loss(self.net, x, t=t, net_kwargs={'actions': actions, 'bpm': bpm, 'clean_x': clean_x})
-    
-    def sample(self, x, bpm, actions, clean_x, n_steps=50):
-        return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm, 'clean_x': clean_x})
-
 
 class LAM(nn.Module):
     def __init__(self,
@@ -1072,92 +844,3 @@ def LAM_M(**kwargs):
 
 def LAM_B(**kwargs):
     return LAM(depth=12, hidden_size=768, num_heads=12, **kwargs)
-
-class ModernLAM(nn.Module):
-    def __init__(self,
-                 in_channels,
-                 hidden_size,
-                 levels,
-                 spatial_window,
-                 temporal_window,
-                 action_length=3,
-                 ratios=[4,2],
-                 num_heads=12,
-                 depth=12,
-                 mlp_ratio=4,
-                 ):
-        super().__init__()
-        self.action_model = ActionTransformer(in_channels=in_channels, 
-                                              hidden_size=hidden_size, 
-                                              levels=levels, 
-                                              spatial_window=spatial_window, 
-                                              temporal_window=temporal_window, 
-                                              ratios=ratios,
-                                              num_heads=num_heads, 
-                                              depth=depth, 
-                                              mlp_ratio=mlp_ratio)
-        self.decoder = ModernDiTWrapper(in_channels=in_channels, 
-                                  hidden_size=hidden_size, 
-                                  spatial_window=spatial_window,
-                                  action_length=action_length,
-                                  num_heads=num_heads, 
-                                  depth=int(depth * 3 // 2), # balance encoder decoder parameters 
-                                  mlp_ratio=mlp_ratio)
-        
-        self.levels = levels
-    
-    def forward(self, x, bpm):
-        """
-        x: (B, T, N, C) latents
-        alpha: (B) noise level for history latents
-        """
-        assert x.ndim == 4
-        
-        z, indices = self.action_model(x, bpm)
-        
-        x = self.decoder(x[:, 1], bpm[:, 1], z, x[:, 0])
-        return x, indices
-    
-    def enocde_actions(self, x, bpm):
-        """
-        x: (B, T, N, C) latents
-        alpha: (B) noise level for history latents
-        """
-        assert x.ndim == 4
-        
-        z, indices = self.action_model(x, bpm)
-        return z, indices
-    
-    def generate(self, x, bpm, actions, clean_x, n_steps=50):
-        return self.decoder.sample(x, bpm, actions, clean_x, n_steps=n_steps)
-    
-    def generate_random_different_actions(self, actions_indices, codebook_size, device):
-        shape = actions_indices.shape
-        random_actions = torch.randint(0, codebook_size, shape, device=device)
-
-        while torch.any(random_actions == actions_indices):
-            random_actions = torch.where(
-                random_actions == actions_indices,
-                torch.randint(0, codebook_size, shape, device=device),
-                random_actions,
-            )
-
-        return random_actions
-    
-    def lam_vs_random_actions(self, x, bpm, n_steps=50):
-        z, indices = self.action_model(x, bpm)
-        
-        random_actions = self.generate_random_different_actions(indices, math.prod(self.levels), x.device)
-        recon = self.generate(x[:, 1], bpm[:, 1], z, x[:, 0], n_steps=n_steps)
-        random = self.generate(x[:, 1], bpm[:, 1], self.action_model.from_vq(self.action_model.vq.indices_to_codes(random_actions)), x[:, 0], n_steps=n_steps)
-        
-        return recon, random
-
-def ModernLAM_L(**kwargs):
-    return ModernLAM(depth=24, hidden_size=1024, num_heads=16, **kwargs)
-
-def ModernLAM_M(**kwargs):
-    return ModernLAM(depth=20, hidden_size=768, num_heads=12, **kwargs)
-
-def ModernLAM_B(**kwargs):
-    return ModernLAM(depth=12, hidden_size=768, num_heads=12, **kwargs)
