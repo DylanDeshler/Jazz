@@ -87,11 +87,11 @@ class TimestepEmbedder(nn.Module):
     def timestep_embedding(t, dim, max_period=10000):
         """
         Create sinusoidal timestep embeddings.
-        :param t: a 2-D Tensor of (N, T) indices, one per batch element.
+        :param t: a 1-D Tensor of (N) indices, one per batch element.
                           These may be fractional.
         :param dim: the dimension of the output.
         :param max_period: controls the minimum frequency of the embeddings.
-        :return: an (N, T, D) Tensor of positional embeddings.
+        :return: an (N, D) Tensor of positional embeddings.
         """
         # https://github.com/openai/glide-text2im/blob/main/glide_text2im/nn.py
         half = dim // 2
@@ -919,8 +919,11 @@ class ModernDiT(nn.Module):
         x = self.x_embedder(x)
         x = rearrange(x, 'b c l -> b l c')
         
+        print(t.shape, bpm.shape)
         t = self.t_embedder(t) + bpm
+        print(t.shape)
         t0 = self.t_block(t)
+        print(t0.shape)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
         for block in self.blocks:
