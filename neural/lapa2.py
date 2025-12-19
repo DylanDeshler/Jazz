@@ -729,7 +729,34 @@ class DiT(nn.Module):
         x = self.final_layer(x)
         return x
 
-from diffusion_forcing import Patcher, DiTBlock
+class DiTBlock(nn.Module):
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
+        super().__init__()
+        self.norm1 = RMSNorm(hidden_size)
+        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=False, proj_bias=False, **block_kwargs)
+        self.norm2 = RMSNorm(hidden_size)
+        self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), bias=False)
+        self.scale_shift_table = nn.Parameter(
+            torch.randn(6, hidden_size) / hidden_size ** 0.5,
+        )
+    
+    def forward(self, x, t, freqs_cis=None, attn_mask=False):
+        biases = self.scale_shift_table[None] + t.reshape(x.size(0), 6, -1)
+        (
+            shift_msa,
+            scale_msa,
+            gate_msa,
+            shift_mlp,
+            scale_mlp,
+            gate_mlp,
+        ) = [chunk.squeeze(2) for chunk in biases.chunk(6, dim=2)]
+        
+        x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask)
+        x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
+        return x
+
+
+from diffusion_forcing import Patcher
 class ModernDiT(nn.Module):
     def __init__(self,
                  in_channels,
@@ -818,7 +845,7 @@ class ModernDiT(nn.Module):
         shift, scale = (self.final_layer_scale_shift_table[None] + F.silu(t[:, None])).chunk(
             2, dim=2
         )
-        x = modulate(self.norm(x), shift.squeeze(2), scale.squeeze(2))
+        x = modulate(self.norm(x), shift, scale)
         x = self.fc(x)
         return x
 
