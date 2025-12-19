@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import math
 from typing import Optional, List, Callable
 
-from einops import rearrange
+from einops import rearrange, repeat
 from vector_quantize_pytorch import FSQ, ResidualFSQ
 from fm import FM, FMEulerSampler
 
@@ -726,6 +726,100 @@ class DiT(nn.Module):
         x = self.final_layer(x)
         return x
 
+from diffusion_forcing import Patcher, DiTBlock
+class ModernDiT(nn.Module):
+    def __init__(self,
+                 in_channels,
+                 hidden_size,
+                 spatial_window,
+                 n_chunks,
+                 action_length,
+                 num_heads=12,
+                 depth=12,
+                 mlp_ratio=4,
+                 ):
+        super().__init__()
+        self.action_length = action_length
+        self.spatial_window = spatial_window
+        max_input_size = spatial_window * n_chunks
+        
+        self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
+        self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
+
+        self.proj = nn.Linear(2 * in_channels + hidden_size, hidden_size, bias=True)
+        self.x_embedder = Patcher(hidden_size, hidden_size)
+        
+        self.t_block = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(hidden_size, hidden_size * 6, bias=True),
+        )
+        
+        self.null_bpm = nn.Parameter(torch.randn(1, hidden_size) / hidden_size ** 0.5)
+        self.null_action = nn.Parameter(torch.randn(1, hidden_size) / hidden_size ** 0.5)
+        
+        self.blocks = nn.ModuleList([
+            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+        ])
+
+        self.norm = RMSNorm(hidden_size)
+        self.final_layer_scale_shift_table = nn.Parameter(
+            torch.randn(2, hidden_size) / hidden_size ** 0.5,
+        )
+        self.fc = nn.Linear(hidden_size, in_channels, bias=False)
+        
+        self.initialize_weights()
+        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
+    
+    def initialize_weights(self):
+        self.apply(self._init_weights)
+        # zero out classifier weights
+        nn.init.zeros_(self.fc.weight)
+        nn.init.zeros_(self.t_block[-1].weight)
+        nn.init.zeros_(self.t_block[-1].bias)
+        # zero out c_proj weights in all blocks
+        for block in self.blocks:
+            nn.init.zeros_(block.mlp.w3.weight)
+            nn.init.zeros_(block.attn.proj.weight)
+    
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            # https://arxiv.org/pdf/2310.17813
+            fan_out = module.weight.size(0)
+            fan_in = module.weight.size(1)
+            std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
+            nn.init.normal_(module.weight, mean=0.0, std=std)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
+    
+    def forward(self, x, t, bpm, actions, clean_x):
+        bpm = self.bpm_embedder(bpm)
+        actions = torch.repeat_interleave(actions, self.spatial_window // self.action_length, dim=2).contiguous()
+        actions = rearrange(actions, 'b t l c -> b (t l) c')
+        
+        x = torch.cat([x, clean_x, actions], dim=-1)
+        x = self.proj(x)
+        x = rearrange(x, 'b l c -> b c l')
+        x = self.x_embedder(x)
+        x = rearrange(x, 'b c l -> b l c')
+        
+        t = self.t_embedder(t) + bpm
+        t = repeat(t, 'b t c -> b (t l) c', l=self.spatial_window)
+        t0 = self.t_block(t)
+        
+        freqs_cis = self.freqs_cis[:x.shape[1]]
+        for block in self.blocks:
+            x = block(x, t0, freqs_cis=freqs_cis, attn_mask=None)
+        
+        # SAM Audio does not use a non-linearity on t here
+        shift, scale = (self.final_layer_scale_shift_table[None, None] + F.silu(t[:, :, None])).chunk(
+            2, dim=2
+        )
+        x = modulate(self.norm(x), shift.squeeze(2), scale.squeeze(2))
+        x = self.fc(x)
+        return x
+
 class DiTWrapper(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
@@ -751,6 +845,21 @@ class DiTWrapper(nn.Module):
     
     def sample(self, x, bpm, actions, n_steps=50):
         return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm})
+
+class ModernDiTWrapper(nn.Module):
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.net = ModernDiT(**kwargs)
+        
+        self.diffusion = FM(timescale=1000.0)
+        self.sampler = FMEulerSampler(self.diffusion)
+    
+    def forward(self, x, bpm, actions, clean_x, t=None):
+        return self.diffusion.loss(self.net, x, t=t, net_kwargs={'actions': actions, 'bpm': bpm, 'clean_x': clean_x})
+    
+    def sample(self, x, bpm, actions, clean_x, n_steps=50):
+        return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm, 'clean_x': clean_x})
+
 
 class LAM(nn.Module):
     def __init__(self,
@@ -844,3 +953,91 @@ def LAM_M(**kwargs):
 
 def LAM_B(**kwargs):
     return LAM(depth=12, hidden_size=768, num_heads=12, **kwargs)
+
+class ModernLAM(nn.Module):
+    def __init__(self,
+                 in_channels,
+                 hidden_size,
+                 levels,
+                 spatial_window,
+                 temporal_window,
+                 ratios=[4,2],
+                 num_heads=12,
+                 depth=12,
+                 mlp_ratio=4,
+                 ):
+        super().__init__()
+        self.action_model = ActionTransformer(in_channels=in_channels, 
+                                              hidden_size=hidden_size, 
+                                              levels=levels, 
+                                              spatial_window=spatial_window, 
+                                              temporal_window=temporal_window, 
+                                              ratios=ratios,
+                                              num_heads=num_heads, 
+                                              depth=depth, 
+                                              mlp_ratio=mlp_ratio)
+        self.decoder = ModernDiTWrapper(in_channels=in_channels, 
+                                  hidden_size=hidden_size, 
+                                  num_actions=spatial_window // math.prod(ratios), 
+                                  max_input_size=spatial_window,
+                                  num_heads=num_heads, 
+                                  depth=int(depth * 3 // 2), # balance encoder decoder parameters 
+                                  mlp_ratio=mlp_ratio)
+        
+        self.levels = levels
+    
+    def forward(self, x, bpm):
+        """
+        x: (B, T, N, C) latents
+        alpha: (B) noise level for history latents
+        """
+        assert x.ndim == 4
+        
+        z, indices = self.action_model(x, bpm)
+        
+        x = self.decoder(x[:, 1], bpm[:, 1], z, x[:, 0])
+        return x, indices
+    
+    def enocde_actions(self, x, bpm):
+        """
+        x: (B, T, N, C) latents
+        alpha: (B) noise level for history latents
+        """
+        assert x.ndim == 4
+        
+        z, indices = self.action_model(x, bpm)
+        return z, indices
+    
+    def generate(self, x, bpm, actions, clean_x, n_steps=50):
+        return self.decoder.sample(x, bpm, actions, clean_x, n_steps=n_steps)
+    
+    def generate_random_different_actions(self, actions_indices, codebook_size, device):
+        shape = actions_indices.shape
+        random_actions = torch.randint(0, codebook_size, shape, device=device)
+
+        while torch.any(random_actions == actions_indices):
+            random_actions = torch.where(
+                random_actions == actions_indices,
+                torch.randint(0, codebook_size, shape, device=device),
+                random_actions,
+            )
+
+        return random_actions
+    
+    def lam_vs_random_actions(self, x, bpm, n_steps=50):
+        z, indices = self.action_model(x, bpm)
+        
+        random_actions = self.generate_random_different_actions(indices, math.prod(self.levels), x.device)
+        recon = self.generate(x[:, 1], bpm[:, 1], z, x[:, 0], n_steps=n_steps)
+        random = self.generate(x[:, 1], bpm[:, 1], self.action_model.from_vq(self.action_model.vq.indices_to_codes(random_actions)), x[:, 0], n_steps=n_steps)
+        
+        return recon, random
+
+def ModernLAM_L(**kwargs):
+    return ModernLAM(depth=24, hidden_size=1024, num_heads=16, **kwargs)
+
+def ModernLAM_M(**kwargs):
+    return ModernLAM(depth=20, hidden_size=768, num_heads=12, **kwargs)
+
+def ModernLAM_B(**kwargs):
+    return ModernLAM(depth=12, hidden_size=768, num_heads=12, **kwargs)
