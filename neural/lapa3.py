@@ -733,7 +733,6 @@ class ModernDiT(nn.Module):
         x = self.fc(x)
         return x
 
-
 class ModernDiTWrapper(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
