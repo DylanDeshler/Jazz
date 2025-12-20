@@ -708,6 +708,7 @@ class ModernDiT(nn.Module):
         x = self.x_embedder(x)
         x = rearrange(x, 'b c l -> b l c')
         
+        print(t.shape, bpm.shape, actions.shape)
         t = self.t_embedder(t) + bpm + actions
         t0 = self.t_block(t)
         
