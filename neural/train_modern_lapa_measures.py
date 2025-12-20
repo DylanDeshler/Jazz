@@ -51,7 +51,7 @@ resampler = torchaudio.transforms.Resample(16000, 24000)
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'ModernLAPA_measures_bpm_B_FSQ_16_3'
+out_dir = 'ModernLAPA_measures_bpm_B_FSQ_64_3'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -59,7 +59,7 @@ save_interval = 5000
 eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -78,7 +78,7 @@ max_seq_len = temporal_window * cut_len
 vae_embed_dim = 16
 # 2^4 2^6 2^8 2^9 2^10 2^11 2^12 2^14 2^16
 # [5, 3] [8, 8] [8, 6, 5] [8, 8, 8] [8, 5, 5, 5] [8, 8, 6, 5] [7, 5, 5, 5] [8, 8, 8, 6, 5] [8, 8, 8, 5, 5, 5]
-levels = [5, 3]
+levels = [8, 8]
 ratios = [4, 4]
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
@@ -228,28 +228,28 @@ if ddp:
 @torch.no_grad()
 def estimate_loss():
     out = {}
-    # model.eval()
+    unoptimized_model.eval()
     for i, split in enumerate(['train', 'val']):
         losses = torch.zeros(eval_iters * gradient_accumulation_steps)
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
             X, ratio, bpm = get_batch(split)
             with ctx:
-                loss, _ = model(X, bpm)
+                loss, _ = unoptimized_model(X, bpm)
             losses[k] = loss.item()
         out[split] = losses.mean()
-    # model.train()
+    unoptimized_model.train()
     return out
 
 @torch.no_grad()
 def estimate_codebook_usage():
     out = {}
-    model.eval()
+    unoptimized_model.eval()
     for i, split in enumerate(['train', 'val']):
         usage = torch.zeros(eval_iters * gradient_accumulation_steps)
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
             X, ratio, bpm = get_batch(split)
             with ctx:
-                _, indices = model(X, bpm)
+                _, indices = unoptimized_model(X, bpm)
                 
                 indices = indices.flatten()
                 num_tokens = indices.numel()
@@ -269,7 +269,7 @@ def estimate_codebook_usage():
             
             usage[k] = perplexity
         out[split] = usage.mean()
-    model.train()
+    unoptimized_model.train()
     return out
 
 # learning rate decay scheduler (cosine with warmup)
@@ -313,13 +313,14 @@ def generate_lam_vs_random_actions(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
     
+    unoptimized_model.eval()
     x, ratio, bpm = get_batch('val')
     x, ratio, bpm = x[:20], ratio[:20], bpm[:20]
 
     B, T, N, D = x.shape
 
     with ctx:
-        recon, random_recon = raw_model.lam_vs_random_actions(x.clone(), bpm, n_steps=50)
+        recon, random_recon = unoptimized_model.lam_vs_random_actions(x.clone(), bpm, n_steps=50)
     
     if decoder_window > spatial_window:
         raise NotImplementedError()
@@ -411,38 +412,36 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        # usage = estimate_codebook_usage()
-        # losses = estimate_loss()
-        # if iter_num % sample_interval == 0 and master_process:
-        #     model.eval()
-        #     with ctx:
-        #         metrics = generate_lam_vs_random_actions(iter_num)
-        #     model.train()
-        #     print(f"iter {iter_num}: delta PSNR {metrics['PSNR']:.3f}, delta Similarity {metrics['Similarity']:.3f}")
-        # print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, train perplexity: {usage['train']:.2f}, val perplexity {usage['val']:.2f}")
-        # if wandb_log:
-        #     wandb.log({
-        #         "iter": iter_num,
-        #         "train/loss": losses['train'],
-        #         "val/loss": losses['val'],
-        #         "lr": lr,
-        #         "mfu": running_mfu*100, # convert to percentage
-        #         "tokens": tokens_trained,
-        #     })
-        # if losses['val'] < best_val_loss or always_save_checkpoint:
-        #     best_val_loss = losses['val']
-        #     if iter_num > 0:
-        #         checkpoint = {
-        #             'model': raw_model.state_dict(),
-        #             'optimizer': optimizer.state_dict(),
-        #             'model_args': model_args,
-        #             'iter_num': iter_num,
-        #             'best_val_loss': best_val_loss,
-        #             'config': config,
-        #             'tokens': tokens_trained,
-        #         }
-        #         print(f"saving checkpoint to {out_dir}")
-        #         torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+        usage = estimate_codebook_usage()
+        losses = estimate_loss()
+        if iter_num % sample_interval == 0 and master_process:
+            with ctx:
+                metrics = generate_lam_vs_random_actions(iter_num)
+            print(f"iter {iter_num}: delta PSNR {metrics['PSNR']:.3f}, delta Similarity {metrics['Similarity']:.3f}")
+        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, train perplexity: {usage['train']:.2f}, val perplexity {usage['val']:.2f}")
+        if wandb_log:
+            wandb.log({
+                "iter": iter_num,
+                "train/loss": losses['train'],
+                "val/loss": losses['val'],
+                "lr": lr,
+                "mfu": running_mfu*100, # convert to percentage
+                "tokens": tokens_trained,
+            })
+        if losses['val'] < best_val_loss or always_save_checkpoint:
+            best_val_loss = losses['val']
+            if iter_num > 0:
+                checkpoint = {
+                    'model': raw_model.state_dict(),
+                    'optimizer': optimizer.state_dict(),
+                    'model_args': model_args,
+                    'iter_num': iter_num,
+                    'best_val_loss': best_val_loss,
+                    'config': config,
+                    'tokens': tokens_trained,
+                }
+                print(f"saving checkpoint to {out_dir}")
+                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
 
         if iter_num % save_interval == 0:
             if iter_num > 0:
