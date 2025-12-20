@@ -517,7 +517,7 @@ class ActionTransformer(nn.Module):
         
         x = self.to_vq(x)
         x, indices = self.vq(x)
-        x = self.from_vq(x)
+        x = self.from_vq(x).squeeze(1)
         return x, indices
 
 class DiTBlock(nn.Module):
