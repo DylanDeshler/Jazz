@@ -9,7 +9,7 @@ from einops import rearrange, repeat
 from vector_quantize_pytorch import FSQ, ResidualFSQ
 from fm import FM, FMEulerSampler
 
-@torch.compile
+# @torch.compile
 def modulate(x: torch.Tensor, shift: torch.Tensor, scale: torch.Tensor):
     return x * (1 + scale) + shift
 
@@ -196,7 +196,7 @@ class SwiGLUMlp(nn.Module):
         self.w12 = nn.Linear(in_features, 2 * hidden_features, bias=bias)
         self.w3 = nn.Linear(hidden_features, out_features, bias=bias)
 
-    @torch.compile
+    # @torch.compile
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x12 = self.w12(x)
         x1, x2 = x12.chunk(2, dim=-1)
