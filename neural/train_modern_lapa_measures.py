@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from lapa3 import ModernLAM_B as net
+from lapa4 import ModernLAM_B as net
 from dito import DiToV5 as Tokenizer
 
 import matplotlib.pyplot as plt
@@ -51,7 +51,7 @@ resampler = torchaudio.transforms.Resample(16000, 24000)
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'ModernLAPA_measures_bpm_B_FSQ_64_3'
+out_dir = 'ModernLAPA_measures_bpm_B_FSQ_64_1'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
