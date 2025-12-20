@@ -48,7 +48,7 @@ save_interval = 5000
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -69,14 +69,14 @@ action_channels = vae_embed_dim * 4 # extremely arbitrary choice balancing capac
 levels = [5, 3]
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 1000000 # total number of training iterations
+max_iters = 160000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
-decay_lr = False # whether to decay the learning rate
-warmup_iters = 5000 # how many steps to warm up for
+decay_lr = True # whether to decay the learning rate
+warmup_iters = 135000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
@@ -269,7 +269,7 @@ def save_samples(step):
     os.makedirs(batch_dir, exist_ok=True)
     
     x, ratio, bpm, actions = get_batch('val')
-    x = x[:10]
+    x, ratio, bpm, actions = x[:10], ratio[:10], bpm[:10], actions[:10]
 
     B, T, N, D = x.shape
     
@@ -357,9 +357,7 @@ while True:
                 }
                 print(f"saving checkpoint to {out_dir}")
                 torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
-
-                if iter_num % save_interval == 0 and master_process == 0:
-                    torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
+    
     if iter_num == 0 and eval_only:
         break
 
