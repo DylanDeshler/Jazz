@@ -215,7 +215,7 @@ scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 # compile the model
 if compile and 'cuda' in device:
     print("compiling the model... (takes a ~minute)")
-    unoptimized_model = model
+    model = model
     model = torch.compile(model) # requires PyTorch 2.0
     tokenizer = torch.compile(tokenizer)
     emb_model = torch.compile(emb_model)
@@ -228,28 +228,28 @@ if ddp:
 @torch.no_grad()
 def estimate_loss():
     out = {}
-    unoptimized_model.eval()
+    model.eval()
     for i, split in enumerate(['train', 'val']):
         losses = torch.zeros(eval_iters * gradient_accumulation_steps)
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
             X, ratio, bpm = get_batch(split)
             with ctx:
-                loss, _ = unoptimized_model(X, bpm)
+                loss, _ = model(X, bpm)
             losses[k] = loss.item()
         out[split] = losses.mean()
-    unoptimized_model.train()
+    model.train()
     return out
 
 @torch.no_grad()
 def estimate_codebook_usage():
     out = {}
-    unoptimized_model.eval()
+    model.eval()
     for i, split in enumerate(['train', 'val']):
         usage = torch.zeros(eval_iters * gradient_accumulation_steps)
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
             X, ratio, bpm = get_batch(split)
             with ctx:
-                _, indices = unoptimized_model(X, bpm)
+                _, indices = model(X, bpm)
                 
                 indices = indices.flatten()
                 num_tokens = indices.numel()
@@ -269,7 +269,7 @@ def estimate_codebook_usage():
             
             usage[k] = perplexity
         out[split] = usage.mean()
-    unoptimized_model.train()
+    model.train()
     return out
 
 # learning rate decay scheduler (cosine with warmup)
@@ -313,14 +313,14 @@ def generate_lam_vs_random_actions(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
     
-    unoptimized_model.eval()
+    model.eval()
     x, ratio, bpm = get_batch('val')
     x, ratio, bpm = x[:20], ratio[:20], bpm[:20]
 
     B, T, N, D = x.shape
 
     with ctx:
-        recon, random_recon = unoptimized_model.lam_vs_random_actions(x.clone(), bpm, n_steps=50)
+        recon, random_recon = model.lam_vs_random_actions(x.clone(), bpm, n_steps=50)
     
     if decoder_window > spatial_window:
         raise NotImplementedError()
@@ -412,36 +412,36 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        usage = estimate_codebook_usage()
-        losses = estimate_loss()
-        if iter_num % sample_interval == 0 and master_process:
-            with ctx:
-                metrics = generate_lam_vs_random_actions(iter_num)
-            print(f"iter {iter_num}: delta PSNR {metrics['PSNR']:.3f}, delta Similarity {metrics['Similarity']:.3f}")
-        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, train perplexity: {usage['train']:.2f}, val perplexity {usage['val']:.2f}")
-        if wandb_log:
-            wandb.log({
-                "iter": iter_num,
-                "train/loss": losses['train'],
-                "val/loss": losses['val'],
-                "lr": lr,
-                "mfu": running_mfu*100, # convert to percentage
-                "tokens": tokens_trained,
-            })
-        if losses['val'] < best_val_loss or always_save_checkpoint:
-            best_val_loss = losses['val']
-            if iter_num > 0:
-                checkpoint = {
-                    'model': raw_model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'model_args': model_args,
-                    'iter_num': iter_num,
-                    'best_val_loss': best_val_loss,
-                    'config': config,
-                    'tokens': tokens_trained,
-                }
-                print(f"saving checkpoint to {out_dir}")
-                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+        # usage = estimate_codebook_usage()
+        # losses = estimate_loss()
+        # if iter_num % sample_interval == 0 and master_process:
+        #     with ctx:
+        #         metrics = generate_lam_vs_random_actions(iter_num)
+        #     print(f"iter {iter_num}: delta PSNR {metrics['PSNR']:.3f}, delta Similarity {metrics['Similarity']:.3f}")
+        # print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, train perplexity: {usage['train']:.2f}, val perplexity {usage['val']:.2f}")
+        # if wandb_log:
+        #     wandb.log({
+        #         "iter": iter_num,
+        #         "train/loss": losses['train'],
+        #         "val/loss": losses['val'],
+        #         "lr": lr,
+        #         "mfu": running_mfu*100, # convert to percentage
+        #         "tokens": tokens_trained,
+        #     })
+        # if losses['val'] < best_val_loss or always_save_checkpoint:
+        #     best_val_loss = losses['val']
+        #     if iter_num > 0:
+        #         checkpoint = {
+        #             'model': raw_model.state_dict(),
+        #             'optimizer': optimizer.state_dict(),
+        #             'model_args': model_args,
+        #             'iter_num': iter_num,
+        #             'best_val_loss': best_val_loss,
+        #             'config': config,
+        #             'tokens': tokens_trained,
+        #         }
+        #         print(f"saving checkpoint to {out_dir}")
+        #         torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
 
         if iter_num % save_interval == 0:
             if iter_num > 0:
