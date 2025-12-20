@@ -473,9 +473,9 @@ class ActionTransformer(nn.Module):
             torch.nn.init.zeros_(block.mlp.w3.weight)
             torch.nn.init.zeros_(block.attn.proj.weight)
         
-        # self.to_vq[1].reset_parameters()
+        self.to_vq[1].reset_parameters()
         # self.from_vq.reset_parameters()
-        self.to_vq.fc.reset_parameters()
+        # self.to_vq.fc.reset_parameters()
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
