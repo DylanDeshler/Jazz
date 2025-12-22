@@ -51,7 +51,7 @@ resampler = torchaudio.transforms.Resample(16000, 24000)
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'ModernLAPA_measures_bpm_B_FSQ_64_1'
+out_dir = 'ModernLAPA_measures_bpm_B_RFSQ_64codes_3quants'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
