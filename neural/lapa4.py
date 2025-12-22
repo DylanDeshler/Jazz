@@ -6,7 +6,8 @@ import math
 from typing import Optional, List, Callable
 
 from einops import rearrange, repeat
-from vector_quantize_pytorch import FSQ, ResidualFSQ
+from vector_quantize_pytorch import FSQ
+from residual_ln_fsq import ResidualFSQ
 from fm import FM, FMEulerSampler
 
 # @torch.compile
@@ -430,7 +431,7 @@ class ActionTransformer(nn.Module):
                  levels,
                  spatial_window,
                  temporal_window,
-                 ratios, 
+                 num_quantizers, 
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4,
@@ -451,8 +452,8 @@ class ActionTransformer(nn.Module):
             nn.LayerNorm(spatial_window * hidden_size),
             nn.Linear(spatial_window * hidden_size, len(levels)),
         )
-        self.vq = FSQ(levels=levels)
-        # self.vq = ResidualFSQ(levels=levels, num_quantizers=)
+        # self.vq = FSQ(levels=levels)
+        self.vq = ResidualFSQ(levels=levels, num_quantizers=num_quantizers, quantize_dropout=True)
         self.from_vq = nn.Linear(len(levels), hidden_size)
         
         self.spatial_pos = nn.Embedding(spatial_window + 1, hidden_size)
@@ -745,7 +746,7 @@ class ModernLAM(nn.Module):
                  spatial_window,
                  temporal_window,
                  action_length=3,
-                 ratios=[4,2],
+                 num_quantizers=3,
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4,
@@ -756,7 +757,7 @@ class ModernLAM(nn.Module):
                                               levels=levels, 
                                               spatial_window=spatial_window, 
                                               temporal_window=temporal_window, 
-                                              ratios=ratios,
+                                              num_quantizers=num_quantizers,
                                               num_heads=num_heads, 
                                               depth=depth, 
                                               mlp_ratio=mlp_ratio)
