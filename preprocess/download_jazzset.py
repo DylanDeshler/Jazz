@@ -1,4 +1,3 @@
-from pydub import AudioSegment
 import requests
 from io import BytesIO
 import os
@@ -7,7 +6,6 @@ from tqdm import tqdm
 
 import librosa
 
-import numpy as np
 import soundfile as sf
 
 rate = 16000
