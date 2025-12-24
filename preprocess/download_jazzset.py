@@ -1,52 +1,54 @@
 import requests
-from io import BytesIO
 import os
 import pickle
-from tqdm import tqdm
-
 import librosa
-from pydub import AudioSegment
-import numpy as np
 import soundfile as sf
+from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor
+import tempfile
 
+# Configuration
 rate = 16000
 out_dir = '/home/ubuntu/base/Data/wavs'
 os.makedirs(out_dir, exist_ok=True)
+MAX_WORKERS = 40  # Number of simultaneous downloads/processes
 
-cards = pickle.load(open('/home/ubuntu/base/Data/JazzSet.0.9.pkl', "rb"))[6:]
-
-for card in tqdm(cards):
-    mp3_url = card['URLS'][0]['FILE']
-    out_name = '-'.join(mp3_url.split('/')[-2:]).replace('.mp3', '.wav')
-    out_path = os.path.join(out_dir, out_name)
-
+def process_card(card):
     try:
-        response = requests.get(mp3_url, timeout=20)
+        mp3_url = card['URLS'][0]['FILE']
+        out_name = '-'.join(mp3_url.split('/')[-2:]).replace('.mp3', '.wav')
+        out_path = os.path.join(out_dir, out_name)
+
+        # Skip if already exists (useful for resuming crashes)
+        if os.path.exists(out_path):
+            return True
+
+        # Download the file
+        response = requests.get(mp3_url, timeout=30)
         response.raise_for_status()
 
-        # 1. Load the bytes into pydub
-        # pydub is very reliable at identifying MP3 headers from a stream
-        audio = AudioSegment.from_file(BytesIO(response.content), format="mp3")
-
-        # 2. Convert to float32 NumPy array (which librosa uses)
-        # We also normalize it to the range [-1.0, 1.0]
-        samples = np.array(audio.get_array_of_samples()).astype(np.float32)
+        # Save to temp file and process
+        with tempfile.NamedTemporaryFile(suffix=".mp3") as temp_mp3:
+            temp_mp3.write(response.content)
+            temp_mp3.flush()
+            
+            y, sr = librosa.load(temp_mp3.name, sr=rate)
+            sf.write(out_path, y, rate)
         
-        # Handle Stereo to Mono if necessary
-        if audio.channels == 2:
-            samples = samples.reshape((-1, 2)).mean(axis=1)
-        
-        # Normalize bit depth (pydub loads as integers)
-        samples /= (2**15) 
-
-        # 3. Resample using librosa if needed
-        if audio.frame_rate != rate:
-            y = librosa.resample(samples, orig_sr=audio.frame_rate, target_sr=rate)
-        else:
-            y = samples
-
-        # 4. Save
-        sf.write(out_path, y, rate)
-
+        return True
     except Exception as e:
-        print(f"Error processing {mp3_url}: {e}")
+        return f"Error with {card.get('URLS', [{}])[0].get('FILE')}: {e}"
+
+# Load data
+cards = pickle.load(open('/home/ubuntu/base/Data/JazzSet.0.9.pkl', "rb"))[6:]
+
+# Execute in parallel
+print(f"Starting parallel processing with {MAX_WORKERS} workers...")
+with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+    # list() forces the tqdm to track the generator progress
+    results = list(tqdm(executor.map(process_card, cards), total=len(cards)))
+
+# Optional: Print errors
+errors = [r for r in results if r is not True]
+if errors:
+    print(f"\nFinished with {len(errors)} errors. Example: {errors[0]}")
