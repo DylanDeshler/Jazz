@@ -17,6 +17,8 @@ os.makedirs(out_dir, exist_ok=True)
 MAX_WORKERS = 40  # Number of simultaneous downloads/processes
 
 def process_card(card):
+    if not isinstance(card, dict):
+        return f"Skipping invalid entry: {card} (not a dictionary)"
     try:
         mp3_url = card['URLS'][0]['FILE']
         out_name = '-'.join(mp3_url.split('/')[-2:]).replace('.mp3', '.wav')
