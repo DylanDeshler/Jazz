@@ -150,7 +150,7 @@ def generate_audio_measures(paths):
     """
     audio_path, beat_path = paths
     
-    out_path = audio_path.replace('wavs', 'wavs_measures').replace('.wav', '.npz')
+    out_path = audio_path.replace('/wavs', '/wavs_measures').replace('.wav', '.npz')
     if os.path.exists(out_path):
         return
     
@@ -204,8 +204,7 @@ def time_warp_measures():
     print(len(beat_paths), len(audio_paths))
 
     valid_audio, valid_beats = [], []
-    print(f"Filtering for songs with Time Signature: 4/4 ...")
-    for audio_p, beat_p in zip(audio_paths, beat_paths):
+    for audio_p, beat_p in tqdm(zip(audio_paths, beat_paths), desc='Filtering for songs with Time Signature: 4/4 ...'):
         beat_data = parse_beat_file(beat_p)
         detected_sig = get_time_signature(beat_data)
         
