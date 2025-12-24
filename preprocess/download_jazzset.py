@@ -19,6 +19,7 @@ for card in tqdm(cards):
     out_url = '-'.join(mp3_url.split('/')[-2:])
     out_url = out_url.replace('.mp3', '.wav')
     out_url = os.path.join(out_dir, out_url)
+    print(mp3_url)
 
     try:
         response = requests.get(mp3_url)
