@@ -11,7 +11,6 @@ from beat_this.utils import save_beat_tsv
 
 paths = glob.glob('/home/ubuntu/base/Data/wavs/*.wav')
 file2beats = File2Beats(checkpoint_path="final0", device="cuda", dbn=False)
-print(len(paths))
 
 for audio_path in tqdm(paths):
     beats, downbeats = file2beats(audio_path)
