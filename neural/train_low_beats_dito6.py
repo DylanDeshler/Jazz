@@ -47,7 +47,7 @@ log_interval = 100
 eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -61,14 +61,14 @@ rate = 16000
 n_samples = 24576
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 90000 # total number of training iterations
+max_iters = 1000000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.999
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
-decay_lr = True # whether to decay the learning rate
-warmup_iters = 75000 # how many steps to warm up for
+decay_lr = False # whether to decay the learning rate
+warmup_iters = 5000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
@@ -119,7 +119,7 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 # poor man's data loader
 def get_batch(split='train'):
-    data = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_audio.npy', dtype=np.float16, mode='r', shape=(3693787, n_samples))
+    data = np.memmap('/home/ubuntu/base/Data/measures_audio.bin', dtype=np.float16, mode='r', shape=(3693787, n_samples))
     train_n = int(len(data) * 0.98)
     if split == 'train':
         idxs = torch.randint(train_n, (batch_size,))
@@ -129,8 +129,8 @@ def get_batch(split='train'):
     return batch
 
 def get_meta_batch(split='train'):
-    data = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_audio.npy', dtype=np.float16, mode='r', shape=(3693787, n_samples))
-    meta = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_meta.npy', dtype=np.float32, mode='r', shape=(3693787, 2))
+    data = np.memmap('/home/ubuntu/base/Data/measures_audio.bin', dtype=np.float16, mode='r', shape=(3693787, n_samples))
+    meta = np.memmap('/home/ubuntu/base/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(3693787, 2))
     train_n = int(len(data) * 0.98)
     if split == 'train':
         idxs = torch.randint(train_n, (batch_size,))
