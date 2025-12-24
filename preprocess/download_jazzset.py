@@ -7,6 +7,9 @@ from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
 import tempfile
 
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+
 # Configuration
 rate = 16000
 out_dir = '/home/ubuntu/base/Data/wavs'
