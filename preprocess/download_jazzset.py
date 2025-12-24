@@ -12,7 +12,7 @@ rate = 16000
 out_dir = '/home/ubuntu/base/Data/wavs'
 os.makedirs(out_dir, exist_ok=True)
 
-cards = pickle.load(open('/Users/dylan.d/Documents/research/music/JazzSet.0.9.pkl', "rb"))[6:]
+cards = pickle.load(open('/home/ubuntu/base/Data/JazzSet.0.9.pkl', "rb"))[6:]
 
 for card in tqdm(cards):
     mp3_url = card['URLS'][0]['FILE']
