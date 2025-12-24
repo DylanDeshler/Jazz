@@ -16,20 +16,18 @@ cards = pickle.load(open('/home/ubuntu/base/Data/JazzSet.0.9.pkl', "rb"))[6:]
 
 for card in tqdm(cards):
     mp3_url = card['URLS'][0]['FILE']
-    out_url = '-'.join(mp3_url.split('/')[-2:])
-    out_url = out_url.replace('.mp3', '.wav')
-    out_url = os.path.join(out_dir, out_url)
-    print(mp3_url)
+    out_name = '-'.join(mp3_url.split('/')[-2:]).replace('.mp3', '.wav')
+    out_path = os.path.join(out_dir, out_name)
 
     try:
-        response = requests.get(mp3_url)
-        mp3_audio = BytesIO(response.content)
+        response = requests.get(mp3_url, timeout=10)
+        response.raise_for_status() 
+        
+        mp3_buffer = BytesIO(response.content)
+        y, sr = librosa.load(mp3_buffer, sr=rate)
 
-        y, sr = librosa.load(mp3_audio, sr=None)
-        y = librosa.resample(y, orig_sr=sr, target_sr=rate)
-
-        sf.write(out_url, y, rate)
+        sf.write(out_path, y, rate)
 
     except Exception as e:
-        print(e)
+        print(f"Error processing {mp3_url}: {e}")
         continue
