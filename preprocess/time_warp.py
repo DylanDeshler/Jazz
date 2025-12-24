@@ -161,8 +161,12 @@ def generate_audio_measures(paths):
     if len(downbeat_indices) < 10:
         return
     
-    y, sr = librosa.load(audio_path, sr=None)
-    assert sr == TARGET_SR
+    try:
+        y, sr = librosa.load(audio_path, sr=None)
+        assert sr == TARGET_SR
+    except Exception as e:
+        print(e)
+        return
     
     if len(y) < 1000:
         return
