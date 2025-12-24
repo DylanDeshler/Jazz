@@ -199,8 +199,9 @@ def generate_audio_measures(paths):
 def time_warp_measures():
     print("Gathering files...")
     # audio_paths = sorted(glob.glob('/home/ubuntu/base/Data/wavs/*.wav'))
-    beat_paths = sorted(glob.glob('/home/ubuntu/base/Data/beats/*.beat'))
-    audio_paths = [path.replace('beats', 'wavs').replace('.beat', '.wav') for path in beat_paths]
+    beat_paths = sorted(glob.glob('/home/ubuntu/base/Data/beats/*.beats'))
+    audio_paths = [path.replace('beats', 'wavs').replace('.beats', '.wav') for path in beat_paths]
+    print(len(beat_paths), len(audio_paths))
 
     valid_audio, valid_beats = [], []
     print(f"Filtering for songs with Time Signature: 4/4 ...")
