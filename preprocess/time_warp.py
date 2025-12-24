@@ -150,7 +150,7 @@ def generate_audio_measures(paths):
     """
     audio_path, beat_path = paths
     
-    out_path = audio_path.replace('jazz_data_16000_full_clean', 'jazz_data_16000_full_clean_measures').replace('.wav', '.npz')
+    out_path = audio_path.replace('wavs', 'wavs_measures').replace('.wav', '.npz')
     if os.path.exists(out_path):
         return
     
@@ -198,8 +198,8 @@ def generate_audio_measures(paths):
 
 def time_warp_measures():
     print("Gathering files...")
-    audio_paths = sorted(glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav'))
-    beat_paths = sorted(glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats/*.beats'))
+    audio_paths = sorted(glob.glob('/home/ubuntu/base/Data/wavs/*.wav'))
+    beat_paths = sorted(glob.glob('/home/ubuntu/base/Data/beats/*.beat'))
 
     valid_audio, valid_beats = [], []
     print(f"Filtering for songs with Time Signature: 4/4 ...")
@@ -321,7 +321,7 @@ def measures(length=None, max_samples=None):
             json.dump(audio_dict, f)
 
 def crunch(length=None):
-    paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.npz')
+    paths = glob.glob('/home/ubuntu/base/Data/wavs_measures/*.npz')
     
     # 3693787
     if length is None:
@@ -334,13 +334,13 @@ def crunch(length=None):
         print('Total samples: ', length)
     
     audio_mmap = np.memmap(
-        '/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_audio.npy', 
+        '/home/ubuntu/base/Data/measures_audio.bin', 
         dtype=np.float16, 
         mode='w+', 
         shape=(length, TARGET_SAMPLES)
     )
     meta_mmap = np.memmap(
-        '/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_meta.npy', 
+        '/home/ubuntu/base/Data/measures_meta.bin', 
         dtype=np.float32, 
         mode='w+', 
         shape=(length, 2)
@@ -376,7 +376,7 @@ def crunch(length=None):
     audio_mmap.flush()
     meta_mmap.flush()
     
-    with open('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_songs.json', 'w') as f:
+    with open('/home/ubuntu/base/Data/measures_songs.json', 'w') as f:
         json.dump(song_index, f, indent=2)
 
 if __name__ == "__main__":
