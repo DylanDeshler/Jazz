@@ -9,7 +9,7 @@ from tqdm import tqdm
 from beat_this.inference import File2Beats
 from beat_this.utils import save_beat_tsv
 
-paths = glob.glob('/base/Data/*.wav')
+paths = glob.glob('/home/ubuntu/base/Data/wavs/*.wav')
 file2beats = File2Beats(checkpoint_path="final0", device="cpu", dbn=False)
 print(len(paths))
 
