@@ -84,11 +84,11 @@ class InvertibleLayerNorm(nn.Module):
         denormalized = (normalized_x - bias) / weight
         return denormalized * self.current_std + self.current_mean
 
-class ResidualFSQ(nn.Module):
-    def __init__(self, levels, num_quantizers):
-        super().__init__()
+# class ResidualFSQ(nn.Module):
+#     def __init__(self, levels, num_quantizers):
+#         super().__init__()
         
-        self.vqs = [FSQ(levels=levels) for _ in range(num_quantizers)]
+#         self.vqs = [FSQ(levels=levels) for _ in range(num_quantizers)]
 
 class ResidualFSQ(Module):
     """ Follows Algorithm 1. in https://arxiv.org/pdf/2107.03312.pdf """
