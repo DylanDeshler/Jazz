@@ -64,10 +64,10 @@ def restore_measure(audio, stretch_ratio, sr=16000):
     y_restored = pyrb.time_stretch(audio, sr, restore_rate)
     return y_restored
 
-N = 3693787
-data = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_audio.npy', dtype=np.float16, mode='r', shape=(N, n_samples))
-arr = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large.bin', dtype=np.float16, mode='w+', shape=(N, 48, 16))
-meta = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_meta.npy', dtype=np.float32, mode='r', shape=(N, 2))
+N = 4403211
+data = np.memmap('/home/ubuntu/Data/measures_audio.bin', dtype=np.float16, mode='r', shape=(N, n_samples))
+arr = np.memmap('/home/ubuntu/Data/low_measures_large.bin', dtype=np.float16, mode='w+', shape=(N, 48, 16))
+meta = np.memmap('/home/ubuntu/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(N, 2))
 
 with torch.no_grad():
     for i in tqdm(range(N // batch_size)):
