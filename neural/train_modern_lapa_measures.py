@@ -42,11 +42,11 @@ import torchaudio
 import pyrubberband as pyrb
 from sklearn.metrics.pairwise import paired_cosine_distances
 
-emb_model_id = "m-a-p/MERT-v1-330M"
-emb_model = AutoModel.from_pretrained(emb_model_id, trust_remote_code=True)
-processor = Wav2Vec2FeatureExtractor.from_pretrained(emb_model_id, trust_remote_code=True)
+# emb_model_id = "m-a-p/MERT-v1-330M"
+# emb_model = AutoModel.from_pretrained(emb_model_id, trust_remote_code=True)
+# processor = Wav2Vec2FeatureExtractor.from_pretrained(emb_model_id, trust_remote_code=True)
 
-resampler = torchaudio.transforms.Resample(16000, 24000)
+# resampler = torchaudio.transforms.Resample(16000, 24000)
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -171,7 +171,7 @@ for k,v in list(state_dict.items()):
 tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 
-emb_model = emb_model.to(device)
+# emb_model = emb_model.to(device)
 
 model_args = dict(in_channels=vae_embed_dim, levels=levels, spatial_window=spatial_window, temporal_window=temporal_window, num_quantizers=num_quantizers, action_length=1)
 if init_from == 'scratch':
@@ -219,7 +219,7 @@ if compile and 'cuda' in device:
     model = model
     model = torch.compile(model) # requires PyTorch 2.0
     tokenizer = torch.compile(tokenizer)
-    emb_model = torch.compile(emb_model)
+    # emb_model = torch.compile(emb_model)
 
 # wrap model into DDP container
 if ddp:
@@ -355,30 +355,30 @@ def generate_lam_vs_random_actions(step):
         sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), np.concatenate([restore_measure(og0, r0), restore_measure(y, r)]), 16000)
         sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), np.concatenate([restore_measure(og0, r0), restore_measure(random_y, r)]), 16000)
     
-    x = [row for row in resampler(torch.from_numpy(x)).numpy()]
-    recon = [row for row in resampler(torch.from_numpy(recon)).numpy()]
-    random_recon = [row for row in resampler(torch.from_numpy(random_recon)).numpy()]
+    # x = [row for row in resampler(torch.from_numpy(x)).numpy()]
+    # recon = [row for row in resampler(torch.from_numpy(recon)).numpy()]
+    # random_recon = [row for row in resampler(torch.from_numpy(random_recon)).numpy()]
 
-    x_inputs = processor(x, sampling_rate=24000, return_tensors="pt")
-    recon_inputs = processor(recon, sampling_rate=24000, return_tensors="pt")
-    random_recon_inputs = processor(random_recon, sampling_rate=24000, return_tensors="pt")
+    # x_inputs = processor(x, sampling_rate=24000, return_tensors="pt")
+    # recon_inputs = processor(recon, sampling_rate=24000, return_tensors="pt")
+    # random_recon_inputs = processor(random_recon, sampling_rate=24000, return_tensors="pt")
     
-    x_inputs['input_values'] = x_inputs['input_values'].to(device)
-    recon_inputs['input_values'] = recon_inputs['input_values'].to(device)
-    random_recon_inputs['input_values'] = random_recon_inputs['input_values'].to(device)
-    x_inputs['attention_mask'] = x_inputs['attention_mask'].to(device)
-    recon_inputs['attention_mask'] = recon_inputs['attention_mask'].to(device)
-    random_recon_inputs['attention_mask'] = random_recon_inputs['attention_mask'].to(device)
+    # x_inputs['input_values'] = x_inputs['input_values'].to(device)
+    # recon_inputs['input_values'] = recon_inputs['input_values'].to(device)
+    # random_recon_inputs['input_values'] = random_recon_inputs['input_values'].to(device)
+    # x_inputs['attention_mask'] = x_inputs['attention_mask'].to(device)
+    # recon_inputs['attention_mask'] = recon_inputs['attention_mask'].to(device)
+    # random_recon_inputs['attention_mask'] = random_recon_inputs['attention_mask'].to(device)
     
-    with torch.no_grad():
-        x_emb = emb_model(**x_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1).cpu().numpy()
-        recon_emb = emb_model(**recon_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1).cpu().numpy()
-        random_recon_emb = emb_model(**random_recon_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1).cpu().numpy()
+    # with torch.no_grad():
+    #     x_emb = emb_model(**x_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1).cpu().numpy()
+    #     recon_emb = emb_model(**recon_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1).cpu().numpy()
+    #     random_recon_emb = emb_model(**random_recon_inputs, output_hidden_states=True).last_hidden_state.mean(dim=1).cpu().numpy()
 
-    recon_sim = 1 - paired_cosine_distances(x_emb, recon_emb)
-    random_sim = 1 - paired_cosine_distances(x_emb, random_recon_emb)
+    # recon_sim = 1 - paired_cosine_distances(x_emb, recon_emb)
+    # random_sim = 1 - paired_cosine_distances(x_emb, random_recon_emb)
     
-    return {'PSNR': np.mean(recon_psnr - random_psnr).item(), 'Similarity': np.mean(recon_sim - random_sim).item()}
+    # return {'PSNR': np.mean(recon_psnr - random_psnr).item(), 'Similarity': np.mean(recon_sim - random_sim).item()}
 
 def psnr(y_true, y_pred, max_val=1.):
     mse = np.mean((y_true - y_pred) ** 2, axis=1)  # (B,)
