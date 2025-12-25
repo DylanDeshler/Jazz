@@ -190,10 +190,10 @@ class TimestepEmbedder(nn.Module):
             self.mlp = SwiGLUMlp(frequency_embedding_size, int(2 / 3 * 4 * hidden_size), hidden_size, bias=bias)
         else:
             self.mlp = nn.Sequential(
-            nn.Linear(frequency_embedding_size, hidden_size, bias=bias),
-            nn.SiLU(),
-            nn.Linear(hidden_size, hidden_size, bias=bias),
-        )
+                nn.Linear(frequency_embedding_size, hidden_size, bias=bias),
+                nn.SiLU(),
+                nn.Linear(hidden_size, hidden_size, bias=bias),
+            )
         self.frequency_embedding_size = frequency_embedding_size
         self.max_period = max_period
 
@@ -642,17 +642,17 @@ class ModernDiT(nn.Module):
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
         self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
         self.action_embedder = nn.Embedding(num_actions, action_channels)
-
-        self.proj = nn.Linear(in_channels + action_channels, hidden_size, bias=True)
-        self.x_embedder = Patcher(hidden_size, hidden_size)
+        self.x_embedder = Patcher(in_channels, hidden_size)
+        
+        self.fuse_conditioning = SwiGLUMlp(hidden_size * 3, int(2 / 3 * mlp_ratio * hidden_size), hidden_size, bias=False)
         
         self.t_block = nn.Sequential(
             nn.SiLU(),
             nn.Linear(hidden_size, hidden_size * 6, bias=True),
         )
         
-        self.null_bpm = nn.Parameter(torch.randn(1, hidden_size) / hidden_size ** 0.5)
-        self.null_action = nn.Parameter(torch.randn(1, action_channels) / action_channels ** 0.5)
+        # self.null_bpm = nn.Parameter(torch.randn(1, hidden_size) / hidden_size ** 0.5)
+        # self.null_action = nn.Parameter(torch.randn(1, action_channels) / action_channels ** 0.5)
         
         self.blocks = nn.ModuleList([
             DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
@@ -692,27 +692,22 @@ class ModernDiT(nn.Module):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
     def forward(self, x, t, bpm, actions, attn_mask=None):
-        
         if self.training and attn_mask is None:
             if np.random.rand() < 0.2:
                 attn_mask = self.block_causal_mask
         elif attn_mask:
             attn_mask = self.block_causal_mask
         
-        bpm = token_drop(self.bpm_embedder(bpm), self.null_bpm, self.training)
-        actions = token_drop(self.action_embedder(actions), self.null_action, self.training)
-        # Assuming position in action sequence is correlated to position in latent sequence
-        # Could also experiment with concatenating every action to every latent position
-        actions = torch.repeat_interleave(actions, self.spatial_window // self.action_length, dim=2).contiguous()
-        actions = rearrange(actions, 'b t l c -> b (t l) c')
+        bpm = self.bpm_embedder(bpm)#token_drop(self.bpm_embedder(bpm), self.null_bpm, self.training)
+        actions = self.action_embedder(actions)#token_drop(self.action_embedder(actions), self.null_action, self.training)
+        t = self.t_embedder(t)
         
-        x = torch.cat([x, actions], dim=-1)
-        x = self.proj(x)
         x = rearrange(x, 'b l c -> b c l')
         x = self.x_embedder(x)
         x = rearrange(x, 'b c l -> b l c')
         
-        t = self.t_embedder(t) + bpm
+        t = torch.cat([t, bpm, actions], dim=-1)
+        t = self.fuse_conditioning(t)
         t = repeat(t, 'b t c -> b (t l) c', l=self.spatial_window)
         t0 = self.t_block(t)
         

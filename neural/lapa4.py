@@ -659,6 +659,8 @@ class ModernDiT(nn.Module):
         self.proj = nn.Linear(2 * in_channels, hidden_size, bias=True)
         self.x_embedder = Patcher(hidden_size, hidden_size)
         
+        self.fuse_conditioning = SwiGLUMlp(hidden_size * 3, int(2 / 3 * mlp_ratio * hidden_size), hidden_size, bias=False)
+        
         self.t_block = nn.Sequential(
             nn.SiLU(),
             nn.Linear(hidden_size, hidden_size * 6, bias=True),
@@ -702,6 +704,7 @@ class ModernDiT(nn.Module):
     
     def forward(self, x, t, bpm, actions, clean_x):
         bpm = self.bpm_embedder(bpm)
+        t = self.t_embedder(t)
         
         x = torch.cat([x, clean_x], dim=-1)
         x = self.proj(x)
@@ -709,7 +712,8 @@ class ModernDiT(nn.Module):
         x = self.x_embedder(x)
         x = rearrange(x, 'b c l -> b l c')
         
-        t = self.t_embedder(t) + bpm + actions
+        t = torch.cat([t, bpm, actions], dim=-1)
+        t = self.fuse_conditioning(t)
         t0 = self.t_block(t)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
