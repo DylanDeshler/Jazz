@@ -141,8 +141,8 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 # poor man's data loader
 def get_batch(split='train'):
     # TODO: sample within songs (this can go over boundaries)
-    data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large.bin', dtype=np.float16, mode='r', shape=(3693787, 48, vae_embed_dim))
-    meta = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_meta.npy', dtype=np.float32, mode='r', shape=(3693787, 2))
+    data = np.memmap('/home/ubuntu/Data/low_measures_large.bin', dtype=np.float16, mode='r', shape=(4403211, 48, vae_embed_dim))
+    meta = np.memmap('/home/ubuntu/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(4403211, 2))
     if split == 'train':
         idxs = torch.randint(int(len(data) * 0.98) - temporal_window, (batch_size,))
     else:
