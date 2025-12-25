@@ -61,14 +61,14 @@ rate = 16000
 n_samples = 24576
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 110000 # total number of training iterations
+max_iters = 115000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.999
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
 decay_lr = True # whether to decay the learning rate
-warmup_iters = 90000 # how many steps to warm up for
+warmup_iters = 95000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
