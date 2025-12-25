@@ -134,8 +134,6 @@ class ResidualFSQ(Module):
 
             fsq = FSQ(
                 levels = levels,
-                preserve_symmetry = True,
-                bound_hard_clamp = bound_hard_clamp,
                 **kwargs
             )
 
