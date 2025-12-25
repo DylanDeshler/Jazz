@@ -54,8 +54,8 @@ wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 2 # used to simulate larger batch sizes
-batch_size = 64 # if gradient_accumulation_steps > 1, this is the micro-batch size
+gradient_accumulation_steps = 1 # used to simulate larger batch sizes
+batch_size = 128 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
 n_samples = 24576
@@ -119,7 +119,7 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 # poor man's data loader
 def get_batch(split='train'):
-    data = np.memmap('/home/ubuntu/base/Data/measures_audio.bin', dtype=np.float16, mode='r', shape=(4403211, n_samples))
+    data = np.memmap('/home/ubuntu/Data/measures_audio.bin', dtype=np.float16, mode='r', shape=(4403211, n_samples))
     train_n = int(len(data) * 0.98)
     if split == 'train':
         idxs = torch.randint(train_n, (batch_size,))
@@ -129,8 +129,8 @@ def get_batch(split='train'):
     return batch
 
 def get_meta_batch(split='train'):
-    data = np.memmap('/home/ubuntu/base/Data/measures_audio.bin', dtype=np.float16, mode='r', shape=(4403211, n_samples))
-    meta = np.memmap('/home/ubuntu/base/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(4403211, 2))
+    data = np.memmap('/home/ubuntu/Data/measures_audio.bin', dtype=np.float16, mode='r', shape=(4403211, n_samples))
+    meta = np.memmap('/home/ubuntu/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(4403211, 2))
     train_n = int(len(data) * 0.98)
     if split == 'train':
         idxs = torch.randint(train_n, (batch_size,))
