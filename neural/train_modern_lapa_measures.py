@@ -253,7 +253,7 @@ def estimate_codebook_usage():
             X, ratio, bpm = get_batch(split)
             with ctx:
                 _, indices = model(X, bpm)
-                print(indices.shape)
+                
                 for q in range(num_quantizers):
                     q_indices = indices[..., q].flatten()
                     num_tokens = q_indices.numel()
