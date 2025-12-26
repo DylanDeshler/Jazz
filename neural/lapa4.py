@@ -500,12 +500,12 @@ class ActionTransformer(nn.Module):
         bpm = self.bpm_embedder(bpm.flatten()).view(B, T, 1, -1)
         
         x = torch.cat([bpm, x], dim=2)
-        x = rearrange(x, 'b t n c -> (b t) n c')
+        x = rearrange(x, 'b t n c -> (b t) n c').contiguous()
         x = x + self.spatial_pos(torch.arange(N+1, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.spatial_blocks:
             x = block(x)
         
-        x = rearrange(x, '(b t) n c -> (b n) t c', b=B, t=T)
+        x = rearrange(x, '(b t) n c -> (b n) t c', b=B, t=T).contiguous()
         x = x + self.temporal_pos(torch.arange(T, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.temporal_blocks:
             x = block(x, is_causal=True)
@@ -716,9 +716,9 @@ class ModernDiT(nn.Module):
         t = self.fuse_conditioning(t)
         t0 = self.t_block(t)
         
-        # freqs_cis = self.freqs_cis[:x.shape[1]]
+        freqs_cis = self.freqs_cis[:x.shape[1]]
         for block in self.blocks:
-            x = block(x, t0, freqs_cis=None, attn_mask=None)
+            x = block(x, t0, freqs_cis=freqs_cis, attn_mask=None)
         
         # SAM Audio does not use a non-linearity on t here
         shift, scale = (self.final_layer_scale_shift_table[None] + F.silu(t[:, None])).chunk(
