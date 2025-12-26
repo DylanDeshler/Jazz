@@ -654,13 +654,13 @@ class ModernDiT(nn.Module):
         self.spatial_window = spatial_window
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
-        self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True, max_period=10000)
+        self.bpm_embedder = TimestepEmbedder(hidden_size // 2, bias=False, swiglu=True, max_period=1000)
 
         self.proj = nn.Linear(2 * in_channels, hidden_size, bias=True)
         self.x_embedder = Patcher(hidden_size, hidden_size)
         
         # big param increase but the hidden dim should probably be the product with in dim
-        self.fuse_conditioning = SwiGLUMlp(hidden_size * 3, int(2 / 3 * mlp_ratio * hidden_size), hidden_size, bias=False)
+        self.fuse_conditioning = SwiGLUMlp(hidden_size * 3, int(2 / 3 * mlp_ratio * hidden_size * 3), hidden_size, bias=False)
         
         self.t_block = nn.Sequential(
             nn.SiLU(),
@@ -704,7 +704,7 @@ class ModernDiT(nn.Module):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
     def forward(self, x, t, bpm, actions, clean_x):
-        bpm = self.bpm_embedder(bpm)
+        bpm = torch.cat([self.bpm_embedder(bpm[:, 0]), self.bpm_embedder(bpm[:, 1])], dim=-1)
         t = self.t_embedder(t)
         
         x = torch.cat([x, clean_x], dim=-1)
@@ -786,7 +786,7 @@ class ModernLAM(nn.Module):
         z, indices = self.action_model(x, bpm)
         
         # should condition on both bpm but thats more parameters
-        x = self.decoder(x[:, 1], bpm[:, 1], z, x[:, 0])
+        x = self.decoder(x[:, 1], bpm, z, x[:, 0])
         return x, indices
     
     def enocde_actions(self, x, bpm):
@@ -819,9 +819,9 @@ class ModernLAM(nn.Module):
         z, indices = self.action_model(x.clone(), bpm)
         
         random_actions = self.generate_random_different_actions(indices, math.prod(self.levels), x.device)
-        recon = self.generate(x[:, 1], bpm[:, 1], z, x[:, 0], n_steps=n_steps)
+        recon = self.generate(x[:, 1], bpm, z, x[:, 0], n_steps=n_steps)
         # random = self.generate(x[:, 1], bpm[:, 1], self.action_model.from_vq(self.action_model.vq.indices_to_codes(random_actions)).squeeze(), x[:, 0], n_steps=n_steps)
-        random = self.generate(x[:, 1], bpm[:, 1], self.action_model.from_vq(self.action_model.vq.get_output_from_indices(random_actions)).squeeze(1), x[:, 0], n_steps=n_steps)
+        random = self.generate(x[:, 1], bpm, self.action_model.from_vq(self.action_model.vq.get_output_from_indices(random_actions)).squeeze(1), x[:, 0], n_steps=n_steps)
         
         return recon, random
 
