@@ -783,7 +783,7 @@ class ModernLAM(nn.Module):
         """
         assert x.ndim == 4
         
-        z, indices = self.action_model(x, bpm)
+        z, indices = self.action_model(x.clone(), bpm.clone())
         
         x = self.decoder(x[:, 1], bpm, z, x[:, 0])
         return x, indices
