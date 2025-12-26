@@ -6,8 +6,8 @@ import math
 from typing import Optional, List, Callable
 
 from einops import rearrange, repeat
-from vector_quantize_pytorch import FSQ
-from residual_ln_fsq import ResidualFSQ
+from vector_quantize_pytorch import FSQ, ResidualFSQ
+# from residual_ln_fsq import ResidualFSQ
 from fm import FM, FMEulerSampler
 
 # @torch.compile
@@ -712,7 +712,6 @@ class ModernDiT(nn.Module):
         x = self.x_embedder(x)
         x = rearrange(x, 'b c l -> b l c')
         
-        print(t.shape, bpm.shape, actions.shape)
         t = torch.cat([t, bpm, actions], dim=-1)
         t = self.fuse_conditioning(t)
         t0 = self.t_block(t)
@@ -818,9 +817,8 @@ class ModernLAM(nn.Module):
         z, indices = self.action_model(x.clone(), bpm)
         
         random_actions = self.generate_random_different_actions(indices, math.prod(self.levels), x.device)
-        print(z.shape, self.action_model.from_vq(self.action_model.vq.indices_to_codes(random_actions)).shape)
         recon = self.generate(x[:, 1], bpm[:, 1], z, x[:, 0], n_steps=n_steps)
-        random = self.generate(x[:, 1], bpm[:, 1], self.action_model.from_vq(self.action_model.vq.indices_to_codes(random_actions)), x[:, 0], n_steps=n_steps)
+        random = self.generate(x[:, 1], bpm[:, 1], self.action_model.from_vq(self.action_model.vq.indices_to_codes(random_actions)).squeeze(), x[:, 0], n_steps=n_steps)
         
         return recon, random
 
