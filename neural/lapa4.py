@@ -712,6 +712,7 @@ class ModernDiT(nn.Module):
         x = rearrange(x, 'b l c -> b c l')
         x = self.x_embedder(x)
         x = rearrange(x, 'b c l -> b l c')
+        print('hi')
         
         t = torch.cat([t, bpm, actions], dim=-1)
         t = self.fuse_conditioning(t)
@@ -727,6 +728,7 @@ class ModernDiT(nn.Module):
         )
         x = modulate(self.norm(x), shift, scale)
         x = self.fc(x)
+        print('bye')
         return x
 
 class ModernDiTWrapper(nn.Module):
