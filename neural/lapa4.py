@@ -452,8 +452,8 @@ class ActionTransformer(nn.Module):
             nn.LayerNorm(spatial_window * hidden_size),
             nn.Linear(spatial_window * hidden_size, len(levels)),
         )
-        self.vq = FSQ(levels=levels)
-        # self.vq = ResidualFSQ(levels=levels, num_quantizers=num_quantizers, quantize_dropout=True)
+        # self.vq = FSQ(levels=levels)
+        self.vq = ResidualFSQ(levels=levels, num_quantizers=num_quantizers, quantize_dropout=True)
         self.from_vq = nn.Linear(len(levels), hidden_size)
         
         self.spatial_pos = nn.Embedding(spatial_window + 1, hidden_size)
@@ -819,8 +819,8 @@ class ModernLAM(nn.Module):
         
         random_actions = self.generate_random_different_actions(indices, math.prod(self.levels), x.device)
         recon = self.generate(x[:, 1], bpm, z, x[:, 0], n_steps=n_steps)
-        random = self.generate(x[:, 1], bpm, self.action_model.from_vq(self.action_model.vq.indices_to_codes(random_actions)).squeeze(), x[:, 0], n_steps=n_steps)
-        # random = self.generate(x[:, 1], bpm, self.action_model.from_vq(self.action_model.vq.get_output_from_indices(random_actions)).squeeze(1), x[:, 0], n_steps=n_steps)
+        # random = self.generate(x[:, 1], bpm, self.action_model.from_vq(self.action_model.vq.indices_to_codes(random_actions)).squeeze(), x[:, 0], n_steps=n_steps)
+        random = self.generate(x[:, 1], bpm, self.action_model.from_vq(self.action_model.vq.get_output_from_indices(random_actions)).squeeze(1), x[:, 0], n_steps=n_steps)
         
         return recon, random
 
