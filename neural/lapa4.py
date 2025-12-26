@@ -782,9 +782,9 @@ class ModernLAM(nn.Module):
         """
         assert x.ndim == 4
         
-        z, indices = self.action_model(x.clone(), bpm.clone())
+        z, indices = self.action_model(x, bpm)
         
-        x = self.decoder(x[:, 1].clone(), bpm[:, 1].clone(), z, x[:, 0].clone())
+        x = self.decoder(x[:, 1], bpm[:, 1], z, x[:, 0])
         return x, indices
     
     def enocde_actions(self, x, bpm):
