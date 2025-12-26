@@ -453,8 +453,8 @@ class ActionTransformer(nn.Module):
             nn.Linear(spatial_window * hidden_size, len(levels)),
         )
         self.vq = FSQ(levels=levels)
-        # self.vq = ResidualFSQ(levels=levels, num_quantizers=num_quantizers, quantize_dropout=True)
-        self.from_vq = nn.Linear(len(levels), hidden_size)
+        self.vq = ResidualFSQ(levels=levels, num_quantizers=num_quantizers, quantize_dropout=True)
+        # self.from_vq = nn.Linear(len(levels), hidden_size)
         
         self.spatial_pos = nn.Embedding(spatial_window + 1, hidden_size)
         self.temporal_pos = nn.Embedding(temporal_window, hidden_size)
@@ -712,6 +712,7 @@ class ModernDiT(nn.Module):
         x = self.x_embedder(x)
         x = rearrange(x, 'b c l -> b l c')
         
+        print(t.shape, bpm.shape, actions.shape)
         t = torch.cat([t, bpm, actions], dim=-1)
         t = self.fuse_conditioning(t)
         t0 = self.t_block(t)
