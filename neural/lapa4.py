@@ -828,7 +828,7 @@ def ModernLAM_L(**kwargs):
     return ModernLAM(depth=24, hidden_size=1024, num_heads=16, **kwargs)
 
 def ModernLAM_M(**kwargs):
-    return ModernLAM(depth=20, hidden_size=768, num_heads=12, **kwargs)
+    return ModernLAM(depth=12, hidden_size=1024, num_heads=16, **kwargs)
 
 def ModernLAM_B(**kwargs):
     return ModernLAM(depth=12, hidden_size=768, num_heads=12, **kwargs)
