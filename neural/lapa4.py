@@ -500,12 +500,12 @@ class ActionTransformer(nn.Module):
         bpm = self.bpm_embedder(bpm.flatten()).view(B, T, 1, -1)
         
         x = torch.cat([bpm, x], dim=2)
-        x = rearrange(x, 'b t n c -> (b t) n c').contiguous()
+        x = rearrange(x, 'b t n c -> (b t) n c')
         x = x + self.spatial_pos(torch.arange(N+1, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.spatial_blocks:
             x = block(x)
         
-        x = rearrange(x, '(b t) n c -> (b n) t c', b=B, t=T).contiguous()
+        x = rearrange(x, '(b t) n c -> (b n) t c', b=B, t=T)
         x = x + self.temporal_pos(torch.arange(T, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.temporal_blocks:
             x = block(x, is_causal=True)
