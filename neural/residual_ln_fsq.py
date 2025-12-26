@@ -67,6 +67,7 @@ class InvertibleLayerNorm(nn.Module):
         
         normalized = (x - self.current_mean) / self.current_std
         
+        print(x.shape, normalized.shape, self.weight.shape, self.bias.shape)
         weight = self.weight.view(1, C, 1)  # (1, C, 1)
         bias = self.bias.view(1, C, 1)      # (1, C, 1)
         
