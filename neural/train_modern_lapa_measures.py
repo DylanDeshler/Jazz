@@ -418,9 +418,9 @@ while True:
         usage = estimate_codebook_usage()
         losses = estimate_loss()
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, train perplexity: {usage['train']}, val perplexity {usage['val']}")
-        # if iter_num % sample_interval == 0 and master_process:
-        #     with ctx:
-        #         generate_lam_vs_random_actions(iter_num)
+        if iter_num % sample_interval == 0 and master_process:
+            with ctx:
+                generate_lam_vs_random_actions(iter_num)
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
