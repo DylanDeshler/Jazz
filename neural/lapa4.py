@@ -654,7 +654,7 @@ class ModernDiT(nn.Module):
         self.spatial_window = spatial_window
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
-        self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True, max_period=1000)
+        self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True, max_period=10000)
 
         self.proj = nn.Linear(2 * in_channels, hidden_size, bias=True)
         self.x_embedder = Patcher(hidden_size, hidden_size)
