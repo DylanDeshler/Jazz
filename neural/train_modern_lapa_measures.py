@@ -248,30 +248,31 @@ def estimate_codebook_usage():
     out = {}
     model.eval()
     for i, split in enumerate(['train', 'val']):
-        usage = torch.zeros(eval_iters * gradient_accumulation_steps)
+        usage = torch.zeros(num_quantizers, eval_iters * gradient_accumulation_steps)
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
             X, ratio, bpm = get_batch(split)
             with ctx:
                 _, indices = model(X, bpm)
                 
-                indices = indices.flatten()
-                num_tokens = indices.numel()
+                for q in num_quantizers:
+                    indices = indices.flatten()
+                    num_tokens = indices.numel()
+                
+                    counts = torch.bincount(indices, minlength=math.prod(levels)).float()
+                    
+                    active_mask = counts > 0
+                    active_count = active_mask.sum().item()
+                    utilization = active_count / math.prod(levels)
+                    
+                    probs = counts / num_tokens
+                    
+                    # Add epsilon to avoid log(0)
+                    probs = probs + 1e-10
+                    entropy = -torch.sum(probs * torch.log(probs))
+                    perplexity = torch.exp(entropy).item()
             
-                counts = torch.bincount(indices, minlength=math.prod(levels)).float()
-                
-                active_mask = counts > 0
-                active_count = active_mask.sum().item()
-                utilization = active_count / math.prod(levels)
-                
-                probs = counts / num_tokens
-                
-                # Add epsilon to avoid log(0)
-                probs = probs + 1e-10
-                entropy = -torch.sum(probs * torch.log(probs))
-                perplexity = torch.exp(entropy).item()
-            
-            usage[k] = perplexity
-        out[split] = usage.mean()
+                    usage[q, k] = perplexity
+        out[split] = usage.mean(dim=1)
     model.train()
     return out
 
@@ -419,8 +420,7 @@ while True:
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, train perplexity: {usage['train']:.2f}, val perplexity {usage['val']:.2f}")
         if iter_num % sample_interval == 0 and master_process:
             with ctx:
-                metrics = generate_lam_vs_random_actions(iter_num)
-            print(f"iter {iter_num}: delta PSNR {metrics['PSNR']:.3f}, delta Similarity {metrics['Similarity']:.3f}")
+                generate_lam_vs_random_actions(iter_num)
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
