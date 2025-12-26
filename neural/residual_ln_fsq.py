@@ -59,7 +59,7 @@ class InvertibleLayerNorm(nn.Module):
         self.register_buffer('current_std', None, persistent=False)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        B, C, L = x.shape
+        B, L, C = x.shape
         
         self.current_mean = x.mean(dim=2, keepdim=True)  # (B, C, 1)
         variance = x.var(dim=2, keepdim=True, unbiased=False)  # (B, C, 1)
@@ -68,8 +68,8 @@ class InvertibleLayerNorm(nn.Module):
         normalized = (x - self.current_mean) / self.current_std
         
         print(x.shape, normalized.shape, self.weight.shape, self.bias.shape)
-        weight = self.weight.view(1, C, 1)  # (1, C, 1)
-        bias = self.bias.view(1, C, 1)      # (1, C, 1)
+        weight = self.weight.view(1, 1, C)  # (1, C, 1)
+        bias = self.bias.view(1, 1, C)      # (1, C, 1)
         
         return weight * normalized + bias
     
