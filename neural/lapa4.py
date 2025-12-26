@@ -518,6 +518,7 @@ class ActionTransformer(nn.Module):
         
         x = self.to_vq(x)
         x, indices = self.vq(x)
+        print(x.shape, indices.shape)
         x = self.from_vq(x).squeeze(1)
         return x, indices
 
