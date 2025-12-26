@@ -716,9 +716,9 @@ class ModernDiT(nn.Module):
         t = self.fuse_conditioning(t)
         t0 = self.t_block(t)
         
-        freqs_cis = self.freqs_cis[:x.shape[1]]
+        # freqs_cis = self.freqs_cis[:x.shape[1]]
         for block in self.blocks:
-            x = block(x, t0, freqs_cis=freqs_cis, attn_mask=None)
+            x = block(x, t0, freqs_cis=None, attn_mask=None)
         
         # SAM Audio does not use a non-linearity on t here
         shift, scale = (self.final_layer_scale_shift_table[None] + F.silu(t[:, None])).chunk(
