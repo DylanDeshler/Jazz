@@ -61,7 +61,7 @@ save_interval = 5000
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -346,8 +346,8 @@ def generate_lam_vs_random_actions(step):
     recon = recon.cpu().detach().float().numpy().squeeze(1)
     random_recon = random_recon.cpu().detach().float().numpy().squeeze(1)
 
-    recon_psnr = psnr(x, recon)
-    random_psnr = psnr(x, random_recon)
+    # recon_psnr = psnr(x, recon)
+    # random_psnr = psnr(x, random_recon)
 
     for i in range(20):
         og0, og, y, random_y, r0, r = x0[i], x[i], recon[i], random_recon[i], ratio[i, 0].cpu().detach().numpy().item(), ratio[i, 1].cpu().detach().numpy().item()
@@ -417,10 +417,10 @@ while True:
         usage = estimate_codebook_usage()
         losses = estimate_loss()
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, train perplexity: {usage['train']:.2f}, val perplexity {usage['val']:.2f}")
-        # if iter_num % sample_interval == 0 and master_process:
-        #     with ctx:
-        #         metrics = generate_lam_vs_random_actions(iter_num)
-        #     print(f"iter {iter_num}: delta PSNR {metrics['PSNR']:.3f}, delta Similarity {metrics['Similarity']:.3f}")
+        if iter_num % sample_interval == 0 and master_process:
+            with ctx:
+                metrics = generate_lam_vs_random_actions(iter_num)
+            print(f"iter {iter_num}: delta PSNR {metrics['PSNR']:.3f}, delta Similarity {metrics['Similarity']:.3f}")
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
