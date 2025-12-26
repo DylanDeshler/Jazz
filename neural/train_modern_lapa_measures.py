@@ -417,7 +417,7 @@ while True:
     if iter_num % eval_interval == 0 and master_process:
         usage = estimate_codebook_usage()
         losses = estimate_loss()
-        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, train perplexity: {usage['train']:.2f}, val perplexity {usage['val']:.2f}")
+        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, train perplexity: {usage['train']}, val perplexity {usage['val']}")
         if iter_num % sample_interval == 0 and master_process:
             with ctx:
                 generate_lam_vs_random_actions(iter_num)
