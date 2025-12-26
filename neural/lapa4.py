@@ -508,7 +508,7 @@ class ActionTransformer(nn.Module):
         x = rearrange(x, '(b t) n c -> (b n) t c', b=B, t=T)
         x = x + self.temporal_pos(torch.arange(T, device=x.device, dtype=torch.long).unsqueeze(0))
         for block in self.temporal_blocks:
-            x = block(x, is_causal=True)
+            x = block(x)
         
         x = rearrange(x, '(b n) t c -> b t n c', b=B, n=N+1)
         first_frame, last_frame = x[:, 0, 1:], x[:, 1, 1:]
