@@ -159,7 +159,9 @@ class Attention(nn.Module):
         if freqs_cis is not None:
             q = apply_rotary_emb(q.transpose(1, 2), freqs_cis).transpose(1, 2)
             k = apply_rotary_emb(k.transpose(1, 2), freqs_cis).transpose(1, 2)
-
+        q = q.contiguous()
+        k = k.contiguous()
+        v = v.contiguous()
         if self.fused_attn:
             x = F.scaled_dot_product_attention(
                 q, k, v,
@@ -507,7 +509,6 @@ class ActionTransformer(nn.Module):
         
         x = rearrange(x, '(b t) n c -> (b n) t c', b=B, t=T)
         x = x + self.temporal_pos(torch.arange(T, device=x.device, dtype=torch.long).unsqueeze(0))
-        x = x.contiguous()
         for block in self.temporal_blocks:
             x = block(x, is_causal=True)
         
