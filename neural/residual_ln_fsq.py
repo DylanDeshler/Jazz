@@ -77,10 +77,10 @@ class InvertibleLayerNorm(nn.Module):
         if self.current_mean is None or self.current_std is None:
             raise RuntimeError("mean or std are None!")
         
-        B, C, L = normalized_x.shape
+        B, L, C = normalized_x.shape
         
-        weight = self.weight.view(1, C, 1)
-        bias = self.bias.view(1, C, 1)
+        weight = self.weight.view(1, 1, C)
+        bias = self.bias.view(1, 1, C)
         
         denormalized = (normalized_x - bias) / weight
         return denormalized * self.current_std + self.current_mean
