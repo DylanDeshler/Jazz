@@ -150,6 +150,10 @@ def get_batch(split='train'):
     x = torch.from_numpy(np.stack([data[idx:idx+temporal_window] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     ratio = torch.from_numpy(np.stack([meta[idx:idx+temporal_window, 0] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     bpm = torch.from_numpy(np.stack([meta[idx:idx+temporal_window, 1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    
+    x = torch.rand_like(x).to(device, non_blocking=True)
+    ratio = torch.rand_like(ratio).to(device, non_blocking=True)
+    bpm = torch.rand_like(bpm).to(device, non_blocking=True)
     return x, ratio, bpm
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
