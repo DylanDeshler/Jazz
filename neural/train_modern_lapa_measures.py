@@ -42,6 +42,8 @@ import torchaudio
 import pyrubberband as pyrb
 from sklearn.metrics.pairwise import paired_cosine_distances
 
+from torch.nn.attention import SDPBackend, sdpa_kernel
+
 # emb_model_id = "m-a-p/MERT-v1-330M"
 # emb_model = AutoModel.from_pretrained(emb_model_id, trust_remote_code=True)
 # processor = Wav2Vec2FeatureExtractor.from_pretrained(emb_model_id, trust_remote_code=True)
@@ -94,11 +96,11 @@ warmup_iters = 5000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
-backend = 'gloo' # 'nccl', 'gloo', etc.
+backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
 device = 'cuda:0' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
-compile = False # use PyTorch 2.0 to compile the model to be faster
+compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 # exec(open('configurator.py').read()) # overrides from command line or config file
@@ -403,7 +405,6 @@ if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
 checkpoint = None # free up memory
 while True:
-    from torch.nn.attention import SDPBackend, sdpa_kernel
     with sdpa_kernel([SDPBackend.EFFICIENT_ATTENTION, SDPBackend.MATH]):
         # determine and set the learning rate for this iteration
         lr = get_lr(iter_num) if decay_lr else learning_rate
