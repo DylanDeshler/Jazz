@@ -785,7 +785,6 @@ class ModernLAM(nn.Module):
         
         z, indices = self.action_model(x, bpm)
         
-        # should condition on both bpm but thats more parameters
         x = self.decoder(x[:, 1], bpm, z, x[:, 0])
         return x, indices
     

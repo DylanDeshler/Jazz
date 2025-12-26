@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from lapa4 import ModernLAM_B as net
+from lapa4 import ModernLAM_M as net
 from dito import DiToV5 as Tokenizer
 
 import matplotlib.pyplot as plt
@@ -53,7 +53,7 @@ from torch.nn.attention import SDPBackend, sdpa_kernel
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'test'#'ModernLAPA_measures_bpm_B_RFSQ_64codes_3quants'
+out_dir = 'ModernLAPA_measures_bpm_M_RFSQ_64codes_3quants'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
