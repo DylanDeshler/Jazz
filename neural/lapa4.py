@@ -658,8 +658,6 @@ class ModernDiT(nn.Module):
 
         self.proj = nn.Linear(2 * in_channels, hidden_size, bias=True)
         self.x_embedder = Patcher(hidden_size, hidden_size)
-        
-        # big param increase but the hidden dim should probably be the product with in dim
         self.fuse_conditioning = SwiGLUMlp(hidden_size * 3, hidden_size, hidden_size, bias=False)
         
         self.t_block = nn.Sequential(
@@ -678,7 +676,7 @@ class ModernDiT(nn.Module):
         self.fc = nn.Linear(hidden_size, in_channels, bias=False)
         
         self.initialize_weights()
-        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, spatial_window))
+        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, spatial_window, theta=500))
     
     def initialize_weights(self):
         self.apply(self._init_weights)
