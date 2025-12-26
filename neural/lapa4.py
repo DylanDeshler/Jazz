@@ -159,9 +159,7 @@ class Attention(nn.Module):
         if freqs_cis is not None:
             q = apply_rotary_emb(q.transpose(1, 2), freqs_cis).transpose(1, 2)
             k = apply_rotary_emb(k.transpose(1, 2), freqs_cis).transpose(1, 2)
-        q = q.contiguous()
-        k = k.contiguous()
-        v = v.contiguous()
+        
         if self.fused_attn:
             x = F.scaled_dot_product_attention(
                 q, k, v,
