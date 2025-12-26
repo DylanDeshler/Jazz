@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from lapa4 import ModernLAM_M as net
+from lapa4 import ModernLAM_B as net
 from dito import DiToV5 as Tokenizer
 
 import matplotlib.pyplot as plt
