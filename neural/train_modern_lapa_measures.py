@@ -97,7 +97,7 @@ min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/
 backend = 'gloo' # 'nccl', 'gloo', etc.
 # system
 device = 'cpu' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
-dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float32' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
+dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = False # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
@@ -147,7 +147,7 @@ def get_batch(split='train'):
         idxs = torch.randint(int(len(data) * 0.98) - temporal_window, (batch_size,))
     else:
         idxs = torch.randint(int(len(data) * 0.98), len(data) - temporal_window, (batch_size,))
-    x = torch.from_numpy(np.stack([data[idx:idx+temporal_window] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    x = torch.from_numpy(np.stack([data[idx:idx+temporal_window] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True).float()
     ratio = torch.from_numpy(np.stack([meta[idx:idx+temporal_window, 0] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     bpm = torch.from_numpy(np.stack([meta[idx:idx+temporal_window, 1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     return x, ratio, bpm
