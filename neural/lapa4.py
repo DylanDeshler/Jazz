@@ -818,7 +818,8 @@ class ModernLAM(nn.Module):
         
         random_actions = self.generate_random_different_actions(indices, math.prod(self.levels), x.device)
         recon = self.generate(x[:, 1], bpm[:, 1], z, x[:, 0], n_steps=n_steps)
-        random = self.generate(x[:, 1], bpm[:, 1], self.action_model.from_vq(self.action_model.vq.indices_to_codes(random_actions)).squeeze(), x[:, 0], n_steps=n_steps)
+        # random = self.generate(x[:, 1], bpm[:, 1], self.action_model.from_vq(self.action_model.vq.indices_to_codes(random_actions)).squeeze(), x[:, 0], n_steps=n_steps)
+        random = self.generate(x[:, 1], bpm[:, 1], self.action_model.from_vq(self.action_model.vq.get_codes_from_indices(random_actions)).squeeze(), x[:, 0], n_steps=n_steps)
         
         return recon, random
 
