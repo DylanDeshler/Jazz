@@ -258,7 +258,6 @@ def estimate_codebook_usage():
                     q_indices = indices[..., q].flatten()
                     num_tokens = q_indices.numel()
 
-                    print(q_indices.shape, q_indices.min(), q_indices.max())
                     counts = torch.bincount(q_indices, minlength=math.prod(levels)).float()
                     
                     active_mask = counts > 0
