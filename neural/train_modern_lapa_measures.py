@@ -255,10 +255,11 @@ def estimate_codebook_usage():
                 _, indices = model(X, bpm)
                 print(indices.shape)
                 for q in range(num_quantizers):
-                    indices = indices[..., q].flatten()
-                    num_tokens = indices[..., q].numel()
-                
-                    counts = torch.bincount(indices[..., q], minlength=math.prod(levels)).float()
+                    q_indices = indices[..., q].flatten()
+                    num_tokens = q_indices.numel()
+
+                    print(q_indices.shape, q_indices.min(), q_indices.max())
+                    counts = torch.bincount(q_indices, minlength=math.prod(levels)).float()
                     
                     active_mask = counts > 0
                     active_count = active_mask.sum().item()
