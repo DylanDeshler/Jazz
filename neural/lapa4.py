@@ -660,7 +660,7 @@ class ModernDiT(nn.Module):
         self.x_embedder = Patcher(hidden_size, hidden_size)
         
         # big param increase but the hidden dim should probably be the product with in dim
-        self.fuse_conditioning = SwiGLUMlp(hidden_size * 3, int(2 / 3 * mlp_ratio * hidden_size * 3), hidden_size, bias=False)
+        self.fuse_conditioning = SwiGLUMlp(hidden_size * 3, int(2 / 3 * mlp_ratio * hidden_size * 2), hidden_size, bias=False)
         
         self.t_block = nn.Sequential(
             nn.SiLU(),
