@@ -237,7 +237,6 @@ def estimate_codebook_usage():
                 
                 for q in range(num_quantizers):
                     q_indices = indices[..., q].flatten()
-                    print(q_indices.shape)
                     num_tokens = q_indices.numel()
 
                     counts = torch.bincount(q_indices, minlength=math.prod(levels)).float()
@@ -413,6 +412,8 @@ while True:
                 "lr": lr,
                 "mfu": running_mfu*100, # convert to percentage
                 "tokens": tokens_trained,
+                "train/codebook_usage": usage['train'],
+                "val/codebook_usage": usage['val']
             })
         if losses['val'] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses['val']
