@@ -558,11 +558,9 @@ class ActionTransformer(nn.Module):
         
         # x = x[:, 1:]
         
-        print(x.shape)
         x = self.to_vq(x)
         x, indices = self.vq(x)
         x = self.from_vq(x)
-        print(x.shape)
         
         return x, indices
 
@@ -664,7 +662,7 @@ class ModernDiT(nn.Module):
         bpm = self.bpm_embedder(bpm)
         t = self.t_embedder(t)
         
-        x = torch.cat([x, actions], dim=-1)
+        x = torch.cat([x, actions.unsqueeze(2).repeat(1, 1, N, 1)], dim=-1)
         x = rearrange(x, 'b t n c -> (b t) c n')
         x = self.x_embedder(x)
         x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
