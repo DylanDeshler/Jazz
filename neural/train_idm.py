@@ -45,7 +45,7 @@ eval_interval = 500
 sample_interval = 5000
 log_interval = 100
 save_interval = 5000
-eval_iters = 1000
+eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
@@ -55,7 +55,7 @@ wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 1 # used to simulate larger batch sizes
+gradient_accumulation_steps = 3 # used to simulate larger batch sizes
 batch_size = 96 # * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 spatial_window = 48
