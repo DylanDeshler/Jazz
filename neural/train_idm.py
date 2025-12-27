@@ -156,7 +156,7 @@ for k,v in list(state_dict.items()):
 tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 
-model_args = dict(in_channels=vae_embed_dim, n_chunks=n_chunks, spatial_window=spatial_window, num_actions=math.prod(levels), num_quantizers=num_quantizers)
+model_args = dict(in_channels=vae_embed_dim, n_chunks=n_chunks, spatial_window=spatial_window, levels=levels, num_quantizers=num_quantizers)
 
 if init_from == 'scratch':
     # init a new model from scratch
