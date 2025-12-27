@@ -35,7 +35,7 @@ class FM:
         noise = torch.randn_like(x) if noise is None else noise
         s = [x.shape[0], x.shape[1], x.shape[2], 1]
         
-        mask = torch.ones(*s)
+        mask = torch.ones(*s, device=x.device)
         mask[:, 0, :, :] = 0
         mask = mask.bool()
         
