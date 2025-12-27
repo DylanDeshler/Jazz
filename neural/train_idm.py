@@ -41,7 +41,7 @@ import pyrubberband as pyrb
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
 out_dir = 'test'#'IDM_measures_bpm_M_RFSQ_64codes_3quants'
-eval_interval = 5000
+eval_interval = 1000
 sample_interval = 5000
 log_interval = 100
 save_interval = 5000
