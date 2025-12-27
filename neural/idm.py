@@ -43,9 +43,13 @@ class FM:
             net_kwargs = {}
         
         if t is None:
+            print(x.shape, t.shape)
             t = torch.rand(x.shape[0], x.shape[1] // self.chunk_size, device=x.device)
+            print(t.shape)
             repeat_t = torch.repeat_interleave(t, repeats=self.chunk_size, dim=1)
+            print(repeat_t.shape)
         x_t, noise = self.add_noise(x, repeat_t)
+        print(x_t.shape, noise.shape)
         
         pred = net(x_t, t=t * self.timescale, **net_kwargs)
         
