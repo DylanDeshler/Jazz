@@ -665,6 +665,7 @@ class ModernDiT(nn.Module):
         x = self.x_embedder(x)
         x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
         
+        print(x.shape, t.shape, bpm.shape, actions.shape)
         t = torch.cat([t, bpm, actions], dim=-1)
         t = self.fuse_conditioning(t)
         t = repeat(t, 'b t c -> b (t n) c', n=N)
