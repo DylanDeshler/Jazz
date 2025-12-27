@@ -35,15 +35,15 @@ class FM:
         noise = torch.randn_like(x) if noise is None else noise
         s = [x.shape[0], x.shape[1], x.shape[2], 1]
         
-        mask = torch.ones(*s, device=x.device)
-        mask[:, 0, :, :] = 0
-        mask = mask.bool()
+        # mask = torch.ones(*s, device=x.device)
+        # mask[:, 0, :, :] = 0
+        # mask = mask.bool()
         
         alpha = self.alpha(t).view(*s)
         sigma = self.sigma(t).view(*s)
         
-        alpha = torch.where(mask == 0, torch.ones_like(alpha), alpha)
-        sigma = torch.where(mask == 0, torch.zeros_like(sigma), sigma)
+        # alpha = torch.where(mask == 0, torch.ones_like(alpha), alpha)
+        # sigma = torch.where(mask == 0, torch.zeros_like(sigma), sigma)
         
         x_t = alpha * x + sigma * noise
         return x_t, noise
@@ -71,7 +71,8 @@ class FM:
                 return loss, t
         else:
             # dont calculate loss over first token (because its not noised)
-            loss = ((pred[:, 1:].float() - target[:, 1:].float()) ** 2).mean()
+            # loss = ((pred[:, 1:].float() - target[:, 1:].float()) ** 2).mean()
+            loss = ((pred.float() - target.float()) ** 2).mean()
             if return_all:
                 return loss, x_t, pred
             else:
@@ -650,7 +651,7 @@ class ModernDiT(nn.Module):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
     def forward(self, x, t, bpm, actions):
-        print(x.shape, t.shape, bpm.shape, actions.shape)
+        # drop 1st token because no action for it
         x = x[:, 1:]
         t = t[:, 1:]
         bpm = bpm[:, 1:]
@@ -663,7 +664,6 @@ class ModernDiT(nn.Module):
         x = self.x_embedder(x)
         x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
         
-        print(x.shape, t.shape, bpm.shape, actions.shape)
         t = torch.cat([t, bpm, actions], dim=-1)
         t = self.fuse_conditioning(t)
         t = repeat(t, 'b t c -> b (t n) c', n=N)
