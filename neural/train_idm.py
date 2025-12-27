@@ -59,7 +59,7 @@ gradient_accumulation_steps = 1 # used to simulate larger batch sizes
 batch_size = 96 # * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 spatial_window = 48
-n_chunks = 1 + 1 # look ahead
+n_chunks = 4 + 1 # look ahead
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
 # 2^4 2^6 2^8 2^9 2^10 2^11 2^12 2^14 2^16

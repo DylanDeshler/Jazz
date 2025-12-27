@@ -672,9 +672,9 @@ class ModernDiT(nn.Module):
     
     def forward(self, x, t, bpm, actions):
         # drop 1st token because no action for it
-        x = x[:, 1:]
-        t = t[:, 1:]
-        bpm = bpm[:, 1:]
+        x = x[:, :-1]
+        t = t[:, :-1]
+        bpm = bpm[:, :-1]
         B, T, N, C = x.shape
         
         bpm = self.bpm_embedder(bpm)
