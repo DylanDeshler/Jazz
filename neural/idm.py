@@ -60,7 +60,6 @@ class FM:
                 return loss, t
         else:
             # dont calculate loss over first token
-            print(pred.shape, target.shape)
             loss = ((pred[:, N:].float() - target[:, N:].float()) ** 2).mean()
             if return_all:
                 return loss, x_t, pred
