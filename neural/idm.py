@@ -12,7 +12,6 @@ from vector_quantize_pytorch import FSQ, ResidualFSQ
 class FM:
     
     def __init__(self, chunk_size, sigma_min=1e-5, timescale=1.0):
-        self.chunk_size = chunk_size
         self.sigma_min = sigma_min
         self.prediction_type = None
         self.timescale = timescale
@@ -39,14 +38,16 @@ class FM:
         return x_t, noise
     
     def loss(self, net, x, t=None, net_kwargs=None, return_loss_unreduced=False, return_all=False):
+        B, T, N, C = x.shape
+        
         if net_kwargs is None:
             net_kwargs = {}
         
         if t is None:
             print(x.shape)
-            t = torch.rand(x.shape[0], x.shape[1] // self.chunk_size, device=x.device)
+            t = torch.rand(B, T, device=x.device)
             print(t.shape)
-            repeat_t = torch.repeat_interleave(t, repeats=self.chunk_size, dim=1)
+            repeat_t = torch.repeat_interleave(t, repeats=N, dim=1)
             print(repeat_t.shape)
         x_t, noise = self.add_noise(x, repeat_t)
         print(x_t.shape, noise.shape)
@@ -64,7 +65,7 @@ class FM:
         else:
             # dont calculate loss over first token
             print(pred.shape, target.shape)
-            loss = ((pred[:, self.chunk_size:].float() - target[:, self.chunk_size:].float()) ** 2).mean()
+            loss = ((pred[:, N:].float() - target[:, N:].float()) ** 2).mean()
             if return_all:
                 return loss, x_t, pred
             else:
@@ -672,7 +673,7 @@ class ModernDiTWrapper(nn.Module):
         super().__init__()
         self.net = ModernDiT(**kwargs)
         
-        self.diffusion = FM(chunk_size=kwargs['spatial_window'], timescale=1000.0)
+        self.diffusion = FM(timescale=1000.0)
         self.sampler = FMEulerSampler(self.diffusion)
     
     def forward(self, x, bpm, actions, t=None):
