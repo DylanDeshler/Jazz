@@ -623,8 +623,8 @@ class ModernDiT(nn.Module):
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
         self.bpm_embedder = TimestepEmbedder(hidden_size // 2, bias=False, swiglu=True, max_period=1000)
-        # self.proj = nn.Linear(2 * in_channels, hidden_size, bias=True)
-        self.x_embedder = Patcher(in_channels, hidden_size)
+        self.proj = nn.Linear(2 * in_channels, hidden_size, bias=True)
+        self.x_embedder = Patcher(hidden_size, hidden_size)
         
         self.fuse_conditioning = SwiGLUMlp(hidden_size * 3, hidden_size, hidden_size, bias=False)
         # self.null_x = nn.Parameter(torch.randn(spatial_window, in_channels) / in_channels ** 0.5)
@@ -680,8 +680,8 @@ class ModernDiT(nn.Module):
         bpm = torch.cat([bpm[:, 1:], bpm[:, :-1]], dim=-1)
         t = self.t_embedder(t)
         
-        # x = torch.cat([x[:, 1:], clean_x[:, :-1]], dim=-1)
-        # x = self.proj(x)
+        x = torch.cat([x[:, 1:], clean_x[:, :-1]], dim=-1)
+        x = self.proj(x)
         
         B, T, N, C = x.shape
         x = rearrange(x, 'b t n c -> (b t) c n')
@@ -697,7 +697,7 @@ class ModernDiT(nn.Module):
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
         for block in self.blocks:
-            x = block(x, t0, freqs_cis=freqs_cis, is_causal=True)
+            x = block(x, t0, freqs_cis=freqs_cis, attn_mask=self.block_causal_mask)
         
         # SAM Audio does not use a non-linearity on t here
         shift, scale = (self.final_layer_scale_shift_table[None, None] + F.silu(t[:, :, None])).chunk(
