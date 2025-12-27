@@ -563,7 +563,7 @@ class ModernDiT(nn.Module):
         # maybe these shapes are wrong? different from DiTBlock
         print(t.shape)
         shift, scale = (self.final_layer_scale_shift_table[None] + F.silu(t[:, None])).chunk(
-            2, dim=2
+            2, dim=1
         )
         # biases = self.scale_shift_table[None] + t.reshape(x.size(0), 6, -1)
         x = modulate(self.norm(x), shift, scale)
