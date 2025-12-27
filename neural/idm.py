@@ -553,9 +553,7 @@ class ActionTransformer(nn.Module):
         x = x[:, :, 1:]
         x = rearrange(x, 'b t n c -> b t (n c)')
         
-        print(x.shape)
         x = x[:, 1:]
-        print(x.shape)
         
         x = self.to_vq(x)
         x, indices = self.vq(x)
@@ -652,6 +650,7 @@ class ModernDiT(nn.Module):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
     def forward(self, x, t, bpm, actions):
+        print(x.shape, t.shape, bpm.shape, actions.shape)
         x = x[:, 1:]
         t = t[:, 1:]
         bpm = bpm[:, 1:]
