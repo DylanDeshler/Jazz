@@ -622,7 +622,8 @@ class ModernDiT(nn.Module):
         max_input_size = spatial_window * n_chunks
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
-        self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True, max_period=1000)
+        self.bpm_embedder = TimestepEmbedder(hidden_size // 2, bias=False, swiglu=True, max_period=1000)
+        self.proj = nn.Linear(2 * in_channels, hidden_size, bias=True)
         self.x_embedder = Patcher(in_channels, hidden_size)
         
         self.fuse_conditioning = SwiGLUMlp(hidden_size * 3, hidden_size, hidden_size, bias=False)
@@ -670,21 +671,22 @@ class ModernDiT(nn.Module):
         elif isinstance(module, nn.Embedding):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
-    def forward(self, x, t, bpm, actions):
+    def forward(self, x, t, bpm, actions, clean_x):
         # drop 1st token because no action for it
-        x = x[:, :-1]
-        t = t[:, :-1]
-        bpm = bpm[:, :-1]
+        t = t[:, 1:]
         B, T, N, C = x.shape
         
         bpm = self.bpm_embedder(bpm)
+        bpm = torch.cat([bpm[:, 1:], bpm[:, :-1]], dim=-1)
         t = self.t_embedder(t)
         
+        x = torch.cat([x[:, 1:], clean_x[:, :-1]], dim=-1)
+        x = self.proj(x)
         x = rearrange(x, 'b t n c -> (b t) c n')
         x = self.x_embedder(x)
         x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
         
-        x = token_drop(x, self.null_x.weight[0], self.training, 1)
+        # x = token_drop(x, self.null_x.weight[0], self.training, 1)
         
         t = torch.cat([t, bpm, actions], dim=-1)
         t = self.fuse_conditioning(t)
@@ -712,11 +714,11 @@ class ModernDiTWrapper(nn.Module):
         self.diffusion = FM(timescale=1000.0)
         self.sampler = FMEulerSampler(self.diffusion)
     
-    def forward(self, x, bpm, actions, t=None):
-        return self.diffusion.loss(self.net, x, t=t, net_kwargs={'actions': actions, 'bpm': bpm})
+    def forward(self, x, bpm, actions, clean_x, t=None):
+        return self.diffusion.loss(self.net, x, t=t, net_kwargs={'actions': actions, 'bpm': bpm, 'clean_x': clean_x})
     
-    def sample(self, x, bpm, actions, n_steps=50):
-        return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm})
+    def sample(self, x, bpm, actions, clean_x, n_steps=50):
+        return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm, 'clean_x': clean_x})
 
 class IDM(nn.Module):
     def __init__(self,
@@ -759,7 +761,7 @@ class IDM(nn.Module):
         
         z, indices = self.action_model(x.clone(), bpm.clone())
         
-        x = self.decoder(x, bpm, z)
+        x = self.decoder(x, bpm, z, x)
         return x, indices
     
     def enocde_actions(self, x, bpm):
