@@ -683,7 +683,7 @@ class ModernDiT(nn.Module):
         # x = torch.cat([x[:, 1:], clean_x[:, :-1]], dim=-1)
         # x = self.proj(x)
         
-        x = torch.cat([self.null_x, x], dim=1)
+        x = torch.cat([self.null_x.weight[0], x], dim=1)
         B, T, N, C = x.shape
         x = rearrange(x, 'b t n c -> (b t) c n')
         x = self.x_embedder(x)
