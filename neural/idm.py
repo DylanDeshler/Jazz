@@ -48,7 +48,7 @@ class FM:
             print(x.shape)
             t = torch.rand(B, T, device=x.device)
             print(t.shape)
-            repeat_t = torch.repeat(t, repeats=N, dim=2)
+            repeat_t = t.repeat((1, 1, N))
             print(repeat_t.shape)
         x_t, noise = self.add_noise(x, repeat_t)
         print(x_t.shape, noise.shape)
