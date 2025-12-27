@@ -540,7 +540,7 @@ class ActionTransformer(nn.Module):
         # x = self.x_embedder(x)
         x = rearrange(x, 'b t n c -> (b t) c n')
         x = self.x_embedder(x)
-        x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
+        x = rearrange(x, '(b t) c n -> b t n c', b=B, t=T)
         bpm = self.bpm_embedder(bpm)
         
         x = torch.cat([bpm.unsqueeze(2), x], dim=2)
