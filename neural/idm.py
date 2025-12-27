@@ -34,6 +34,7 @@ class FM:
     def add_noise(self, x, t, noise=None):
         noise = torch.randn_like(x) if noise is None else noise
         s = [x.shape[0], x.shape[1]] + [1] * (x.dim() - 2)
+        print(x.shape, t.shape, noise.shape, s)
         x_t = self.alpha(t).view(*s) * x + self.sigma(t).view(*s) * noise
         return x_t, noise
     
