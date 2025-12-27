@@ -50,9 +50,9 @@ eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = False # disabled by default
-wandb_project = out_dir #'zinc20++'
-wandb_run_name = 'llama' + str(time.time())
+wandb_log = True # disabled by default
+wandb_project = out_dir
+wandb_run_name = str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 1 # used to simulate larger batch sizes
