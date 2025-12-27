@@ -556,6 +556,10 @@ class ActionTransformer(nn.Module):
         x, indices = self.vq(x)
         x = self.from_vq(x)
         
+        print(x.shape, indices.shape)
+        x = x[:, 1:]
+        indices = indices[:, 1:]
+        
         return x, indices
 
 class DiTBlock(nn.Module):
@@ -729,7 +733,7 @@ class IDM(nn.Module):
         
         z, indices = self.action_model(x.clone(), bpm.clone())
         
-        x = self.decoder(x, bpm, z)
+        x = self.decoder(x[:, :-1], bpm[:, :-1], z)
         return x, indices
     
     def enocde_actions(self, x, bpm):
