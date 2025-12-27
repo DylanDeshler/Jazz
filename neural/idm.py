@@ -623,7 +623,7 @@ class ModernDiT(nn.Module):
         self.fc = nn.Linear(hidden_size, in_channels, bias=False)
         
         self.initialize_weights()
-        self.register_buffer('block_causal_mask', create_block_causal_mask(spatial_window, n_chunks))
+        self.register_buffer('block_causal_mask', create_block_causal_mask(spatial_window, n_chunks-1))
         self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
     
     def initialize_weights(self):
@@ -654,7 +654,6 @@ class ModernDiT(nn.Module):
         x = x[:, 1:]
         t = t[:, 1:]
         bpm = bpm[:, 1:]
-        actions = actions[:, 1:]
         B, T, N, C = x.shape
         
         bpm = self.bpm_embedder(bpm)
