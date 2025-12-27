@@ -541,6 +541,7 @@ class ModernDiT(nn.Module):
         bpm = self.bpm_embedder(bpm.flatten()).view(B, T, 1, -1)
         bpm = torch.cat([bpm[:, 1:], bpm[:, :-1]], dim=-1)
         t = self.t_embedder(t)
+        T = T - 1
         
         x = torch.cat([x[:, 1:], clean_x[:, :-1]], dim=-1)
         x = rearrange(x, 'b t n c -> (b t) c n')
