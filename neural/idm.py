@@ -575,7 +575,7 @@ class DiTBlock(nn.Module):
             torch.randn(6, hidden_size) / hidden_size ** 0.5,
         )
     
-    def forward(self, x, t, freqs_cis=None, attn_mask=False, is_causal=False):
+    def forward(self, x, t, freqs_cis=None, attn_mask=None, is_causal=False):
         biases = self.scale_shift_table[None] + t.reshape(x.size(0), x.size(1), 6, -1)
         (
             shift_msa,
@@ -646,7 +646,7 @@ class ModernDiT(nn.Module):
         
         self.initialize_weights()
         self.register_buffer('block_causal_mask', create_block_causal_mask(spatial_window, n_chunks - 1))
-        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, 2*max_input_size))
+        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
     
     def initialize_weights(self):
         self.apply(self._init_weights)
