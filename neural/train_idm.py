@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from idm import IDM_B as net
+from raw_idm import IDM_B as net
 from dito import DiToV5 as Tokenizer
 import soundfile as sf
 
@@ -40,7 +40,7 @@ import pyrubberband as pyrb
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'IDM_measures_bpm_B_RFSQ_64codes_3quants'
+out_dir = 'RawIDM_measures_bpm_B_RFSQ_64codes_3quants'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -50,7 +50,7 @@ eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = True # disabled by default
+wandb_log = False # disabled by default
 wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
