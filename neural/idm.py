@@ -706,7 +706,6 @@ class ModernDiT(nn.Module):
         x = modulate(self.norm(x), shift.squeeze(2), scale.squeeze(2))
         x = self.fc(x)
         x = rearrange(x, 'b (t n) c -> b t n c', t=T, n=N)
-        x = x[:, 1:]
         return x
 
 class ModernDiTWrapper(nn.Module):
