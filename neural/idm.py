@@ -553,9 +553,9 @@ class ActionTransformer(nn.Module):
         x = x[:, :, 1:]
         x = rearrange(x, 'b t n c -> b t (n c)')
         
-        # print(x.shape)
-        # x = x.contiguous()[:, 1:].contiguous()
-        # print(x.shape)
+        print(x.shape)
+        x = x[:, 1:]
+        print(x.shape)
         
         x = self.to_vq(x)
         x, indices = self.vq(x)
@@ -734,7 +734,7 @@ class IDM(nn.Module):
         
         z, indices = self.action_model(x.clone(), bpm.clone())
         
-        x = self.decoder(x, bpm, z)
+        x = self.decoder(x[:, :-1], bpm[:, :-1], z)
         return x, indices
     
     def enocde_actions(self, x, bpm):
