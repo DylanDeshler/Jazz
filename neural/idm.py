@@ -558,9 +558,11 @@ class ActionTransformer(nn.Module):
         
         # x = x[:, 1:]
         
+        print(x.shape)
         x = self.to_vq(x)
         x, indices = self.vq(x)
         x = self.from_vq(x)
+        print(x.shape, indices.shape)
         
         return x, indices
 
