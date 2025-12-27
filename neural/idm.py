@@ -556,7 +556,7 @@ class ActionTransformer(nn.Module):
         
         x = rearrange(x, '(b n) t c -> b t (n c)', b=B, n=N+1)
         
-        # x = x[:, 1:]
+        x = x[:, 1:]
         
         x = self.to_vq(x)
         x, indices = self.vq(x)
@@ -654,9 +654,9 @@ class ModernDiT(nn.Module):
     
     def forward(self, x, t, bpm, actions):
         # drop 1st token because no action for it
-        # x = x[:, 1:]
-        # t = t[:, 1:]
-        # bpm = bpm[:, 1:]
+        x = x[:, 1:]
+        t = t[:, 1:]
+        bpm = bpm[:, 1:]
         B, T, N, C = x.shape
         
         bpm = self.bpm_embedder(bpm)

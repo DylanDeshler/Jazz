@@ -412,8 +412,8 @@ while True:
                 "lr": lr,
                 "mfu": running_mfu*100, # convert to percentage
                 "tokens": tokens_trained,
-                "train/codebook_usage": usage['train'],
-                "val/codebook_usage": usage['val']
+                "train/codebook_usage": np.mean(usage['train']),
+                "val/codebook_usage": np.mean(usage['val'])
             })
         if losses['val'] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses['val']
