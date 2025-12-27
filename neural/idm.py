@@ -627,7 +627,7 @@ class ModernDiT(nn.Module):
         self.x_embedder = Patcher(in_channels, hidden_size)
         
         self.fuse_conditioning = SwiGLUMlp(hidden_size * 2, hidden_size, hidden_size, bias=False)
-        self.null_x = nn.Embedding(1, hidden_size)
+        self.null_x = nn.Parameter(torch.randn(spatial_window, in_channels) / in_channels ** 0.5)
         
         self.t_block = nn.Sequential(
             nn.SiLU(),
@@ -683,7 +683,7 @@ class ModernDiT(nn.Module):
         # x = torch.cat([x[:, 1:], clean_x[:, :-1]], dim=-1)
         # x = self.proj(x)
         
-        x = torch.cat([self.null_x.weight[0], x], dim=1)
+        x = torch.cat([self.null_x.unsqueeze(0).unsqueeze(0), x], dim=1)
         B, T, N, C = x.shape
         x = rearrange(x, 'b t n c -> (b t) c n')
         x = self.x_embedder(x)
