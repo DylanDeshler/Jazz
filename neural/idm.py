@@ -652,6 +652,10 @@ class ModernDiT(nn.Module):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
     def forward(self, x, t, bpm, actions):
+        x = x[:, 1:]
+        t = t[:, 1:]
+        bpm = bpm[:, 1:]
+        actions = actions[:, 1:]
         B, T, N, C = x.shape
         
         bpm = self.bpm_embedder(bpm)
@@ -734,7 +738,7 @@ class IDM(nn.Module):
         
         z, indices = self.action_model(x.clone(), bpm.clone())
         
-        x = self.decoder(x[:, :-1], bpm[:, :-1], z)
+        x = self.decoder(x, bpm, z)
         return x, indices
     
     def enocde_actions(self, x, bpm):
