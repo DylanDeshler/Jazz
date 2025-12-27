@@ -674,7 +674,6 @@ class ModernDiT(nn.Module):
     def forward(self, x, t, bpm, actions, clean_x):
         # drop 1st token because no action for it
         t = t[:, 1:]
-        B, T, N, C = x.shape
         
         bpm = self.bpm_embedder(bpm)
         bpm = torch.cat([bpm[:, 1:], bpm[:, :-1]], dim=-1)
@@ -682,6 +681,8 @@ class ModernDiT(nn.Module):
         
         x = torch.cat([x[:, 1:], clean_x[:, :-1]], dim=-1)
         x = self.proj(x)
+        
+        B, T, N, C = x.shape
         x = rearrange(x, 'b t n c -> (b t) c n')
         x = self.x_embedder(x)
         x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
