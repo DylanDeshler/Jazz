@@ -11,7 +11,7 @@ from vector_quantize_pytorch import FSQ, ResidualFSQ
 
 class FM:
     
-    def __init__(self, chunk_size, sigma_min=1e-5, timescale=1.0):
+    def __init__(self, sigma_min=1e-5, timescale=1.0):
         self.sigma_min = sigma_min
         self.prediction_type = None
         self.timescale = timescale
