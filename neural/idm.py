@@ -34,7 +34,18 @@ class FM:
     def add_noise(self, x, t, noise=None):
         noise = torch.randn_like(x) if noise is None else noise
         s = [x.shape[0], x.shape[1], x.shape[2], 1]
-        x_t = self.alpha(t).view(*s) * x + self.sigma(t).view(*s) * noise
+        
+        mask = torch.ones(*s)
+        mask[:, 0, :, :] = 0
+        mask = mask.bool()
+        
+        alpha = self.alpha(t).view(*s)
+        sigma = self.sigma(t).view(*s)
+        
+        alpha = torch.where(mask == 0, torch.ones_like(alpha), alpha)
+        sigma = torch.where(mask == 0, torch.zeros_like(sigma), sigma)
+        
+        x_t = alpha * x + sigma * noise
         return x_t, noise
     
     def loss(self, net, x, t=None, net_kwargs=None, return_loss_unreduced=False, return_all=False):
@@ -59,7 +70,7 @@ class FM:
             else:
                 return loss, t
         else:
-            # dont calculate loss over first token
+            # dont calculate loss over first token (because its not noised)
             loss = ((pred[:, 1:].float() - target[:, 1:].float()) ** 2).mean()
             if return_all:
                 return loss, x_t, pred
