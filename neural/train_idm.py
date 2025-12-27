@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from idm import IDM_B as net
+from idm import IDM_M as net
 from dito import DiToV5 as Tokenizer
 import soundfile as sf
 
@@ -40,7 +40,7 @@ import pyrubberband as pyrb
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'IDM_measures_bpm_B_RFSQ_64codes_3quants'
+out_dir = 'IDM_measures_bpm_M_RFSQ_64codes_3quants'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -56,7 +56,7 @@ wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 1 # used to simulate larger batch sizes
-batch_size = 128 # * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 96 # * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 spatial_window = 48
 n_chunks = 8
