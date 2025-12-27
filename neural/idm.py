@@ -650,9 +650,9 @@ class ModernDiT(nn.Module):
     def initialize_weights(self):
         self.apply(self._init_weights)
         # zero out classifier weights
-        nn.init.zeros_(self.fc.weight)
-        nn.init.zeros_(self.t_block[-1].weight)
-        nn.init.zeros_(self.t_block[-1].bias)
+        # nn.init.zeros_(self.fc.weight)
+        # nn.init.zeros_(self.t_block[-1].weight)
+        # nn.init.zeros_(self.t_block[-1].bias)
         # zero out c_proj weights in all blocks
         for block in self.blocks:
             nn.init.zeros_(block.mlp.w3.weight)
