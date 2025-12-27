@@ -132,7 +132,7 @@ def get_batch(split='train'):
         idxs = torch.randint(int(len(data) * 0.98) - n_chunks, (batch_size,))
     else:
         idxs = torch.randint(int(len(data) * 0.98), len(data) - n_chunks, (batch_size,))
-    x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).view(batch_size, max_seq_len, vae_embed_dim).pin_memory().to(device, non_blocking=True)
+    x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     ratio = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 0] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     bpm = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     return x, ratio, bpm

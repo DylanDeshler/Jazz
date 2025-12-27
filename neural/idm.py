@@ -636,18 +636,19 @@ class ModernDiT(nn.Module):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
     def forward(self, x, t, bpm, actions):
+        B, T, N, C = x.shape
+        
         bpm = self.bpm_embedder(bpm)
-        actions = self.action_embedder(actions)
         t = self.t_embedder(t)
         
-        x = rearrange(x, 'b l c -> b c l')
+        x = rearrange(x, 'b t n c -> (b t) c n')
         x = self.x_embedder(x)
-        x = rearrange(x, 'b c l -> b l c')
+        x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
         
         print(x.shape, t.shape, bpm.shape, actions.shape)
         t = torch.cat([t, bpm, actions], dim=-1)
         t = self.fuse_conditioning(t)
-        t = repeat(t, 'b t c -> b (t l) c', l=self.spatial_window)
+        t = repeat(t, 'b t c -> b (t n) c', n=N)
         t0 = self.t_block(t)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
