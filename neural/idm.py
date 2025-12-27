@@ -71,8 +71,8 @@ class FM:
                 return loss, t
         else:
             # dont calculate loss over first token (because its not noised)
-            # loss = ((pred[:, 1:].float() - target[:, 1:].float()) ** 2).mean()
-            loss = ((pred.float() - target[:, 1:].float()) ** 2).mean()
+            loss = ((pred[:, 1:].float() - target[:, 1:].float()) ** 2).mean()
+            # loss = ((pred.float() - target[:, 1:].float()) ** 2).mean()
             if return_all:
                 return loss, x_t, pred
             else:
@@ -554,7 +554,7 @@ class ActionTransformer(nn.Module):
         x = x[:, :, 1:]
         x = rearrange(x, 'b t n c -> b t (n c)')
         
-        x = x[:, 1:]
+        # x = x[:, 1:]
         
         x = self.to_vq(x)
         x, indices = self.vq(x)
@@ -652,9 +652,9 @@ class ModernDiT(nn.Module):
     
     def forward(self, x, t, bpm, actions):
         # drop 1st token because no action for it
-        x = x[:, 1:]
-        t = t[:, 1:]
-        bpm = bpm[:, 1:]
+        # x = x[:, 1:]
+        # t = t[:, 1:]
+        # bpm = bpm[:, 1:]
         B, T, N, C = x.shape
         
         bpm = self.bpm_embedder(bpm)
