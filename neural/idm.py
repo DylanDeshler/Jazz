@@ -646,12 +646,10 @@ class ModernDiT(nn.Module):
         x = self.x_embedder(x)
         x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
         
-        print(x.shape, t.shape, bpm.shape, actions.shape)
         t = torch.cat([t, bpm, actions], dim=-1)
         t = self.fuse_conditioning(t)
         t = repeat(t, 'b t c -> b (t n) c', n=N)
         t0 = self.t_block(t)
-        print(t0.shape)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
         for block in self.blocks:
@@ -663,6 +661,7 @@ class ModernDiT(nn.Module):
         )
         x = modulate(self.norm(x), shift.squeeze(2), scale.squeeze(2))
         x = self.fc(x)
+        x = rearrange(x, 'b (t n) c -> b t n c', t=T, n=N)
         return x
 
 class ModernDiTWrapper(nn.Module):
