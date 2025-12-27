@@ -626,7 +626,7 @@ class ModernDiT(nn.Module):
         self.proj = nn.Linear(2 * in_channels, hidden_size, bias=True)
         self.x_embedder = Patcher(in_channels, hidden_size)
         
-        self.fuse_conditioning = SwiGLUMlp(hidden_size * 2, hidden_size, hidden_size, bias=False)
+        self.fuse_conditioning = SwiGLUMlp(hidden_size * 3, hidden_size, hidden_size, bias=False)
         self.null_x = nn.Parameter(torch.randn(spatial_window, in_channels) / in_channels ** 0.5)
         
         self.t_block = nn.Sequential(
