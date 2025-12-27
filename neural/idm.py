@@ -734,7 +734,7 @@ class IDM(nn.Module):
         
         z, indices = self.action_model(x.clone(), bpm.clone())
         
-        x = self.decoder(x[:, :-1], bpm[:, :-1], z)
+        x = self.decoder(x, bpm, z)
         return x, indices
     
     def enocde_actions(self, x, bpm):
