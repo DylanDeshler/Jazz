@@ -554,7 +554,7 @@ class ActionTransformer(nn.Module):
         x = rearrange(x, 'b t n c -> b t (n c)')
         
         print(x.shape)
-        x = x[:, 1:]
+        x = x[:, 1:].contiguous()
         print(x.shape)
         
         x = self.to_vq(x)
