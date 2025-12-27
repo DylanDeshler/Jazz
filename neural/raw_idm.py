@@ -569,6 +569,7 @@ class ModernDiT(nn.Module):
         x = modulate(self.norm(x), shift, scale)
         x = self.fc(x)
         x = rearrange(x, 'b (t n) c -> b t n c', t=T, n=N)
+        x = torch.cat([clean_x[:, [0]], x], dim=1)
         return x
 
 class ModernDiTWrapper(nn.Module):
