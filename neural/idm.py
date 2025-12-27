@@ -34,7 +34,6 @@ class FM:
     def add_noise(self, x, t, noise=None):
         noise = torch.randn_like(x) if noise is None else noise
         s = [x.shape[0], x.shape[1], x.shape[2], 1]
-        print(x.shape, t.shape, noise.shape, s)
         x_t = self.alpha(t).view(*s) * x + self.sigma(t).view(*s) * noise
         return x_t, noise
     
@@ -45,13 +44,9 @@ class FM:
             net_kwargs = {}
         
         if t is None:
-            print(x.shape)
             t = torch.rand(B, T, device=x.device)
-            print(t.shape)
             repeat_t = t.unsqueeze(2).repeat(1, 1, N)
-            print(repeat_t.shape)
         x_t, noise = self.add_noise(x, repeat_t)
-        print(x_t.shape, noise.shape)
         
         pred = net(x_t, t=t * self.timescale, **net_kwargs)
         
@@ -565,6 +560,7 @@ class DiTBlock(nn.Module):
         )
     
     def forward(self, x, t, freqs_cis=None, attn_mask=False):
+        print(x.shape, t.shape)
         biases = self.scale_shift_table[None] + t.reshape(x.size(0), 6, -1)
         (
             shift_msa,
@@ -656,6 +652,7 @@ class ModernDiT(nn.Module):
         t = self.fuse_conditioning(t)
         t = repeat(t, 'b t c -> b (t n) c', n=N)
         t0 = self.t_block(t)
+        print(t0.shape)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
         for block in self.blocks:
