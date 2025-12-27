@@ -72,7 +72,7 @@ class FM:
         else:
             # dont calculate loss over first token (because its not noised)
             # loss = ((pred[:, 1:].float() - target[:, 1:].float()) ** 2).mean()
-            loss = ((pred.float() - target.float()) ** 2).mean()
+            loss = ((pred.float() - target[:, 1:].float()) ** 2).mean()
             if return_all:
                 return loss, x_t, pred
             else:
