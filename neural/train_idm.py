@@ -237,6 +237,7 @@ def estimate_codebook_usage():
                 
                 for q in range(num_quantizers):
                     q_indices = indices[..., q].flatten()
+                    print(q_indices.shape)
                     num_tokens = q_indices.numel()
 
                     counts = torch.bincount(q_indices, minlength=math.prod(levels)).float()
