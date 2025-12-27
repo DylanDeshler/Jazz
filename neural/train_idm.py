@@ -59,7 +59,7 @@ gradient_accumulation_steps = 1 # used to simulate larger batch sizes
 batch_size = 96 # * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 spatial_window = 48
-n_chunks = 8
+n_chunks = 8 + 1 # look ahead
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
 # 2^4 2^6 2^8 2^9 2^10 2^11 2^12 2^14 2^16
@@ -132,9 +132,9 @@ def get_batch(split='train'):
         idxs = torch.randint(int(len(data) * 0.98) - n_chunks, (batch_size,))
     else:
         idxs = torch.randint(int(len(data) * 0.98), len(data) - n_chunks, (batch_size,))
-    x = torch.from_numpy(np.stack([data[idx:idx+n_chunks+1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    ratio = torch.from_numpy(np.stack([meta[idx:idx+n_chunks+1, 0] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    bpm = torch.from_numpy(np.stack([meta[idx:idx+n_chunks+1, 1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    ratio = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 0] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    bpm = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     return x, ratio, bpm
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
