@@ -561,9 +561,11 @@ class ModernDiT(nn.Module):
         
         # SAM Audio does not use a non-linearity on t here
         # maybe these shapes are wrong? different from DiTBlock
+        print(t.shape)
         shift, scale = (self.final_layer_scale_shift_table[None] + F.silu(t[:, None])).chunk(
             2, dim=2
         )
+        # biases = self.scale_shift_table[None] + t.reshape(x.size(0), 6, -1)
         x = modulate(self.norm(x), shift, scale)
         x = self.fc(x)
         x = rearrange(x, 'b (t n) c -> b t n c', t=T, n=N)
