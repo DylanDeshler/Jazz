@@ -62,7 +62,6 @@ spatial_window = 48
 n_chunks = 8
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
-action_channels = vae_embed_dim * 4 # extremely arbitrary choice balancing capacity and tradeoff with input noise
 # 2^4 2^6 2^8 2^9 2^10 2^11 2^12 2^14 2^16
 # [5, 3] [8, 8] [8, 6, 5] [8, 8, 8] [8, 5, 5, 5] [8, 8, 6, 5] [7, 5, 5, 5] [8, 8, 8, 6, 5] [8, 8, 8, 5, 5, 5]
 levels = [8, 8]
@@ -157,7 +156,7 @@ for k,v in list(state_dict.items()):
 tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 
-model_args = dict(in_channels=vae_embed_dim, action_channels=action_channels, n_chunks=n_chunks, spatial_window=spatial_window, num_actions=math.prod(levels), num_quantizers=num_quantizers)
+model_args = dict(in_channels=vae_embed_dim, n_chunks=n_chunks, spatial_window=spatial_window, num_actions=math.prod(levels), num_quantizers=num_quantizers)
 
 if init_from == 'scratch':
     # init a new model from scratch
