@@ -590,6 +590,23 @@ class DiTBlock(nn.Module):
         x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
         return x
 
+def token_drop(labels, null_token, training, p_uncond):
+    if not training:
+        return labels
+    
+    B = labels.shape[0]
+    device = labels.device
+    
+    batch_rand_shape = (B,) + (1,) * (labels.ndim - 2)
+    batch_rand = torch.rand(batch_rand_shape, device=device)
+    
+    mask_drop_all = batch_rand < p_uncond
+    
+    final_mask = mask_drop_all.unsqueeze(-1)
+    null_token = null_token.to(labels.dtype)
+    
+    return torch.where(final_mask, null_token, labels)
+
 class ModernDiT(nn.Module):
     def __init__(self,
                  in_channels,
@@ -609,6 +626,7 @@ class ModernDiT(nn.Module):
         self.x_embedder = Patcher(in_channels, hidden_size)
         
         self.fuse_conditioning = SwiGLUMlp(hidden_size * 3, hidden_size, hidden_size, bias=False)
+        self.null_x = nn.Embedding(1, hidden_size)
         
         self.t_block = nn.Sequential(
             nn.SiLU(),
@@ -626,7 +644,7 @@ class ModernDiT(nn.Module):
         self.fc = nn.Linear(hidden_size, in_channels, bias=False)
         
         self.initialize_weights()
-        self.register_buffer('block_causal_mask', create_block_causal_mask(spatial_window, n_chunks))
+        self.register_buffer('block_causal_mask', create_block_causal_mask(spatial_window, n_chunks - 1))
         self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
     
     def initialize_weights(self):
@@ -665,6 +683,8 @@ class ModernDiT(nn.Module):
         x = rearrange(x, 'b t n c -> (b t) c n')
         x = self.x_embedder(x)
         x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
+        
+        x = token_drop(x, self.null_x.weight[0], self.training, 0.2)
         
         t = torch.cat([t, bpm, actions], dim=-1)
         t = self.fuse_conditioning(t)
