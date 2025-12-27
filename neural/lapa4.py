@@ -582,7 +582,6 @@ class ConvBlock1d(nn.Module):
         x = self.activation(x)
         return self.project(x)
 
-
 class ResnetBlock1d(nn.Module):
     def __init__(
         self,
@@ -621,7 +620,6 @@ class ResnetBlock1d(nn.Module):
         h = self.block1(x)
         h = self.block2(h)
         return h + self.to_out(x)
-
 
 class Patcher(torch.nn.Module):
     def __init__(
