@@ -490,8 +490,8 @@ class ActionTransformer(nn.Module):
         ])
         
         self.to_vq = nn.Sequential(
-            nn.LayerNorm(spatial_window * hidden_size, elementwise_affine=False),
-            nn.Linear(spatial_window * hidden_size, len(levels)),
+            nn.LayerNorm(spatial_window * hidden_size),
+            nn.Linear((spatial_window + 1) * hidden_size, len(levels)),
         )
         # self.vq = FSQ(levels=levels)
         self.vq = ResidualFSQ(levels=levels, num_quantizers=num_quantizers, quantize_dropout=True)
@@ -554,15 +554,15 @@ class ActionTransformer(nn.Module):
         for block in self.temporal_blocks:
             x = block(x, is_causal=True)
         
-        x = rearrange(x, '(b n) t c -> b t n c', b=B, n=N+1)
-        x = x[:, :, 1:]
-        x = rearrange(x, 'b t n c -> b t (n c)')
+        x = rearrange(x, '(b n) t c -> b t (n c)', b=B, n=N+1)
         
         # x = x[:, 1:]
         
+        print(x.shape)
         x = self.to_vq(x)
         x, indices = self.vq(x)
         x = self.from_vq(x)
+        print(x.shape)
         
         return x, indices
 
@@ -608,9 +608,9 @@ class ModernDiT(nn.Module):
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
         self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True, max_period=1000)
-        self.x_embedder = Patcher(in_channels, hidden_size)
+        self.x_embedder = Patcher(in_channels + hidden_size, hidden_size)
         
-        self.fuse_conditioning = SwiGLUMlp(hidden_size * 3, hidden_size, hidden_size, bias=False)
+        self.fuse_conditioning = SwiGLUMlp(hidden_size * 2, hidden_size, hidden_size, bias=False)
         
         self.t_block = nn.Sequential(
             nn.SiLU(),
@@ -664,11 +664,12 @@ class ModernDiT(nn.Module):
         bpm = self.bpm_embedder(bpm)
         t = self.t_embedder(t)
         
+        x = torch.cat([x, actions], dim=-1)
         x = rearrange(x, 'b t n c -> (b t) c n')
         x = self.x_embedder(x)
         x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
         
-        t = torch.cat([t, bpm, actions], dim=-1)
+        t = torch.cat([t, bpm], dim=-1)
         t = self.fuse_conditioning(t)
         t = repeat(t, 'b t c -> b (t n) c', n=N)
         t0 = self.t_block(t)
