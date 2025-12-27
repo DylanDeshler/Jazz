@@ -516,7 +516,6 @@ class ActionTransformer(nn.Module):
             torch.nn.init.zeros_(block.attn.proj.weight)
         
         self.to_vq[1].reset_parameters()
-        self.to_vq.requires_grad_(False)
         # self.from_vq.reset_parameters()
         # self.to_vq.fc.reset_parameters()
 
