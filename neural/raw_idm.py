@@ -545,9 +545,7 @@ class ModernDiT(nn.Module):
         
         x = torch.cat([x[:, 1:], clean_x[:, :-1]], dim=-1)
         x = rearrange(x, 'b t n c -> (b t) c n')
-        print(x.shape)
         x = self.x_embedder(x)
-        print(x.shape)
         x = rearrange(x, '(b t) c n -> b t n c', b=B, t=T)
         x = torch.cat([x, actions.unsqueeze(2).repeat(1, 1, N, 1), bpm.repeat(1, 1, N, 1)], dim=-1)
         x = self.fuse_conditioning(x)
@@ -561,7 +559,6 @@ class ModernDiT(nn.Module):
         
         # SAM Audio does not use a non-linearity on t here
         # maybe these shapes are wrong? different from DiTBlock
-        print(t.shape)
         shift, scale = (self.final_layer_scale_shift_table[None] + F.silu(t[:, None])).chunk(
             2, dim=1
         )
