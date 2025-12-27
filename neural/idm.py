@@ -623,11 +623,11 @@ class ModernDiT(nn.Module):
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
         self.bpm_embedder = TimestepEmbedder(hidden_size // 2, bias=False, swiglu=True, max_period=1000)
-        self.proj = nn.Linear(2 * in_channels, hidden_size, bias=True)
+        # self.proj = nn.Linear(2 * in_channels, hidden_size, bias=True)
         self.x_embedder = Patcher(in_channels, hidden_size)
         
         self.fuse_conditioning = SwiGLUMlp(hidden_size * 3, hidden_size, hidden_size, bias=False)
-        self.null_x = nn.Parameter(torch.randn(spatial_window, in_channels) / in_channels ** 0.5)
+        # self.null_x = nn.Parameter(torch.randn(spatial_window, in_channels) / in_channels ** 0.5)
         
         self.t_block = nn.Sequential(
             nn.SiLU(),
@@ -674,7 +674,7 @@ class ModernDiT(nn.Module):
     def forward(self, x, t, bpm, actions, clean_x):
         # drop 1st token because no action for it
         t = t[:, 1:]
-        # x = x[:, 1:]
+        x = x[:, 1:]
         
         bpm = self.bpm_embedder(bpm)
         bpm = torch.cat([bpm[:, 1:], bpm[:, :-1]], dim=-1)
@@ -683,13 +683,10 @@ class ModernDiT(nn.Module):
         # x = torch.cat([x[:, 1:], clean_x[:, :-1]], dim=-1)
         # x = self.proj(x)
         
-        x = torch.cat([self.null_x.unsqueeze(0).unsqueeze(0).repeat(x.shape[0], 1, 1, 1), x], dim=1)
         B, T, N, C = x.shape
-        print(x.shape)
         x = rearrange(x, 'b t n c -> (b t) c n')
         x = self.x_embedder(x)
         x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
-        print(x.shape, actions.shape)
         
         # x = token_drop(x, self.null_x.weight[0], self.training, 1)
         
