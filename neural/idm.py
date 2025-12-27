@@ -575,7 +575,7 @@ class DiTBlock(nn.Module):
             torch.randn(6, hidden_size) / hidden_size ** 0.5,
         )
     
-    def forward(self, x, t, freqs_cis=None, attn_mask=False):
+    def forward(self, x, t, freqs_cis=None, attn_mask=False, is_causal=False):
         biases = self.scale_shift_table[None] + t.reshape(x.size(0), x.size(1), 6, -1)
         (
             shift_msa,
@@ -586,7 +586,7 @@ class DiTBlock(nn.Module):
             gate_mlp,
         ) = [chunk.squeeze(2) for chunk in biases.chunk(6, dim=2)]
         
-        x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask)
+        x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask, is_causal=is_causal)
         x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
         return x
 
@@ -646,7 +646,7 @@ class ModernDiT(nn.Module):
         
         self.initialize_weights()
         self.register_buffer('block_causal_mask', create_block_causal_mask(spatial_window, n_chunks - 1))
-        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
+        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, 2*max_input_size))
     
     def initialize_weights(self):
         self.apply(self._init_weights)
@@ -700,7 +700,7 @@ class ModernDiT(nn.Module):
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
         for block in self.blocks:
-            x = block(x, t0, freqs_cis=freqs_cis, attn_mask=self.block_causal_mask)
+            x = block(x, t0, is_causal=True, attn_mask=self.block_causal_mask)
         
         # SAM Audio does not use a non-linearity on t here
         shift, scale = (self.final_layer_scale_shift_table[None, None] + F.silu(t[:, :, None])).chunk(
