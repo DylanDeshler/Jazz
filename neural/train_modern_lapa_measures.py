@@ -53,7 +53,7 @@ from torch.nn.attention import SDPBackend, sdpa_kernel
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'ModernLAPA_measures_bpm_B_RFSQ_16codes_3quants'
+out_dir = 'ModernLAPA_measures_bpm_B_RFSQ_16codes_3quants_state'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
