@@ -700,7 +700,7 @@ class ModernDiT(nn.Module):
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
         for block in self.blocks:
-            x = block(x, t0, is_causal=True, attn_mask=self.block_causal_mask)
+            x = block(x, t0, freqs_cis=freqs_cis, is_causal=True)
         
         # SAM Audio does not use a non-linearity on t here
         shift, scale = (self.final_layer_scale_shift_table[None, None] + F.silu(t[:, :, None])).chunk(
