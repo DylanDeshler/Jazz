@@ -478,7 +478,8 @@ class ActionTransformer(nn.Module):
                  ):
         super().__init__()
         
-        self.x_embedder = nn.Sequential(nn.Linear(in_channels, hidden_size, bias=True), RMSNorm(hidden_size))
+        # self.x_embedder = nn.Sequential(nn.Linear(in_channels, hidden_size, bias=True), RMSNorm(hidden_size))
+        self.x_embedder = Patcher(in_channels, hidden_size)
         self.bpm_embedder = TimestepEmbedder(hidden_size, max_period=1000)
         
         self.spatial_blocks = nn.ModuleList([
@@ -536,7 +537,10 @@ class ActionTransformer(nn.Module):
         """
         B, T, N, C = x.shape
         
+        # x = self.x_embedder(x)
+        x = rearrange(x, 'b t n c -> (b t) c n')
         x = self.x_embedder(x)
+        x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
         bpm = self.bpm_embedder(bpm)
         
         x = torch.cat([bpm.unsqueeze(2), x], dim=2)
