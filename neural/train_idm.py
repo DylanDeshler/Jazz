@@ -309,9 +309,9 @@ def generate_lam_vs_random_actions(step):
         recon, random_recon = model.lam_vs_random_actions(x.clone(), bpm, n_steps=50)
     
     with ctx:
-        x = tokenizer.decode(x.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
-        recon = tokenizer.decode(recon.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
-        random_recon = tokenizer.decode(random_recon.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
+        x = tokenizer.decode(x.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
+        recon = tokenizer.decode(recon.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
+        random_recon = tokenizer.decode(random_recon.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
     
     x = x.cpu().detach().float().numpy().squeeze(1)
     recon = recon.cpu().detach().float().numpy().squeeze(1)
