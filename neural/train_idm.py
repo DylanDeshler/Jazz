@@ -48,7 +48,7 @@ save_interval = 5000
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir
@@ -309,21 +309,21 @@ def generate_lam_vs_random_actions(step):
         recon, random_recon = model.lam_vs_random_actions(x.clone(), bpm, n_steps=50)
     
     with ctx:
-        x = tokenizer.decode(x.permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
-        recon = tokenizer.decode(recon.permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
-        random_recon = tokenizer.decode(random_recon.permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
+        x = tokenizer.decode(x.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
+        recon = tokenizer.decode(recon.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
+        random_recon = tokenizer.decode(random_recon.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
     
     x = x.cpu().detach().float().numpy().squeeze(1)
     recon = recon.cpu().detach().float().numpy().squeeze(1)
     random_recon = random_recon.cpu().detach().float().numpy().squeeze(1)
     
     for i in range(20):
-        og, y, random_y, r = x[i], recon[i], random_recon[i], ratio[i, 0].cpu().detach().numpy().item()
+        og, y, random_y, r = x[i], recon[i], random_recon[i], ratio[i, 0].cpu().detach().numpy()
         
         # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), np.concatenate([restore_measure(og[j], r[j]) for j in range(len(og))]), 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), np.concatenate([restore_measure(y[j], r[j]) for j in range(len(og))]), 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), np.concatenate([restore_measure(random_y[j], r[j]) for j in range(len(og))]), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), np.concatenate([restore_measure(og[j], r[j].item()) for j in range(len(og))]), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), np.concatenate([restore_measure(y[j], r[j].item()) for j in range(len(og))]), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), np.concatenate([restore_measure(random_y[j], r[j].item()) for j in range(len(og))]), 16000)
 
 # logging
 if wandb_log and master_process:
