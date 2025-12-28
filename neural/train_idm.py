@@ -318,7 +318,7 @@ def generate_lam_vs_random_actions(step):
     random_recon = random_recon.cpu().detach().float().numpy().squeeze(1)
     
     for i in range(20):
-        og, y, random_y, r = x[i], recon[i], random_recon[i], ratio[i, 0].cpu().detach().numpy()
+        og, y, random_y, r = x[i], recon[i], random_recon[i], ratio[i].cpu().detach().numpy()
         
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), np.concatenate([restore_measure(og[j], r[j].item()) for j in range(len(og))]), 16000)
