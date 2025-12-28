@@ -55,7 +55,7 @@ class FM:
             else:
                 return loss, t
         else:
-            loss = ((pred.float() - target[:, 1:].float()) ** 2).mean()
+            loss = ((pred[:, 1:].float() - target[:, 1:].float()) ** 2).mean()
             if return_all:
                 return loss, x_t, pred
             else:
@@ -675,6 +675,7 @@ class ModernDiT(nn.Module):
         x = modulate(self.norm(x), shift, scale)
         x = self.fc(x)
         x = rearrange(x, 'b (t n) c -> b t n c', t=T, n=N)
+        x = torch.cat([clean_x[:, [0]], x], dim=1)
         
         return x
 
@@ -691,7 +692,7 @@ class ModernDiTWrapper(nn.Module):
     
     def sample(self, x, bpm, actions, clean_x, n_steps=50):
         out = self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm, 'clean_x': clean_x})
-        out = torch.cat([clean_x[:, [0]], out], dim=1)
+        out[:, 0] = clean_x[:, 0]
         return out
 
 class IDM(nn.Module):
