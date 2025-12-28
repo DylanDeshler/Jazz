@@ -58,6 +58,7 @@ dataset = ''
 gradient_accumulation_steps = 1 # used to simulate larger batch sizes
 batch_size = 256 # * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
+cut_seconds = 1
 spatial_window = 48
 n_chunks = 4 + 1 # look ahead
 max_seq_len = spatial_window * n_chunks
@@ -307,65 +308,22 @@ def generate_lam_vs_random_actions(step):
     with ctx:
         recon, random_recon = model.lam_vs_random_actions(x.clone(), bpm, n_steps=50)
     
-    if decoder_window > spatial_window:
-        raise NotImplementedError()
-        t2 = decoder_window // spatial_window
-        t1 = (temporal_window // t2) + (n_autoregressive_steps // t2)
-        x = rearrange(x, 'b (t1 t2) n c -> b t1 (t2 n) c', t1=t1, t2=t2)
-        recon = rearrange(recon, 'b (t1 t2) n c -> b t1 (t2 n) c', t1=t1, t2=t2)
-        random_recon = rearrange(random_recon, 'b (t1 t2) n c -> b t1 (t2 n) c', t1=t1, t2=t2)
-        
-        B, T, N, D = x.shape
-    
     with ctx:
-        x = tokenizer.decode(torch.cat([x[:, 0], x[:, 1]], dim=0).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
+        x = tokenizer.decode(x.permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
         recon = tokenizer.decode(recon.permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
         random_recon = tokenizer.decode(random_recon.permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
     
-    x0, x = x.chunk(2, dim=0)
-    x0 = x0.cpu().detach().float().numpy().squeeze(1)
     x = x.cpu().detach().float().numpy().squeeze(1)
     recon = recon.cpu().detach().float().numpy().squeeze(1)
     random_recon = random_recon.cpu().detach().float().numpy().squeeze(1)
     
     for i in range(20):
-        og0, og, y, random_y, r0, r = x0[i], x[i], recon[i], random_recon[i], ratio[i, 0].cpu().detach().numpy().item(), ratio[i, 1].cpu().detach().numpy().item()
-
-        # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), np.concatenate([restore_measure(og0, r0), restore_measure(og, r)]), 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), np.concatenate([restore_measure(og0, r0), restore_measure(y, r)]), 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), np.concatenate([restore_measure(og0, r0), restore_measure(random_y, r)]), 16000)
-
-@torch.no_grad()
-def save_samples(step):
-    batch_dir = os.path.join(out_dir, str(step))
-    os.makedirs(batch_dir, exist_ok=True)
-    
-    x, ratio, bpm, actions = get_batch('val')
-    x, ratio, bpm, actions = x[:10], ratio[:10], bpm[:10], actions[:10]
-
-    B, T, N, D = x.shape
-    
-    with ctx:
-        recon = raw_model.generate(x.clone(), bpm, actions, n_steps=50)
-        x = tokenizer.decode(x.permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
-        recon = tokenizer.decode(recon.permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
-    
-    x = x.cpu().detach().float().numpy().squeeze(1)
-    recon = recon.cpu().detach().float().numpy().squeeze(1)
-    ratio = ratio.cpu().detach().numpy()
-
-    for i in range(10):
-        og, y, r = x[i], recon[i], ratio[i].item()
-
-        og_ms, y_ms = [], []
-        for og_m, y_m, r_m in zip(og, y, r):
-            og_ms.append(restore_measure(og_m, r_m))
-            y_ms.append(restore_measure(y_m, r))
+        og, y, random_y, r = x[i], recon[i], random_recon[i], ratio[i, 0].cpu().detach().numpy().item()
         
         # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), np.concatenate(og_ms), 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), np.concatenate(y_ms), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), np.concatenate([restore_measure(og[j], r[j]) for j in range(len(og))]), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), np.concatenate([restore_measure(y[j], r[j]) for j in range(len(og))]), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), np.concatenate([restore_measure(random_y[j], r[j]) for j in range(len(og))]), 16000)
 
 # logging
 if wandb_log and master_process:
@@ -398,11 +356,11 @@ while True:
         usage = estimate_codebook_usage()
         losses = estimate_loss()
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, train perplexity: {usage['train']}, val perplexity {usage['val']}")
-        # if iter_num % sample_interval == 0 and master_process:
-        #     model.eval()
-        #     with ctx:
-        #         metrics = save_samples(iter_num)
-        #     model.train()
+        if iter_num % sample_interval == 0 and master_process:
+            model.eval()
+            with ctx:
+                generate_lam_vs_random_actions(iter_num)
+            model.train()
         #     print(f"iter {iter_num}: delta PSNR {metrics['PSNR']:.3f}, delta Similarity {metrics['Similarity']:.3f}")
         if wandb_log:
             wandb.log({
