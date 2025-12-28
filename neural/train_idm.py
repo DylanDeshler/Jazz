@@ -313,9 +313,9 @@ def generate_lam_vs_random_actions(step):
         recon = tokenizer.decode(recon.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
         random_recon = tokenizer.decode(random_recon.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
     
-    x = x.cpu().detach().float().numpy().squeeze(1)
-    recon = recon.cpu().detach().float().numpy().squeeze(1)
-    random_recon = random_recon.cpu().detach().float().numpy().squeeze(1)
+    x = x.cpu().detach().float().numpy().squeeze()
+    recon = recon.cpu().detach().float().numpy().squeeze()
+    random_recon = random_recon.cpu().detach().float().numpy().squeeze()
     
     for i in range(20):
         og, y, random_y, r = x[i], recon[i], random_recon[i], ratio[i].cpu().detach().numpy()
