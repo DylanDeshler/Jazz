@@ -707,9 +707,9 @@ class ModernDiT(nn.Module):
         #     2, dim=1
         # )
         # AdaLN conditioning
-        shift, scale = (self.final_layer_scale_shift_table[None, None] + F.silu(t[:, :, None])).chunk(
+        shift, scale = [chunk.squeeze() for chunk in (self.final_layer_scale_shift_table[None, None] + F.silu(t[:, :, None])).chunk(
             2, dim=2
-        )
+        )]
         x = modulate(self.norm(x), shift, scale)
         x = self.fc(x)
         x = rearrange(x, 'b (t n) c -> b t n c', t=T, n=N)
