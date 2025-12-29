@@ -666,10 +666,14 @@ class ModernDiT(nn.Module):
         
         # AdaLN conditioning
         t = torch.cat([t.unsqueeze(1).unsqueeze(2).repeat(1, T, N, 1), actions.unsqueeze(2).repeat(1, 1, N, 1), bpm.repeat(1, 1, N, 1)], dim=-1)
+        print(t.shape)
         t = self.fuse_conditioning(t)
+        print(t.shape)
         t = rearrange(t, 'b t n c -> b (t n) c')
+        print(t.shape)
         
         t0 = self.t_block(t)
+        print(x.shape, t.shape)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
         for block in self.blocks:
