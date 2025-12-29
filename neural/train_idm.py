@@ -69,7 +69,7 @@ levels = [8, 8]
 num_quantizers = 3
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 230000 # total number of training iterations
+max_iters = 250000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.95
