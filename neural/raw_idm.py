@@ -532,7 +532,8 @@ class ActionTransformer(nn.Module):
             x = block(x, is_causal=True)
         
         x = rearrange(x, '(b n) t c -> b t n c', b=B, n=N+1)
-        x = x[:, 1:, 1:] - x[:, :-1, 1:]
+        # x = x[:, 1:, 1:] - x[:, :-1, 1:]
+        x = x[:, 1:]
         x = rearrange(x, 'b t n c -> b t (n c)')
         
         x = self.to_vq(x)
