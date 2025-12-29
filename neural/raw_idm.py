@@ -706,6 +706,7 @@ class ModernDiT(nn.Module):
         # shift, scale = (self.final_layer_scale_shift_table[None] + F.silu(t[:, None])).chunk(
         #     2, dim=1
         # )
+        
         # AdaLN conditioning
         shift, scale = [chunk.squeeze() for chunk in (self.final_layer_scale_shift_table[None, None] + F.silu(t[:, :, None])).chunk(
             2, dim=2
