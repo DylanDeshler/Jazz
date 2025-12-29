@@ -691,8 +691,8 @@ class ModernDiTWrapper(nn.Module):
     def forward(self, x, bpm, actions, clean_x, t=None):
         return self.diffusion.loss(self.net, x, t=t, net_kwargs={'actions': actions, 'bpm': bpm, 'clean_x': clean_x})
     
-    def sample(self, x, bpm, actions, clean_x, n_steps=50):
-        out = self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm, 'clean_x': clean_x})
+    def sample(self, x, bpm, actions, clean_x, n_steps=50, noise=None):
+        out = self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm, 'clean_x': clean_x}, noise=noise)
         out[:, 0] = clean_x[:, 0]
         return out
 
@@ -750,7 +750,7 @@ class IDM(nn.Module):
         z, indices = self.action_model(x, bpm)
         return z, indices
     
-    def generate(self, x, bpm, actions, clean_x, n_steps=50):
+    def generate(self, x, bpm, actions, clean_x, n_steps=50, noise=None):
         return self.decoder.sample(x, bpm, actions, clean_x, n_steps=n_steps)
     
     def generate_random_different_actions(self, actions_indices, codebook_size, device):
@@ -769,9 +769,10 @@ class IDM(nn.Module):
     def lam_vs_random_actions(self, x, bpm, n_steps=50):
         z, indices = self.action_model(x.clone(), bpm)
         
+        noise = torch.randn(x.shape, device=x.device)
         random_actions = self.generate_random_different_actions(indices, math.prod(self.levels), x.device)
-        recon = self.generate(x, bpm, z, x, n_steps=n_steps)
-        random = self.generate(x, bpm, self.action_model.from_vq(self.action_model.vq.get_output_from_indices(random_actions)).squeeze(1), x, n_steps=n_steps)
+        recon = self.generate(x, bpm, z, x, n_steps=n_steps, noise=noise)
+        random = self.generate(x, bpm, self.action_model.from_vq(self.action_model.vq.get_output_from_indices(random_actions)).squeeze(1), x, n_steps=n_steps, noise=noise)
         
         return recon, random
 

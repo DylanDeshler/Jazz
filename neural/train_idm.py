@@ -320,10 +320,16 @@ def generate_lam_vs_random_actions(step):
     for i in range(20):
         og, y, random_y, r = x[i], recon[i], random_recon[i], ratio[i].cpu().detach().numpy()
         
+        og_wav = np.concatenate([restore_measure(og[j], r[j].item()) for j in range(len(og))])
+        recon_wav = np.concatenate([restore_measure(y[j], r[j].item()) for j in range(len(og))])
+        random_wav = np.concatenate([restore_measure(random_y[j], r[j].item()) for j in range(len(og))])
+        diff_wav = recon_wav - random_wav
+        
         # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), np.concatenate([restore_measure(og[j], r[j].item()) for j in range(len(og))]), 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), np.concatenate([restore_measure(y[j], r[j].item()) for j in range(len(og))]), 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), np.concatenate([restore_measure(random_y[j], r[j].item()) for j in range(len(og))]), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), og_wav, 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), recon_wav, 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_wav, 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_diff.wav'), diff_wav, 16000)
 
 # logging
 if wandb_log and master_process:
