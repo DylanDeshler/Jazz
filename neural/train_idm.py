@@ -49,7 +49,7 @@ log_interval = 100
 save_interval = 5000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
-always_save_checkpoint = False # if True, always save a checkpoint after each eval
+always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
@@ -385,7 +385,6 @@ def generate_lam_vs_random_actions(step):
         # axes.ravel()[5].set_ylim(0, 10000) # Show up to 10kHz
         fig.colorbar(pcm, ax=axes.ravel()[5], label='Intensity [dB]')
 
-        # Save the plot
         plt.savefig(f'{i}_wavs.png')
 
 # logging
