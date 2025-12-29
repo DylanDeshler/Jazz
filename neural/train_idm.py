@@ -385,7 +385,7 @@ def generate_lam_vs_random_actions(step):
         # axes.ravel()[5].set_ylim(0, 10000) # Show up to 10kHz
         fig.colorbar(pcm, ax=axes.ravel()[5], label='Intensity [dB]')
 
-        plt.savefig(f'{i}_wavs.png')
+        plt.savefig(os.path.join(batch_dir, f'{i}_wavs.png'))
 
 # logging
 if wandb_log and master_process:
