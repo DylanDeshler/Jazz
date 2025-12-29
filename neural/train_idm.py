@@ -297,6 +297,19 @@ def restore_measure(audio, stretch_ratio, sr=16000):
     return y_restored
 
 @torch.no_grad()
+def generate_continuations(step):
+    batch_dir = os.path.join(out_dir, str(step))
+    os.makedirs(batch_dir, exist_ok=True)
+    
+    model.eval()
+    x, ratio, bpm = get_batch('val')
+    x, ratio, bpm = x[:20], ratio[:20], bpm[:20]
+    
+    with ctx:
+        z, indices = model.enocde_actions(x.clone(), bpm)
+        samples = model.generate(x, bpm, z, x)
+
+@torch.no_grad()
 def generate_lam_vs_random_actions(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
@@ -308,7 +321,8 @@ def generate_lam_vs_random_actions(step):
     B, T, N, D = x.shape
 
     with ctx:
-        recon, random_recon = model.lam_vs_random_actions(x.clone(), bpm, n_steps=50)
+        noise = torch.randn(x.shape, device=x.device)
+        recon, random_recon = model.lam_vs_random_actions(x.clone(), bpm, n_steps=50, noise=noise)
     
         x = tokenizer.decode(x.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
         recon = tokenizer.decode(recon.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
@@ -386,6 +400,7 @@ def generate_lam_vs_random_actions(step):
         fig.colorbar(pcm, ax=axes.ravel()[5], label='Intensity [dB]')
 
         plt.savefig(os.path.join(batch_dir, f'{i}_wavs.png'))
+        plt.close('all')
 
 # logging
 if wandb_log and master_process:

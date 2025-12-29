@@ -773,10 +773,9 @@ class IDM(nn.Module):
 
         return random_actions
     
-    def lam_vs_random_actions(self, x, bpm, n_steps=50):
+    def lam_vs_random_actions(self, x, bpm, n_steps=50, noise=None):
         z, indices = self.action_model(x.clone(), bpm)
         
-        noise = torch.randn(x.shape, device=x.device)
         random_actions = self.generate_random_different_actions(indices, math.prod(self.levels), x.device)
         recon = self.generate(x, bpm, z, x, n_steps=n_steps, noise=noise)
         random = self.generate(x, bpm, self.action_model.from_vq(self.action_model.vq.get_output_from_indices(random_actions)).squeeze(1), x, n_steps=n_steps, noise=noise)
