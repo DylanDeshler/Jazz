@@ -702,11 +702,13 @@ class ModernDiT(nn.Module):
             x = block(x, t0, freqs_cis=freqs_cis, attn_mask=self.block_causal_mask)
         
         # SAM Audio does not use a non-linearity on t here
+        # # Concat conditioning
         # shift, scale = (self.final_layer_scale_shift_table[None] + F.silu(t[:, None])).chunk(
         #     2, dim=1
         # )
+        # AdaLN conditioning
         shift, scale = (self.final_layer_scale_shift_table[None, None] + F.silu(t[:, :, None])).chunk(
-            3, dim=1
+            2, dim=2
         )
         x = modulate(self.norm(x), shift, scale)
         x = self.fc(x)
