@@ -602,7 +602,7 @@ class ModernDiT(nn.Module):
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
         self.bpm_embedder = TimestepEmbedder(hidden_size // 2, bias=False, swiglu=True, max_period=1000)
         
-        self.fuse_conditioning = SwiGLUMlp(hidden_size * 3, hidden_size * 4, hidden_size, bias=False)
+        self.fuse_conditioning = SwiGLUMlp(hidden_size * 3, hidden_size, hidden_size, bias=False)
         self.x_embedder = Patcher(2 * in_channels, hidden_size)
         
         self.t_block = nn.Sequential(
@@ -751,7 +751,7 @@ class IDM(nn.Module):
         return z, indices
     
     def generate(self, x, bpm, actions, clean_x, n_steps=50, noise=None):
-        return self.decoder.sample(x, bpm, actions, clean_x, n_steps=n_steps)
+        return self.decoder.sample(x, bpm, actions, clean_x, n_steps=n_steps, noise=noise)
     
     def generate_random_different_actions(self, actions_indices, codebook_size, device):
         shape = actions_indices.shape
