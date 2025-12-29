@@ -751,7 +751,14 @@ class IDM(nn.Module):
         return z, indices
     
     def generate(self, x, bpm, actions, clean_x, n_steps=50, noise=None):
-        return self.decoder.sample(x, bpm, actions, clean_x, n_steps=n_steps, noise=noise)
+        B, T, N, C = x.shape
+        
+        out = x.clone()
+        for t in range(1, T):
+            res = self.decoder.sample(out, bpm, actions, out, n_steps=n_steps, noise=noise)
+            out[:, t] = res[:, t]
+            
+        return out
     
     def generate_random_different_actions(self, actions_indices, codebook_size, device):
         shape = actions_indices.shape

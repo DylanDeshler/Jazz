@@ -33,9 +33,11 @@ from einops import rearrange
 from raw_idm import IDM_B as net
 from dito import DiToV5 as Tokenizer
 import soundfile as sf
+from scipy import signal
 
 import torch
 import pyrubberband as pyrb
+import matplotlib.pyplot as plt
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -308,7 +310,6 @@ def generate_lam_vs_random_actions(step):
     with ctx:
         recon, random_recon = model.lam_vs_random_actions(x.clone(), bpm, n_steps=50)
     
-    with ctx:
         x = tokenizer.decode(x.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
         recon = tokenizer.decode(recon.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
         random_recon = tokenizer.decode(random_recon.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
@@ -323,13 +324,69 @@ def generate_lam_vs_random_actions(step):
         og_wav = np.concatenate([restore_measure(og[j], r[j].item()) for j in range(len(og))])
         recon_wav = np.concatenate([restore_measure(y[j], r[j].item()) for j in range(len(og))])
         random_wav = np.concatenate([restore_measure(random_y[j], r[j].item()) for j in range(len(og))])
-        diff_wav = recon_wav - random_wav
         
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), og_wav, 16000)
         sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), recon_wav, 16000)
         sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_wav, 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_diff.wav'), diff_wav, 16000)
+        
+        T = len(og_wav) / 16000
+        t = np.linspace(0, T, len(og_wav), endpoint=False)
+        fig, axes = plt.subplots(2, 3)
+        
+        # Real
+        axes.ravel()[0].plot(t, og_wav)
+        axes.ravel()[0].set_title('Real Waveform')
+        axes.ravel()[0].set_xlabel('Time [s]')
+        axes.ravel()[0].set_ylabel('Amplitude')
+        axes.ravel()[0].set_xlim(0, T)
+        
+        frequencies, times, Sxx = signal.spectrogram(og_wav, 16000)
+        Sxx_log = 10 * np.log10(Sxx + 1e-10)
+
+        pcm = axes.ravel()[1].pcolormesh(times, frequencies, Sxx_log, shading='gouraud', cmap='viridis')
+        axes.ravel()[1].set_title('Real Spectrogram')
+        axes.ravel()[1].set_xlabel('Time [s]')
+        axes.ravel()[1].set_ylabel('Frequency [Hz]')
+        # axes.ravel()[1].set_ylim(0, 10000) # Show up to 10kHz
+        fig.colorbar(pcm, ax=axes.ravel()[1], label='Intensity [dB]')
+        
+        # Reconstruction
+        axes.ravel()[2].plot(t, recon_wav)
+        axes.ravel()[2].set_title('Reconstruction Waveform')
+        axes.ravel()[2].set_xlabel('Time [s]')
+        axes.ravel()[2].set_ylabel('Amplitude')
+        axes.ravel()[2].set_xlim(0, T)
+        
+        frequencies, times, Sxx = signal.spectrogram(recon_wav, 16000)
+        Sxx_log = 10 * np.log10(Sxx + 1e-10)
+
+        pcm = axes.ravel()[3].pcolormesh(times, frequencies, Sxx_log, shading='gouraud', cmap='viridis')
+        axes.ravel()[3].set_title('Reconstruction Spectrogram')
+        axes.ravel()[3].set_xlabel('Time [s]')
+        axes.ravel()[3].set_ylabel('Frequency [Hz]')
+        # axes.ravel()[3].set_ylim(0, 10000) # Show up to 10kHz
+        fig.colorbar(pcm, ax=axes.ravel()[3], label='Intensity [dB]')
+        
+        # Random
+        axes.ravel()[4].plot(t, random_wav)
+        axes.ravel()[4].set_title('Random Waveform')
+        axes.ravel()[4].set_xlabel('Time [s]')
+        axes.ravel()[4].set_ylabel('Amplitude')
+        axes.ravel()[4].set_xlim(0, T)
+        
+        frequencies, times, Sxx = signal.spectrogram(random_wav, 16000)
+        Sxx_log = 10 * np.log10(Sxx + 1e-10)
+
+        pcm = axes.ravel()[5].pcolormesh(times, frequencies, Sxx_log, shading='gouraud', cmap='viridis')
+        axes.ravel()[5].set_title('Random Spectrogram')
+        axes.ravel()[5].set_xlabel('Time [s]')
+        axes.ravel()[5].set_ylabel('Frequency [Hz]')
+        # axes.ravel()[5].set_ylim(0, 10000) # Show up to 10kHz
+        fig.colorbar(pcm, ax=axes.ravel()[5], label='Intensity [dB]')
+
+        # Save the plot
+        plt.savefig(f'{i}_wavs.png')
 
 # logging
 if wandb_log and master_process:
