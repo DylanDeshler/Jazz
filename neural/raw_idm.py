@@ -532,8 +532,8 @@ class ActionTransformer(nn.Module):
             x = block(x, is_causal=True)
         
         x = rearrange(x, '(b n) t c -> b t n c', b=B, n=N+1)
-        # x = x[:, 1:, 1:] - x[:, :-1, 1:]
-        x = x[:, 1:, 1:]
+        x = x[:, 1:, 1:] - x[:, :-1, 1:]
+        # x = x[:, 1:, 1:]
         x = rearrange(x, 'b t n c -> b t (n c)')
         
         x = self.to_vq(x)
@@ -602,7 +602,7 @@ class ModernDiT(nn.Module):
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
         self.bpm_embedder = TimestepEmbedder(hidden_size // 2, bias=False, swiglu=True, max_period=1000)
         
-        self.fuse_conditioning = SwiGLUMlp(hidden_size * 3, hidden_size, hidden_size, bias=False)
+        self.fuse_conditioning = SwiGLUMlp(hidden_size * 3, hidden_size * 4, hidden_size, bias=False)
         self.x_embedder = Patcher(2 * in_channels, hidden_size)
         
         self.t_block = nn.Sequential(
