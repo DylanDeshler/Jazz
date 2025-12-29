@@ -566,6 +566,32 @@ class DiTBlock(nn.Module):
         x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
         return x
 
+class IndependentDiTBlock(nn.Module):
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
+        super().__init__()
+        self.norm1 = RMSNorm(hidden_size)
+        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=False, proj_bias=False, **block_kwargs)
+        self.norm2 = RMSNorm(hidden_size)
+        self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), bias=False)
+        self.scale_shift_table = nn.Parameter(
+            torch.randn(6, hidden_size) / hidden_size ** 0.5,
+        )
+    
+    def forward(self, x, t, freqs_cis=None, attn_mask=False):
+        biases = self.scale_shift_table[None, None] + t.reshape(x.size(0), x.size(1), 6, -1)
+        (
+            shift_msa,
+            scale_msa,
+            gate_msa,
+            shift_mlp,
+            scale_mlp,
+            gate_mlp,
+        ) = [chunk for chunk in biases.chunk(6, dim=1)]
+        
+        x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask)
+        x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
+        return x
+
 def token_drop(labels, null_token, training, p_uncond):
     if not training:
         return labels
@@ -609,7 +635,7 @@ class ModernDiT(nn.Module):
         )
         
         self.blocks = nn.ModuleList([
-            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+            IndependentDiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
 
         self.norm = RMSNorm(hidden_size)
@@ -666,14 +692,10 @@ class ModernDiT(nn.Module):
         
         # AdaLN conditioning
         t = torch.cat([t.unsqueeze(1).unsqueeze(2).repeat(1, T, N, 1), actions.unsqueeze(2).repeat(1, 1, N, 1), bpm.repeat(1, 1, N, 1)], dim=-1)
-        print(t.shape)
         t = self.fuse_conditioning(t)
-        print(t.shape)
         t = rearrange(t, 'b t n c -> b (t n) c')
-        print(t.shape)
         
         t0 = self.t_block(t)
-        print(x.shape, t.shape)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
         for block in self.blocks:
