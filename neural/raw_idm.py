@@ -473,7 +473,6 @@ class ActionTransformer(nn.Module):
             nn.LayerNorm(spatial_window * hidden_size),
             nn.Linear(spatial_window * hidden_size, len(levels)),
         )
-        # self.vq = FSQ(levels=levels)
         self.vq = ResidualFSQ(levels=levels, num_quantizers=num_quantizers, quantize_dropout=True)
         self.from_vq = nn.Linear(len(levels), hidden_size)
         
@@ -533,7 +532,6 @@ class ActionTransformer(nn.Module):
         
         x = rearrange(x, '(b n) t c -> b t n c', b=B, n=N+1)
         x = x[:, 1:, 1:] - x[:, :-1, 1:]
-        # x = x[:, 1:, 1:]
         x = rearrange(x, 'b t n c -> b t (n c)')
         
         x = self.to_vq(x)
@@ -658,10 +656,18 @@ class ModernDiT(nn.Module):
         x = torch.cat([x[:, 1:], clean_x[:, :-1]], dim=-1)
         x = rearrange(x, 'b t n c -> (b t) c n')
         x = self.x_embedder(x)
-        x = rearrange(x, '(b t) c n -> b t n c', b=B, t=T)
-        x = torch.cat([x, actions.unsqueeze(2).repeat(1, 1, N, 1), bpm.repeat(1, 1, N, 1)], dim=-1)
-        x = self.fuse_conditioning(x)
         x = rearrange(x, 'b t n c -> b (t n) c')
+        
+        # # Concat conditioning
+        # x = rearrange(x, '(b t) c n -> b t n c', b=B, t=T)
+        # x = torch.cat([x, actions.unsqueeze(2).repeat(1, 1, N, 1), bpm.repeat(1, 1, N, 1)], dim=-1)
+        # x = self.fuse_conditioning(x)
+        # x = rearrange(x, 'b t n c -> b (t n) c')
+        
+        # AdaLN conditioning
+        t = torch.cat([t.unsqueeze(1).unsqueeze(2).repeat(1, T, N, 1), actions.unsqueeze(2).repeat(1, 1, N, 1), bpm.repeat(1, 1, N, 1)], dim=-1)
+        t = self.fuse_conditioning(t)
+        t = rearrange(t, 'b t n c -> b (t n) c')
         
         t0 = self.t_block(t)
         
