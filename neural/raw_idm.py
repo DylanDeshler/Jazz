@@ -601,7 +601,7 @@ class ModernDiT(nn.Module):
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
         self.bpm_embedder = TimestepEmbedder(hidden_size // 2, bias=False, swiglu=True, max_period=1000)
         
-        self.fuse_conditioning = SwiGLUMlp(hidden_size * 3, hidden_size, hidden_size, bias=False)
+        self.fuse_conditioning = SwiGLUMlp(hidden_size * 3, hidden_size * 4, hidden_size, bias=False)
         self.x_embedder = Patcher(2 * in_channels, hidden_size)
         
         self.t_block = nn.Sequential(
