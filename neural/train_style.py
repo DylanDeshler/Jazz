@@ -42,7 +42,7 @@ import matplotlib.pyplot as plt
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'Style_16_adaln_measures_bpm_B_nobias'
+out_dir = 'Style_16_adaln_measures_bpm_M_nobias'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -58,7 +58,7 @@ wandb_run_name = str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 1 # used to simulate larger batch sizes
-batch_size = 256 # * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 512 # * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 cut_seconds = 1
 spatial_window = 48
