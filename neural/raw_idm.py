@@ -817,6 +817,8 @@ class IDM(nn.Module):
         random_actions = self.generate_random_different_actions(indices, math.prod(self.levels), x.device)
         recon = self.generate(x, bpm, z, x, n_steps=n_steps, noise=noise)
         random = self.generate(x, bpm, self.action_model.from_vq(self.action_model.vq.get_output_from_indices(random_actions)).squeeze(1), x, n_steps=n_steps, noise=noise)
+        # random = self.generate(x, bpm, self.action_model.from_vq(self.action_model.vq.indices_to_codes(random_actions)).squeeze(1), x, n_steps=n_steps, noise=noise)
+        
         
         return recon, random
 
