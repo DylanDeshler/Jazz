@@ -543,7 +543,9 @@ class ActionTransformer(nn.Module):
         """
         B, T, N, C = x.shape
         
+        x = rearrange(x, 'b t n c -> (b t) c n')
         x = self.x_embedder(x)
+        x = rearrange(x, '(b t) c n -> b t n c', b=B, t=T)
         bpm = self.bpm_embedder(bpm.flatten()).view(B, T, 1, -1)
         
         x = x + bpm
