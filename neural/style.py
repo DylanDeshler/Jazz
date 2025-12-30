@@ -510,7 +510,7 @@ class ActionTransformer(nn.Module):
             SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
         
-        self.attn_pool = Attention(hidden_size, num_heads=num_heads, qkv_bias=True)
+        self.attn_pool = MultiHeadAttention(hidden_size, num_heads=num_heads)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         
         self.initialize_weights()
