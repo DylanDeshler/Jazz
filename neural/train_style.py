@@ -274,7 +274,7 @@ def generate_lam_vs_random_actions(step):
     B, T, N, D = x.shape
 
     with ctx:
-        noise = torch.randn(x.shape, device=x.device)
+        noise = torch.randn(x[:, -n_decoder_chunks:].shape, device=x.device)
         recon, random_recon = model.lam_vs_random_actions(x.clone(), bpm, n_steps=50, noise=noise)
     
         x = tokenizer.decode(x.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
