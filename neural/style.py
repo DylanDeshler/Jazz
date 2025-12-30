@@ -554,9 +554,7 @@ class ActionTransformer(nn.Module):
             x = block(x)
         
         query = torch.mean(x, dim=-2, keepdim=False)
-        print(query.shape, x.shape, self.style_embeddings.shape)
         style = self.attn_pool(query=query, context=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
-        print(query.shape, x.shape, style.shape)
         
         return style
 
@@ -571,7 +569,7 @@ class DiTBlock(nn.Module):
             torch.randn(6, hidden_size) / hidden_size ** 0.5,
         )
     
-    def forward(self, x, t, freqs_cis=None, attn_mask=False):
+    def forward(self, x, t, freqs_cis=None, attn_mask=None):
         biases = self.scale_shift_table[None] + t.reshape(x.size(0), 6, -1)
         (
             shift_msa,
