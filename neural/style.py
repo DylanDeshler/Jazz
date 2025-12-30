@@ -554,6 +554,7 @@ class ActionTransformer(nn.Module):
             x = block(x)
         
         query = torch.mean(x, dim=-2, keepdim=False)
+        print(query.shape, x.shape)
         style = self.attn_pool(query=query, context=self.style_embeddings)
         print(query.shape, x.shape, style.shape)
         
