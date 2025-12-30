@@ -42,7 +42,7 @@ import matplotlib.pyplot as plt
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'RawIDM_delta_adaln_measures_bpm_B_RFSQ_256codes_3quants'
+out_dir = 'RawIDM_delta_adaln_measures_bpm_B_RFSQ_16codes_3quants'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -67,7 +67,7 @@ max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
 # 2^4 2^6 2^8 2^9 2^10 2^11 2^12 2^14 2^16
 # [5, 3] [8, 8] [8, 6, 5] [8, 8, 8] [8, 5, 5, 5] [8, 8, 6, 5] [7, 5, 5, 5] [8, 8, 8, 6, 5] [8, 8, 8, 5, 5, 5]
-levels = [8, 6, 5]
+levels = [5, 3]
 num_quantizers = 3
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
