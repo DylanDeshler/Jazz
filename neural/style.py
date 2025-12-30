@@ -53,7 +53,7 @@ class FM:
             else:
                 return loss, t
         else:
-            loss = ((pred[:, 1:].float() - target[:, 1:].float()) ** 2).mean()
+            loss = ((pred.float() - target.float()) ** 2).mean()
             if return_all:
                 return loss, x_t, pred
             else:
@@ -760,6 +760,7 @@ class IDM(nn.Module):
         return z
     
     def generate(self, x, bpm, actions, n_steps=50, noise=None):
+        print(x.shape, bpm.shape, actions.shape)
         return self.decoder.sample(x, bpm, actions, n_steps=n_steps, noise=noise)
     
     def lam_vs_random_actions(self, x, bpm, n_steps=50, noise=None):
