@@ -294,11 +294,13 @@ def generate_lam_vs_random_actions(step):
         recon_wav = np.concatenate([restore_measure(y[j], tail_r[j].item()) for j in range(n_decoder_chunks)])
         random_wav = np.concatenate([restore_measure(random_y[j], tail_r[j].item()) for j in range(n_decoder_chunks)])
         
-        print(base.shape, og_wav.shape, recon_wav.shape, random_wav.shape)
+        recon_wav = np.concatenate([base, recon_wav])
+        random_wav = np.concatenate([base, random_wav])
+        
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), og_wav, 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), np.concatenate([base, recon_wav]), 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), np.concatenate([random_wav]), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), recon_wav, 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_wav, 16000)
         
         T = len(og_wav) / 16000
         t = np.linspace(0, T, len(og_wav), endpoint=False)
