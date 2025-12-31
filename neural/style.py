@@ -272,7 +272,7 @@ class MultiHeadAttention(nn.Module):
         self.num_heads = num_heads
         self.dim_hidden = dim_hidden
         self.dim_attn = dim_hidden // num_heads
-        self.scale = self.dim_attn ** -0.5
+        self.scale = 1 / math.sqrt(dim_hidden)
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention') and flash
 
     def forward(self, query, context, mask=None):
@@ -298,7 +298,6 @@ class MultiHeadAttention(nn.Module):
             )
             e = e.transpose(1, 2).contiguous().view_as(query) 
         else:
-            raise NotImplementedError()
             dot_product = torch.einsum("bhqa,bhka->bhqk", (q, k))
             dot_product = self.scale * dot_product.masked_fill_(mask.logical_not(), float("-inf"))
             w = torch.softmax(dot_product, dim=-1)
@@ -504,8 +503,7 @@ class ActionTransformer(nn.Module):
         super().__init__()
         max_input_size = spatial_window * n_chunks
         
-        self.x_embedder = Patcher(in_channels + hidden_size, hidden_size)
-        # self.x_embedder = nn.Sequential(nn.Linear(in_channels, hidden_size, bias=True), RMSNorm(hidden_size))
+        self.x_embedder = Patcher(in_channels, hidden_size)
         self.bpm_embedder = TimestepEmbedder(hidden_size, max_period=1000)
         
         self.blocks = nn.ModuleList([
@@ -513,7 +511,7 @@ class ActionTransformer(nn.Module):
         ])
         
         self.pool_norm = RMSNorm(hidden_size)
-        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
+        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=num_heads)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         
         self.initialize_weights()
@@ -521,6 +519,8 @@ class ActionTransformer(nn.Module):
     
     def initialize_weights(self):
         self.apply(self._init_weights)
+        # zero out classifier weights
+        # torch.nn.init.zeros_(self.to_vq[-1].weight)
         # zero out c_proj weights in all blocks
         for block in self.blocks:
             torch.nn.init.zeros_(block.mlp.w3.weight)
@@ -544,14 +544,12 @@ class ActionTransformer(nn.Module):
         """
         B, T, N, C = x.shape
         
-        bpm = self.bpm_embedder(bpm.flatten()).view(B, T, 1, -1).repeat(1, 1, N, 1)
-        x = torch.cat([x, bpm], dim=-1)
-        
         x = rearrange(x, 'b t n c -> (b t) c n')
         x = self.x_embedder(x)
         x = rearrange(x, '(b t) c n -> b t n c', b=B, t=T)
+        bpm = self.bpm_embedder(bpm.flatten()).view(B, T, 1, -1)
         
-        # x = x + bpm
+        x = x + bpm
         x = rearrange(x, 'b t n c -> b (t n) c')
         for block in self.blocks:
             x = block(x)
