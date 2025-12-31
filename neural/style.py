@@ -781,7 +781,7 @@ class IDM(nn.Module):
     def lam_vs_random_actions(self, x, bpm, n_steps=50, noise=None):
         B, T, N, C = x.shape
         
-        z = self.action_model(x[:, -self.n_decoder_chunks].clone(), bpm[:, -self.n_decoder_chunks].clone())
+        z = self.action_model(x[:, -self.n_decoder_chunks:].clone(), bpm[:, -self.n_decoder_chunks:].clone())
         
         recon = self.generate(x, bpm, z,  n_steps=n_steps, noise=noise)
         random = self.generate(x, bpm, self.action_model.style_embeddings.mean(0).unsqueeze(0).repeat(B, 1), n_steps=n_steps, noise=noise)
