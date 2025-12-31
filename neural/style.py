@@ -606,14 +606,16 @@ class ModernDiT(nn.Module):
                  in_channels,
                  hidden_size,
                  spatial_window,
-                 n_chunks,
+                 n_encoder_chunks,
+                 n_decoder_chunks,
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4,
                  ):
         super().__init__()
+        self.n_decoder_chunks = n_decoder_chunks
         self.spatial_window = spatial_window
-        max_input_size = spatial_window * n_chunks
+        max_input_size = spatial_window * (n_encoder_chunks + n_decoder_chunks)
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
         self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True, max_period=1000)
@@ -637,7 +639,6 @@ class ModernDiT(nn.Module):
         self.fc = nn.Linear(hidden_size, in_channels, bias=False)
         
         self.initialize_weights()
-        self.register_buffer('block_causal_mask', create_block_causal_mask(spatial_window, n_chunks - 1))
         self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
     
     def initialize_weights(self):
@@ -663,7 +664,8 @@ class ModernDiT(nn.Module):
         elif isinstance(module, nn.Embedding):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
-    def forward(self, x, t, bpm, actions):
+    def forward(self, x, t, bpm, actions, history):
+        x = torch.cat([history, x], dim=1)
         B, T, N, C = x.shape
         
         bpm = self.bpm_embedder(bpm.flatten()).view(B, T, -1).mean(1)
@@ -689,6 +691,8 @@ class ModernDiT(nn.Module):
         x = self.fc(x)
         x = rearrange(x, 'b (t n) c -> b t n c', t=T, n=N)
         
+        x = x[:, -self.n_decoder_chunks]
+        
         return x
 
 class ModernDiTWrapper(nn.Module):
@@ -696,14 +700,21 @@ class ModernDiTWrapper(nn.Module):
         super().__init__()
         self.net = ModernDiT(**kwargs)
         
+        self.n_encoder_chunks = kwargs['n_encoder_chunks']
+        self.n_decoder_chunks = kwargs['n_decoder_chunks']
+        
         self.diffusion = FM(timescale=1000.0)
         self.sampler = FMEulerSampler(self.diffusion)
     
     def forward(self, x, bpm, actions, t=None):
-        return self.diffusion.loss(self.net, x, t=t, net_kwargs={'actions': actions, 'bpm': bpm})
+        history = x[:, :self.n_encoder_chunks].clone()
+        x = x[:, -self.n_decoder_chunks:].clone()
+        return self.diffusion.loss(self.net, x, t=t, net_kwargs={'actions': actions, 'bpm': bpm, 'history': history})
     
     def sample(self, x, bpm, actions, n_steps=50, noise=None):
-        return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm}, noise=noise)
+        history = x[:, :self.n_encoder_chunks].clone()
+        x = x[:, -self.n_decoder_chunks:].clone()
+        return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm, 'history': history}, noise=noise)
 
 class IDM(nn.Module):
     def __init__(self,
@@ -732,7 +743,8 @@ class IDM(nn.Module):
         self.decoder = ModernDiTWrapper(in_channels=in_channels, 
                                         hidden_size=hidden_size, 
                                         spatial_window=spatial_window,
-                                        n_chunks=n_decoder_chunks,
+                                        n_encoder_chunks=n_encoder_chunks,
+                                        n_decoder_chunks=n_decoder_chunks,
                                         num_heads=num_heads, 
                                         depth=depth,
                                         mlp_ratio=mlp_ratio)
@@ -745,8 +757,11 @@ class IDM(nn.Module):
         assert x.ndim == 4
         B, T, N, C = x.shape
         
-        z = self.action_model(x[:, :self.n_encoder_chunks].clone(), bpm[:, :self.n_encoder_chunks].clone())
-        x = self.decoder(x[:, -self.n_decoder_chunks:].clone(), bpm[:, -self.n_decoder_chunks:].clone(), z)
+        history = x[:, :self.n_encoder_chunks].clone()
+        x = x[:, -self.n_decoder_chunks:].clone()
+        
+        z = self.action_model(history, bpm[:, :self.n_encoder_chunks].clone())
+        x = self.decoder(x, bpm, z, history)
         return x, z
     
     def enocde_actions(self, x, bpm):
@@ -767,8 +782,8 @@ class IDM(nn.Module):
         
         z = self.action_model(x[:, :self.n_encoder_chunks].clone(), bpm[:, :self.n_encoder_chunks].clone())
         
-        recon = self.generate(x[:, -self.n_decoder_chunks:], bpm[:, -self.n_decoder_chunks:], z,  n_steps=n_steps, noise=noise)
-        random = self.generate(x[:, -self.n_decoder_chunks:], bpm[:, -self.n_decoder_chunks:], self.action_model.style_embeddings.mean(0).unsqueeze(0).repeat(B, 1), n_steps=n_steps, noise=noise)
+        recon = self.generate(x, bpm, z,  n_steps=n_steps, noise=noise)
+        random = self.generate(x, bpm, self.action_model.style_embeddings.mean(0).unsqueeze(0).repeat(B, 1), n_steps=n_steps, noise=noise)
         
         return recon, random
 
