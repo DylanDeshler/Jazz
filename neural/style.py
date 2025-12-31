@@ -691,7 +691,7 @@ class ModernDiT(nn.Module):
         x = self.fc(x)
         x = rearrange(x, 'b (t n) c -> b t n c', t=T, n=N)
         
-        x = x[:, -self.n_decoder_chunks]
+        x = x[:, -self.n_decoder_chunks:]
         
         return x
 
