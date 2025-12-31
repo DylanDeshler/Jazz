@@ -272,7 +272,7 @@ class MultiHeadAttention(nn.Module):
         self.num_heads = num_heads
         self.dim_hidden = dim_hidden
         self.dim_attn = dim_hidden // num_heads
-        self.scale = 1 / math.sqrt(dim_hidden)
+        self.scale = self.dim_attn ** -0.5
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention') and flash
 
     def forward(self, query, context, mask=None):
@@ -298,6 +298,7 @@ class MultiHeadAttention(nn.Module):
             )
             e = e.transpose(1, 2).contiguous().view_as(query) 
         else:
+            raise NotImplementedError()
             dot_product = torch.einsum("bhqa,bhka->bhqk", (q, k))
             dot_product = self.scale * dot_product.masked_fill_(mask.logical_not(), float("-inf"))
             w = torch.softmax(dot_product, dim=-1)
@@ -511,7 +512,7 @@ class ActionTransformer(nn.Module):
         ])
         
         self.pool_norm = RMSNorm(hidden_size)
-        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=num_heads)
+        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         
         self.initialize_weights()
