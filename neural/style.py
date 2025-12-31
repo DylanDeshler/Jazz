@@ -510,7 +510,8 @@ class ActionTransformer(nn.Module):
             SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
         
-        self.attn_pool = MultiHeadAttention(hidden_size, num_heads=num_heads)
+        self.pool_norm = RMSNorm(hidden_size)
+        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=num_heads)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         
         self.initialize_weights()
@@ -553,8 +554,9 @@ class ActionTransformer(nn.Module):
         for block in self.blocks:
             x = block(x)
         
+        x = self.pool_norm(x)
         query = torch.mean(x, dim=-2, keepdim=False)
-        style = self.attn_pool(query=query, context=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
+        style = self.pool_attn(query=query, context=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
         
         return style
 
@@ -731,7 +733,7 @@ class IDM(nn.Module):
         self.action_model = ActionTransformer(in_channels=in_channels, 
                                               hidden_size=hidden_size,
                                               spatial_window=spatial_window, 
-                                              n_chunks=n_encoder_chunks, 
+                                              n_chunks=n_decoder_chunks, 
                                               n_style_embeddings=n_style_embeddings,
                                               num_heads=num_heads, 
                                               depth=depth, 
@@ -756,7 +758,7 @@ class IDM(nn.Module):
         history = x[:, :self.n_encoder_chunks].clone()
         x = x[:, -self.n_decoder_chunks:].clone()
         
-        z = self.action_model(history, bpm[:, :self.n_encoder_chunks].clone())
+        z = self.action_model(x, bpm[:, -self.n_decoder_chunks:].clone())
         x = self.decoder(x, bpm, z, history)
         return x, z
     
@@ -779,7 +781,7 @@ class IDM(nn.Module):
     def lam_vs_random_actions(self, x, bpm, n_steps=50, noise=None):
         B, T, N, C = x.shape
         
-        z = self.action_model(x[:, :self.n_encoder_chunks].clone(), bpm[:, :self.n_encoder_chunks].clone())
+        z = self.action_model(x[:, -self.n_decoder_chunks].clone(), bpm[:, -self.n_decoder_chunks].clone())
         
         recon = self.generate(x, bpm, z,  n_steps=n_steps, noise=noise)
         random = self.generate(x, bpm, self.action_model.style_embeddings.mean(0).unsqueeze(0).repeat(B, 1), n_steps=n_steps, noise=noise)
