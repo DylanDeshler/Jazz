@@ -50,9 +50,9 @@ save_interval = 5000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = False # disabled by default
+wandb_log = True # disabled by default
 wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
@@ -77,7 +77,7 @@ beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
 decay_lr = False # whether to decay the learning rate
-warmup_iters = 30000 # how many steps to warm up for
+warmup_iters = 5000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
@@ -180,7 +180,7 @@ elif init_from == 'resume':
     for k,v in list(state_dict.items()):
         if k.startswith(unwanted_prefix):
             state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-    model.load_state_dict(state_dict, strict=False)
+    model.load_state_dict(state_dict)
     iter_num = checkpoint['iter_num']
     tokens_trained = checkpoint['tokens']
     best_val_loss = checkpoint['best_val_loss']
@@ -371,8 +371,8 @@ running_mfu = -1.0
 
 # optimizer
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, betas=(beta1, beta2))
-# if init_from == 'resume':
-#     optimizer.load_state_dict(checkpoint['optimizer'])
+if init_from == 'resume':
+    optimizer.load_state_dict(checkpoint['optimizer'])
 checkpoint = None # free up memory
 while True:
 
@@ -384,40 +384,40 @@ while True:
     tokens_trained += batch_size * gradient_accumulation_steps * max_seq_len
 
     # evaluate the loss on train/val sets and write checkpoints
-    # if iter_num % eval_interval == 0 and master_process:
-    #     losses = estimate_loss()
-    #     print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-    #     if iter_num % sample_interval == 0 and master_process:
-    #         model.eval()
-    #         with ctx:
-    #             generate_lam_vs_random_actions(iter_num)
-    #         model.train()
-    #     if wandb_log:
-    #         wandb.log({
-    #             "iter": iter_num,
-    #             "train/loss": losses['train'],
-    #             "val/loss": losses['val'],
-    #             "lr": lr,
-    #             "mfu": running_mfu*100, # convert to percentage
-    #             "tokens": tokens_trained,
-    #         })
-    #     if losses['val'] < best_val_loss or always_save_checkpoint:
-    #         best_val_loss = losses['val']
-    #         if iter_num > 0:
-    #             checkpoint = {
-    #                 'model': raw_model.state_dict(),
-    #                 'optimizer': optimizer.state_dict(),
-    #                 'model_args': model_args,
-    #                 'iter_num': iter_num,
-    #                 'best_val_loss': best_val_loss,
-    #                 'config': config,
-    #                 'tokens': tokens_trained,
-    #             }
-    #             print(f"saving checkpoint to {out_dir}")
-    #             torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+    if iter_num % eval_interval == 0 and master_process:
+        losses = estimate_loss()
+        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        if iter_num % sample_interval == 0 and master_process:
+            model.eval()
+            with ctx:
+                generate_lam_vs_random_actions(iter_num)
+            model.train()
+        if wandb_log:
+            wandb.log({
+                "iter": iter_num,
+                "train/loss": losses['train'],
+                "val/loss": losses['val'],
+                "lr": lr,
+                "mfu": running_mfu*100, # convert to percentage
+                "tokens": tokens_trained,
+            })
+        if losses['val'] < best_val_loss or always_save_checkpoint:
+            best_val_loss = losses['val']
+            if iter_num > 0:
+                checkpoint = {
+                    'model': raw_model.state_dict(),
+                    'optimizer': optimizer.state_dict(),
+                    'model_args': model_args,
+                    'iter_num': iter_num,
+                    'best_val_loss': best_val_loss,
+                    'config': config,
+                    'tokens': tokens_trained,
+                }
+                print(f"saving checkpoint to {out_dir}")
+                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
     
-    # if iter_num == 0 and eval_only:
-    #     break
+    if iter_num == 0 and eval_only:
+        break
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
