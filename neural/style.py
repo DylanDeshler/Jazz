@@ -504,8 +504,8 @@ class ActionTransformer(nn.Module):
         super().__init__()
         max_input_size = spatial_window * n_chunks
         
-        # self.x_embedder = Patcher(in_channels, hidden_size)
-        self.x_embedder = nn.Sequential(nn.Linear(in_channels, hidden_size, bias=True), RMSNorm(hidden_size))
+        self.x_embedder = Patcher(in_channels + hidden_size, hidden_size)
+        # self.x_embedder = nn.Sequential(nn.Linear(in_channels, hidden_size, bias=True), RMSNorm(hidden_size))
         self.bpm_embedder = TimestepEmbedder(hidden_size, max_period=1000)
         
         self.blocks = nn.ModuleList([
@@ -544,12 +544,14 @@ class ActionTransformer(nn.Module):
         """
         B, T, N, C = x.shape
         
-        # x = rearrange(x, 'b t n c -> (b t) c n')
-        x = self.x_embedder(x)
-        # x = rearrange(x, '(b t) c n -> b t n c', b=B, t=T)
-        bpm = self.bpm_embedder(bpm.flatten()).view(B, T, 1, -1)
+        bpm = self.bpm_embedder(bpm.flatten()).view(B, T, 1, -1).repeat(1, 1, N, 1)
+        x = torch.cat([x, bpm], dim=-1)
         
-        x = x + bpm
+        x = rearrange(x, 'b t n c -> (b t) c n')
+        x = self.x_embedder(x)
+        x = rearrange(x, '(b t) c n -> b t n c', b=B, t=T)
+        
+        # x = x + bpm
         x = rearrange(x, 'b t n c -> b (t n) c')
         for block in self.blocks:
             x = block(x)
