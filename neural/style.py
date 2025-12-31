@@ -706,14 +706,10 @@ class ModernDiTWrapper(nn.Module):
         self.diffusion = FM(timescale=1000.0)
         self.sampler = FMEulerSampler(self.diffusion)
     
-    def forward(self, x, bpm, actions, t=None):
-        history = x[:, :self.n_encoder_chunks].clone()
-        x = x[:, -self.n_decoder_chunks:].clone()
+    def forward(self, x, bpm, actions, history, t=None):
         return self.diffusion.loss(self.net, x, t=t, net_kwargs={'actions': actions, 'bpm': bpm, 'history': history})
     
-    def sample(self, x, bpm, actions, n_steps=50, noise=None):
-        history = x[:, :self.n_encoder_chunks].clone()
-        x = x[:, -self.n_decoder_chunks:].clone()
+    def sample(self, x, bpm, actions, history, n_steps=50, noise=None):
         return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm, 'history': history}, noise=noise)
 
 class IDM(nn.Module):
@@ -775,7 +771,10 @@ class IDM(nn.Module):
         return z
     
     def generate(self, x, bpm, actions, n_steps=50, noise=None):
-        return self.decoder.sample(x, bpm, actions, n_steps=n_steps, noise=noise)
+        history = x[:, :self.n_encoder_chunks].clone()
+        x = x[:, -self.n_decoder_chunks:].clone()
+        
+        return self.decoder.sample(x, bpm, actions, history, n_steps=n_steps, noise=noise)
     
     def lam_vs_random_actions(self, x, bpm, n_steps=50, noise=None):
         B, T, N, C = x.shape
