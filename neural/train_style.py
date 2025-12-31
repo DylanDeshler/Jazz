@@ -371,8 +371,8 @@ running_mfu = -1.0
 
 # optimizer
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, betas=(beta1, beta2))
-if init_from == 'resume':
-    optimizer.load_state_dict(checkpoint['optimizer'], strict=False)
+# if init_from == 'resume':
+#     optimizer.load_state_dict(checkpoint['optimizer'])
 checkpoint = None # free up memory
 while True:
 
