@@ -556,7 +556,8 @@ class ActionTransformer(nn.Module):
         for block in self.blocks:
             x = block(x)
         
-        query = self.pool_norm(torch.mean(x, dim=-2, keepdim=False))
+        x = self.pool_norm(x)
+        query = torch.mean(x, dim=-2, keepdim=False)
         style = self.pool_attn(query=query, context=self.style_norm(self.style_embeddings.unsqueeze(0).repeat(B, 1, 1)))
         
         return style
