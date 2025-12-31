@@ -504,7 +504,8 @@ class ActionTransformer(nn.Module):
         super().__init__()
         max_input_size = spatial_window * n_chunks
         
-        self.x_embedder = Patcher(in_channels, hidden_size)
+        # self.x_embedder = Patcher(in_channels, hidden_size)
+        self.x_embedder = nn.Sequential(nn.Linear(in_channels, hidden_size, bias=True), RMSNorm(hidden_size))
         self.bpm_embedder = TimestepEmbedder(hidden_size, max_period=1000)
         
         self.blocks = nn.ModuleList([
@@ -513,7 +514,6 @@ class ActionTransformer(nn.Module):
         
         self.pool_norm = RMSNorm(hidden_size)
         self.pool_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
-        self.style_norm = RMSNorm(hidden_size)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         
         self.initialize_weights()
@@ -521,8 +521,6 @@ class ActionTransformer(nn.Module):
     
     def initialize_weights(self):
         self.apply(self._init_weights)
-        # zero out classifier weights
-        # torch.nn.init.zeros_(self.to_vq[-1].weight)
         # zero out c_proj weights in all blocks
         for block in self.blocks:
             torch.nn.init.zeros_(block.mlp.w3.weight)
@@ -556,8 +554,9 @@ class ActionTransformer(nn.Module):
         for block in self.blocks:
             x = block(x)
         
-        query = self.pool_norm(torch.mean(x, dim=-2, keepdim=False))
-        style = self.pool_attn(query=query, context=self.style_norm(self.style_embeddings.unsqueeze(0).repeat(B, 1, 1)))
+        x = self.pool_norm(x)
+        query = torch.mean(x, dim=-2, keepdim=False)
+        style = self.pool_attn(query=query, context=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
         
         return style
 
