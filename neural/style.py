@@ -265,7 +265,8 @@ class MultiHeadAttention(nn.Module):
     def __init__(self, dim_hidden, num_heads, dropout_w=0, dropout_e=0, bias=False, flash=True, **kwargs):
         super().__init__()
         self.Q = nn.Linear(dim_hidden, dim_hidden, bias)
-        self.KV = nn.Linear(dim_hidden, 2*dim_hidden, bias)
+        self.K = nn.Linear(dim_hidden, dim_hidden, bias)
+        self.V = nn.Linear(dim_hidden, dim_hidden, bias)
         self.out = nn.Linear(dim_hidden, dim_hidden, bias)
         self.dropout_w = nn.Dropout(dropout_w)
         self.dropout_e = nn.Dropout(dropout_e)
@@ -275,11 +276,12 @@ class MultiHeadAttention(nn.Module):
         self.scale = self.dim_attn ** -0.5
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention') and flash
 
-    def forward(self, query, context, mask=None):
+    def forward(self, query, key, value, mask=None):
 
         ## PROJECT INPUTS
         q = self.Q(query)
-        k, v = self.KV(context).split(self.dim_hidden, dim=2)
+        k = self.K(key)
+        v = self.V(value)
 
         ## SPLIT ATTENTION HEADS
         b = query.size(0) # Assume [batch, seq_len, hidden]
@@ -517,7 +519,8 @@ class ActionTransformer(nn.Module):
         # self.probe_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
         # self.style_probe = nn.Parameter(torch.randn(1, hidden_size) / hidden_size ** 0.5)
         
-        # self.pool_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
+        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
+        self.style_keys = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         
         self.initialize_weights()
@@ -563,15 +566,8 @@ class ActionTransformer(nn.Module):
         x = self.norm(x)
         x = self.proj(x)
         
-        # query = torch.mean(x, dim=-2, keepdim=False)
-        
-        # query = self.probe_attn(query=self.style_probe.unsqueeze(0).repeat(B, 1, 1), context=x)
-        # style = self.pool_attn(query=query, context=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1)).squeeze(1)
-        
-        scores = torch.matmul(x, self.style_embeddings.T)
-        scores = torch.mean(scores, dim=1) #torch.max(scores, dim=1).values
-        weights = torch.softmax(scores, dim=1)
-        style = torch.matmul(weights, self.style_embeddings)
+        query = torch.mean(x, dim=-2, keepdim=False)
+        style = self.pool_attn(query=query, key=self.style_keys.unsqueeze(0).repeat(B, 1, 1), value=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1)).squeeze(1)
         
         return style
 
