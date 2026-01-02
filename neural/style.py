@@ -569,7 +569,7 @@ class ActionTransformer(nn.Module):
         # style = self.pool_attn(query=query, context=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1)).squeeze(1)
         
         scores = torch.matmul(x, self.style_embeddings.T)
-        scores = torch.max(scores, dim=1).values    # or mean
+        scores = torch.mean(scores, dim=1) #torch.max(scores, dim=1).values
         weights = torch.softmax(scores, dim=1)
         style = torch.matmul(weights, self.style_embeddings)
         
