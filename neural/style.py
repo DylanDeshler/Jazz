@@ -512,7 +512,7 @@ class ActionTransformer(nn.Module):
         ])
         
         self.norm = RMSNorm(hidden_size)
-        self.proj = nn.LineaR(hidden_size, hidden_size, bias=False)
+        self.proj = nn.Linear(hidden_size, hidden_size, bias=False)
         
         # self.probe_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
         # self.style_probe = nn.Parameter(torch.randn(1, hidden_size) / hidden_size ** 0.5)
@@ -568,10 +568,11 @@ class ActionTransformer(nn.Module):
         # query = self.probe_attn(query=self.style_probe.unsqueeze(0).repeat(B, 1, 1), context=x)
         # style = self.pool_attn(query=query, context=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1)).squeeze(1)
         
-        scores = torch.matmul(x, self.style_embeddings.T)
+        style_embeddings = self.style_embeddings.unsqueeze(0).repeat(B, 1, 1)
+        scores = torch.matmul(x, style_embeddings.T)
         scores = torch.max(scores, dim=1).values    # or mean
         weights = torch.softmax(scores, dim=1)
-        style = torch.matmul(weights, self.style_embeddings)
+        style = torch.matmul(weights, style_embeddings)
         
         return style
 
