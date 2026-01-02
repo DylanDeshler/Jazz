@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from style import IDM_M as net
+from style import IDM_B as net
 from dito import DiToV5 as Tokenizer
 import soundfile as sf
 from scipy import signal
@@ -42,7 +42,7 @@ import matplotlib.pyplot as plt
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'Style_64_adaln_measures_bpm_M_nobias'
+out_dir = 'Style_64_adaln_measures_bpm_B_nobias_1pred'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -63,7 +63,7 @@ batch_size = 384 # * 5 * 8 # if gradient_accumulation_steps > 1, this is the mic
 cut_seconds = 1
 spatial_window = 48
 n_encoder_chunks = 4
-n_decoder_chunks = 2
+n_decoder_chunks = 1
 n_chunks = n_encoder_chunks + n_decoder_chunks
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
