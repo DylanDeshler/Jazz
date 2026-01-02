@@ -42,7 +42,7 @@ import matplotlib.pyplot as plt
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'Style_64_adaln_measures_bpm_B_nobias_1pred_probe'
+out_dir = 'Style_64_adaln_measures_bpm_B_nobias_1pred_invertmax'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
