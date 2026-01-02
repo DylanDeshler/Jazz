@@ -42,7 +42,7 @@ import matplotlib.pyplot as plt
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'Style_64_adaln_measures_bpm_B_nobias_1pred_kv'
+out_dir = 'Style_64_adaln_measures_bpm_B_nobias'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -63,7 +63,7 @@ batch_size = 384 # * 5 * 8 # if gradient_accumulation_steps > 1, this is the mic
 cut_seconds = 1
 spatial_window = 48
 n_encoder_chunks = 4
-n_decoder_chunks = 1
+n_decoder_chunks = 2
 n_chunks = n_encoder_chunks + n_decoder_chunks
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
