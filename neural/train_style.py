@@ -289,6 +289,7 @@ def generate_lam_vs_random_actions(step):
         og, y, random_y, r = x[i], recon[i], random_recon[i], ratio[i].cpu().detach().numpy()
         tail_r = r[-n_decoder_chunks:]
         
+        print(og.shape, y.shape, random_y.shape, r.shape)
         base = np.concatenate([restore_measure(og[j], r[j].item()) for j in range(n_encoder_chunks)])
         og_wav = np.concatenate([restore_measure(og[j], r[j].item()) for j in range(n_chunks)])
         recon_wav = np.concatenate([restore_measure(y[j], tail_r[j].item()) for j in range(n_decoder_chunks)])
