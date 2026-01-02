@@ -281,15 +281,14 @@ def generate_lam_vs_random_actions(step):
         recon = tokenizer.decode(recon.view(B * n_decoder_chunks, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, n_decoder_chunks, 1, 24576 * cut_seconds)
         random_recon = tokenizer.decode(random_recon.view(B * n_decoder_chunks, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, n_decoder_chunks, 1, 24576 * cut_seconds)
     
-    x = x.cpu().detach().float().numpy().squeeze()
-    recon = recon.cpu().detach().float().numpy().squeeze()
-    random_recon = random_recon.cpu().detach().float().numpy().squeeze()
+    x = x.cpu().detach().float().numpy().squeeze(-2)
+    recon = recon.cpu().detach().float().numpy().squeeze(-2)
+    random_recon = random_recon.cpu().detach().float().numpy().squeeze(-2)
     
     for i in range(20):
         og, y, random_y, r = x[i], recon[i], random_recon[i], ratio[i].cpu().detach().numpy()
         tail_r = r[-n_decoder_chunks:]
         
-        print(og.shape, y.shape, random_y.shape, r.shape)
         base = np.concatenate([restore_measure(og[j], r[j].item()) for j in range(n_encoder_chunks)])
         og_wav = np.concatenate([restore_measure(og[j], r[j].item()) for j in range(n_chunks)])
         recon_wav = np.concatenate([restore_measure(y[j], tail_r[j].item()) for j in range(n_decoder_chunks)])
