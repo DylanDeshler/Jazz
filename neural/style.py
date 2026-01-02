@@ -511,10 +511,13 @@ class ActionTransformer(nn.Module):
             SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
         
-        self.pool_norm = RMSNorm(hidden_size)
-        self.probe_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
-        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
-        self.style_probe = nn.Parameter(torch.randn(1, hidden_size) / hidden_size ** 0.5)
+        self.norm = RMSNorm(hidden_size)
+        self.proj = nn.LineaR(hidden_size, hidden_size, bias=False)
+        
+        # self.probe_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
+        # self.style_probe = nn.Parameter(torch.randn(1, hidden_size) / hidden_size ** 0.5)
+        
+        # self.pool_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         
         self.initialize_weights()
@@ -557,10 +560,18 @@ class ActionTransformer(nn.Module):
         for block in self.blocks:
             x = block(x)
         
-        x = self.pool_norm(x)
+        x = self.norm(x)
+        x = self.proj(x)
+        
         # query = torch.mean(x, dim=-2, keepdim=False)
-        query = self.probe_attn(query=self.style_probe.unsqueeze(0).repeat(B, 1, 1), context=x)
-        style = self.pool_attn(query=query, context=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1)).squeeze(1)
+        
+        # query = self.probe_attn(query=self.style_probe.unsqueeze(0).repeat(B, 1, 1), context=x)
+        # style = self.pool_attn(query=query, context=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1)).squeeze(1)
+        
+        scores = torch.matmul(x, self.style_embeddings.T)
+        scores = torch.max(scores, dim=1).values    # or mean
+        weights = torch.softmax(scores, dim=1)
+        style = torch.matmul(weights, self.style_embeddings)
         
         return style
 
