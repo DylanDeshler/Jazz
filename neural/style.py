@@ -559,7 +559,7 @@ class ActionTransformer(nn.Module):
         
         x = self.pool_norm(x)
         # query = torch.mean(x, dim=-2, keepdim=False)
-        query = self.probe_attn(query=self.probe.unsqueeze(0).repeat(B, 1, 1), context=x)
+        query = self.probe_attn(query=self.style_probe.unsqueeze(0).repeat(B, 1, 1), context=x)
         style = self.pool_attn(query=query, context=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
         
         return style
