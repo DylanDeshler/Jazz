@@ -519,12 +519,12 @@ class ActionTransformer(nn.Module):
         # self.probe_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
         # self.style_probe = nn.Parameter(torch.randn(1, hidden_size) / hidden_size ** 0.5)
         
-        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=True)
+        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
         # self.style_keys = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         
         self.initialize_weights()
-        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
+        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size, theta=1000))
     
     def initialize_weights(self):
         self.apply(self._init_weights)
@@ -624,6 +624,7 @@ class ModernDiT(nn.Module):
                  mlp_ratio=4,
                  ):
         super().__init__()
+        self.n_encoder_chunks = n_encoder_chunks
         self.n_decoder_chunks = n_decoder_chunks
         self.spatial_window = spatial_window
         max_input_size = spatial_window * (n_encoder_chunks + n_decoder_chunks)
@@ -631,7 +632,7 @@ class ModernDiT(nn.Module):
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
         self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True, max_period=1000)
         
-        self.fuse_conditioning = SwiGLUMlp(hidden_size * 3, hidden_size * 4, hidden_size, bias=False)
+        self.fuse_conditioning = SwiGLUMlp(hidden_size * 2, hidden_size * 4, hidden_size, bias=False)
         self.x_embedder = Patcher(in_channels, hidden_size)
         
         self.t_block = nn.Sequential(
@@ -679,14 +680,16 @@ class ModernDiT(nn.Module):
         x = torch.cat([history, x], dim=1)
         B, T, N, C = x.shape
         
-        bpm = self.bpm_embedder(bpm.flatten()).view(B, T, -1).mean(1)
-        t = self.t_embedder(t)
-        
         x = rearrange(x, 'b t n c -> (b t) c n')
         x = self.x_embedder(x)
-        x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
+        x = rearrange(x, '(b t) c n -> b t n c', b=B, t=T)
+        bpm = self.bpm_embedder(bpm.flatten()).view(B, T, 1, -1)
         
-        t = torch.cat([t, actions, bpm], dim=-1)
+        x = x + bpm
+        x = rearrange(x, 'b t n c -> b (t n) c')
+        
+        t = self.t_embedder(t)
+        t = torch.cat([t, actions], dim=-1)
         t = self.fuse_conditioning(t)
         t0 = self.t_block(t)
         
@@ -802,6 +805,9 @@ def IDM_L(**kwargs):
 
 def IDM_M(**kwargs):
     return IDM(depth=12, hidden_size=1024, num_heads=16, **kwargs)
+
+def IDM_(**kwargs):
+    return IDM(depth=16, hidden_size=768, num_heads=12, **kwargs)
 
 def IDM_B(**kwargs):
     return IDM(depth=12, hidden_size=768, num_heads=12, **kwargs)
