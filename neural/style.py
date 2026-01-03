@@ -265,21 +265,23 @@ class MultiHeadAttention(nn.Module):
     def __init__(self, dim_hidden, num_heads, dropout_w=0, dropout_e=0, bias=False, flash=True, **kwargs):
         super().__init__()
         self.Q = nn.Linear(dim_hidden, dim_hidden, bias)
-        self.KV = nn.Linear(dim_hidden, 2*dim_hidden, bias)
+        self.K = nn.Linear(dim_hidden, dim_hidden, bias)
+        self.V = nn.Linear(dim_hidden, dim_hidden, bias)
         self.out = nn.Linear(dim_hidden, dim_hidden, bias)
         self.dropout_w = nn.Dropout(dropout_w)
         self.dropout_e = nn.Dropout(dropout_e)
         self.num_heads = num_heads
         self.dim_hidden = dim_hidden
         self.dim_attn = dim_hidden // num_heads
-        self.scale = 1 / math.sqrt(dim_hidden)
+        self.scale = self.dim_attn ** -0.5
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention') and flash
 
-    def forward(self, query, context, mask=None):
+    def forward(self, query, key, value, mask=None):
 
         ## PROJECT INPUTS
         q = self.Q(query)
-        k, v = self.KV(context).split(self.dim_hidden, dim=2)
+        k = self.K(key)
+        v = self.V(value)
 
         ## SPLIT ATTENTION HEADS
         b = query.size(0) # Assume [batch, seq_len, hidden]
@@ -298,6 +300,7 @@ class MultiHeadAttention(nn.Module):
             )
             e = e.transpose(1, 2).contiguous().view_as(query) 
         else:
+            raise NotImplementedError()
             dot_product = torch.einsum("bhqa,bhka->bhqk", (q, k))
             dot_product = self.scale * dot_product.masked_fill_(mask.logical_not(), float("-inf"))
             w = torch.softmax(dot_product, dim=-1)
@@ -510,8 +513,14 @@ class ActionTransformer(nn.Module):
             SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
         
-        self.pool_norm = RMSNorm(hidden_size)
-        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=num_heads)
+        self.norm = RMSNorm(hidden_size)
+        # self.proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        
+        # self.probe_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
+        # self.style_probe = nn.Parameter(torch.randn(1, hidden_size) / hidden_size ** 0.5)
+        
+        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
+        # self.style_keys = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         
         self.initialize_weights()
@@ -554,9 +563,9 @@ class ActionTransformer(nn.Module):
         for block in self.blocks:
             x = block(x)
         
-        x = self.pool_norm(x)
+        x = self.norm(x)
         query = torch.mean(x, dim=-2, keepdim=False)
-        style = self.pool_attn(query=query, context=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
+        style = self.pool_attn(query=query, key=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1), value=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1)).squeeze(1)
         
         return style
 
