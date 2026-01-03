@@ -777,7 +777,7 @@ class IDM(nn.Module):
         x = x[:, -self.n_decoder_chunks:].clone()
         
         # slightly noise BPM
-        bpm = bpm + torch.randn_like(bpm) * 1.5
+        bpm = bpm + torch.randn_like(bpm)
         
         z = self.action_model(x, bpm[:, -self.n_decoder_chunks:].clone())
         x = self.decoder(x, bpm, z, history)
