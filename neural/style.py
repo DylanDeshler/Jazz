@@ -515,8 +515,8 @@ class ActionTransformer(nn.Module):
         
         self.norm = RMSNorm(hidden_size)
         
+        self.query_token = nn.Parameter(torch.randn(1, hidden_size) / hidden_size ** 0.5)
         self.pool_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
-        # self.style_keys = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         
         self.initialize_weights()
@@ -524,8 +524,6 @@ class ActionTransformer(nn.Module):
     
     def initialize_weights(self):
         self.apply(self._init_weights)
-        # zero out classifier weights
-        # torch.nn.init.zeros_(self.to_vq[-1].weight)
         # zero out c_proj weights in all blocks
         for block in self.blocks:
             torch.nn.init.zeros_(block.mlp.w3.weight)
@@ -556,16 +554,26 @@ class ActionTransformer(nn.Module):
         
         x = x + bpm
         x = rearrange(x, 'b t n c -> b (t n) c')
+        x = torch.cat([self.query_token.unsqueeze(0).repeat(B, 1, 1), x], dim=1)
         for block in self.blocks:
             x = block(x)
         
         x = self.norm(x)
         
+        ## loses x signal but interpretable
         # query = torch.mean(x, dim=-2, keepdim=False)
         # style = self.pool_attn(query=query, key=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1), value=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1)).squeeze(1)
         
-        style =  self.pool_attn(query=x, key=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1), value=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
-        style = torch.mean(style, dim=-2, keepdim=False)
+        ## better but how to interpret?
+        # style = self.pool_attn(query=x, key=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1), value=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
+        # style = torch.mean(style, dim=-2, keepdim=False)
+        
+        ## learned query token
+        style = self.pool_attn(x[:, 0], key=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1), value=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1)).squeeze(1)
+        
+        ## query token with residual connection to x
+        # query = torch.mean(x, dim=-2, keepdim=False) + self.query_token.unsqueeze(0).repeat(B, 1, 1)
+        # style = self.pool_attn(query=query, key=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1), value=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1)).squeeze(1)
         
         return style
 
@@ -806,7 +814,7 @@ def IDM_L(**kwargs):
 def IDM_M(**kwargs):
     return IDM(depth=12, hidden_size=1024, num_heads=16, **kwargs)
 
-def IDM_(**kwargs):
+def IDM_S(**kwargs):
     return IDM(depth=16, hidden_size=768, num_heads=12, **kwargs)
 
 def IDM_B(**kwargs):
