@@ -507,7 +507,7 @@ class ActionTransformer(nn.Module):
         max_input_size = spatial_window * n_chunks
         
         self.x_embedder = Patcher(in_channels, hidden_size)
-        self.bpm_embedder = TimestepEmbedder(hidden_size, max_period=1000)
+        self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True, max_period=1000)
         
         self.blocks = nn.ModuleList([
             SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
@@ -554,7 +554,7 @@ class ActionTransformer(nn.Module):
         x = x + bpm
         x = rearrange(x, 'b t n c -> b (t n) c')
         for block in self.blocks:
-            x = block(x)
+            x = block(x, freqs_cis=self.freqs_cis)
         
         x = self.norm(x)
         
@@ -775,6 +775,9 @@ class IDM(nn.Module):
         
         history = x[:, :self.n_encoder_chunks].clone()
         x = x[:, -self.n_decoder_chunks:].clone()
+        
+        # slightly noise BPM
+        bpm = bpm + torch.randn_like(bpm) * 1.5
         
         z = self.action_model(x, bpm[:, -self.n_decoder_chunks:].clone())
         x = self.decoder(x, bpm, z, history)
