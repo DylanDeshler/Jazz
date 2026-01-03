@@ -519,7 +519,7 @@ class ActionTransformer(nn.Module):
         # self.probe_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
         # self.style_probe = nn.Parameter(torch.randn(1, hidden_size) / hidden_size ** 0.5)
         
-        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
+        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=True)
         # self.style_keys = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         
