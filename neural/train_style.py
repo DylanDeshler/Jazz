@@ -50,14 +50,14 @@ save_interval = 5000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 1 # used to simulate larger batch sizes
+gradient_accumulation_steps = 2 # used to simulate larger batch sizes
 batch_size = 384 # * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 cut_seconds = 1
@@ -261,6 +261,103 @@ def restore_measure(audio, stretch_ratio, sr=16000):
     
     y_restored = pyrb.time_stretch(audio, sr, restore_rate)
     return y_restored
+
+def create_auto_grid(n_plots, figsize=(12, 8)):
+    """
+    Automatically creates a grid of subplots closest to a square shape.
+    Returns the figure and a flattened list of axes.
+    """
+    # 1. Calculate the 'squarish' dimensions
+    cols = math.ceil(math.sqrt(n_plots))
+    rows = math.ceil(n_plots / cols)
+    
+    # 2. Create subplots
+    # squeeze=False ensures 'axes' is ALWAYS a 2D array, even if N=1
+    fig, axes = plt.subplots(rows, cols, figsize=figsize, constrained_layout=True)
+    
+    # 3. Flatten axes for easy iteration
+    axes_flat = axes.flatten()
+    
+    # 4. Hide any extra empty slots immediately
+    for i in range(n_plots, len(axes_flat)):
+        axes_flat[i].axis('off')
+        
+    # Return only the valid axes we need
+    return fig, axes_flat[:n_plots]
+
+@torch.no_grad()
+def generate_lam_actions(step):
+    batch_dir = os.path.join(out_dir, str(step))
+    os.makedirs(batch_dir, exist_ok=True)
+    
+    model.eval()
+    x, ratio, bpm = get_batch('val')
+    x, ratio, bpm = x[[1]], ratio[[1]], bpm[[1]]
+    x, ratio, bpm = x.repeat(n_style_embeddings, 1, 1, 1), ratio.repeat(n_style_embeddings, 1), bpm.repeat(n_style_embeddings, 1)
+    
+    B, T, N, D = x.shape
+    
+    action_indices = torch.arange(0, n_style_embeddings).unsqueeze(1).repeat(1, 2)
+    
+    with ctx:
+        noise = torch.randn(x[:, -n_decoder_chunks:].shape, device=x.device)
+        recon = model.generate_from_action_indices(x.clone(), bpm, action_indices, n_steps=50, noise=noise)
+        
+        x = tokenizer.decode(x.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
+        recon = tokenizer.decode(recon.view(B * n_decoder_chunks, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, n_decoder_chunks, 1, 24576 * cut_seconds)
+    
+    x = x.cpu().detach().float().numpy().squeeze(-2)
+    recon = recon.cpu().detach().float().numpy().squeeze(-2)
+    
+    wavs = []
+    for i in range(x.shape[0]):
+        og, y, r = x[i], recon[i], ratio[i].cpu().detach().numpy()
+        tail_r = r[-n_decoder_chunks:]
+        
+        base = np.concatenate([restore_measure(og[j], r[j].item()) for j in range(n_encoder_chunks)])
+        og_wav = np.concatenate([restore_measure(og[j], r[j].item()) for j in range(n_chunks)])
+        recon_wav = np.concatenate([restore_measure(y[j], tail_r[j].item()) for j in range(n_decoder_chunks)])
+        
+        recon_wav = np.concatenate([base, recon_wav])
+        
+        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), og_wav, 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), recon_wav, 16000)
+        
+        if i == 0:
+            wavs.append(og_wav)
+        wavs.append(recon_wav)
+    
+    T = len(og_wav) / 16000
+    
+    vmin, vmax = [], []
+    for wav in wavs:
+        frequencies, times, Sxx = signal.spectrogram(wav, 16000)
+        Sxx_log = 10 * np.log10(Sxx + 1e-10)
+        vmin.append(Sxx_log.min())
+        vmax.append(Sxx_log.max())
+
+    vmin = min(vmin)
+    vmax = max(vmax)
+    
+    pcm = None
+    fig, axes = create_auto_grid(n_style_embeddings + 1)
+    for i, ax in enumerate(axes):
+        frequencies, times, Sxx = signal.spectrogram(wavs[i], 16000)
+        Sxx_log = 10 * np.log10(Sxx + 1e-10)
+        
+        pcm = ax.pcolormesh(times, frequencies, Sxx_log, shading='gouraud', cmap='viridis', vmin=vmin, vmax=vmax)
+        
+        if i == 0:
+            ax.set_title('Real')
+        else:
+            ax.set_title(f'{i}')
+
+    fig.colorbar(pcm, ax=axes, label='Intensity [dB]')
+    fig.supxlabel('Time [s]')
+    fig.supylabel('Frequency [Hz]')
+
+    plt.savefig(os.path.join(batch_dir, 'action_wavs.png'))
+    plt.close('all')
 
 @torch.no_grad()
 def generate_lam_vs_random_actions(step):

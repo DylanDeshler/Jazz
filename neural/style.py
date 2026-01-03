@@ -516,7 +516,6 @@ class ActionTransformer(nn.Module):
         # Cross-attention with style embeddings could help align representations for pooling... 
         
         self.norm = RMSNorm(hidden_size)
-        
         self.pool_norm = RMSNorm(hidden_size)
         self.pool_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
@@ -780,8 +779,7 @@ class IDM(nn.Module):
         history = x[:, :self.n_encoder_chunks].clone()
         x = x[:, -self.n_decoder_chunks:].clone()
         
-        # slightly noise BPM
-        bpm = bpm + torch.randn_like(bpm)
+        bpm = bpm
         
         z = self.action_model(x, bpm[:, -self.n_decoder_chunks:].clone())
         x = self.decoder(x, bpm, z, history)
@@ -802,6 +800,11 @@ class IDM(nn.Module):
         x = x[:, -self.n_decoder_chunks:].clone()
         
         return self.decoder.sample(x, bpm, actions, history, n_steps=n_steps, noise=noise)
+    
+    def generate_from_action_indices(self, x, bpm, action_indices, n_steps=50, noise=None):
+        actions = self.action_model.style_embeddings[action_indices]
+        
+        return self.generate(x, bpm, actions, n_steps=n_steps, noise=noise)
     
     def lam_vs_random_actions(self, x, bpm, n_steps=50, noise=None):
         B, T, N, C = x.shape
