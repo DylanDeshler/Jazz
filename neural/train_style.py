@@ -57,7 +57,7 @@ wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 2 # used to simulate larger batch sizes
+gradient_accumulation_steps = 3 # used to simulate larger batch sizes
 batch_size = 384 # * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 cut_seconds = 1
