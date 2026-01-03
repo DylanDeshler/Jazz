@@ -569,11 +569,11 @@ class ActionTransformer(nn.Module):
         # style = torch.mean(style, dim=-2, keepdim=False)
         
         ## learned query token
-        style = self.pool_attn(x[:, 0], key=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1), value=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1)).squeeze(1)
+        # style = self.pool_attn(x[:, 0], key=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1), value=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1)).squeeze(1)
         
         ## query token with residual connection to x
-        # query = torch.mean(x, dim=-2, keepdim=False) + self.query_token.unsqueeze(0).repeat(B, 1, 1)
-        # style = self.pool_attn(query=query, key=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1), value=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1)).squeeze(1)
+        query = torch.mean(x, dim=-2, keepdim=True) + self.query_token.unsqueeze(0).repeat(B, 1, 1)
+        style = self.pool_attn(query=query, key=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1), value=self.style_embeddings.unsqueeze(0).repeat(B, 1, 1)).squeeze(1)
         
         return style
 
