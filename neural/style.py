@@ -778,14 +778,12 @@ class IDM(nn.Module):
         
         history = x[:, :self.n_encoder_chunks].clone()
         x = x[:, -self.n_decoder_chunks:].clone()
-        
-        bpm = bpm
-        
+    
         z = self.action_model(x, bpm[:, -self.n_decoder_chunks:].clone())
         x = self.decoder(x, bpm, z, history)
         return x, z
     
-    def enocde_actions(self, x, bpm):
+    def encode_actions(self, x, bpm):
         """
         x: (B, T, N, C) latents
         alpha: (B) noise level for history latents
