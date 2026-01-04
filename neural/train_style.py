@@ -292,7 +292,7 @@ def generate_lam_actions(step):
     
     model.eval()
     x, ratio, bpm = get_batch('val')
-    x, ratio, bpm = x[[1]], ratio[[1]], bpm[[1]]
+    x, ratio, bpm = x[[0]], ratio[[0]], bpm[[0]]
     x, ratio, bpm = x.repeat(n_style_embeddings, 1, 1, 1), ratio.repeat(n_style_embeddings, 1), bpm.repeat(n_style_embeddings, 1)
     
     B, T, N, D = x.shape
