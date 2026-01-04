@@ -46,14 +46,11 @@ arr = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddin
 
 with torch.no_grad():
     for i in tqdm(range(N // batch_size)):
-        batch = torch.from_numpy(np.stack([data[j:j+n_chunks] for j in range(i*batch_size, (i+1)*batch_size)], axis=0)).pin_memory().to(device, non_blocking=True)
-        bpm = torch.from_numpy(np.stack([meta[j:j+n_chunks, 1] for j in range(i*batch_size, (i+1)*batch_size)], axis=0)).pin_memory().to(device, non_blocking=True)
+        batch = torch.from_numpy(np.stack([data[j:j+n_decoder_chunks] for j in range(i*batch_size, (i+1)*batch_size)], axis=0)).pin_memory().to(device, non_blocking=True)
+        bpm = torch.from_numpy(np.stack([meta[j:j+n_decoder_chunks, 1] for j in range(i*batch_size, (i+1)*batch_size)], axis=0)).pin_memory().to(device, non_blocking=True)
         
         with ctx:
-            print(batch.shape, bpm.shape)
-            batch = batch[:, -n_decoder_chunks:].clone()
-            
-            actions = model.encode_actions(batch, bpm[:, -n_decoder_chunks:].clone())
+            actions = model.encode_actions(batch, bpm)
             print(batch.shape, bpm.shape, actions.shape)
         
         arr[i*batch_size:(i+1)*batch_size] = actions.cpu().detach().numpy().astype(np.float16)
