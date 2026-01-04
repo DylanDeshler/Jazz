@@ -296,7 +296,7 @@ def generate_lam_actions(step):
     
     B, T, N, D = x.shape
     
-    action_weights = torch.nn.functional.one_hot(torch.arange(0, n_style_embeddings), n_style_embeddings).pin_memory().to(device, non_blocking=True)
+    action_weights = torch.nn.functional.one_hot(torch.arange(0, n_style_embeddings), n_style_embeddings).float().pin_memory().to(device, non_blocking=True)
     
     with ctx:
         noise = torch.randn(x[:, -n_decoder_chunks:].shape, device=x.device)
