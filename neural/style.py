@@ -801,6 +801,7 @@ class IDM(nn.Module):
     
     def generate_from_action_indices(self, x, bpm, action_indices, n_steps=50, noise=None):
         actions = self.action_model.style_embeddings[action_indices]
+        print(actions.shape, x.shape, bpm.shape)
         
         return self.generate(x, bpm, actions, n_steps=n_steps, noise=noise)
     
