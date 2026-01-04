@@ -287,7 +287,7 @@ def create_auto_grid(n_plots, figsize=(12, 8)):
 
 @torch.no_grad()
 def generate_lam_actions(step):
-    batch_dir = os.path.join(out_dir, str(step))
+    batch_dir = os.path.join(out_dir, str(step), 'actions')
     os.makedirs(batch_dir, exist_ok=True)
     
     model.eval()
@@ -320,8 +320,8 @@ def generate_lam_actions(step):
         
         recon_wav = np.concatenate([base, recon_wav])
         
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), og_wav, 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), recon_wav, 16000)
+        sf.write(os.path.join(batch_dir, f'real.wav'), og_wav, 16000)
+        sf.write(os.path.join(batch_dir, f'{i}.wav'), recon_wav, 16000)
         
         if i == 0:
             wavs.append(og_wav)
@@ -356,7 +356,7 @@ def generate_lam_actions(step):
     fig.supxlabel('Time [s]')
     fig.supylabel('Frequency [Hz]')
 
-    plt.savefig(os.path.join(batch_dir, 'action_wavs.png'))
+    plt.savefig(os.path.join(batch_dir, 'wavs.png'))
     plt.close('all')
 
 @torch.no_grad()
@@ -487,8 +487,8 @@ while True:
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
             with ctx:
-                generate_lam_vs_random_actions(iter_num)
                 generate_lam_actions(iter_num)
+                generate_lam_vs_random_actions(iter_num)
             model.train()
         if wandb_log:
             wandb.log({
