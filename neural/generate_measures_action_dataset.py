@@ -6,7 +6,7 @@ from tqdm import tqdm
 import numpy as np
 import torch
 
-from lapa2 import LAM_B as net
+from style import IDM_S as net
 
 device = 'cuda'
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto 
@@ -17,15 +17,15 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 batch_size = 2**10
 
-ckpt_path = os.path.join('LAPA_measures_bpm_B_FSQ_16_3', 'ckpt.pt')
+ckpt_path = os.path.join('Style_32_adaln_measures_bpm_S_nobias', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 model_args = checkpoint['model_args']
 vae_embed_dim = model_args['in_channels']
-levels = model_args['levels']
-temporal_window = model_args['temporal_window']
 spatial_window = model_args['spatial_window']
-ratios = model_args['ratios']
-action_length = spatial_window // math.prod(ratios)
+n_encoder_chunks = model_args['n_encoder_chunks']
+n_decoder_chunks = model_args['n_decoder_chunks']
+n_chunks = n_encoder_chunks + n_decoder_chunks
+n_style_embeddings = model_args['n_style_embeddings']
 
 model = net(**model_args).to(device)
 state_dict = checkpoint['model']
@@ -39,19 +39,19 @@ model.load_state_dict(state_dict)
 model.eval()
 model = torch.compile(model)
 
-N = 3693787
-
-data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large.bin', dtype=np.float16, mode='r', shape=(N, 48, vae_embed_dim))
-meta = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_meta.npy', dtype=np.float32, mode='r', shape=(N, 2))
-arr = np.memmap(f'/home/dylan.d/research/music/Jazz/latents/low_measures_large_actions_{vae_embed_dim}_{math.prod(levels)}_{action_length}.bin', dtype=np.int8, mode='w+', shape=(N, action_length))
+N = 4403211
+data = np.memmap('/home/ubuntu/Data/low_measures_large.bin', dtype=np.float16, mode='r', shape=(N, 48, vae_embed_dim))
+meta = np.memmap('/home/ubuntu/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(N, 2))
+arr = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}.bin', dtype=np.float16, mode='w+', shape=(N))
 
 with torch.no_grad():
     for i in tqdm(range(N // batch_size)):
-        batch = torch.from_numpy(np.stack([data[j:j+temporal_window] for j in range(i*batch_size, (i+1)*batch_size)])).pin_memory().to(device, non_blocking=True)
-        bpm = torch.from_numpy(np.stack([meta[j:j+temporal_window, 1] for j in range(i*batch_size, (i+1)*batch_size)])).pin_memory().to(device, non_blocking=True)
+        batch = torch.from_numpy(np.stack([data[j:j+n_chunks] for j in range(i*batch_size, (i+1)*batch_size)])).pin_memory().to(device, non_blocking=True)
+        bpm = torch.from_numpy(np.stack([meta[j:j+n_chunks, 1] for j in range(i*batch_size, (i+1)*batch_size)])).pin_memory().to(device, non_blocking=True)
         
         with ctx:
-           _, actions = model.enocde_actions(batch, bpm)
+           actions = model.enocde_actions(batch, bpm)
+           print(batch.shape, bpm.shape, actions.shape)
         
         arr[i*batch_size:(i+1)*batch_size] = actions.cpu().detach().numpy().astype(np.float16)
 
