@@ -554,7 +554,7 @@ class ActionTransformer(nn.Module):
         mixed_v = torch.matmul(weights, v_proj)
         output = self.pool_attn.out(mixed_v)
         
-        return output
+        return self.out_norm(output)
     
     def forward(self, x, bpm):
         """
