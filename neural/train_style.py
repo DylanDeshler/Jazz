@@ -35,7 +35,6 @@ from dito import DiToV5 as Tokenizer
 import soundfile as sf
 from scipy import signal
 
-import torch
 import pyrubberband as pyrb
 import matplotlib.pyplot as plt
 
@@ -50,7 +49,7 @@ save_interval = 5000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir
@@ -297,11 +296,11 @@ def generate_lam_actions(step):
     
     B, T, N, D = x.shape
     
-    action_indices = torch.arange(0, n_style_embeddings)
+    action_weights = torch.nn.functional.one_hot(torch.arange(0, n_style_embeddings), n_style_embeddings)
     
     with ctx:
         noise = torch.randn(x[:, -n_decoder_chunks:].shape, device=x.device)
-        recon = model.generate_from_action_indices(x.clone(), bpm, action_indices, n_steps=50, noise=noise)
+        recon = model.generate_from_actions(x.clone(), bpm, action_weights, n_steps=50, noise=noise)
         
         x = tokenizer.decode(x.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
         recon = tokenizer.decode(recon.view(B * n_decoder_chunks, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, n_decoder_chunks, 1, 24576 * cut_seconds)

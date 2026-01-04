@@ -542,6 +542,19 @@ class ActionTransformer(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
+    def get_style_vector(self, weights):
+        """
+        weights: (B, n_style_embeddings)
+        """
+        
+        normed_styles = self.pool_norm(self.style_embeddings.unsqueeze(0))
+        v_proj = self.pool_attn.V(normed_styles)
+        v_proj = v_proj.squeeze(0)
+        mixed_v = torch.matmul(weights, v_proj)
+        output = self.pool_attn.out(mixed_v)
+        
+        return output
+    
     def forward(self, x, bpm):
         """
         x: (B, T, N, C) latents
@@ -792,8 +805,8 @@ class IDM(nn.Module):
         
         return self.decoder.sample(x, bpm, actions, history, n_steps=n_steps, noise=noise)
     
-    def generate_from_action_indices(self, x, bpm, action_indices, n_steps=50, noise=None):
-        actions = self.action_model.style_embeddings[action_indices]
+    def generate_from_actions(self, x, bpm, weights, n_steps=50, noise=None):
+        actions = self.action_model.get_style_vector(weights)
         
         return self.generate(x, bpm, actions, n_steps=n_steps, noise=noise)
     
