@@ -38,11 +38,12 @@ for k,v in list(state_dict.items()):
 model.load_state_dict(state_dict)
 model.eval()
 model = torch.compile(model)
+hidden_size = model.action_model.hidden_size
 
 N = 4403211
 data = np.memmap('/home/ubuntu/Data/low_measures_large.bin', dtype=np.float16, mode='r', shape=(N, 48, vae_embed_dim))
 meta = np.memmap('/home/ubuntu/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(N, 2))
-arr = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}.bin', dtype=np.float16, mode='w+', shape=(N))
+arr = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}.bin', dtype=np.float16, mode='w+', shape=(N, hidden_size))
 
 with torch.no_grad():
     for i in tqdm(range(N // batch_size)):
