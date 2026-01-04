@@ -297,7 +297,7 @@ def generate_lam_actions(step):
     
     B, T, N, D = x.shape
     
-    action_indices = torch.arange(0, n_style_embeddings).unsqueeze(1).repeat(1, 2)
+    action_indices = torch.arange(0, n_style_embeddings)
     
     with ctx:
         noise = torch.randn(x[:, -n_decoder_chunks:].shape, device=x.device)
