@@ -48,7 +48,7 @@ sample_interval = 5000
 log_interval = 100
 save_interval = 5000
 eval_iters = 600
-eval_only = False # if True, script exits right after the first eval
+eval_only = True # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
 init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
@@ -488,6 +488,7 @@ while True:
             model.eval()
             with ctx:
                 generate_lam_vs_random_actions(iter_num)
+                generate_lam_actions(iter_num)
             model.train()
         if wandb_log:
             wandb.log({
