@@ -578,7 +578,7 @@ class ActionTransformer(nn.Module):
         query = torch.mean(x, dim=-2, keepdim=False)
         style = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings).squeeze(1)
         
-        ## better but how to interpret?
+        ## better but less interpretable?
         # style = self.pool_attn(query=x, key=style_embeddings, value=style_embeddings)
         # style = torch.mean(style, dim=-2, keepdim=False)
         
