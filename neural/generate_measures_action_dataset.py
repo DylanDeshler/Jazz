@@ -51,7 +51,10 @@ with torch.no_grad():
         
         with ctx:
             print(batch.shape, bpm.shape)
-            actions = model.enocde_actions(batch, bpm)
+            history = x[:, :n_encoder_chunks].clone()
+            x = x[:, -n_decoder_chunks:].clone()
+            
+            actions = model(x, bpm[:, -n_decoder_chunks:].clone())
             print(batch.shape, bpm.shape, actions.shape)
         
         arr[i*batch_size:(i+1)*batch_size] = actions.cpu().detach().numpy().astype(np.float16)
