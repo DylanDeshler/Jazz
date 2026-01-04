@@ -51,8 +51,8 @@ with torch.no_grad():
         
         with ctx:
             actions = model.encode_actions(batch, bpm)
-            print(batch.shape, bpm.shape, actions.shape, actions.dtype)
+            print(batch.shape, bpm.shape, actions.shape, actions.dtype,  arr[i*batch_size:(i+1)*batch_size].shape)
         
-        arr[i*batch_size:(i+1)*batch_size] = actions.cpu().detach().numpy().astype(np.float16)
+        arr[i*batch_size:(i+1)*batch_size] = actions.float().cpu().detach().numpy().astype(np.float16)
 
 arr.flush()
