@@ -266,8 +266,8 @@ class MultiHeadAttention(nn.Module):
         super().__init__()
         self.Q = nn.Linear(dim_hidden, dim_hidden, bias)
         self.K = nn.Linear(dim_hidden, dim_hidden, bias)
-        self.V = nn.Linear(dim_hidden, dim_hidden, bias)
-        self.out = nn.Linear(dim_hidden, dim_hidden, bias)
+        self.V = nn.Identity()#nn.Linear(dim_hidden, dim_hidden, bias)
+        self.out = nn.Identity()#nn.Linear(dim_hidden, dim_hidden, bias)
         self.dropout_w = nn.Dropout(dropout_w)
         self.dropout_e = nn.Dropout(dropout_e)
         self.num_heads = num_heads
@@ -519,6 +519,7 @@ class ActionTransformer(nn.Module):
         self.pool_norm = RMSNorm(hidden_size)
         self.pool_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
+        self.out_norm = RMSNorm(hidden_size)
         
         self.initialize_weights()
         self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size, theta=1000))
@@ -574,15 +575,15 @@ class ActionTransformer(nn.Module):
         x = self.norm(x)
         style_embeddings = self.pool_norm(self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
         
-        ## loses x signal but interpretable
-        # query = torch.mean(x, dim=-2, keepdim=False)
-        # style = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings).squeeze(1)
+        # loses x signal but interpretable
+        query = torch.mean(x, dim=-2, keepdim=False)
+        style = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings).squeeze(1)
         
         # better but less interpretable?
-        style = self.pool_attn(query=x, key=style_embeddings, value=style_embeddings)
-        style = torch.mean(style, dim=-2, keepdim=False)
+        # style = self.pool_attn(query=x, key=style_embeddings, value=style_embeddings)
+        # style = torch.mean(style, dim=-2, keepdim=False)
         
-        return style
+        return self.out_norm(style)
 
 class DiTBlock(nn.Module):
     def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
