@@ -41,7 +41,7 @@ import matplotlib.pyplot as plt
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'Style_32_adaln_measures_bpm_S_nobias_poolfirst'
+out_dir = 'Style_32_adaln_measures_bpm_S_nobias'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -51,7 +51,7 @@ eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
 init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = True # disabled by default
+wandb_log = False # disabled by default
 wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
@@ -481,8 +481,8 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        # losses = estimate_loss()
-        # print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        losses = estimate_loss()
+        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
             with ctx:
