@@ -551,7 +551,7 @@ class ActionTransformer(nn.Module):
         # GST uses 4 heads for style transfer, doesnt say for manual...
         # Could train manual attention with 1 head and transfer with num_heads
         self.manual_attn = MultiHeadAttention(hidden_size, num_heads=1, bias=False, top_k=10)
-        self.transfer_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
+        # self.transfer_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         self.out_norm = RMSNorm(hidden_size)
         
@@ -629,7 +629,7 @@ class ActionTransformer(nn.Module):
         
         return entropy.mean().item(), utilization
     
-    def forward(self, x, bpm):
+    def forward(self, x, bpm, force_manual=False, force_transfer=False):
         """
         x: (B, T, N, C) latents
         """
@@ -651,10 +651,20 @@ class ActionTransformer(nn.Module):
         style_embeddings = self.pool_norm(self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
         
         # loses x signal but more interpretable
-        manual_query, transfer_query = torch.mean(x, dim=-2, keepdim=False).chunk(2, dim=0)
-        manual_style = self.manual_attn(query=manual_query, key=style_embeddings, value=style_embeddings).squeeze(1)
-        transfer_style = self.transfer_attn(query=transfer_query, key=style_embeddings, value=style_embeddings).squeeze(1)
-        style = torch.cat([manual_style, transfer_style], dim=0)
+        query = torch.mean(x, dim=-2, keepdim=False)
+        style = self.manual_attn(query=query, key=style_embeddings, value=style_embeddings).squeeze(1)
+        
+        # if self.training:
+        #     manual_query, transfer_query = torch.mean(x, dim=-2, keepdim=False).chunk(2, dim=0)
+        #     manual_style = self.manual_attn(query=manual_query, key=style_embeddings, value=style_embeddings).squeeze(1)
+        #     transfer_style = self.transfer_attn(query=transfer_query, key=style_embeddings, value=style_embeddings).squeeze(1)
+        #     style = torch.cat([manual_style, transfer_style], dim=0)
+        # elif force_manual:
+        #     query = torch.mean(x, dim=-2, keepdim=False)
+        #     style = self.manual_attn(query=query, key=style_embeddings, value=style_embeddings).squeeze(1)
+        # elif force_transfer:
+        #     query = torch.mean(x, dim=-2, keepdim=False)
+        #     style = self.transfer_attn(query=query, key=style_embeddings, value=style_embeddings).squeeze(1)
         
         # better but less interpretable?
         # style = self.manual_attn(query=x, key=style_embeddings, value=style_embeddings)
@@ -872,14 +882,14 @@ class IDM(nn.Module):
         x = self.decoder(x, bpm, z, history)
         return x, z
     
-    def encode_actions(self, x, bpm):
+    def encode_actions(self, x, bpm, force_manual, force_transfer):
         """
         x: (B, T, N, C) latents
         alpha: (B) noise level for history latents
         """
         assert x.ndim == 4
         
-        z = self.action_model(x, bpm)
+        z = self.action_model(x, bpm, force_manual=force_manual, force_transfer=force_transfer)
         return z
     
     def generate(self, x, bpm, actions, n_steps=50, noise=None):
