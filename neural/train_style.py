@@ -125,7 +125,7 @@ ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torc
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 # poor man's data loader
-def get_batch(split='train'):
+def get_batch(split='train', batch_size=batch_size):
     # TODO: sample within songs (this can go over song boundaries)
     data = np.memmap('/home/ubuntu/Data/low_measures_large.bin', dtype=np.float16, mode='r', shape=(4403211, 48, vae_embed_dim))
     meta = np.memmap('/home/ubuntu/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(4403211, 2))
@@ -215,9 +215,9 @@ def estimate_loss():
     out = {}
     model.eval()
     for i, split in enumerate(['train', 'val']):
-        losses = torch.zeros(eval_iters * gradient_accumulation_steps)
-        for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
-            X, ratio, bpm = get_batch(split)
+        losses = torch.zeros(eval_iters)
+        for k in tqdm(range(eval_iters)):
+            X, ratio, bpm = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
                 loss, _ = model(X, bpm)
             losses[k] = loss.item()
@@ -230,9 +230,9 @@ def estimate_style_entropy():
     out = {}
     model.eval()
     for i, split in enumerate(['train', 'val']):
-        entropies = torch.zeros(eval_iters * gradient_accumulation_steps)
-        for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
-            X, ratio, bpm = get_batch(split)
+        entropies = torch.zeros(eval_iters)
+        for k in tqdm(range(eval_iters)):
+            X, ratio, bpm = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
                 entropy = model.action_model.style_entropy(X, bpm)
             entropies[k] = entropy.item()
