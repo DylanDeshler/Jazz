@@ -41,7 +41,7 @@ import matplotlib.pyplot as plt
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'Style_32_adaln_measures_bpm_S_nobias_poolfirst_norm_fullx'
+out_dir = 'Style_32_adaln_measures_bpm_S_nobias_poolfirst_norm_fullx_1head'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -51,7 +51,7 @@ eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = False # disabled by default
+wandb_log = True # disabled by default
 wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
@@ -511,6 +511,8 @@ while True:
                 "iter": iter_num,
                 "train/loss": losses['train'],
                 "val/loss": losses['val'],
+                "train/entropy": entropy['train'],
+                "val/entropy": entropy['val'],
                 "lr": lr,
                 "mfu": running_mfu*100, # convert to percentage
                 "tokens": tokens_trained,
