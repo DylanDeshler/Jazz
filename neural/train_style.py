@@ -326,11 +326,12 @@ def generate_lam_actions(step):
         og, y, r = x[i], recon[i], ratio[i].cpu().detach().numpy()
         tail_r = r[-n_decoder_chunks:]
         
-        base = np.concatenate([restore_measure(og[j], r[j].item()) for j in range(n_encoder_chunks)])
         og_wav = np.concatenate([restore_measure(og[j], r[j].item()) for j in range(n_chunks)])
         recon_wav = np.concatenate([restore_measure(y[j], tail_r[j].item()) for j in range(n_decoder_chunks)])
         
-        recon_wav = np.concatenate([base, recon_wav])
+        if n_encoder_chunks > 0:
+            base = np.concatenate([restore_measure(og[j], r[j].item()) for j in range(n_encoder_chunks)])
+            recon_wav = np.concatenate([base, recon_wav])
         
         sf.write(os.path.join(batch_dir, f'real.wav'), og_wav, 16000)
         sf.write(os.path.join(batch_dir, f'{i}.wav'), recon_wav, 16000)
@@ -398,13 +399,14 @@ def generate_lam_vs_random_actions(step):
         og, y, random_y, r = x[i], recon[i], random_recon[i], ratio[i].cpu().detach().numpy()
         tail_r = r[-n_decoder_chunks:]
         
-        base = np.concatenate([restore_measure(og[j], r[j].item()) for j in range(n_encoder_chunks)])
         og_wav = np.concatenate([restore_measure(og[j], r[j].item()) for j in range(n_chunks)])
         recon_wav = np.concatenate([restore_measure(y[j], tail_r[j].item()) for j in range(n_decoder_chunks)])
         random_wav = np.concatenate([restore_measure(random_y[j], tail_r[j].item()) for j in range(n_decoder_chunks)])
         
-        recon_wav = np.concatenate([base, recon_wav])
-        random_wav = np.concatenate([base, random_wav])
+        if n_encoder_chunks > 0:
+            base = np.concatenate([restore_measure(og[j], r[j].item()) for j in range(n_encoder_chunks)])
+            recon_wav = np.concatenate([base, recon_wav])
+            random_wav = np.concatenate([base, random_wav])
         
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), og_wav, 16000)
