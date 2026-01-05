@@ -353,7 +353,7 @@ def generate_lam_actions(step):
     vmax = max(vmax)
     
     pcm = None
-    fig, axes = create_auto_grid(n_style_embeddings + 1)
+    fig, axes = create_auto_grid(n_samples + 1)
     for i, ax in enumerate(axes):
         frequencies, times, Sxx = signal.spectrogram(wavs[i], 16000)
         Sxx_log = 10 * np.log10(Sxx + 1e-10)
