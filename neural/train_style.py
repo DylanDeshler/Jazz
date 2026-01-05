@@ -236,8 +236,8 @@ def estimate_style_entropy():
             X, ratio, bpm = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
                 entropy, usage = model.action_model.style_entropy(X, bpm)
-            entropies[k] = entropy.item()
-            usages[k] = usage.item()
+            entropies[k] = entropy
+            usages[k] = usage
         out1[split] = entropies.mean()
         out2[split] = usages.mean()
     model.train()
