@@ -57,7 +57,7 @@ wandb_run_name = str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 3 # used to simulate larger batch sizes
-batch_size = 320 # * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 256 # * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 cut_seconds = 1
 spatial_window = 48
@@ -224,6 +224,21 @@ def estimate_loss():
         out[split] = losses.mean()
     model.train()
     return out
+
+@torch.no_grad()
+def estimate_style_entropy():
+    out = {}
+    model.eval()
+    for i, split in enumerate(['train', 'val']):
+        losses = torch.zeros(eval_iters * gradient_accumulation_steps)
+        for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
+            X, ratio, bpm = get_batch(split)
+            with ctx:
+                entropy = model.action_model.style_entropy(X, bpm)
+            losses[k] = loss.item()
+        out[split] = losses.mean()
+    model.train()
+    return out 
 
 # learning rate decay scheduler (cosine with warmup)
 def get_lr(it):
@@ -481,8 +496,10 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
+        entropy = estimate_style_entropy()
         losses = estimate_loss()
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        print(f"iter {iter_num}: train entropy {entropy['train']:.6f}, val entropy {entropy['val']:.6f}")
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
             with ctx:

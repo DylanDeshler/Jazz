@@ -299,15 +299,16 @@ class MultiHeadAttention(nn.Module):
                 scale=self.scale,
             )
             e = e.transpose(1, 2).contiguous().view_as(query) 
+            
+            return self.dropout_e(self.out(e))
         else:
-            raise NotImplementedError()
             dot_product = torch.einsum("bhqa,bhka->bhqk", (q, k))
             dot_product = self.scale * dot_product.masked_fill_(mask.logical_not(), float("-inf"))
             w = torch.softmax(dot_product, dim=-1)
             w = self.dropout_w(w)
             e = torch.einsum("bhqv,bhva->bhqa", (w, v)).transpose(1, 2).contiguous().view_as(query) 
-
-        return self.dropout_e(self.out(e))
+            
+            return self.dropout_e(self.out(e)), w
 
 class Attention(nn.Module):
     def __init__(
@@ -558,6 +559,44 @@ class ActionTransformer(nn.Module):
         output = self.pool_attn.out(mixed_v)
         
         return self.out_norm(output)
+    
+    def style_entropy(self, x, bpm):
+        flash = self.pool_attn.flash
+        self.pool_attn.flash = False
+        
+        B, T, N, C = x.shape
+        
+        x = rearrange(x, 'b t n c -> (b t) c n')
+        x = self.x_embedder(x)
+        x = rearrange(x, '(b t) c n -> b t n c', b=B, t=T)
+        bpm = self.bpm_embedder(bpm.flatten()).view(B, T, 1, -1)
+        
+        x = x + bpm
+        x = rearrange(x, 'b t n c -> b (t n) c')
+        for block in self.blocks:
+            x = block(x, freqs_cis=self.freqs_cis)
+            
+        x = x[:, -self.n_decoder_chunks:]
+        
+        x = self.norm(x)
+        style_embeddings = self.pool_norm(self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
+        
+        # loses x signal but interpretable
+        query = torch.mean(x, dim=-2, keepdim=False)
+        style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings).squeeze(1)
+        
+        # better but less interpretable?
+        # style = self.pool_attn(query=x, key=style_embeddings, value=style_embeddings)
+        # style = torch.mean(style, dim=-2, keepdim=False)
+        
+        self.pool_attn.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention') and flash
+        
+        print(weights.shape)
+        
+        entropy = -torch.sum(weights * torch.log(weights + 1e-6), dim=-1)
+        print(entropy.shape)
+        
+        return entropy.mean()
     
     def forward(self, x, bpm):
         """
