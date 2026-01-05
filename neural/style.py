@@ -297,7 +297,7 @@ class MultiHeadAttention(nn.Module):
         self.top_k = top_k
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention') and (flash and not top_k)
 
-    def forward(self, query, key, value, mask=None):
+    def forward(self, query, key, value, mask=None, return_weights=False):
 
         ## PROJECT INPUTS
         q = self.Q(query)
@@ -321,7 +321,6 @@ class MultiHeadAttention(nn.Module):
             )
             e = e.transpose(1, 2).contiguous().view_as(query) 
             
-            return self.dropout_e(self.out(e))
         else:
             dot_product = torch.einsum("bhqa,bhka->bhqk", (q, k)) * self.scale
             if mask is not None:
@@ -333,7 +332,10 @@ class MultiHeadAttention(nn.Module):
             w = self.dropout_w(w)
             e = torch.einsum("bhqv,bhva->bhqa", (w, v)).transpose(1, 2).contiguous().view_as(query) 
             
-            return self.dropout_e(self.out(e)), w
+            if return_weights:
+                return self.dropout_e(self.out(e)), w
+        
+        return self.dropout_e(self.out(e))
 
 class Attention(nn.Module):
     def __init__(
@@ -611,7 +613,7 @@ class ActionTransformer(nn.Module):
         
         # loses x signal but interpretable
         query = torch.mean(x, dim=-2, keepdim=False)
-        style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings)
+        style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings, return_weights=True)
         
         # better but less interpretable?
         # style = self.pool_attn(query=x, key=style_embeddings, value=style_embeddings)
