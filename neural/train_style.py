@@ -41,7 +41,7 @@ import matplotlib.pyplot as plt
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'Style_32_adaln_measures_bpm_S_nobias_poolfirst_norm_fullx_1head'
+out_dir = 'Style_128_adaln_measures_bpm_S_nobias_poolfirst_norm_fullx_1head'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -66,7 +66,7 @@ n_decoder_chunks = 2
 n_chunks = n_encoder_chunks + n_decoder_chunks
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
-n_style_embeddings = 32
+n_style_embeddings = 128
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
@@ -498,8 +498,7 @@ while True:
     if iter_num % eval_interval == 0 and master_process:
         entropy = estimate_style_entropy()
         losses = estimate_loss()
-        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-        print(f"iter {iter_num}: train entropy {entropy['train']:.6f}, val entropy {entropy['val']:.6f}")
+        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, train entropy {entropy['train']:.6f}, val entropy {entropy['val']:.6f}")
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
             with ctx:

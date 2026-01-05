@@ -524,7 +524,7 @@ class ActionTransformer(nn.Module):
         self.pool_norm = RMSNorm(hidden_size)
         # GST uses 4 heads for style transfer, doesnt say for manual...
         # Could train manual attention with 1 head and transfer with num_heads
-        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=1, bias=False)   
+        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=1, bias=False)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         self.out_norm = RMSNorm(hidden_size)
         
