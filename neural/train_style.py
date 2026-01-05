@@ -303,11 +303,13 @@ def generate_lam_actions(step):
     model.eval()
     x, ratio, bpm = get_batch('val')
     x, ratio, bpm = x[[0]], ratio[[0]], bpm[[0]]
-    x, ratio, bpm = x.repeat(n_style_embeddings, 1, 1, 1), ratio.repeat(n_style_embeddings, 1), bpm.repeat(n_style_embeddings, 1)
+    
+    n_samples = 32
+    x, ratio, bpm = x.repeat(n_samples, 1, 1, 1), ratio.repeat(n_samples, 1), bpm.repeat(n_samples, 1)
     
     B, T, N, D = x.shape
     
-    action_weights = torch.nn.functional.one_hot(torch.arange(0, n_style_embeddings), n_style_embeddings).float().pin_memory().to(device, non_blocking=True)
+    action_weights = torch.nn.functional.one_hot(torch.randint(n_style_embeddings, size=n_samples), n_style_embeddings).float().pin_memory().to(device, non_blocking=True)
     
     with ctx:
         noise = torch.randn(x[:, -n_decoder_chunks:].shape, device=x.device)
