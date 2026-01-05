@@ -563,6 +563,7 @@ class ActionTransformer(nn.Module):
         
         return self.out_norm(output)
     
+    @torch.no_grad()
     def style_entropy(self, x, bpm):
         flash = self.pool_attn.flash
         self.pool_attn.flash = False
@@ -594,10 +595,15 @@ class ActionTransformer(nn.Module):
         
         self.pool_attn.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention') and flash
         
-        weights = weights.mean(dim=1).squeeze(-2)
+        weights = weights.squeeze(-2)
+        indices = torch.argmax(weights, dim=-1)
+        counts = torch.bincount(indices, minlength=self.style_embeddings.shape[0]).float()
+        utilization = (counts > 0).sum().item() / self.style_embeddings.shape[0]
+        
+        weights = weights.mean(dim=1)
         entropy = -torch.sum(weights * torch.log(weights + 1e-6), dim=-1)
         
-        return entropy.mean()
+        return entropy.mean(), utilization
     
     def forward(self, x, bpm):
         """
