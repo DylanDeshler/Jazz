@@ -311,7 +311,7 @@ class MultiHeadAttention(nn.Module):
         v = v.view(b, -1, self.num_heads, self.dim_attn).transpose(1, 2)
 
         ## COMPUTE ATTENTION
-        if self.flash:
+        if self.flash and not return_weights:
             e = F.scaled_dot_product_attention(
                 q, k, v, 
                 attn_mask=mask, 
