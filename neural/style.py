@@ -302,8 +302,9 @@ class MultiHeadAttention(nn.Module):
             
             return self.dropout_e(self.out(e))
         else:
-            dot_product = torch.einsum("bhqa,bhka->bhqk", (q, k))
-            dot_product = self.scale * dot_product.masked_fill_(mask.logical_not(), float("-inf"))
+            dot_product = torch.einsum("bhqa,bhka->bhqk", (q, k)) * self.scale
+            if mask is not None:
+                dot_product = dot_product.masked_fill_(mask.logical_not(), float("-inf"))
             w = torch.softmax(dot_product, dim=-1)
             w = self.dropout_w(w)
             e = torch.einsum("bhqv,bhva->bhqa", (w, v)).transpose(1, 2).contiguous().view_as(query) 
