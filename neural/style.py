@@ -585,8 +585,6 @@ class ActionTransformer(nn.Module):
         # loses x signal but interpretable
         query = torch.mean(x, dim=-2, keepdim=False)
         style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings)
-        print(weights.shape)
-        weights = weights.mean(dim=1).squeeze(-2)
         
         # better but less interpretable?
         # style = self.pool_attn(query=x, key=style_embeddings, value=style_embeddings)
@@ -594,10 +592,8 @@ class ActionTransformer(nn.Module):
         
         self.pool_attn.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention') and flash
         
-        print(weights.shape)
-        
+        weights = weights.mean(dim=1).squeeze(-2)
         entropy = -torch.sum(weights * torch.log(weights + 1e-6), dim=-1)
-        print(entropy.shape)
         
         return entropy.mean()
     
