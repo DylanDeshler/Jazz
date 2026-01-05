@@ -48,7 +48,7 @@ log_interval = 100
 save_interval = 5000
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
-always_save_checkpoint = True # if True, always save a checkpoint after each eval
+always_save_checkpoint = False # if True, always save a checkpoint after each eval
 init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
@@ -227,19 +227,22 @@ def estimate_loss():
 
 @torch.no_grad()
 def estimate_style_entropy():
-    out1, out2 = {}, {}
+    out1, out2, out3 = {}, {}, {}
     model.eval()
     for i, split in enumerate(['train', 'val']):
         entropies = torch.zeros(eval_iters)
+        batch_entropies = torch.zeros(eval_iters)
         usages = torch.zeros(eval_iters)
         for k in tqdm(range(eval_iters)):
             X, ratio, bpm = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
-                entropy, usage = model.action_model.style_entropy(X, bpm)
+                entropy, batch_entropy, usage = model.action_model.style_entropy(X, bpm)
             entropies[k] = entropy
+            batch_entropies[k] = batch_entropy
             usages[k] = usage
         out1[split] = entropies.mean()
-        out2[split] = usages.mean()
+        out2[split] = batch_entropies.mean()
+        out3[split] = usages.mean()
     model.train()
     return out1, out2
 
@@ -496,10 +499,10 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        entropy, usage = estimate_style_entropy()
+        entropy, batch_entropy, usage = estimate_style_entropy()
         losses = estimate_loss()
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-        print(f"iter {iter_num}: train entropy {entropy['train']:.6f}, val entropy {entropy['val']:.6f}, train usage {usage['train']:.6f}, val usage {usage['val']:.6f}")
+        print(f"iter {iter_num}: train entropy {entropy['train']:.6f}, val entropy {entropy['val']:.6f}, train usage {usage['train']:.6f}, val usage {usage['val']:.6f}, train batch entropy {batch_entropy['train']:.6f}, val batch entropy {batch_entropy['val']:.6f}")
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
             with ctx:
@@ -515,6 +518,8 @@ while True:
                 "val/entropy": entropy['val'],
                 "train/usage": usage['train'],
                 "val/usage": usage['val'],
+                "train/batch_entropy": batch_entropy['train'],
+                "val/batch_entropy": batch_entropy['val'],
                 "lr": lr,
                 "mfu": running_mfu*100, # convert to percentage
                 "tokens": tokens_trained,

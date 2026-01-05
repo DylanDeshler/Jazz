@@ -627,7 +627,7 @@ class ActionTransformer(nn.Module):
         counts = torch.bincount(indices, minlength=self.style_embeddings.shape[0]).float()
         utilization = (counts > 0).sum().item() / self.style_embeddings.shape[0]
         
-        return entropy.mean().item(), utilization
+        return entropy.mean().item(), batch_entropy.item(), utilization
     
     def forward(self, x, bpm, force_manual=False, force_transfer=False):
         """
