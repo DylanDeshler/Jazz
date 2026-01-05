@@ -524,7 +524,7 @@ class ActionTransformer(nn.Module):
         self.pool_norm = RMSNorm(hidden_size)
         # GST uses 4 heads for style transfer, doesnt say for manual...
         # Could train manual attention with 1 head and transfer with num_heads
-        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=1, bias=False)
+        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=4, bias=False)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         self.out_norm = RMSNorm(hidden_size)
         
@@ -600,14 +600,12 @@ class ActionTransformer(nn.Module):
         
         entropy = -torch.sum(weights * torch.log(weights + 1e-6), dim=-1)
         batch_entropy = -torch.sum(weights.mean(dim=0) * torch.log(weights.mean(dim=0) + 1e-6))
-        print(entropy.mean().item(), batch_entropy.mean().item())
         
         indices = torch.argmax(weights, dim=-1)
         counts = torch.bincount(indices, minlength=self.style_embeddings.shape[0]).float()
-        utilization = (counts > 0).sum()
-        print(utilization)
+        utilization = (counts > 0).sum().item() / self.style_embeddings.shape[0]
         
-        return entropy.mean(), utilization
+        return entropy.mean(), batch_entropy.mean(), utilization
     
     def forward(self, x, bpm):
         """
