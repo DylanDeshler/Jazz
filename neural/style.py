@@ -494,17 +494,20 @@ class Patcher(torch.nn.Module):
         return x
 
 class ActionTransformer(nn.Module):
-    def __init__(self,in_channels,
+    def __init__(self,
+                 in_channels,
                  hidden_size,
                  spatial_window,
-                 n_chunks,
+                 n_encoder_chunks,
+                 n_decoder_chunks,
                  n_style_embeddings,
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4,
                  ):
         super().__init__()
-        max_input_size = spatial_window * n_chunks
+        self.n_decoder_chunks = n_decoder_chunks
+        max_input_size = spatial_window * (n_encoder_chunks + n_decoder_chunks)
         
         self.x_embedder = Patcher(in_channels, hidden_size)
         self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True, max_period=1000)
@@ -522,7 +525,7 @@ class ActionTransformer(nn.Module):
         self.out_norm = RMSNorm(hidden_size)
         
         self.initialize_weights()
-        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size, theta=1000))
+        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
     
     def initialize_weights(self):
         self.apply(self._init_weights)
@@ -571,6 +574,8 @@ class ActionTransformer(nn.Module):
         x = rearrange(x, 'b t n c -> b (t n) c')
         for block in self.blocks:
             x = block(x, freqs_cis=self.freqs_cis)
+            
+        x = x[:, -self.n_decoder_chunks:]
         
         x = self.norm(x)
         style_embeddings = self.pool_norm(self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
@@ -761,7 +766,8 @@ class IDM(nn.Module):
         self.action_model = ActionTransformer(in_channels=in_channels, 
                                               hidden_size=hidden_size,
                                               spatial_window=spatial_window, 
-                                              n_chunks=n_decoder_chunks, 
+                                              n_encoder_chunks=n_encoder_chunks,
+                                              n_decoder_chunks=n_decoder_chunks, 
                                               n_style_embeddings=n_style_embeddings,
                                               num_heads=num_heads, 
                                               depth=depth, 
@@ -783,10 +789,11 @@ class IDM(nn.Module):
         assert x.ndim == 4
         B, T, N, C = x.shape
         
+        z = self.action_model(x, bpm)
+        
         history = x[:, :self.n_encoder_chunks].clone()
         x = x[:, -self.n_decoder_chunks:].clone()
-    
-        z = self.action_model(x, bpm[:, -self.n_decoder_chunks:].clone())
+
         x = self.decoder(x, bpm, z, history)
         return x, z
     
@@ -814,7 +821,7 @@ class IDM(nn.Module):
     def lam_vs_random_actions(self, x, bpm, n_steps=50, noise=None):
         B, T, N, C = x.shape
         
-        z = self.action_model(x[:, -self.n_decoder_chunks:].clone(), bpm[:, -self.n_decoder_chunks:].clone())
+        z = self.action_model(x.clone(), bpm.clone())
         
         recon = self.generate(x, bpm, z,  n_steps=n_steps, noise=noise)
         random = self.generate(x, bpm, self.action_model.style_embeddings.mean(0).unsqueeze(0).repeat(B, 1), n_steps=n_steps, noise=noise)
