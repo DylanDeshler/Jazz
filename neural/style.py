@@ -550,7 +550,7 @@ class ActionTransformer(nn.Module):
         self.pool_norm = RMSNorm(hidden_size)
         # GST uses 4 heads for style transfer, doesnt say for manual...
         # Could train manual attention with 1 head and transfer with num_heads
-        self.manual_attn = MultiHeadAttention(hidden_size, num_heads=1, bias=False, top_k=10)
+        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=1, bias=False, top_k=10)
         # self.transfer_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         self.out_norm = RMSNorm(hidden_size)
@@ -583,10 +583,10 @@ class ActionTransformer(nn.Module):
         """
         
         normed_styles = self.pool_norm(self.style_embeddings.unsqueeze(0))
-        v_proj = self.manual_attn.V(normed_styles)
+        v_proj = self.pool_attn.V(normed_styles)
         v_proj = v_proj.squeeze(0)
         mixed_v = torch.matmul(weights, v_proj)
-        output = self.manual_attn.out(mixed_v)
+        output = self.pool_attn.out(mixed_v)
         
         return self.out_norm(output)
     
@@ -611,10 +611,10 @@ class ActionTransformer(nn.Module):
         
         # loses x signal but interpretable
         query = torch.mean(x, dim=-2, keepdim=False)
-        style, weights = self.manual_attn(query=query, key=style_embeddings, value=style_embeddings, return_weights=True)
+        style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings, return_weights=True)
         
         # better but less interpretable?
-        # style = self.manual_attn(query=x, key=style_embeddings, value=style_embeddings)
+        # style = self.pool_attn(query=x, key=style_embeddings, value=style_embeddings)
         # style = torch.mean(style, dim=-2, keepdim=False)
         
         weights = weights.squeeze(-2)
@@ -652,22 +652,22 @@ class ActionTransformer(nn.Module):
         
         # loses x signal but more interpretable
         query = torch.mean(x, dim=-2, keepdim=False)
-        style = self.manual_attn(query=query, key=style_embeddings, value=style_embeddings).squeeze(1)
+        style = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings).squeeze(1)
         
         # if self.training:
         #     manual_query, transfer_query = torch.mean(x, dim=-2, keepdim=False).chunk(2, dim=0)
-        #     manual_style = self.manual_attn(query=manual_query, key=style_embeddings, value=style_embeddings).squeeze(1)
+        #     manual_style = self.pool_attn(query=manual_query, key=style_embeddings, value=style_embeddings).squeeze(1)
         #     transfer_style = self.transfer_attn(query=transfer_query, key=style_embeddings, value=style_embeddings).squeeze(1)
         #     style = torch.cat([manual_style, transfer_style], dim=0)
         # elif force_manual:
         #     query = torch.mean(x, dim=-2, keepdim=False)
-        #     style = self.manual_attn(query=query, key=style_embeddings, value=style_embeddings).squeeze(1)
+        #     style = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings).squeeze(1)
         # elif force_transfer:
         #     query = torch.mean(x, dim=-2, keepdim=False)
         #     style = self.transfer_attn(query=query, key=style_embeddings, value=style_embeddings).squeeze(1)
         
         # better but less interpretable?
-        # style = self.manual_attn(query=x, key=style_embeddings, value=style_embeddings)
+        # style = self.pool_attn(query=x, key=style_embeddings, value=style_embeddings)
         # style = torch.mean(style, dim=-2, keepdim=False)
         
         return self.out_norm(style)
