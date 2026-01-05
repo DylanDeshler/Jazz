@@ -584,7 +584,9 @@ class ActionTransformer(nn.Module):
         
         # loses x signal but interpretable
         query = torch.mean(x, dim=-2, keepdim=False)
-        style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings).squeeze(1)
+        style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings)
+        print(weights.shape)
+        weights = weights.squeeze(1)
         
         # better but less interpretable?
         # style = self.pool_attn(query=x, key=style_embeddings, value=style_embeddings)
