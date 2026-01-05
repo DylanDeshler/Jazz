@@ -309,7 +309,7 @@ def generate_lam_actions(step):
     
     B, T, N, D = x.shape
     
-    action_weights = torch.nn.functional.one_hot(torch.randint(n_style_embeddings, size=n_samples), n_style_embeddings).float().pin_memory().to(device, non_blocking=True)
+    action_weights = torch.nn.functional.one_hot(torch.randint(n_style_embeddings, size=(n_samples,)), n_style_embeddings).float().pin_memory().to(device, non_blocking=True)
     
     with ctx:
         noise = torch.randn(x[:, -n_decoder_chunks:].shape, device=x.device)
@@ -494,10 +494,10 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        entropy, usage = estimate_style_entropy()
-        losses = estimate_loss()
-        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-        print(f"iter {iter_num}: train entropy {entropy['train']:.6f}, val entropy {entropy['val']:.6f}, train usage {usage['train']:.6f}, val usage {usage['val']:.6f}")
+        # entropy, usage = estimate_style_entropy()
+        # losses = estimate_loss()
+        # print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        # print(f"iter {iter_num}: train entropy {entropy['train']:.6f}, val entropy {entropy['val']:.6f}, train usage {usage['train']:.6f}, val usage {usage['val']:.6f}")
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
             with ctx:
