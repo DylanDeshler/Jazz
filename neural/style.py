@@ -524,7 +524,7 @@ class ActionTransformer(nn.Module):
         self.pool_norm = RMSNorm(hidden_size)
         # GST uses 4 heads for style transfer, doesnt say for manual...
         # Could train manual attention with 1 head and transfer with num_heads
-        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=4, bias=False)
+        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=1, bias=False)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         self.out_norm = RMSNorm(hidden_size)
         
@@ -703,6 +703,7 @@ class ModernDiT(nn.Module):
         
         self.fuse_conditioning = SwiGLUMlp(hidden_size * 2, hidden_size * 4, hidden_size, bias=False)
         self.x_embedder = Patcher(in_channels, hidden_size)
+        self.null_embedding = nn.Parameter(torch.randn(1, in_channels) / in_channels ** 0.5)
         
         self.t_block = nn.Sequential(
             nn.SiLU(),
@@ -746,6 +747,8 @@ class ModernDiT(nn.Module):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
     def forward(self, x, t, bpm, actions, history):
+        history = token_drop(history, self.null_embedding, self.training, 0.2)
+        
         x = torch.cat([history, x], dim=1)
         B, T, N, C = x.shape
         

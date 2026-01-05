@@ -41,7 +41,7 @@ import matplotlib.pyplot as plt
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'Style_128_adaln_measures_bpm_S_nobias_poolfirst_norm_fullx_4head'
+out_dir = 'Style_128_adaln_measures_bpm_S_nobias_poolfirst_norm_fullx_1head'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -49,7 +49,7 @@ save_interval = 5000
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir
@@ -284,22 +284,15 @@ def create_auto_grid(n_plots, figsize=(12, 8)):
     Automatically creates a grid of subplots closest to a square shape.
     Returns the figure and a flattened list of axes.
     """
-    # 1. Calculate the 'squarish' dimensions
     cols = math.ceil(math.sqrt(n_plots))
     rows = math.ceil(n_plots / cols)
     
-    # 2. Create subplots
-    # squeeze=False ensures 'axes' is ALWAYS a 2D array, even if N=1
     fig, axes = plt.subplots(rows, cols, figsize=figsize, constrained_layout=True)
-    
-    # 3. Flatten axes for easy iteration
     axes_flat = axes.flatten()
     
-    # 4. Hide any extra empty slots immediately
     for i in range(n_plots, len(axes_flat)):
-        axes_flat[i].axis('off')
+        axes_flat[i].set_axis_off()
         
-    # Return only the valid axes we need
     return fig, axes_flat[:n_plots]
 
 @torch.no_grad()
