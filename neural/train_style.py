@@ -230,13 +230,13 @@ def estimate_style_entropy():
     out = {}
     model.eval()
     for i, split in enumerate(['train', 'val']):
-        losses = torch.zeros(eval_iters * gradient_accumulation_steps)
+        entropies = torch.zeros(eval_iters * gradient_accumulation_steps)
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
             X, ratio, bpm = get_batch(split)
             with ctx:
                 entropy = model.action_model.style_entropy(X, bpm)
-            losses[k] = loss.item()
-        out[split] = losses.mean()
+            entropies[k] = entropy.item()
+        out[split] = entropies.mean()
     model.train()
     return out 
 
