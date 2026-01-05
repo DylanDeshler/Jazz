@@ -260,9 +260,29 @@ class RMSNorm(nn.Module):
         output = self._norm(x.float()).type_as(x)
         return output * self.weight
 
+def top_k_softmax(scores, k=5):
+    """
+    scores: (Batch, Heads, Queries, Styles)
+    Keeps top k values, masks the rest to -inf, then softmax.
+    """
+    # 1. Find the top K scores
+    top_k_values, _ = torch.topk(scores, k=k, dim=-1)
+    
+    # 2. Determine the cutoff (smallest of the top K)
+    # maintain shape for broadcasting
+    cutoff = top_k_values[..., -1].unsqueeze(-1) 
+    
+    # 3. Mask everything below cutoff
+    # 1e-9 or -inf ensures they become absolute zero after softmax
+    scores_masked = scores.clone()
+    scores_masked[scores < cutoff] = float('-inf')
+    
+    # 4. Standard Softmax on the remaining 5 items
+    return F.softmax(scores_masked, dim=-1)
+
 ## Just for attention pooling
 class MultiHeadAttention(nn.Module):
-    def __init__(self, dim_hidden, num_heads, dropout_w=0, dropout_e=0, bias=False, flash=True, **kwargs):
+    def __init__(self, dim_hidden, num_heads, dropout_w=0, dropout_e=0, bias=False, flash=True, top_k=None, **kwargs):
         super().__init__()
         self.Q = nn.Linear(dim_hidden, dim_hidden, bias)
         self.K = nn.Linear(dim_hidden, dim_hidden, bias)
@@ -274,7 +294,8 @@ class MultiHeadAttention(nn.Module):
         self.dim_hidden = dim_hidden
         self.dim_attn = dim_hidden // num_heads
         self.scale = self.dim_attn ** -0.5
-        self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention') and flash
+        self.top_k = top_k
+        self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention') and (flash and not top_k)
 
     def forward(self, query, key, value, mask=None):
 
@@ -305,7 +326,10 @@ class MultiHeadAttention(nn.Module):
             dot_product = torch.einsum("bhqa,bhka->bhqk", (q, k)) * self.scale
             if mask is not None:
                 dot_product = dot_product.masked_fill_(mask.logical_not(), float("-inf"))
-            w = torch.softmax(dot_product, dim=-1)
+            if self.top_k:
+                w = top_k_softmax(dot_product, self.top_k)
+            else:
+                w = torch.softmax(dot_product, dim=-1)
             w = self.dropout_w(w)
             e = torch.einsum("bhqv,bhva->bhqa", (w, v)).transpose(1, 2).contiguous().view_as(query) 
             
@@ -524,7 +548,7 @@ class ActionTransformer(nn.Module):
         self.pool_norm = RMSNorm(hidden_size)
         # GST uses 4 heads for style transfer, doesnt say for manual...
         # Could train manual attention with 1 head and transfer with num_heads
-        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=1, bias=False)
+        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=1, bias=False, top_k=10)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         self.out_norm = RMSNorm(hidden_size)
         
