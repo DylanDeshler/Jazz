@@ -529,7 +529,7 @@ class ActionTransformer(nn.Module):
         self.out_norm = RMSNorm(hidden_size)
         
         self.initialize_weights()
-        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
+        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size, theta=1000))
     
     def initialize_weights(self):
         self.apply(self._init_weights)
@@ -721,7 +721,7 @@ class ModernDiT(nn.Module):
         self.fc = nn.Linear(hidden_size, in_channels, bias=False)
         
         self.initialize_weights()
-        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
+        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size, theta=1000))
     
     def initialize_weights(self):
         self.apply(self._init_weights)
