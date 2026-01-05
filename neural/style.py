@@ -595,15 +595,19 @@ class ActionTransformer(nn.Module):
         
         self.pool_attn.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention') and flash
         
-        weights = torch.clamp(weights.squeeze(-2), 0, 1)
-        indices = torch.argmax(weights.flatten(), dim=-1)
-        counts = torch.bincount(indices, minlength=self.style_embeddings.shape[0]).float()
-        utilization = (counts > 0).sum().item() / self.style_embeddings.shape[0]
+        weights = weights.squeeze(-2)
+        
+        batch_mean = weights.mean(dim=0)
+        batch_entropy = -torch.sum(batch_mean * torch.log(batch_mean + 1e-6))
+        
+        # indices = torch.argmax(weights.flatten(), dim=-1)
+        # counts = torch.bincount(indices, minlength=self.style_embeddings.shape[0]).float()
+        # utilization = (counts > 0).sum().item() / self.style_embeddings.shape[0]
         
         weights = weights.mean(dim=1)
         entropy = -torch.sum(weights * torch.log(weights + 1e-6), dim=-1)
         
-        return entropy.mean(), utilization
+        return entropy.mean(), batch_entropy.mean()
     
     def forward(self, x, bpm):
         """
