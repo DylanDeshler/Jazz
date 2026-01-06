@@ -408,6 +408,7 @@ class DiTBlock(nn.Module):
         )
     
     def forward(self, x, t, freqs_cis=None, attn_mask=None):
+        print(x.shape, t.shape, self.scale_shift_table.shape)
         biases = self.scale_shift_table[None] + t.reshape(x.size(0), 6, -1)
         (
             shift_msa,
