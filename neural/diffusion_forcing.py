@@ -418,9 +418,9 @@ class DiTBlock(nn.Module):
             shift_mlp,
             scale_mlp,
             gate_mlp,
-        ) = [chunk for chunk in biases.chunk(6, dim=1)]
-        print(shift_mlp.shape)
+        ) = [chunk.squeeze(-2) for chunk in biases.chunk(6, dim=-2)]
         
+        print(x.shape, shift_mlp.shape)
         x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask)
         x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
         return x
