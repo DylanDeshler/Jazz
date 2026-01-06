@@ -684,8 +684,8 @@ class ModernDiT(nn.Module):
         shift, scale = (self.final_layer_scale_shift_table[None, None] + F.silu(t[:, :, None])).chunk(
             2, dim=2
         )
-        print(x.shape, shift.shape, scale.shape)
-        x = modulate(self.norm(x), shift.squeeze(2), scale.squeeze(2))
+        x = rearrange(x, 'b (t n) c -> b t n c', t=T, n=N)
+        x = modulate(self.norm(x), shift.expand(-1, -1, N, -1), scale.expand(-1, -1, N, -1))
         x = self.fc(x)
         
         # B, TN, C = x.shape
