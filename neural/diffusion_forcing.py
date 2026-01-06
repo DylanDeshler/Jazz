@@ -681,11 +681,25 @@ class ModernDiT(nn.Module):
             x = block(x, t0, freqs_cis=freqs_cis, attn_mask=attn_mask)
         
         # SAM Audio does not use a non-linearity on t here
-        shift, scale = (self.final_layer_scale_shift_table[None] + F.silu(t[:, None])).chunk(
+        shift, scale = (self.final_layer_scale_shift_table[None, None] + F.silu(t[:, :, None])).chunk(
             2, dim=2
         )
         x = modulate(self.norm(x), shift.squeeze(2), scale.squeeze(2))
         x = self.fc(x)
+        
+        # B, TN, C = x.shape
+        # B, T, NC = t.shape
+        # N = TN // T
+        
+        # biases = self.scale_shift_table[None, None] + t.reshape(x.size(0), T, 6, -1)
+        # (
+        #     shift_msa,
+        #     scale_msa,
+        #     gate_msa,
+        #     shift_mlp,
+        #     scale_mlp,
+        #     gate_mlp,
+        # ) = [chunk.expand(-1, -1, N, -1) for chunk in biases.chunk(6, dim=-2)]
         return x
 
 class ModernDiTWrapper(nn.Module):
