@@ -32,6 +32,7 @@ class FM:
     def add_noise(self, x, t, noise=None):
         noise = torch.randn_like(x) if noise is None else noise
         s = [x.shape[0], x.shape[1], x.shape[2], 1]
+        print(s, x.shape, t.shape)
         x_t = self.alpha(t).view(*s) * x + self.sigma(t).view(*s) * noise
         return x_t, noise
     
@@ -668,13 +669,9 @@ class ModernDiT(nn.Module):
         
         t = self.t_embedder(t.flatten()).view(B, T, -1)
         actions = self.action_embedder(actions)
-        print(t.shape, actions.shape)
         t = torch.cat([t, actions], dim=-1)
-        print(t.shape)
         t = self.fuse_conditioning(t)
-        print(t.shape)
         t0 = self.t_block(t)
-        print(t0.shape)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
         for block in self.blocks:
@@ -688,19 +685,6 @@ class ModernDiT(nn.Module):
         x = modulate(self.norm(x), shift.expand(-1, -1, N, -1), scale.expand(-1, -1, N, -1))
         x = self.fc(x)
         
-        # B, TN, C = x.shape
-        # B, T, NC = t.shape
-        # N = TN // T
-        
-        # biases = self.scale_shift_table[None, None] + t.reshape(x.size(0), T, 6, -1)
-        # (
-        #     shift_msa,
-        #     scale_msa,
-        #     gate_msa,
-        #     shift_mlp,
-        #     scale_mlp,
-        #     gate_mlp,
-        # ) = [chunk.expand(-1, -1, N, -1) for chunk in biases.chunk(6, dim=-2)]
         return x
 
 class ModernDiTWrapper(nn.Module):
