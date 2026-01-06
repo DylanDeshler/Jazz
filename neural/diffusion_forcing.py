@@ -659,9 +659,13 @@ class ModernDiT(nn.Module):
         
         t = self.t_embedder(t.flatten()).view(B, T, -1)
         actions = self.action_embedder(actions)
+        print(t.shape, actions.shape)
         t = torch.cat([t, actions], dim=-1)
+        print(t.shape)
         t = self.fuse_conditioning(t)
+        print(t.shape)
         t0 = self.t_block(t)
+        print(t0.shape)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
         for block in self.blocks:
