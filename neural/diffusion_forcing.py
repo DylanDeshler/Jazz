@@ -423,8 +423,17 @@ class DiTBlock(nn.Module):
         
         # ugly but memory saving...
         x = rearrange(x, 'b (t n) c -> b t n c', t=6, n=48)
-        x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask)
+        pre_attn = modulate(self.norm1(x), shift_msa, scale_msa)
+        pre_attn = rearrange(pre_attn, 'b t n c -> b (t n) c')
+        attn = self.attn(pre_attn, freqs_cis=freqs_cis, attn_mask=attn_mask)
+        attn = rearrange(attn, 'b (t n) c -> b t n c', t=6, n=48)
+        x = x + gate_msa * attn
+        
         x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
+        
+        
+        # x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask)
+        # x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
         x = rearrange(x, 'b t n c -> b (t n) c')
         return x
 
