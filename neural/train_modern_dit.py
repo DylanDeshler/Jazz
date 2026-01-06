@@ -213,7 +213,7 @@ if ddp:
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
-def estimate_loss(is_causal=None):
+def estimate_loss():
     out = {}
     model.eval()
     for i, split in enumerate(['train', 'val']):
@@ -221,7 +221,7 @@ def estimate_loss(is_causal=None):
         for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
             X, ratio, bpm, actions = get_batch(split)
             with ctx:
-                loss = model(X, bpm, actions, attn_mask=is_causal)
+                loss = model(X, bpm, actions)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -324,9 +324,7 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
-        causal_losses = estimate_loss(True)
-        
-        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, train causal loss {causal_losses['train']:.6f}, val causal loss {causal_losses['val']:.6f}")
+        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
@@ -339,8 +337,6 @@ while True:
                 "iter": iter_num,
                 "train/loss": losses['train'],
                 "val/loss": losses['val'],
-                "train/causal_loss": causal_losses['train'],
-                "val/causal_loss": causal_losses['val'],
                 "lr": lr,
                 "mfu": running_mfu*100, # convert to percentage
                 "tokens": tokens_trained,

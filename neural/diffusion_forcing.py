@@ -103,16 +103,14 @@ class FMEulerSampler:
         uncond_net_kwargs=None,
         guidance=1.0,
         noise=None,
-        mask=None,
     ):
         device = next(net.parameters()).device
         x_t = torch.randn(shape, device=device) if noise is None else noise
         t_steps = torch.linspace(1, 0, n_steps + 1, device=device)
-        mask = torch.ones_like(x_t) if mask is None else mask
 
         with torch.no_grad():
             for i in range(n_steps):
-                t = t_steps[i].repeat(x_t.shape[0])
+                t = t_steps[i].repeat(x_t.shape[0], x_t.shape[1])
                 neg_v = self.diffusion.get_prediction(
                     net,
                     x_t,
@@ -121,7 +119,7 @@ class FMEulerSampler:
                     uncond_net_kwargs=uncond_net_kwargs,
                     guidance=guidance,
                 )
-                x_t = x_t + mask.bool() * neg_v * (t_steps[i] - t_steps[i + 1])
+                x_t = x_t + neg_v * (t_steps[i] - t_steps[i + 1])
         return x_t
 
 # @torch.compile
@@ -623,7 +621,6 @@ class ModernDiT(nn.Module):
         self.fc = nn.Linear(hidden_size, in_channels, bias=False)
         
         self.initialize_weights()
-        self.register_buffer('block_causal_mask', create_block_causal_mask(spatial_window, n_chunks))
         self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
     
     def initialize_weights(self):
@@ -649,14 +646,8 @@ class ModernDiT(nn.Module):
         elif isinstance(module, nn.Embedding):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
-    def forward(self, x, t, bpm, actions, attn_mask=None):
+    def forward(self, x, t, bpm, actions):
         B, T, N, C = x.shape
-        
-        if self.training and attn_mask is None:
-            if torch.rand(1).item() < 0.2:
-                attn_mask = self.block_causal_mask
-        elif attn_mask:
-            attn_mask = self.block_causal_mask
         
         x = rearrange(x, 'b t n c -> (b t) c n')
         x = self.x_embedder(x)
@@ -674,7 +665,7 @@ class ModernDiT(nn.Module):
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
         for block in self.blocks:
-            x = block(x, t0, freqs_cis=freqs_cis, attn_mask=attn_mask)
+            x = block(x, t0, freqs_cis=freqs_cis)
         
         # SAM Audio does not use a non-linearity on t here
         shift, scale = (self.final_layer_scale_shift_table[None, None] + F.silu(t[:, :, None])).chunk(
@@ -694,11 +685,11 @@ class ModernDiTWrapper(nn.Module):
         self.diffusion = FM(timescale=1000.0)
         self.sampler = FMEulerSampler(self.diffusion)
     
-    def forward(self, x, bpm, actions, t=None, attn_mask=None):
-        return self.diffusion.loss(self.net, x, t=t, net_kwargs={'actions': actions, 'bpm': bpm, 'attn_mask': attn_mask})
+    def forward(self, x, bpm, actions, t=None):
+        return self.diffusion.loss(self.net, x, t=t, net_kwargs={'actions': actions, 'bpm': bpm})
     
-    def sample(self, x, bpm, actions, attn_mask=None, n_steps=50):
-        return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm, 'attn_mask': attn_mask})
+    def generate(self, x, bpm, actions, n_steps=50):
+        return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm})
 
 def ModernDiT_large(**kwargs):
     return ModernDiTWrapper(depth=28, hidden_size=1152, num_heads=16, **kwargs)
