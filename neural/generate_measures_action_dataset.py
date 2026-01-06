@@ -17,7 +17,7 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 batch_size = 2**10
 
-ckpt_path = os.path.join('Style_32_adaln_measures_bpm_S_nobias', 'ckpt.pt')
+ckpt_path = os.path.join('Style_1024_adaln_measures_bpm_S_nobias_poolfirst_norm_nohistory_1head', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 model_args = checkpoint['model_args']
 vae_embed_dim = model_args['in_channels']
@@ -51,7 +51,8 @@ with torch.no_grad():
         bpm = torch.from_numpy(np.stack([meta[j:j+n_decoder_chunks, 1] for j in range(i*batch_size, (i+1)*batch_size)], axis=0)).pin_memory().to(device, non_blocking=True)
         
         with ctx:
-            actions = model.encode_actions(batch, bpm)
+            actions = model.encode_actions(batch, bpm, force_manual=True, force_transfer=False)
+            print(batch.shape, actions.shape)
         
         arr[i*batch_size:(i+1)*batch_size] = actions.float().cpu().detach().numpy().astype(np.float16)
 
