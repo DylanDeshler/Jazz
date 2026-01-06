@@ -40,7 +40,7 @@ import pyrubberband as pyrb
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'ModernDiT_measures_bpm_small_16_3'
+out_dir = 'ModernDiT_measures_bpm_small_1024'
 eval_interval = 2500
 sample_interval = 5000
 log_interval = 100
@@ -48,25 +48,23 @@ save_interval = 5000
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
-wandb_project = out_dir #'zinc20++'
-wandb_run_name = 'llama' + str(time.time())
+wandb_project = out_dir
+wandb_run_name = str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 1 # used to simulate larger batch sizes
-batch_size = 96 # * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+gradient_accumulation_steps = 1
+batch_size = 256
 # model
 spatial_window = 48
-n_chunks = 10
+n_chunks = 6
 max_seq_len = spatial_window * n_chunks
-action_length = 3
 vae_embed_dim = 16
-action_channels = vae_embed_dim * 4 # extremely arbitrary choice balancing capacity and tradeoff with input noise
-# 2^4 2^6 2^8 2^9 2^10 2^11 2^12 2^14 2^16
-# [5, 3] [8, 8] [8, 6, 5] [8, 8, 8] [8, 5, 5, 5] [8, 8, 6, 5] [7, 5, 5, 5] [8, 8, 8, 6, 5] [8, 8, 8, 5, 5, 5]
-levels = [5, 3]
+n_style_embeddings = 1024
+style_dim = 768
+cut_seconds = 1
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 160000 # total number of training iterations
@@ -75,14 +73,14 @@ beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
-decay_lr = True # whether to decay the learning rate
-warmup_iters = 135000 # how many steps to warm up for
+decay_lr = False # whether to decay the learning rate
+warmup_iters = 5000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
-backend = 'gloo' # 'nccl', 'gloo', etc.
+backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
-device = 'cuda:0' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
@@ -127,17 +125,19 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 # poor man's data loader
 def get_batch(split='train'):
     # TODO: sample within songs (this can go over boundaries)
-    data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large.bin', dtype=np.float16, mode='r', shape=(3693787, 48, vae_embed_dim))
-    meta = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_meta.npy', dtype=np.float32, mode='r', shape=(3693787, 2))
-    actions = np.memmap(f'/home/dylan.d/research/music/Jazz/latents/low_measures_large_actions_{vae_embed_dim}_{math.prod(levels)}_{action_length}.bin', dtype=np.int8, mode='r', shape=(3693787, action_length))
+    data = np.memmap('/home/dylan.d/research/music/Jazz/latents/low_measures_large.bin', dtype=np.float16, mode='r', shape=(4403211, spatial_window, vae_embed_dim))
+    meta = np.memmap('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures_meta.npy', dtype=np.float32, mode='r', shape=(4403211, 2))
+    actions = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}.bin', dtype=np.float16, mode='r', shape=(4403211, style_dim))
     if split == 'train':
         idxs = torch.randint(int(len(data) * 0.98) - n_chunks, (batch_size,))
     else:
         idxs = torch.randint(int(len(data) * 0.98), len(data) - n_chunks, (batch_size,))
-    x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).view(batch_size, max_seq_len, vae_embed_dim).pin_memory().to(device, non_blocking=True)
+        
+    x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     ratio = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 0] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     bpm = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     actions = torch.from_numpy(np.stack([actions[idx:idx+n_chunks] for idx in idxs], axis=0)).long().pin_memory().to(device, non_blocking=True)
+    
     return x, ratio, bpm, actions
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
@@ -159,7 +159,7 @@ for k,v in list(state_dict.items()):
 tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 
-model_args = dict(in_channels=vae_embed_dim, action_channels=action_channels, n_chunks=n_chunks, spatial_window=spatial_window, num_actions=math.prod(levels), action_length=action_length)
+model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, spatial_window=spatial_window, )
 
 if init_from == 'scratch':
     # init a new model from scratch
@@ -268,21 +268,22 @@ def save_samples(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
     
+    n_samples = 20
     x, ratio, bpm, actions = get_batch('val')
-    x, ratio, bpm, actions = x[:10], ratio[:10], bpm[:10], actions[:10]
+    x, ratio, bpm, actions = x[:n_samples], ratio[:n_samples], bpm[:n_samples], actions[:n_samples]
 
     B, T, N, D = x.shape
     
     with ctx:
         recon = raw_model.generate(x.clone(), bpm, actions, n_steps=50)
-        x = tokenizer.decode(x.permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
-        recon = tokenizer.decode(recon.permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50)
+        x = tokenizer.decode(x.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
+        recon = tokenizer.decode(recon.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
     
-    x = x.cpu().detach().float().numpy().squeeze(1)
-    recon = recon.cpu().detach().float().numpy().squeeze(1)
+    x = x.cpu().detach().float().numpy().squeeze(-2)
+    recon = recon.cpu().detach().float().numpy().squeeze(-2)
     ratio = ratio.cpu().detach().numpy()
 
-    for i in range(10):
+    for i in range(n_samples):
         og, y, r = x[i], recon[i], ratio[i].item()
 
         og_ms, y_ms = [], []
@@ -322,23 +323,24 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        noncausal_losses = estimate_loss()
+        losses = estimate_loss()
         causal_losses = estimate_loss(True)
-        # if iter_num % sample_interval == 0 and master_process:
-        #     model.eval()
-        #     with ctx:
-        #         metrics = save_samples(iter_num)
-        #     model.train()
-        #     print(f"iter {iter_num}: delta PSNR {metrics['PSNR']:.3f}, delta Similarity {metrics['Similarity']:.3f}")
-        print(f"iter {iter_num}: train loss {noncausal_losses['train']:.6f}, val loss {noncausal_losses['val']:.6f}, train causal loss {causal_losses['train']:.6f}, val causal loss {causal_losses['val']:.6f}")
-        losses = {}
-        for k in causal_losses.keys():
-            losses[k] = (causal_losses[k] + noncausal_losses[k]) / 2
+        
+        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}, train causal loss {causal_losses['train']:.6f}, val causal loss {causal_losses['val']:.6f}")
+        
+        if iter_num % sample_interval == 0 and master_process:
+            model.eval()
+            with ctx:
+                save_samples(iter_num)
+            model.train()
+        
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
                 "train/loss": losses['train'],
                 "val/loss": losses['val'],
+                "train/causal_loss": causal_losses['train'],
+                "val/causal_loss": causal_losses['val'],
                 "lr": lr,
                 "mfu": running_mfu*100, # convert to percentage
                 "tokens": tokens_trained,

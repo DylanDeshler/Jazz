@@ -9,8 +9,7 @@ from typing import Optional, List, Callable
 
 class FM:
     
-    def __init__(self, chunk_size, sigma_min=1e-5, timescale=1.0):
-        self.chunk_size = chunk_size
+    def __init__(self, sigma_min=1e-5, timescale=1.0):
         self.sigma_min = sigma_min
         self.prediction_type = None
         self.timescale = timescale
@@ -32,17 +31,19 @@ class FM:
     
     def add_noise(self, x, t, noise=None):
         noise = torch.randn_like(x) if noise is None else noise
-        s = [x.shape[0], x.shape[1]] + [1] * (x.dim() - 2)
+        s = [x.shape[0], x.shape[1], x.shape[2], 1]
         x_t = self.alpha(t).view(*s) * x + self.sigma(t).view(*s) * noise
         return x_t, noise
     
     def loss(self, net, x, t=None, net_kwargs=None, return_loss_unreduced=False, return_all=False):
+        B, T, N, C = x.shape
+        
         if net_kwargs is None:
             net_kwargs = {}
         
         if t is None:
-            t = torch.rand(x.shape[0], x.shape[1] // self.chunk_size, device=x.device)
-            repeat_t = torch.repeat_interleave(t, repeats=self.chunk_size, dim=1)
+            t = torch.rand(B, T, device=x.device)
+            repeat_t = t.unsqueeze(2).repeat(1, 1, N)
         x_t, noise = self.add_noise(x, repeat_t)
         
         pred = net(x_t, t=t * self.timescale, **net_kwargs)
@@ -123,7 +124,7 @@ class FMEulerSampler:
                 x_t = x_t + mask.bool() * neg_v * (t_steps[i] - t_steps[i + 1])
         return x_t
 
-@torch.compile
+# @torch.compile
 def modulate(x: torch.Tensor, shift: torch.Tensor, scale: torch.Tensor):
     return x * (1 + scale) + shift
 
@@ -190,10 +191,10 @@ class TimestepEmbedder(nn.Module):
             self.mlp = SwiGLUMlp(frequency_embedding_size, int(2 / 3 * 4 * hidden_size), hidden_size, bias=bias)
         else:
             self.mlp = nn.Sequential(
-                nn.Linear(frequency_embedding_size, hidden_size, bias=bias),
-                nn.SiLU(),
-                nn.Linear(hidden_size, hidden_size, bias=bias),
-            )
+            nn.Linear(frequency_embedding_size, hidden_size, bias=bias),
+            nn.SiLU(),
+            nn.Linear(hidden_size, hidden_size, bias=bias),
+        )
         self.frequency_embedding_size = frequency_embedding_size
         self.max_period = max_period
 
@@ -201,18 +202,18 @@ class TimestepEmbedder(nn.Module):
     def timestep_embedding(t, dim, max_period=10000):
         """
         Create sinusoidal timestep embeddings.
-        :param t: a 2-D Tensor of (N, T) indices, one per batch element.
+        :param t: a 1-D Tensor of (N) indices, one per batch element.
                           These may be fractional.
         :param dim: the dimension of the output.
         :param max_period: controls the minimum frequency of the embeddings.
-        :return: an (N, T, D) Tensor of positional embeddings.
+        :return: an (N, D) Tensor of positional embeddings.
         """
         # https://github.com/openai/glide-text2im/blob/main/glide_text2im/nn.py
         half = dim // 2
         freqs = torch.exp(
             -math.log(max_period) * torch.arange(start=0, end=half, dtype=torch.float32) / half
         ).to(device=t.device)
-        args = t[:, :, None].float() * freqs[None]
+        args = t[:, None].float() * freqs[None]
         embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
         if dim % 2:
             embedding = torch.cat([embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
@@ -395,51 +396,6 @@ class SwiGLUMlp(nn.Module):
         hidden = F.silu(x1) * x2
         return self.w3(hidden)
 
-class CrossAttentionBlock(nn.Module):
-    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
-        super().__init__()
-        self.norm1 = RMSNorm(hidden_size)
-        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
-        self.norm2 = RMSNorm(hidden_size)
-        self.cross = CrossAttention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
-        self.norm3 = RMSNorm(hidden_size)
-        self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
-    
-    def forward(self, x, context, freqs_cis=None, attn_mask=False):
-        x = x + self.attn(self.norm1(x), freqs_cis=freqs_cis[:x.shape[1]] if freqs_cis is not None else None, attn_mask=attn_mask)
-        x = x + self.cross(self.norm2(x), context, freqs_cis=freqs_cis[:max(x.shape[1], context.shape[1])] if freqs_cis is not None else None)
-        x = x + self.mlp(self.norm3(x))
-        return x
-
-class SelfAttentionBlock(nn.Module):
-    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
-        super().__init__()
-        self.norm1 = RMSNorm(hidden_size)
-        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
-        self.norm2 = RMSNorm(hidden_size)
-        self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size))
-    
-    def forward(self, x, freqs_cis=None, attn_mask=False):
-        x = x + self.attn(self.norm1(x), attn_mask=attn_mask, freqs_cis=freqs_cis[:x.shape[1]] if freqs_cis is not None else None)
-        x = x + self.mlp(self.norm2(x))
-        return x
-
-class LightningFinalLayer(nn.Module):
-    def __init__(self, hidden_size, out_channels, bias=False):
-        super().__init__()
-        self.norm_final = RMSNorm(hidden_size)
-        self.linear = nn.Linear(hidden_size, out_channels, bias=bias)
-        self.adaLN_modulation = nn.Sequential(
-            nn.SiLU(),
-            nn.Linear(hidden_size, 2 * hidden_size, bias=True)
-        )
-
-    def forward(self, x, c):
-        shift, scale = self.adaLN_modulation(c).chunk(2, dim=-1)
-        x = modulate(self.norm_final(x), shift, scale)
-        x = self.linear(x)
-        return x
-
 class DiTBlock(nn.Module):
     def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
         super().__init__()
@@ -451,8 +407,8 @@ class DiTBlock(nn.Module):
             torch.randn(6, hidden_size) / hidden_size ** 0.5,
         )
     
-    def forward(self, x, t, freqs_cis=None, attn_mask=False):
-        biases = self.scale_shift_table[None] + t.reshape(x.size(0), x.size(1), 6, -1)
+    def forward(self, x, t, freqs_cis=None, attn_mask=None):
+        biases = self.scale_shift_table[None] + t.reshape(x.size(0), 6, -1)
         (
             shift_msa,
             scale_msa,
@@ -460,7 +416,7 @@ class DiTBlock(nn.Module):
             shift_mlp,
             scale_mlp,
             gate_mlp,
-        ) = [chunk.squeeze(2) for chunk in biases.chunk(6, dim=2)]
+        ) = [chunk for chunk in biases.chunk(6, dim=1)]
         
         x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask)
         x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
@@ -563,7 +519,6 @@ class ConvBlock1d(nn.Module):
         x = self.activation(x)
         return self.project(x)
 
-
 class ResnetBlock1d(nn.Module):
     def __init__(
         self,
@@ -603,7 +558,6 @@ class ResnetBlock1d(nn.Module):
         h = self.block2(h)
         return h + self.to_out(x)
 
-
 class Patcher(torch.nn.Module):
     def __init__(
         self,
@@ -624,35 +578,28 @@ class Patcher(torch.nn.Module):
 class ModernDiT(nn.Module):
     def __init__(self,
                  in_channels,
-                 action_channels,
                  hidden_size,
-                 num_actions,
                  spatial_window,
                  n_chunks,
-                 action_length,
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4,
                  ):
         super().__init__()
-        self.action_length = action_length
         self.spatial_window = spatial_window
         max_input_size = spatial_window * n_chunks
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
-        self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
-        self.action_embedder = nn.Embedding(num_actions, action_channels)
+        self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True, max_period=1000)
+        self.action_embedder = nn.Linear(style_dim, hidden_size)
         self.x_embedder = Patcher(in_channels, hidden_size)
         
-        self.fuse_conditioning = SwiGLUMlp(hidden_size * 3, int(2 / 3 * mlp_ratio * hidden_size), hidden_size, bias=False)
+        self.fuse_conditioning = SwiGLUMlp(hidden_size * 2, int(2 / 3 * mlp_ratio * hidden_size), hidden_size, bias=False)
         
         self.t_block = nn.Sequential(
             nn.SiLU(),
             nn.Linear(hidden_size, hidden_size * 6, bias=True),
         )
-        
-        # self.null_bpm = nn.Parameter(torch.randn(1, hidden_size) / hidden_size ** 0.5)
-        # self.null_action = nn.Parameter(torch.randn(1, action_channels) / action_channels ** 0.5)
         
         self.blocks = nn.ModuleList([
             DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
@@ -692,23 +639,26 @@ class ModernDiT(nn.Module):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
     def forward(self, x, t, bpm, actions, attn_mask=None):
+        B, T, N, C = x.shape
+        
         if self.training and attn_mask is None:
-            if np.random.rand() < 0.2:
+            if torch.rand(1).item() < 0.2:
                 attn_mask = self.block_causal_mask
         elif attn_mask:
             attn_mask = self.block_causal_mask
         
-        bpm = self.bpm_embedder(bpm)#token_drop(self.bpm_embedder(bpm), self.null_bpm, self.training)
-        actions = self.action_embedder(actions)#token_drop(self.action_embedder(actions), self.null_action, self.training)
-        t = self.t_embedder(t)
-        
-        x = rearrange(x, 'b l c -> b c l')
+        x = rearrange(x, 'b t n c -> (b t) c n')
         x = self.x_embedder(x)
-        x = rearrange(x, 'b c l -> b l c')
+        x = rearrange(x, '(b t) c n -> b t n c', b=B, t=T)
+        bpm = self.bpm_embedder(bpm.flatten()).view(B, T, 1, -1)
         
-        t = torch.cat([t, bpm, actions], dim=-1)
+        x = x + bpm
+        x = rearrange(x, 'b t n c -> b (t n) c')
+        
+        t = self.t_embedder(t.flatten()).view(B, T, -1)
+        actions = self.action_embedder(actions)
+        t = torch.cat([t, actions], dim=-1)
         t = self.fuse_conditioning(t)
-        t = repeat(t, 'b t c -> b (t l) c', l=self.spatial_window)
         t0 = self.t_block(t)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
@@ -716,141 +666,12 @@ class ModernDiT(nn.Module):
             x = block(x, t0, freqs_cis=freqs_cis, attn_mask=attn_mask)
         
         # SAM Audio does not use a non-linearity on t here
-        shift, scale = (self.final_layer_scale_shift_table[None, None] + F.silu(t[:, :, None])).chunk(
+        shift, scale = (self.final_layer_scale_shift_table[None] + F.silu(t[:, None])).chunk(
             2, dim=2
         )
         x = modulate(self.norm(x), shift.squeeze(2), scale.squeeze(2))
         x = self.fc(x)
         return x
-
-class DiT(nn.Module):
-    def __init__(self,
-                 in_channels,
-                 hidden_size,
-                 num_actions,
-                 spatial_window,
-                 n_chunks,
-                 action_length,
-                 num_heads=12,
-                 depth=12,
-                 mlp_ratio=4,
-                 ):
-        super().__init__()
-        self.n_chunks = n_chunks
-        self.num_actions = num_actions
-        self.action_length = action_length
-        
-        self.x_embedder = nn.Sequential(nn.Linear(in_channels, hidden_size, bias=True), RMSNorm(hidden_size))
-        self.t_embedder = TimestepEmbedder(hidden_size)
-        self.bpm_embedder = TimestepEmbedder(hidden_size, max_period=1000)
-        self.action_embedder = nn.Embedding(num_actions, hidden_size)
-        
-        max_input_size = spatial_window * n_chunks
-        self.x_pos = nn.Embedding(max_input_size, hidden_size)
-        self.context_pos = nn.Embedding(n_chunks * (2 + n_chunks), hidden_size)
-
-        self.blocks = nn.ModuleList([
-            CrossAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
-        ])
-        
-        self.null_embeddings = nn.Embedding(2, hidden_size)
-        self.final_layer = nn.Sequential(RMSNorm(hidden_size), nn.Linear(hidden_size, in_channels, bias=True))
-        # self.final_layer = LightningFinalLayer(hidden_size, in_channels)
-
-        self.initialize_weights()
-        self.register_buffer('block_causal_mask', create_block_causal_mask(spatial_window, n_chunks))
-    
-    def initialize_weights(self):
-        self.apply(self._init_weights)
-        # zero out classifier weights
-        if isinstance(self.final_layer, LightningFinalLayer):
-            torch.nn.init.zeros_(self.final_layer.linear.weight)
-            torch.nn.init.zeros_(self.final_layer.adaLN_modulation[-1].weight)
-            torch.nn.init.zeros_(self.final_layer.adaLN_modulation[-1].bias)
-        else:
-            torch.nn.init.zeros_(self.final_layer[-1].weight)
-        # zero out c_proj weights in all blocks
-        for block in self.blocks:
-            torch.nn.init.zeros_(block.mlp.w3.weight)
-            torch.nn.init.zeros_(block.attn.proj.weight)
-            torch.nn.init.zeros_(block.cross.proj.weight)
-
-    def _init_weights(self, module):
-        if isinstance(module, nn.Linear):
-            # https://arxiv.org/pdf/2310.17813
-            fan_out = module.weight.size(0)
-            fan_in = module.weight.size(1)
-            std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
-            torch.nn.init.normal_(module.weight, mean=0.0, std=std)
-            if module.bias is not None:
-                torch.nn.init.zeros_(module.bias)
-        elif isinstance(module, nn.Embedding):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
-    
-    def forward(self, x, t, bpm, actions, attn_mask=None):
-        """
-        x: (B, N, C) latents to be denoised
-        t: (B, T) noise level for x at t
-        bpm: (B, T) bpm for x at t
-        actions: (B, T, A) actions for x at t
-        """
-        assert x.ndim == 3
-        
-        if self.training and attn_mask is None:
-            if np.random.rand() < 0.2:
-                attn_mask = self.block_causal_mask
-        elif attn_mask:
-            attn_mask = self.block_causal_mask
-        
-        x = self.x_embedder(x)
-        t = self.t_embedder(t)
-        
-        bpm = token_drop(self.bpm_embedder(bpm), self.null_embeddings.weight[0], self.training)
-        actions = token_drop(self.action_embedder(actions), self.null_embeddings.weight[1], self.training)
-        context = torch.cat([t.unsqueeze(-2), bpm.unsqueeze(-2), actions], dim=-2).view(t.shape[0], self.n_chunks * (2 + self.action_length), t.shape[-1]).contiguous()
-        
-        x = x + self.x_pos(torch.arange(x.shape[1], device=x.device, dtype=torch.long).unsqueeze(0))
-        context = context + self.context_pos(torch.arange(self.n_chunks * (2 + self.action_length), device=x.device, dtype=torch.long).unsqueeze(0))
-        for block in self.blocks:
-            x = block(x, context, attn_mask=attn_mask)
-        
-        x = self.final_layer(x)
-        return x
-
-class DiTWrapper(nn.Module):
-    def __init__(self, **kwargs):
-        super().__init__()
-        self.net = DiT(**kwargs)
-        
-        self.diffusion = FM(chunk_size=kwargs['spatial_window'], timescale=1000.0)
-        self.sampler = FMEulerSampler(self.diffusion)
-        
-        self.initialize_weights()
-    
-    def initialize_weights(self):
-        # Initialize transformer layers:
-        def _basic_init(module):
-            if isinstance(module, nn.Linear):
-                torch.nn.init.xavier_uniform_(module.weight)
-                if module.bias is not None:
-                    nn.init.constant_(module.bias, 0)
-        self.apply(_basic_init)
-        self.net.initialize_weights()
-    
-    def forward(self, x, bpm, actions, t=None, attn_mask=None):
-        return self.diffusion.loss(self.net, x, t=t, net_kwargs={'actions': actions, 'bpm': bpm, 'attn_mask': attn_mask})
-    
-    def sample(self, x, bpm, actions, attn_mask=None, n_steps=50):
-        return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm, 'attn_mask': attn_mask})
-
-def DiT_L(**kwargs):
-    return DiTWrapper(depth=24, hidden_size=1024, num_heads=16, **kwargs)
-
-def DiT_M(**kwargs):
-    return DiTWrapper(depth=20, hidden_size=768, num_heads=12, **kwargs)
-
-def DiT_B(**kwargs):
-    return DiTWrapper(depth=12, hidden_size=768, num_heads=12, **kwargs)
 
 class ModernDiTWrapper(nn.Module):
     def __init__(self, **kwargs):
@@ -866,5 +687,14 @@ class ModernDiTWrapper(nn.Module):
     def sample(self, x, bpm, actions, attn_mask=None, n_steps=50):
         return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm, 'attn_mask': attn_mask})
 
+def ModernDiT_large(**kwargs):
+    return ModernDiTWrapper(depth=28, hidden_size=1152, num_heads=16, **kwargs)
+
+def ModernDiT_medium(**kwargs):
+    return ModernDiTWrapper(depth=24, hidden_size=1024, num_heads=16, **kwargs)
+
 def ModernDiT_small(**kwargs):
-    return ModernDiTWrapper(depth=12, hidden_size=1024, num_heads=16, **kwargs)
+    return ModernDiTWrapper(depth=16, hidden_size=1024, num_heads=16, **kwargs)
+
+def ModernDiT_tiny(**kwargs):
+    return ModernDiTWrapper(depth=16, hidden_size=768, num_heads=12, **kwargs)
