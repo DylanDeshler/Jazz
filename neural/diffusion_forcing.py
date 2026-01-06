@@ -409,7 +409,8 @@ class DiTBlock(nn.Module):
     
     def forward(self, x, t, freqs_cis=None, attn_mask=None):
         print(x.shape, t.shape, self.scale_shift_table.shape)
-        biases = self.scale_shift_table[None] + t.reshape(x.size(0), 6, -1)
+        biases = self.scale_shift_table[None, None] + t.reshape(x.size(0), 6, 6, -1)
+        print(biases.shape)
         (
             shift_msa,
             scale_msa,
@@ -418,6 +419,7 @@ class DiTBlock(nn.Module):
             scale_mlp,
             gate_mlp,
         ) = [chunk for chunk in biases.chunk(6, dim=1)]
+        print(shift_mlp.shape)
         
         x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask)
         x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
