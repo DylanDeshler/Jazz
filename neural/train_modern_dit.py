@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from diffusion_forcing import ModernDiT_small as net
+from diffusion_forcing import ModernDiT_medium as net
 from dito import DiToV5 as Tokenizer
 import soundfile as sf
 
@@ -40,7 +40,7 @@ import pyrubberband as pyrb
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'ModernDiT_measures_bpm_small_1024'
+out_dir = 'ModernDiT_measures_bpm_medium_1024'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -55,8 +55,8 @@ wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 1
-batch_size = 384
+gradient_accumulation_steps = 2
+batch_size = 256#384
 # model
 spatial_window = 48
 n_chunks = 6
@@ -265,6 +265,9 @@ def restore_measure(audio, stretch_ratio, sr=16000):
 
 @torch.no_grad()
 def save_samples(step):
+    """
+    Generates samples with the same actions as the input audio
+    """
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
     

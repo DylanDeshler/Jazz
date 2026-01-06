@@ -603,7 +603,6 @@ class ModernDiT(nn.Module):
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
         self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True, max_period=1000)
-        # self.action_embedder = nn.Linear(style_dim, hidden_size)
         self.x_embedder = Patcher(in_channels, hidden_size)
         
         self.fuse_conditioning = SwiGLUMlp(hidden_size + style_dim, int(2 / 3 * mlp_ratio * hidden_size), hidden_size, bias=False)
@@ -661,7 +660,6 @@ class ModernDiT(nn.Module):
         x = rearrange(x, 'b t n c -> b (t n) c')
         
         t = self.t_embedder(t.flatten()).view(B, T, -1)
-        # actions = self.action_embedder(actions)
         t = torch.cat([t, actions], dim=-1)
         t = self.fuse_conditioning(t)
         t0 = self.t_block(t)
