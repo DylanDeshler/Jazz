@@ -418,11 +418,14 @@ class DiTBlock(nn.Module):
             shift_mlp,
             scale_mlp,
             gate_mlp,
-        ) = [chunk.squeeze(-2) for chunk in biases.chunk(6, dim=-2)]
+        ) = [chunk.expand(-1, -1, 48, -1) for chunk in biases.chunk(6, dim=-2)]
+        print(x.shape, gate_msa.shape)
         
-        print(x.shape, shift_mlp.shape)
+        # ugly but memory saving...
+        x = rearrange(x, 'b (t n) c -> b t n c', t=6, n=48)
         x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask)
         x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
+        x = rearrange(x, 'b t n c -> b (t n) c')
         return x
 
 def create_block_causal_mask(block_size: int, num_blocks: int, dtype=torch.float32):
