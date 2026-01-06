@@ -581,6 +581,7 @@ class ModernDiT(nn.Module):
                  hidden_size,
                  spatial_window,
                  n_chunks,
+                 style_dim,
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4,
@@ -678,7 +679,7 @@ class ModernDiTWrapper(nn.Module):
         super().__init__()
         self.net = ModernDiT(**kwargs)
         
-        self.diffusion = FM(chunk_size=kwargs['spatial_window'], timescale=1000.0)
+        self.diffusion = FM(timescale=1000.0)
         self.sampler = FMEulerSampler(self.diffusion)
     
     def forward(self, x, bpm, actions, t=None, attn_mask=None):
