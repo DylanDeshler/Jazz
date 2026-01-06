@@ -244,7 +244,7 @@ def estimate_style_entropy():
         out2[split] = batch_entropies.mean()
         out3[split] = usages.mean()
     model.train()
-    return out1, out2
+    return out1, out2, out3
 
 # learning rate decay scheduler (cosine with warmup)
 def get_lr(it):
