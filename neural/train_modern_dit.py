@@ -281,15 +281,14 @@ def save_samples(step):
     
     x = x.cpu().detach().float().numpy().squeeze(-2)
     recon = recon.cpu().detach().float().numpy().squeeze(-2)
-    ratio = ratio.cpu().detach().numpy()
 
     for i in range(n_samples):
-        og, y, r = x[i], recon[i], ratio[i].item()
+        og, y, r = x[i], recon[i], ratio[i].cpu().detach().numpy()
 
         og_ms, y_ms = [], []
         for og_m, y_m, r_m in zip(og, y, r):
-            og_ms.append(restore_measure(og_m, r_m))
-            y_ms.append(restore_measure(y_m, r))
+            og_ms.append(restore_measure(og_m, r_m.item()))
+            y_ms.append(restore_measure(y_m, r_m.item()))
         
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), np.concatenate(og_ms), 16000)
