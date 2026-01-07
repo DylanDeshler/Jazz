@@ -56,7 +56,7 @@ wandb_run_name = str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 2
-batch_size = 128#384
+batch_size = 64#384
 # model
 spatial_window = 48
 n_chunks = 30
