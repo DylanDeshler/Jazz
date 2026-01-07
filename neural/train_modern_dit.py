@@ -48,7 +48,7 @@ save_interval = 5000
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir
@@ -67,14 +67,14 @@ style_dim = 768
 cut_seconds = 1
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 160000 # total number of training iterations
+max_iters = 100000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
-decay_lr = False # whether to decay the learning rate
-warmup_iters = 5000 # how many steps to warm up for
+decay_lr = True # whether to decay the learning rate
+warmup_iters = 85000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
@@ -123,7 +123,7 @@ ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torc
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 # poor man's data loader
-def get_batch(split='train'):
+def get_batch(split='train', batch_size=batch_size):
     # TODO: sample within songs (this can go over boundaries)
     data = np.memmap('/home/ubuntu/Data/low_measures_large.bin', dtype=np.float16, mode='r', shape=(4403211, spatial_window, vae_embed_dim))
     meta = np.memmap('/home/ubuntu/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(4403211, 2))
@@ -217,9 +217,9 @@ def estimate_loss():
     out = {}
     model.eval()
     for i, split in enumerate(['train', 'val']):
-        losses = torch.zeros(eval_iters * gradient_accumulation_steps)
-        for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
-            X, ratio, bpm, actions = get_batch(split)
+        losses = torch.zeros(eval_iters)
+        for k in tqdm(range(eval_iters)):
+            X, ratio, bpm, actions = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
                 loss = model(X, bpm, actions)
             losses[k] = loss.item()
