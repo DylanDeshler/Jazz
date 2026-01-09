@@ -90,7 +90,7 @@ with torch.no_grad():
             os.makedirs(action_dir, exist_ok=True)
             
             bpm = torch.repeat_interleave(bpms, n_samples).to(device)
-            weights = torch.nn.functional.one_hot(torch.ones_like(x) * action, n_style_embeddings).float().to(device)
+            weights = torch.nn.functional.one_hot(torch.ones_like(x).long() * action, n_style_embeddings).float().to(device)
             
             out = model.generate_from_actions(x, bpm, weights)
             out = tokenizer.decode(out.view(n_samples * 50 * n_decoder_chunks, spatial_window, vae_embed_dim).permute(0, 2, 1), shape=(1, 24576 * 1), n_steps=50).view(n_samples * 50, n_decoder_chunks, 1, 24576 * 1)
