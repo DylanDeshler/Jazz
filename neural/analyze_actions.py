@@ -76,7 +76,7 @@ def restore_measure(audio, stretch_ratio, sr=16000):
     y_restored = pyrb.time_stretch(audio, sr, restore_rate)
     return y_restored
 
-n_samples = 16
+n_samples = 2
 bpms = torch.linspace(80, 300, 50)
 x = torch.randn(n_samples * 50, n_decoder_chunks, spatial_window, vae_embed_dim).to(device)
 
