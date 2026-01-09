@@ -77,8 +77,9 @@ def restore_measure(audio, stretch_ratio, sr=16000):
     return y_restored
 
 n_samples = 16
-bpms = torch.linspace(80, 300, 25)
-x = torch.randn(n_samples * 50, n_decoder_chunks, spatial_window, vae_embed_dim).to(device)
+n_bpms = 25
+bpms = torch.linspace(80, 300, n_bpms)
+x = torch.randn(n_samples * n_bpms, n_decoder_chunks, spatial_window, vae_embed_dim).to(device)
 
 out_dir = '/home/ubuntu/Data/action_wavs'
 os.makedirs(out_dir, exist_ok=True)
@@ -90,10 +91,10 @@ with torch.no_grad():
             os.makedirs(action_dir, exist_ok=True)
             
             bpm = torch.repeat_interleave(bpms, n_samples).unsqueeze(-1).repeat(1, 2).to(device)
-            weights = torch.nn.functional.one_hot(torch.ones(n_samples * 50).long() * action, n_style_embeddings).float().to(device)
+            weights = torch.nn.functional.one_hot(torch.ones(n_samples * n_bpms).long() * action, n_style_embeddings).float().to(device)
             
             out = model.generate_from_actions(x, bpm, weights)
-            out = tokenizer.decode(out.view(n_samples * 50 * n_decoder_chunks, spatial_window, vae_embed_dim).permute(0, 2, 1), shape=(1, 24576 * 1), n_steps=50).view(n_samples * 50, n_decoder_chunks, 1, 24576 * 1)
+            out = tokenizer.decode(out.view(n_samples * n_bpms * n_decoder_chunks, spatial_window, vae_embed_dim).permute(0, 2, 1), shape=(1, 24576 * 1), n_steps=50).view(n_samples * n_bpms, n_decoder_chunks, 1, 24576 * 1)
         
             out = out.cpu().detach().float().numpy().squeeze(-2)
             bpm = bpm.cpu().detach().numpy()
