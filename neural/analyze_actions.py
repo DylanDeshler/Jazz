@@ -76,8 +76,8 @@ def restore_measure(audio, stretch_ratio, sr=16000):
     y_restored = pyrb.time_stretch(audio, sr, restore_rate)
     return y_restored
 
-n_samples = 8
-bpms = torch.linspace(80, 300, 50)
+n_samples = 16
+bpms = torch.linspace(80, 300, 25)
 x = torch.randn(n_samples * 50, n_decoder_chunks, spatial_window, vae_embed_dim).to(device)
 
 out_dir = '/home/ubuntu/Data/action_wavs'
@@ -92,11 +92,9 @@ with torch.no_grad():
             bpm = torch.repeat_interleave(bpms, n_samples).unsqueeze(-1).repeat(1, 2).to(device)
             weights = torch.nn.functional.one_hot(torch.ones(n_samples * 50).long() * action, n_style_embeddings).float().to(device)
             
-            print(x.shape, bpm.shape, weights.shape)
             out = model.generate_from_actions(x, bpm, weights)
             out = tokenizer.decode(out.view(n_samples * 50 * n_decoder_chunks, spatial_window, vae_embed_dim).permute(0, 2, 1), shape=(1, 24576 * 1), n_steps=50).view(n_samples * 50, n_decoder_chunks, 1, 24576 * 1)
         
-            print(out.shape, bpm.shape)
             out = out.cpu().detach().float().numpy().squeeze(-2)
             bpm = bpm.cpu().detach().numpy()
             ratio = (4 * 60 * 16000) / (24576 * bpm)
