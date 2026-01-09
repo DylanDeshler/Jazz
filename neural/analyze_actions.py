@@ -96,7 +96,7 @@ with torch.no_grad():
             out = model.generate_from_actions(x, bpm, weights)
             out = tokenizer.decode(out.view(n_samples * 50 * n_decoder_chunks, spatial_window, vae_embed_dim).permute(0, 2, 1), shape=(1, 24576 * 1), n_steps=50).view(n_samples * 50, n_decoder_chunks, 1, 24576 * 1)
         
-            print(x.shape, bpm.shape, ratio.shape)
+            print(x.shape, bpm.shape)
             x = x.cpu().detach().float().numpy().squeeze(-2)
             bpm = bpm.cpu().detach().numpy()
             ratio = (4 * 60 * 16000) / (24576 * bpm)
