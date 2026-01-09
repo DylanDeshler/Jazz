@@ -89,7 +89,7 @@ with torch.no_grad():
             action_dir = os.path.join(out_dir, str(action))
             os.makedirs(action_dir, exist_ok=True)
             
-            bpm = torch.repeat_interleave(bpms, n_samples).unsqueeze(-1).to(device)
+            bpm = torch.repeat_interleave(bpms, n_samples).unsqueeze(-1).repeat(1, 2).to(device)
             weights = torch.nn.functional.one_hot(torch.ones_like(x).long() * action, n_style_embeddings).float().to(device)
             
             print(x.shape, bpm.shape, weights.shape)
