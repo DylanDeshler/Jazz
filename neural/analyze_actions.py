@@ -77,8 +77,8 @@ def restore_measure(audio, stretch_ratio, sr=16000):
     return y_restored
 
 n_samples = 16
-n_bpms = 25
-bpms = torch.linspace(80, 300, n_bpms)
+n_bpms = 15
+bpms = torch.linspace(100, 200, n_bpms)
 x = torch.randn(n_samples * n_bpms, n_decoder_chunks, spatial_window, vae_embed_dim).to(device)
 
 out_dir = '/home/ubuntu/Data/action_wavs'
