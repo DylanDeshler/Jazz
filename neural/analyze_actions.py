@@ -90,7 +90,7 @@ with torch.no_grad():
             os.makedirs(action_dir, exist_ok=True)
             
             bpm = torch.repeat_interleave(bpms, n_samples).unsqueeze(-1).repeat(1, 2).to(device)
-            weights = torch.nn.functional.one_hot(torch.ones_like(x).long() * action, n_style_embeddings).float().to(device)
+            weights = torch.nn.functional.one_hot(torch.ones(n_samples * 50).long() * action, n_style_embeddings).float().to(device)
             
             print(x.shape, bpm.shape, weights.shape)
             out = model.generate_from_actions(x, bpm, weights)
