@@ -41,7 +41,7 @@ import matplotlib.pyplot as plt
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'Style_256_adaln_1measures_bpm_S_nobias_poolfirst_norm_nohistory_1head'
+out_dir = 'Style_128_adaln_1measures_bpm_S_nobias_poolfirst_norm_nohistory_1head'
 eval_interval = 2000
 sample_interval = 5000
 log_interval = 100
@@ -66,7 +66,7 @@ n_decoder_chunks = 1
 n_chunks = n_encoder_chunks + n_decoder_chunks
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
-n_style_embeddings = 256
+n_style_embeddings = 128
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
