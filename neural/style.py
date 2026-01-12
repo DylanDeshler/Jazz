@@ -550,7 +550,7 @@ class ActionTransformer(nn.Module):
         self.pool_norm = RMSNorm(hidden_size)
         # GST uses 4 heads for style transfer, doesnt say for manual...
         # Could train manual attention with 1 head and transfer with num_heads
-        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=4, bias=False)#, top_k=10)
+        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=1, bias=False)#, top_k=10)
         # self.transfer_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         self.out_norm = RMSNorm(hidden_size)
@@ -565,10 +565,10 @@ class ActionTransformer(nn.Module):
             torch.nn.init.zeros_(block.mlp.w3.weight)
             torch.nn.init.zeros_(block.attn.proj.weight)
         
-        self.pool_attn.Q.reset_parameters()
-        self.pool_attn.K.reset_parameters()
-        self.pool_attn.V.reset_parameters()
-        self.pool_attn.out.reset_parameters()
+        # self.pool_attn.Q.reset_parameters()
+        # self.pool_attn.K.reset_parameters()
+        # self.pool_attn.V.reset_parameters()
+        # self.pool_attn.out.reset_parameters()
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
@@ -611,11 +611,12 @@ class ActionTransformer(nn.Module):
             
         x = x[:, -self.n_decoder_chunks:]
         
-        x = self.norm(x)
+        # x = self.norm(x)
         style_embeddings = self.pool_norm(self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
         
         # loses x signal but interpretable
         query = torch.mean(x, dim=-2, keepdim=False)
+        query = self.norm(query)
         style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings, return_weights=True)
         
         # better but less interpretable?
