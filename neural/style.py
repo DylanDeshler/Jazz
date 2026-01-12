@@ -565,8 +565,8 @@ class ActionTransformer(nn.Module):
             torch.nn.init.zeros_(block.mlp.w3.weight)
             torch.nn.init.zeros_(block.attn.proj.weight)
         
-        # self.pool_attn.Q.reset_parameters()
-        # self.pool_attn.K.reset_parameters()
+        self.pool_attn.Q.reset_parameters()
+        self.pool_attn.K.reset_parameters()
         # self.pool_attn.V.reset_parameters()
         # self.pool_attn.out.reset_parameters()
 
@@ -611,12 +611,11 @@ class ActionTransformer(nn.Module):
             
         x = x[:, -self.n_decoder_chunks:]
         
-        # x = self.norm(x)
+        x = self.norm(x)
         style_embeddings = self.pool_norm(self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
         
         # loses x signal but interpretable
         query = torch.mean(x, dim=-2, keepdim=False)
-        query = self.norm(query)
         style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings, return_weights=True)
         
         # better but less interpretable?
@@ -653,12 +652,11 @@ class ActionTransformer(nn.Module):
             
         x = x[:, -self.n_decoder_chunks:]
         
-        # x = self.norm(x)
+        x = self.norm(x)
         style_embeddings = self.pool_norm(self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
         
         # loses x signal but more interpretable
         query = torch.mean(x, dim=-2, keepdim=False)
-        query = self.norm(query)
         style = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings).squeeze(1)
         
         # if self.training:
