@@ -40,7 +40,7 @@ import pyrubberband as pyrb
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'ModernDiT_measures_bpm_small_128_long'
+out_dir = 'ModernDiT_measures_bpm_small_256_long'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -62,7 +62,7 @@ spatial_window = 48
 n_chunks = 30
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
-n_style_embeddings = 128
+n_style_embeddings = 256
 style_dim = 768
 cut_seconds = 1
 # adamw optimizer
