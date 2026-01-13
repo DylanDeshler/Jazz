@@ -11,7 +11,7 @@ import torch
 from style import IDM_S as net
 from dito import DiToV5 as Tokenizer
 
-device = 'cpu'
+device = 'cuda'
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto 
 device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
 # note: float16 data type will automatically use a GradScaler
@@ -76,7 +76,7 @@ def restore_measure(audio, stretch_ratio, sr=16000):
     y_restored = pyrb.time_stretch(audio, sr, restore_rate)
     return y_restored
 
-n_samples = 16
+n_samples = 8
 n_bpms = 20
 bpms = torch.linspace(100, 250, n_bpms)
 x = torch.randn(n_samples * n_bpms, n_decoder_chunks, spatial_window, vae_embed_dim).to(device)
