@@ -20,7 +20,7 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 batch_size = 2**10
 
-checkpoint = torch.load(os.path.join('Style_128_adaln_1measures_bpm_S_nobias_poolfirst_norm_nohistory_1head', 'ckpt.pt'), map_location='cpu')
+checkpoint = torch.load(os.path.join('Style_256_adaln_1measures_bpm_S_nobias_poolfirst_norm_nohistory_1head_top5', 'ckpt.pt'), map_location='cpu')
 model_args = checkpoint['model_args']
 vae_embed_dim = model_args['in_channels']
 spatial_window = model_args['spatial_window']
@@ -82,12 +82,12 @@ def restore_measure(audio, stretch_ratio, sr=16000):
     y_restored = pyrb.time_stretch(audio, sr, restore_rate)
     return y_restored
 
-n_samples = 2
+n_samples = 8
 n_bpms = 15
 bpms = torch.linspace(100, 200, n_bpms)
 x = torch.randn(n_samples * n_bpms, n_decoder_chunks, spatial_window, vae_embed_dim).to(device)
 
-out_dir = '/home/ubuntu/Data/128_action_wavs'
+out_dir = '/home/ubuntu/Data/256_action_wavs'
 os.makedirs(out_dir, exist_ok=True)
 
 with torch.no_grad():
