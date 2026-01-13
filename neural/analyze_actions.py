@@ -20,7 +20,7 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 batch_size = 2**10
 
-checkpoint = torch.load(os.path.join('Style_128_adaln_1measures_bpm_S_nobias_poolfirst_norm_nohistory_1head', 'ckpt.pt'), map_location=device)
+checkpoint = torch.load(os.path.join('Style_128_adaln_1measures_bpm_S_nobias_poolfirst_norm_nohistory_1head', 'ckpt.pt'), map_location='cpu')
 model_args = checkpoint['model_args']
 vae_embed_dim = model_args['in_channels']
 spatial_window = model_args['spatial_window']
@@ -37,10 +37,13 @@ for k,v in list(state_dict.items()):
         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
 model.load_state_dict(state_dict)
 model.eval()
-model = torch.compile(model)
+try:
+    model = torch.compile(model)
+except:
+    pass
 hidden_size = 768
 
-checkpoint = torch.load('tokenizer_low_measures_large/ckpt.pt', map_location=device)
+checkpoint = torch.load('tokenizer_low_measures_large/ckpt.pt', map_location='cpu')
 tokenizer_args = checkpoint['model_args']
 
 tokenizer = Tokenizer(**tokenizer_args).to(device)
@@ -50,7 +53,10 @@ for k,v in list(state_dict.items()):
     if k.startswith(unwanted_prefix):
         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
 tokenizer.load_state_dict(state_dict)
-tokenizer = torch.compile(tokenizer)
+try:
+    tokenizer = torch.compile(tokenizer)
+except:
+    pass
 tokenizer.eval()
 del checkpoint
 
