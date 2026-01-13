@@ -41,7 +41,7 @@ import matplotlib.pyplot as plt
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'Style_128_adaln_1measures_bpm_S_nobias_poolfirst_norm_nohistory_1head'
+out_dir = 'Style_256_adaln_4measures_bpm_S_nobias_poolfirst_norm_nohistory_1head'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -49,9 +49,9 @@ save_interval = 5000
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = True # disabled by default
+wandb_log = False # disabled by default
 wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
@@ -62,21 +62,21 @@ batch_size = 768 # * 5 * 8 # if gradient_accumulation_steps > 1, this is the mic
 cut_seconds = 1
 spatial_window = 48
 n_encoder_chunks = 0
-n_decoder_chunks = 1
+n_decoder_chunks = 4
 n_chunks = n_encoder_chunks + n_decoder_chunks
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
-n_style_embeddings = 128
+n_style_embeddings = 256
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 110000 # total number of training iterations
+max_iters = 1000000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
 decay_lr = True # whether to decay the learning rate
-warmup_iters = 95000 # how many steps to warm up for
+warmup_iters = 5000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
