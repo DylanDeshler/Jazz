@@ -82,8 +82,7 @@ def restore_measure(audio, stretch_ratio, sr=16000):
     y_restored = pyrb.time_stretch(audio, sr, restore_rate)
     return y_restored
 
-n_samples = 16
-batch_n_samples = 1
+n_samples = 2
 n_bpms = 20
 bpms = torch.linspace(100, 250, n_bpms)
 x = torch.randn(n_samples * n_bpms, n_decoder_chunks, spatial_window, vae_embed_dim).to(device)
@@ -97,21 +96,19 @@ with torch.no_grad():
             action_dir = os.path.join(out_dir, str(action))
             os.makedirs(action_dir, exist_ok=True)
             
-            for sample_n_samples in range(n_samples // batch_n_samples):
-                bpm = torch.repeat_interleave(bpms, batch_n_samples).unsqueeze(-1).repeat(1, n_decoder_chunks).to(device)
-                weights = torch.nn.functional.one_hot(torch.ones(batch_n_samples * n_bpms).long() * action, n_style_embeddings).float().to(device)
-                
-                out = model.generate_from_actions(x, bpm, weights)
-                out = tokenizer.decode(out.view(batch_n_samples * n_bpms * n_decoder_chunks, spatial_window, vae_embed_dim).permute(0, 2, 1), shape=(1, 24576 * 1), n_steps=50).view(batch_n_samples * n_bpms, n_decoder_chunks, 1, 24576 * 1)
+            bpm = torch.repeat_interleave(bpms, n_samples).unsqueeze(-1).repeat(1, n_decoder_chunks).to(device)
+            weights = torch.nn.functional.one_hot(torch.ones(n_samples * n_bpms).long() * action, n_style_embeddings).float().to(device)
             
-                out = out.cpu().detach().float().numpy().squeeze(-2)
-                bpm = bpm.cpu().detach().numpy()
-                ratio = (4 * 60 * 16000) / (24576 * bpm)
+            out = model.generate_from_actions(x, bpm, weights)
+            out = tokenizer.decode(out.view(n_samples * n_bpms * n_decoder_chunks, spatial_window, vae_embed_dim).permute(0, 2, 1), shape=(1, 24576 * 1), n_steps=50).view(n_samples * n_bpms, n_decoder_chunks, 1, 24576 * 1)
+        
+            out = out.cpu().detach().float().numpy().squeeze(-2)
+            bpm = bpm.cpu().detach().numpy()
+            ratio = (4 * 60 * 16000) / (24576 * bpm)
+            
+            for i in range(out.shape[0]):
+                y, r = out[i], ratio[i]
                 
-                for i in range(out.shape[0]):
-                    y, r = out[i], ratio[i]
-                    
-                    wav = np.concatenate([restore_measure(y[j], r[j].item()) for j in range(n_chunks)])
-                    
-                    print((i * sample_n_samples * n_samples // batch_n_samples), (i * sample_n_samples * n_samples // batch_n_samples) % n_samples)
-                    sf.write(os.path.join(action_dir, f'action_{action}_bpm_{bpm[i]}_sample{(i * sample_n_samples * n_samples // batch_n_samples) % n_samples}.wav'), wav, 16000)
+                wav = np.concatenate([restore_measure(y[j], r[j].item()) for j in range(n_chunks)])
+                
+                sf.write(os.path.join(action_dir, f'action_{action}_bpm_{bpm[i]}_sample{i % n_samples}.wav'), wav, 16000)
