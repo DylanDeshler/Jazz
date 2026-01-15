@@ -69,7 +69,7 @@ def analyze():
     meta = np.memmap('/home/ubuntu/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(N, 2))
     arr = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}_stats.bin', dtype=np.float16, mode='w+', shape=(N, n_style_embeddings))
     
-    print(np.mean(arr, axis=0)).shape
+    print(np.mean(arr, axis=0).shape)
     np.median(arr, axis=0)
     np.max(arr, axis=0)
     np.min(arr, axis=0)
