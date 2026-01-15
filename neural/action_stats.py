@@ -54,6 +54,6 @@ with torch.no_grad():
             actions, weights = model.encode_actions(batch, bpm, force_manual=True, force_transfer=False, return_weights=True)
             print(actions.shape, weights.shape)
         
-        arr[i*batch_size:(i+1)*batch_size] = weights.float().cpu().detach().numpy().astype(np.float16)
+        arr[i*batch_size:(i+1)*batch_size] = weights.squeeze().float().cpu().detach().numpy().astype(np.float16)
 
 arr.flush()
