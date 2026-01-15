@@ -71,29 +71,27 @@ def analyze():
     arr = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}_stats.bin', dtype=np.float16, mode='r', shape=(N, n_style_embeddings))
     
     stats = {
-        'mean': np.mean(arr, axis=0),
-        'median': np.median(arr, axis=0),
-        'max': np.max(arr, axis=0),
-        'min': np.min(arr, axis=0),
-        'std': np.std(arr, axis=0),
+        'mean': np.mean(arr, axis=0).item(),
+        'median': np.median(arr, axis=0).item(),
+        'max': np.max(arr, axis=0).item(),
+        'min': np.min(arr, axis=0).item(),
+        'std': np.std(arr, axis=0).item(),
     }
-    print(stats)
     
-    # for i in tqdm(range(n_style_embeddings)):
-    #     print(arr[:, i].nonzero())
-    #     idxs = arr[:, i].nonzero()[0]
-    #     print(idxs.shape)
+    for i in tqdm(range(n_style_embeddings)):
+        idxs = arr[:, i].nonzero()[0]
+        print(idxs.shape)
         
-    #     try:
-    #         stats[f'action {i}'] = {
-    #             'mean': np.mean(meta[idxs, 1]),
-    #             'median': np.median(meta[idxs, 1]),
-    #             'max': np.max(meta[idxs, 1]),
-    #             'min': np.min(meta[idxs, 1]),
-    #             'std': np.std(meta[idxs, 1]),
-    #         }
-    #     except:
-    #         print('empty!')
+        try:
+            stats[f'action {i}'] = {
+                'mean': np.mean(meta[idxs, 1]),
+                'median': np.median(meta[idxs, 1]),
+                'max': np.max(meta[idxs, 1]),
+                'min': np.min(meta[idxs, 1]),
+                'std': np.std(meta[idxs, 1]),
+            }
+        except:
+            print('empty!')
     
     with open('/home/ubuntu/Data/stats.json', 'w') as f:
         json.dump(stats, f)
