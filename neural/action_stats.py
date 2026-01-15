@@ -82,11 +82,9 @@ def analyze():
     }
     
     joint_probs = defaultdict(float)
-    for row in tqdm(csr_matrix(arr)):
-        # indices = np.nonzero(row)[0]
-        # values = row[indices]
-        indices = row.indices
-        values = row.data
+    for row in tqdm(arr):
+        indices = np.nonzero(row)[0]
+        values = row[indices]
         
         n_items = len(indices)
         if n_items < 2:
@@ -102,9 +100,10 @@ def analyze():
                 for _, val in combo:
                     weight_product *= val
                 
-                joint_probs[class_ids] += weight_product
+                joint_probs[class_ids] += weight_product * math.factorial(k)
 
     results = {k: v / N for k, v in joint_probs.items()}
+    stats['probs'] = results
 
     print(f"Total Combinations Found: {len(results)}")
     sorted_results = sorted(results.items(), key=lambda item: item[1], reverse=True)
