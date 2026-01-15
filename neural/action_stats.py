@@ -83,11 +83,11 @@ def analyze():
         
         try:
             stats[f'action {i}'] = {
-                'mean': np.mean(meta[idxs, 1]),
-                'median': np.median(meta[idxs, 1]),
-                'max': np.max(meta[idxs, 1]),
-                'min': np.min(meta[idxs, 1]),
-                'std': np.std(meta[idxs, 1]),
+                'mean': np.mean(meta[idxs, 1]).item(),
+                'median': np.median(meta[idxs, 1]).item(),
+                'max': np.max(meta[idxs, 1]).item(),
+                'min': np.min(meta[idxs, 1]).item(),
+                'std': np.std(meta[idxs, 1]).item(),
             }
         except:
             stats[f'action {i}'] = {
