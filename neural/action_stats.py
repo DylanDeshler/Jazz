@@ -79,21 +79,21 @@ def analyze():
     }
     print(stats)
     
-    for i in tqdm(range(n_style_embeddings)):
-        print(arr[:, i].nonzero())
-        idxs = arr[:, i].nonzero()[0]
-        print(idxs.shape)
+    # for i in tqdm(range(n_style_embeddings)):
+    #     print(arr[:, i].nonzero())
+    #     idxs = arr[:, i].nonzero()[0]
+    #     print(idxs.shape)
         
-        try:
-            stats[f'action {i}'] = {
-                'mean': np.mean(meta[idxs, 1]),
-                'median': np.median(meta[idxs, 1]),
-                'max': np.max(meta[idxs, 1]),
-                'min': np.min(meta[idxs, 1]),
-                'std': np.std(meta[idxs, 1]),
-            }
-        except:
-            print('empty!')
+    #     try:
+    #         stats[f'action {i}'] = {
+    #             'mean': np.mean(meta[idxs, 1]),
+    #             'median': np.median(meta[idxs, 1]),
+    #             'max': np.max(meta[idxs, 1]),
+    #             'min': np.min(meta[idxs, 1]),
+    #             'std': np.std(meta[idxs, 1]),
+    #         }
+    #     except:
+    #         print('empty!')
     
     with open('/home/ubuntu/Data/stats.json') as f:
         json.dump(stats, f)
