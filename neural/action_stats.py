@@ -78,9 +78,10 @@ def analyze():
         'std': np.std(arr, axis=0),
     }
     
-    for i in range(n_style_embeddings):
+    print(len(arr.nonzero()))
+    for i in tqdm(range(n_style_embeddings)):
         idxs = arr[:, i].nonzero()
-        print(idxs.shape)
+        print(len(idxs))
         
         stats[f'action {i}'] = {
             'mean': np.mean(meta[idxs]),
