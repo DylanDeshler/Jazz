@@ -68,7 +68,7 @@ def analyze():
     
     N = 4403211
     meta = np.memmap('/home/ubuntu/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(N, 2))
-    arr = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}_stats.bin', dtype=np.float16, mode='w+', shape=(N, n_style_embeddings))
+    arr = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}_stats.bin', dtype=np.float16, mode='r', shape=(N, n_style_embeddings))
     
     stats = {
         'mean': np.mean(arr, axis=0),
@@ -95,7 +95,7 @@ def analyze():
     #     except:
     #         print('empty!')
     
-    with open('/home/ubuntu/Data/stats.json') as f:
+    with open('/home/ubuntu/Data/stats.json', 'w') as f:
         json.dump(stats, f)
 
 
