@@ -80,7 +80,6 @@ def analyze():
     
     for i in tqdm(range(n_style_embeddings)):
         idxs = arr[:, i].nonzero()[0]
-        print(idxs.shape)
         
         try:
             stats[f'action {i}'] = {
@@ -91,7 +90,13 @@ def analyze():
                 'std': np.std(meta[idxs, 1]),
             }
         except:
-            print('empty!')
+            stats[f'action {i}'] = {
+                'mean': 0,
+                'median': 0,
+                'max': 0,
+                'min': 0,
+                'std': 0,
+            }
     
     with open('/home/ubuntu/Data/stats.json', 'w') as f:
         json.dump(stats, f)
