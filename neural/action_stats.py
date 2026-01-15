@@ -1,6 +1,8 @@
 import os
 import math
+from collections import defaultdict
 from contextlib import nullcontext
+from itertools import combinations
 from tqdm import tqdm
 import argparse
 import json
@@ -77,6 +79,36 @@ def analyze():
         'min': np.min(arr, axis=0).tolist(),
         'std': np.std(arr, axis=0).tolist(),
     }
+    
+    joint_probs = defaultdict(float)
+    for row in tqdm(arr):
+        indices = np.nonzero(row)[0]
+        values = row[indices]
+        
+        n_items = len(indices)
+        if n_items < 2:
+            continue
+        
+        max_k = min(n_items, 5) # top-k
+        
+        for k in range(2, max_k + 1):
+            for combo in combinations(zip(indices, values), k):
+                class_ids = tuple(sorted(c[0] for c in combo))
+                
+                weight_product = 1.0
+                for _, val in combo:
+                    weight_product *= val
+                
+                joint_probs[class_ids] += weight_product
+
+    results = {k: v / N for k, v in joint_probs.items()}
+
+    print(f"Total Combinations Found: {len(results)}")
+    sorted_results = sorted(results.items(), key=lambda item: item[1], reverse=True)
+
+    print("\n--- Top Co-occurrences ---")
+    for classes, prob in sorted_results[:5]:
+        print(f"Classes {classes}: P = {prob:.5f}")
     
     for i in range(n_style_embeddings):
         idxs = arr[:, i].nonzero()[0]
