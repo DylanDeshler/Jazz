@@ -78,11 +78,19 @@ def analyze():
         'std': np.std(arr, axis=0).tolist(),
     }
     
-    for i in tqdm(range(n_style_embeddings)):
+    for i in range(n_style_embeddings):
         idxs = arr[:, i].nonzero()[0]
         
         try:
             stats[f'action {i}'] = {
+                'mean': np.mean(arr[idxs, i]).item(),
+                'median': np.median(arr[idxs, i]).item(),
+                'max': np.max(arr[idxs, i]).item(),
+                'min': np.min(arr[idxs, i]).item(),
+                'std': np.std(arr[idxs, i]).item(),
+            }
+            
+            stats[f'action {i} bpm'] = {
                 'mean': np.mean(meta[idxs, 1]).item(),
                 'median': np.median(meta[idxs, 1]).item(),
                 'max': np.max(meta[idxs, 1]).item(),
@@ -91,6 +99,14 @@ def analyze():
             }
         except:
             stats[f'action {i}'] = {
+                'mean': 0,
+                'median': 0,
+                'max': 0,
+                'min': 0,
+                'std': 0,
+            }
+            
+            stats[f'action {i} bpm'] = {
                 'mean': 0,
                 'median': 0,
                 'max': 0,
