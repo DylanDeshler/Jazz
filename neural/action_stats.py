@@ -3,6 +3,7 @@ import math
 from contextlib import nullcontext
 from tqdm import tqdm
 import argparse
+import json
 
 import numpy as np
 import torch
@@ -69,11 +70,28 @@ def analyze():
     meta = np.memmap('/home/ubuntu/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(N, 2))
     arr = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}_stats.bin', dtype=np.float16, mode='w+', shape=(N, n_style_embeddings))
     
-    print(np.mean(arr, axis=0).shape)
-    np.median(arr, axis=0)
-    np.max(arr, axis=0)
-    np.min(arr, axis=0)
-    np.std(arr, axis=0)
+    stats = {
+        'mean': np.mean(arr, axis=0),
+        'median': np.median(arr, axis=0),
+        'max': np.max(arr, axis=0),
+        'min': np.min(arr, axis=0),
+        'std': np.std(arr, axis=0),
+    }
+    
+    for i in range(n_style_embeddings):
+        idxs = arr[:, i].nonzero()
+        print(idxs.shape)
+        
+        stats[f'action {i}'] = {
+            'mean': np.mean(meta[idxs]),
+            'median': np.median(meta[idxs]),
+            'max': np.max(meta[idxs]),
+            'min': np.min(meta[idxs]),
+            'std': np.std(meta[idxs]),
+        }
+    
+    with open('/home/ubuntu/Data/stats.json') as f:
+        json.dump(stats, f)
 
 
 if __name__ == '__main__':
