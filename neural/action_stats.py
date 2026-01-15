@@ -15,7 +15,7 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
-batch_size = 22#2**10
+batch_size = 64#2**10
 
 ckpt_path = os.path.join('Style_256_adaln_1measures_bpm_S_nobias_poolfirst_norm_nohistory_1head_top5', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location='cpu')
@@ -52,7 +52,6 @@ with torch.no_grad():
         
         with ctx:
             actions, weights = model.encode_actions(batch, bpm, force_manual=True, force_transfer=False, return_weights=True)
-            print(actions.shape, weights.shape)
         
         arr[i*batch_size:(i+1)*batch_size] = weights.squeeze().float().cpu().detach().numpy().astype(np.float16)
 
