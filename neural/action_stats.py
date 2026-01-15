@@ -7,6 +7,7 @@ from tqdm import tqdm
 import argparse
 import json
 
+from scipy.sparse import csr_matrix
 import numpy as np
 import torch
 
@@ -81,9 +82,11 @@ def analyze():
     }
     
     joint_probs = defaultdict(float)
-    for row in tqdm(arr):
-        indices = np.nonzero(row)[0]
-        values = row[indices]
+    for row in tqdm(csr_matrix(arr)):
+        # indices = np.nonzero(row)[0]
+        # values = row[indices]
+        indices = row.indices
+        values = row.data
         
         n_items = len(indices)
         if n_items < 2:
