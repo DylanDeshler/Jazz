@@ -71,11 +71,11 @@ def analyze():
     arr = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}_stats.bin', dtype=np.float16, mode='r', shape=(N, n_style_embeddings))
     
     stats = {
-        'mean': np.mean(arr, axis=0).item(),
-        'median': np.median(arr, axis=0).item(),
-        'max': np.max(arr, axis=0).item(),
-        'min': np.min(arr, axis=0).item(),
-        'std': np.std(arr, axis=0).item(),
+        'mean': np.mean(arr, axis=0).tolist(),
+        'median': np.median(arr, axis=0).tolist(),
+        'max': np.max(arr, axis=0).tolist(),
+        'min': np.min(arr, axis=0).tolist(),
+        'std': np.std(arr, axis=0).tolist(),
     }
     
     for i in tqdm(range(n_style_embeddings)):
