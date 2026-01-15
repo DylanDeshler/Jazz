@@ -77,6 +77,7 @@ def analyze():
         'min': np.min(arr, axis=0),
         'std': np.std(arr, axis=0),
     }
+    print(stats)
     
     for i in tqdm(range(n_style_embeddings)):
         print(arr[:, i].nonzero())
