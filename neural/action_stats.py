@@ -100,7 +100,7 @@ def analyze():
                 for _, val in combo:
                     weight_product *= val
                 
-                joint_probs[class_ids] += weight_product * math.factorial(k)
+                joint_probs[f'{class_ids}'] += weight_product * math.factorial(k)
 
     results = {k: v / N for k, v in joint_probs.items()}
     stats['probs'] = results
