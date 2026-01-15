@@ -634,7 +634,7 @@ class ActionTransformer(nn.Module):
         
         return entropy.mean().item(), batch_entropy.item(), utilization
     
-    def forward(self, x, bpm, force_manual=False, force_transfer=False):
+    def forward(self, x, bpm, force_manual=False, force_transfer=False, return_weights=False):
         """
         x: (B, T, N, C) latents
         """
@@ -657,7 +657,8 @@ class ActionTransformer(nn.Module):
         
         # loses x signal but more interpretable
         query = torch.mean(x, dim=-2, keepdim=False)
-        style = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings).squeeze(1)
+        # style = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings).squeeze(1)
+        style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings, return_weights=return_weights)
         
         # if self.training:
         #     manual_query, transfer_query = torch.mean(x, dim=-2, keepdim=False).chunk(2, dim=0)
@@ -675,7 +676,10 @@ class ActionTransformer(nn.Module):
         # style = self.pool_attn(query=x, key=style_embeddings, value=style_embeddings)
         # style = torch.mean(style, dim=-2, keepdim=False)
         
-        return self.out_norm(style)
+        if return_weights:
+            return self.out_norm(style.squeeze(1)), weights
+        
+        return self.out_norm(style.squeeze(1))
 
 class DiTBlock(nn.Module):
     def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
@@ -887,14 +891,14 @@ class IDM(nn.Module):
         x = self.decoder(x, bpm, z, history)
         return x, z
     
-    def encode_actions(self, x, bpm, force_manual, force_transfer):
+    def encode_actions(self, x, bpm, force_manual, force_transfer, return_weights=False):
         """
         x: (B, T, N, C) latents
         alpha: (B) noise level for history latents
         """
         assert x.ndim == 4
         
-        z = self.action_model(x, bpm, force_manual=force_manual, force_transfer=force_transfer)
+        z = self.action_model(x, bpm, force_manual=force_manual, force_transfer=force_transfer, return_weights=return_weights)
         return z
     
     def generate(self, x, bpm, actions, n_steps=50, noise=None):
