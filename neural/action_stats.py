@@ -80,6 +80,7 @@ def analyze():
     
     for i in tqdm(range(n_style_embeddings)):
         idxs = arr[:, i].nonzero()[0]
+        print(idxs.shape)
         
         stats[f'action {i}'] = {
             'mean': np.mean(meta[idxs, 1]),
