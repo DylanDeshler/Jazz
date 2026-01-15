@@ -59,6 +59,22 @@ def generate_action_weights():
 
     arr.flush()
 
+def analyze():
+    ckpt_path = os.path.join('Style_256_adaln_1measures_bpm_S_nobias_poolfirst_norm_nohistory_1head_top5', 'ckpt.pt')
+    checkpoint = torch.load(ckpt_path, map_location='cpu')
+    model_args = checkpoint['model_args']
+    n_style_embeddings = model_args['n_style_embeddings']
+    
+    N = 4403211
+    meta = np.memmap('/home/ubuntu/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(N, 2))
+    arr = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}_stats.bin', dtype=np.float16, mode='w+', shape=(N, n_style_embeddings))
+    
+    print(np.mean(arr, axis=0)).shape
+    np.median(arr, axis=0)
+    np.max(arr, axis=0)
+    np.min(arr, axis=0)
+    np.std(arr, axis=0)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Action Statistics")
@@ -68,11 +84,7 @@ if __name__ == '__main__':
     
     args = parser.parse_args()
     
-    if args.test:
-        test(args.n)
-    elif args.crunch:
-        crunch(args.length)
-    elif args.time_warp:
-        time_warp_measures()
-    elif args.measure:
-        measures(args.length, args.max_samples)
+    if args.generate:
+        generate_action_weights()
+    if args.analyze:
+        analyze()
