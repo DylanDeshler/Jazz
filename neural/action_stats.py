@@ -96,6 +96,7 @@ def analyze():
                 'max': np.max(meta[idxs, 1]).item(),
                 'min': np.min(meta[idxs, 1]).item(),
                 'std': np.std(meta[idxs, 1]).item(),
+                'quantile': np.quantile(meta[idxs, 1], (0.125, 0.25, 0.75, 87.5)).tolist()
             }
         except:
             stats[f'action {i}'] = {
@@ -112,6 +113,7 @@ def analyze():
                 'max': 0,
                 'min': 0,
                 'std': 0,
+                'quantile': [0, 0, 0, 0]
             }
     
     with open('/home/ubuntu/Data/stats.json', 'w') as f:
