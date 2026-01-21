@@ -17,4 +17,4 @@ jobs:
       - name: Push to hub
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: git push https://DylanDeshler:$HF_TOKEN@huggingface.co/spaces/ddeshler/Neural_Music_Generator main
+        run: git push --force https://DylanDeshler:$HF_TOKEN@huggingface.co/spaces/ddeshler/Neural_Music_Generator main
