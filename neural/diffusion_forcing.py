@@ -73,11 +73,28 @@ class FM:
     ):
         if net_kwargs is None:
             net_kwargs = {}
-        pred = net(x_t, t=t * self.timescale, **net_kwargs)
+        
+        # pred = net(x_t, t=t * self.timescale, **net_kwargs)
+        # if guidance != 1.0:
+        #     assert uncond_net_kwargs is not None
+        #     uncond_pred = net(x_t, t=t * self.timescale, **uncond_net_kwargs)
+        #     pred = uncond_pred + guidance * (pred - uncond_pred)
+        
         if guidance != 1.0:
             assert uncond_net_kwargs is not None
-            uncond_pred = net(x_t, t=t * self.timescale, **uncond_net_kwargs)
+            
+            x_t = torch.cat([x_t, x_t], dim=0)
+            t = torch.cat([t, t], dim=0)
+            combined_kwargs = {}
+            # we assume the keys match
+            for k, v in net_kwargs.items():
+                combined_kwargs[k] = torch.cat([v, uncond_net_kwargs[k]], dim=0)
+            combined_pred = net(x_t, t=t * self.timescale, **combined_kwargs)
+            pred, uncond_pred = combined_pred.chunk(2, dim=0)
             pred = uncond_pred + guidance * (pred - uncond_pred)
+        else:
+            pred = net(x_t, t=t * self.timescale, **net_kwargs)
+            
         return pred
     
     def convert_sample_prediction(self, x_t, t, pred):
@@ -390,7 +407,7 @@ class SwiGLUMlp(nn.Module):
         self.w12 = nn.Linear(in_features, 2 * hidden_features, bias=bias)
         self.w3 = nn.Linear(hidden_features, out_features, bias=bias)
 
-    @torch.compile
+    # @torch.compile
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x12 = self.w12(x)
         x1, x2 = x12.chunk(2, dim=-1)
@@ -461,7 +478,7 @@ def create_block_causal_mask(block_size: int, num_blocks: int, dtype=torch.float
     mask_bool = row_ids >= col_ids
     return mask_bool
 
-def token_drop(labels, null_token, training, p_uncond=0.1, p_full=0.3, p_ind_width=0.6):
+def token_drop(labels, null_token, training, p_uncond=0.1, p_full=0.3, p_ind_low=0.1, p_ind_high=0.6):
     """
     Partitions the batch into three mutually exclusive training modes:
     1. Unconditional (Drop All)
@@ -487,7 +504,7 @@ def token_drop(labels, null_token, training, p_uncond=0.1, p_full=0.3, p_ind_wid
     mask_drop_all = batch_rand < p_uncond
     mask_partial_mode = batch_rand >= (p_uncond + p_full)
     
-    sample_specific_drop_rates = torch.rand(batch_rand_shape, device=device) * p_ind_width + (1 - p_ind_width) / 2
+    sample_specific_drop_rates = torch.rand(batch_rand_shape, device=device) * (p_ind_high - p_ind_low) + p_ind_low
     token_noise = torch.rand(labels.shape[:-1], device=device)
     mask_token_drop = token_noise < sample_specific_drop_rates
     
@@ -596,9 +613,11 @@ class ModernDiT(nn.Module):
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4,
+                 use_null_token=False,
                  ):
         super().__init__()
         self.spatial_window = spatial_window
+        self.use_null_token = use_null_token
         max_input_size = spatial_window * n_chunks
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
@@ -606,6 +625,9 @@ class ModernDiT(nn.Module):
         self.x_embedder = Patcher(in_channels, hidden_size)
         
         self.fuse_conditioning = SwiGLUMlp(hidden_size + style_dim, int(2 / 3 * mlp_ratio * hidden_size), hidden_size, bias=False)
+        
+        if self.use_null_token:
+            self.null_token = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
         
         self.t_block = nn.Sequential(
             nn.SiLU(),
@@ -660,6 +682,11 @@ class ModernDiT(nn.Module):
         x = rearrange(x, 'b t n c -> b (t n) c')
         
         t = self.t_embedder(t.flatten()).view(B, T, -1)
+        
+        if self.use_null_token:
+            # self.null_token.unsqueeze(0).repeat(B, T, 1)
+            actions = token_drop(actions, self.null_token.unsqueeze(0), self.training, p_uncond=0.1, p_full=0.8, p_ind_low=0.1, p_ind_high=0.5)
+        
         t = torch.cat([t, actions], dim=-1)
         t = self.fuse_conditioning(t)
         t0 = self.t_block(t)
@@ -689,8 +716,8 @@ class ModernDiTWrapper(nn.Module):
     def forward(self, x, bpm, actions, t=None):
         return self.diffusion.loss(self.net, x, t=t, net_kwargs={'actions': actions, 'bpm': bpm})
     
-    def generate(self, x, bpm, actions, n_steps=50):
-        return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm})
+    def generate(self, x, bpm, actions, n_steps=50, uncond_net_kwargs=None, guidance=1.0):
+        return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm}, uncond_net_kwargs=uncond_net_kwargs, guidance=guidance)
 
 def ModernDiT_large(**kwargs):
     return ModernDiTWrapper(depth=28, hidden_size=1152, num_heads=16, **kwargs)

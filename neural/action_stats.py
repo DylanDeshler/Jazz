@@ -74,11 +74,11 @@ def analyze():
     arr = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}_stats.bin', dtype=np.float16, mode='r', shape=(N, n_style_embeddings))
     
     stats = {
-        'mean': np.mean(arr, axis=0).tolist(),
-        'median': np.median(arr, axis=0).tolist(),
-        'max': np.max(arr, axis=0).tolist(),
-        'min': np.min(arr, axis=0).tolist(),
-        'std': np.std(arr, axis=0).tolist(),
+        "mean": np.mean(arr, axis=0).tolist(),
+        "median": np.median(arr, axis=0).tolist(),
+        "max": np.max(arr, axis=0).tolist(),
+        "min": np.min(arr, axis=0).tolist(),
+        "std": np.std(arr, axis=0).tolist(),
     }
     
     joint_probs = defaultdict(float)
@@ -100,10 +100,10 @@ def analyze():
                 for _, val in combo:
                     weight_product *= val
                 
-                joint_probs[f'{class_ids}'] += weight_product * math.factorial(k)
+                joint_probs[f"{class_ids}"] += weight_product * math.factorial(k)
 
     results = {k: v / N for k, v in joint_probs.items()}
-    stats['probs'] = results
+    stats["probs"] = results
 
     print(f"Total Combinations Found: {len(results)}")
     sorted_results = sorted(results.items(), key=lambda item: item[1], reverse=True)
@@ -116,38 +116,38 @@ def analyze():
         idxs = arr[:, i].nonzero()[0]
         
         try:
-            stats[f'action {i}'] = {
-                'mean': np.mean(arr[idxs, i]).item(),
-                'median': np.median(arr[idxs, i]).item(),
-                'max': np.max(arr[idxs, i]).item(),
-                'min': np.min(arr[idxs, i]).item(),
-                'std': np.std(arr[idxs, i]).item(),
+            stats[f"action {i}"] = {
+                "mean": np.mean(arr[idxs, i]).item(),
+                "median": np.median(arr[idxs, i]).item(),
+                "max": np.max(arr[idxs, i]).item(),
+                "min": np.min(arr[idxs, i]).item(),
+                "std": np.std(arr[idxs, i]).item(),
             }
             
-            stats[f'action {i} bpm'] = {
-                'mean': np.mean(meta[idxs, 1]).item(),
-                'median': np.median(meta[idxs, 1]).item(),
-                'max': np.max(meta[idxs, 1]).item(),
-                'min': np.min(meta[idxs, 1]).item(),
-                'std': np.std(meta[idxs, 1]).item(),
-                'quantile': np.quantile(meta[idxs, 1], (0.125, 0.25, 0.75, 87.5)).tolist()
+            stats[f"action {i} bpm"] = {
+                "mean": np.mean(meta[idxs, 1]).item(),
+                "median": np.median(meta[idxs, 1]).item(),
+                "max": np.max(meta[idxs, 1]).item(),
+                "min": np.min(meta[idxs, 1]).item(),
+                "std": np.std(meta[idxs, 1]).item(),
+                "quantile": np.quantile(meta[idxs, 1], (0.125, 0.25, 0.75, 87.5)).tolist()
             }
         except:
-            stats[f'action {i}'] = {
-                'mean': 0,
-                'median': 0,
-                'max': 0,
-                'min': 0,
-                'std': 0,
+            stats[f"action {i}"] = {
+                "mean": 0,
+                "median": 0,
+                "max": 0,
+                "min": 0,
+                "std": 0,
             }
             
-            stats[f'action {i} bpm'] = {
-                'mean': 0,
-                'median': 0,
-                'max': 0,
-                'min': 0,
-                'std': 0,
-                'quantile': [0, 0, 0, 0]
+            stats[f"action {i} bpm"] = {
+                "mean": 0,
+                "median": 0,
+                "max": 0,
+                "min": 0,
+                "std": 0,
+                "quantile": [0, 0, 0, 0]
             }
     
     with open('/home/ubuntu/Data/stats.json', 'w') as f:
