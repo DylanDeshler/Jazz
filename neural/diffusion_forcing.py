@@ -684,7 +684,6 @@ class ModernDiT(nn.Module):
         t = self.t_embedder(t.flatten()).view(B, T, -1)
         
         if self.use_null_token:
-            # self.null_token.unsqueeze(0).repeat(B, T, 1)
             actions = token_drop(actions, self.null_token.unsqueeze(0), self.training, p_uncond=0.1, p_full=0.8, p_ind_low=0.1, p_ind_high=0.5)
         
         t = torch.cat([t, actions], dim=-1)

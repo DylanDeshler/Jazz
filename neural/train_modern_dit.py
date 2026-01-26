@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from diffusion_forcing import ModernDiT_small as net
+from diffusion_forcing import ModernDiT_large as net
 from dito import DiToV5 as Tokenizer
 import soundfile as sf
 
@@ -40,7 +40,7 @@ import pyrubberband as pyrb
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'ModernDiT_measures_bpm_small_256_long_uncond'
+out_dir = 'ModernDiT_measures_bpm_large_256_long_uncond'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -56,7 +56,7 @@ wandb_run_name = str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 2
-batch_size = 80#384
+batch_size = 40#384
 # model
 spatial_window = 48
 n_chunks = 30
