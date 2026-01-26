@@ -627,7 +627,7 @@ class ModernDiT(nn.Module):
         self.fuse_conditioning = SwiGLUMlp(hidden_size + style_dim, int(2 / 3 * mlp_ratio * hidden_size), hidden_size, bias=False)
         
         if self.use_null_token:
-            self.null_token = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
+            self.null_token = nn.Parameter(torch.randn(style_dim) / style_dim ** 0.5)
         
         self.t_block = nn.Sequential(
             nn.SiLU(),
