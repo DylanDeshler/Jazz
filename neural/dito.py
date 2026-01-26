@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from consistency_decoder import ConsistencyDecoderUNet, ConsistencyDecoderUNetV2, DylanDecoderUNet, DylanDecoderUNet2
 from seanet import SEANetEncoder, DylanSEANetEncoder
 from fm import FM, FMEulerSampler
-from perciever import Perciever, Reciever
+# from perciever import Perciever, Reciever
 
 class DiToV6(nn.Module):
     def __init__(self, z_shape, in_dim, hidden_dim, latent_dim, n_heads, encoder_depth, encoder_n_interleave, decoder_depth, decoder_n_interleave, n_latents, patch_size, kernel_size=None):
