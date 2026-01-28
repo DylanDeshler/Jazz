@@ -133,8 +133,8 @@ Training this network successfully required ditching the history, using a single
 
 For comparison here are some real and generated samples from the latent action model paired with their spectrograms. Notice that some samples are more directly similar than to the corresponding real version, but all pairs maintain the "vibe".
 
-<img src="0_wavs.png" width="50%">
-![Style Tokens](0_wavs.png "Style Tokens")
+<img src="samples/actions/0_wavs.png" width="50%">
+![Style Tokens](samples/actions/0_wavs.png "Style Tokens")
 
 | Original | Reconstruction |
 |----------|----------------|
