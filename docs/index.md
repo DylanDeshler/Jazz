@@ -136,7 +136,7 @@ For comparison here are some real and generated samples from the latent action m
 | Original | Reconstruction |
 |----------|----------------|
 | <audio controls><source src="samples/actions/0_real.wav" type="audio/wav"></audio> | <audio controls><source src="samples/actions/0_recon.wav" type="audio/wav"></audio> |
-<img src="o_wavs.png" width="50%">
+<img src="0_wavs.png" width="50%">
 | <audio controls><source src="samples/actions/5_real.wav" type="audio/wav"></audio> | <audio controls><source src="samples/actions/5_recon.wav" type="audio/wav"></audio> |
 | <audio controls><source src="samples/actions/9_real.wav" type="audio/wav"></audio> | <audio controls><source src="samples/actions/9_recon.wav" type="audio/wav"></audio> |
 | <audio controls><source src="samples/actions/11_real.wav" type="audio/wav"></audio> | <audio controls><source src="samples/actions/11_recon.wav" type="audio/wav"></audio> |
