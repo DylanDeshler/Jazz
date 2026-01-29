@@ -133,10 +133,67 @@ Training this network successfully required ditching the history, using a single
 
 For comparison here are some real and generated samples from the latent action model paired with their spectrograms. Notice that some samples are more directly similar than to the corresponding real version, but all pairs maintain the "vibe".
 
+<div style="display: flex; gap: 20px; margin-bottom: 50px; align-items: flex-start;">
+
+  <div style="flex: 1; text-align: center;">
+    <img src="samples/actions/0_wavs.png" alt="Item 1" style="width: 100%; border-radius: 8px; aspect-ratio: 16/9; object-fit: cover; background: #f0f0f0;">
+    <div style="margin-top: 12px; display: flex; justify-content: space-between; gap: 5px;">
+      <audio controls style="width: 48%; transform: scale(0.85); transform-origin: left center;">
+        <source src="samples/actions/0_real.wav" type="audio/mpeg">
+      </audio>
+      <audio controls style="width: 48%; transform: scale(0.85); transform-origin: right center;">
+        <source src="samples/actions/0_recon.wav" type="audio/mpeg">
+      </audio>
+    </div>
+  </div>
+
+  <div style="flex: 1; text-align: center;">
+    <img src="samples/actions/5_wavs.png" alt="Item 2" style="width: 100%; border-radius: 8px; aspect-ratio: 16/9; object-fit: cover; background: #f0f0f0;">
+    <div style="margin-top: 12px; display: flex; justify-content: space-between; gap: 5px;">
+      <audio controls style="width: 48%; transform: scale(0.85); transform-origin: left center;">
+        <source src="samples/actions/5_real.wav" type="audio/mpeg">
+      </audio>
+      <audio controls style="width: 48%; transform: scale(0.85); transform-origin: right center;">
+        <source src="samples/actions/5_recon.wav" type="audio/mpeg">
+      </audio>
+    </div>
+  </div>
+
+</div>
+
+<div style="display: flex; gap: 20px; margin-bottom: 50px; align-items: flex-start;">
+
+  <div style="flex: 1; text-align: center;">
+    <img src="samples/actions/9_wavs.png" alt="Item 3" style="width: 100%; border-radius: 8px; aspect-ratio: 16/9; object-fit: cover; background: #f0f0f0;">
+    <div style="margin-top: 12px; display: flex; justify-content: space-between; gap: 5px;">
+      <audio controls style="width: 48%; transform: scale(0.85); transform-origin: left center;">
+        <source src="samples/actions/9_real.wav" type="audio/mpeg">
+      </audio>
+      <audio controls style="width: 48%; transform: scale(0.85); transform-origin: right center;">
+        <source src="samples/actions/9_recon.wav" type="audio/mpeg">
+      </audio>
+    </div>
+  </div>
+
+  <div style="flex: 1; text-align: center;">
+    <img src="samples/actions/11_wavs.png" alt="Item 4" style="width: 100%; border-radius: 8px; aspect-ratio: 16/9; object-fit: cover; background: #f0f0f0;">
+    <div style="margin-top: 12px; display: flex; justify-content: space-between; gap: 5px;">
+      <audio controls style="width: 48%; transform: scale(0.85); transform-origin: left center;">
+        <source src="samples/actions/11_real.wav" type="audio/mpeg">
+      </audio>
+      <audio controls style="width: 48%; transform: scale(0.85); transform-origin: right center;">
+        <source src="samples/actions/11_recon.wav" type="audio/mpeg">
+      </audio>
+    </div>
+  </div>
+
+</div>
+
+<img src="samples/actions/0_wavs.png" width="50%">
+
 | Original | Reconstruction |
 |----------|----------------|
 | <audio controls><source src="samples/actions/0_real.wav" type="audio/wav"></audio> | <audio controls><source src="samples/actions/0_recon.wav" type="audio/wav"></audio> |
-<img src="o_wavs.png" width="50%">
 | <audio controls><source src="samples/actions/5_real.wav" type="audio/wav"></audio> | <audio controls><source src="samples/actions/5_recon.wav" type="audio/wav"></audio> |
 | <audio controls><source src="samples/actions/9_real.wav" type="audio/wav"></audio> | <audio controls><source src="samples/actions/9_recon.wav" type="audio/wav"></audio> |
 | <audio controls><source src="samples/actions/11_real.wav" type="audio/wav"></audio> | <audio controls><source src="samples/actions/11_recon.wav" type="audio/wav"></audio> |
