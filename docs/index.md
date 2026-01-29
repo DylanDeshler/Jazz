@@ -138,6 +138,7 @@ For comparison here are some real and generated samples from the latent action m
   <div style="flex: 1; text-align: center;">
     <img src="samples/actions/0_wavs.png" alt="Item 1" style="width: auto; max-width: 100%; height: 500px; object-fit: contain; border-radius: 8px;">
     <div style="margin-top: 12px; display: flex; justify-content: space-between; gap: 5px;">
+      <span style="display: block; font-size: 14px; font-weight: bold; margin-bottom: 5px; color: #555;">Original</span>
       <audio controls style="width: 48%; transform: scale(0.85); transform-origin: left center;">
         <source src="samples/actions/0_real.wav" type="audio/mpeg">
       </audio>
@@ -150,6 +151,7 @@ For comparison here are some real and generated samples from the latent action m
   <div style="flex: 1; text-align: center;">
     <img src="samples/actions/5_wavs.png" alt="Item 2" style="width: auto; max-width: 100%; height: 500px; object-fit: contain; border-radius: 8px;">
     <div style="margin-top: 12px; display: flex; justify-content: space-between; gap: 5px;">
+      <span style="display: block; font-size: 14px; font-weight: bold; margin-bottom: 5px; color: #555;">Reconstruction</span>
       <audio controls style="width: 48%; transform: scale(0.85); transform-origin: left center;">
         <source src="samples/actions/5_real.wav" type="audio/mpeg">
       </audio>
@@ -166,6 +168,7 @@ For comparison here are some real and generated samples from the latent action m
   <div style="flex: 1; text-align: center;">
     <img src="samples/actions/9_wavs.png" alt="Item 3" style="width: auto; max-width: 100%; height: 500px; object-fit: contain; border-radius: 8px;">
     <div style="margin-top: 12px; display: flex; justify-content: space-between; gap: 5px;">
+      <span style="display: block; font-size: 14px; font-weight: bold; margin-bottom: 5px; color: #555;">Original</span>
       <audio controls style="width: 48%; transform: scale(0.85); transform-origin: left center;">
         <source src="samples/actions/9_real.wav" type="audio/mpeg">
       </audio>
@@ -178,6 +181,7 @@ For comparison here are some real and generated samples from the latent action m
   <div style="flex: 1; text-align: center;">
     <img src="samples/actions/11_wavs.png" alt="Item 4" style="width: auto; max-width: 100%; height: 500px; object-fit: contain; border-radius: 8px;">
     <div style="margin-top: 12px; display: flex; justify-content: space-between; gap: 5px;">
+      <span style="display: block; font-size: 14px; font-weight: bold; margin-bottom: 5px; color: #555;">Reconstruction</span>
       <audio controls style="width: 48%; transform: scale(0.85); transform-origin: left center;">
         <source src="samples/actions/11_real.wav" type="audio/mpeg">
       </audio>
@@ -188,8 +192,6 @@ For comparison here are some real and generated samples from the latent action m
   </div>
 
 </div>
-
-<img src="samples/actions/0_wavs.png" width="50%">
 
 | Original | Reconstruction |
 |----------|----------------|
