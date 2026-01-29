@@ -136,7 +136,7 @@ For comparison here are some real and generated samples from the latent action m
 <div style="display: flex; gap: 20px; margin-bottom: 50px; align-items: flex-start;">
 
   <div style="flex: 1; text-align: center;">
-    <img src="samples/actions/0_wavs.png" alt="Item 1" style="width: 100%; border-radius: 8px; aspect-ratio: 16/9; object-fit: cover; background: #f0f0f0;">
+    <img src="samples/actions/0_wavs.png" alt="Item 1" style="width: auto; max-width: 100%; height: 500px; object-fit: contain; border-radius: 8px;">
     <div style="margin-top: 12px; display: flex; justify-content: space-between; gap: 5px;">
       <audio controls style="width: 48%; transform: scale(0.85); transform-origin: left center;">
         <source src="samples/actions/0_real.wav" type="audio/mpeg">
@@ -148,7 +148,7 @@ For comparison here are some real and generated samples from the latent action m
   </div>
 
   <div style="flex: 1; text-align: center;">
-    <img src="samples/actions/5_wavs.png" alt="Item 2" style="width: 100%; border-radius: 8px; aspect-ratio: 16/9; object-fit: cover; background: #f0f0f0;">
+    <img src="samples/actions/5_wavs.png" alt="Item 2" style="width: auto; max-width: 100%; height: 500px; object-fit: contain; border-radius: 8px;">
     <div style="margin-top: 12px; display: flex; justify-content: space-between; gap: 5px;">
       <audio controls style="width: 48%; transform: scale(0.85); transform-origin: left center;">
         <source src="samples/actions/5_real.wav" type="audio/mpeg">
@@ -164,7 +164,7 @@ For comparison here are some real and generated samples from the latent action m
 <div style="display: flex; gap: 20px; margin-bottom: 50px; align-items: flex-start;">
 
   <div style="flex: 1; text-align: center;">
-    <img src="samples/actions/9_wavs.png" alt="Item 3" style="width: 100%; border-radius: 8px; aspect-ratio: 16/9; object-fit: cover; background: #f0f0f0;">
+    <img src="samples/actions/9_wavs.png" alt="Item 3" style="width: auto; max-width: 100%; height: 500px; object-fit: contain; border-radius: 8px;">
     <div style="margin-top: 12px; display: flex; justify-content: space-between; gap: 5px;">
       <audio controls style="width: 48%; transform: scale(0.85); transform-origin: left center;">
         <source src="samples/actions/9_real.wav" type="audio/mpeg">
@@ -176,7 +176,7 @@ For comparison here are some real and generated samples from the latent action m
   </div>
 
   <div style="flex: 1; text-align: center;">
-    <img src="samples/actions/11_wavs.png" alt="Item 4" style="width: 100%; border-radius: 8px; aspect-ratio: 16/9; object-fit: cover; background: #f0f0f0;">
+    <img src="samples/actions/11_wavs.png" alt="Item 4" style="width: auto; max-width: 100%; height: 500px; object-fit: contain; border-radius: 8px;">
     <div style="margin-top: 12px; display: flex; justify-content: space-between; gap: 5px;">
       <audio controls style="width: 48%; transform: scale(0.85); transform-origin: left center;">
         <source src="samples/actions/11_real.wav" type="audio/mpeg">
@@ -188,16 +188,6 @@ For comparison here are some real and generated samples from the latent action m
   </div>
 
 </div>
-
-<img src="samples/actions/0_wavs.png" width="50%">
-
-| Original | Reconstruction |
-|----------|----------------|
-| <audio controls><source src="samples/actions/0_real.wav" type="audio/wav"></audio> | <audio controls><source src="samples/actions/0_recon.wav" type="audio/wav"></audio> |
-| <audio controls><source src="samples/actions/5_real.wav" type="audio/wav"></audio> | <audio controls><source src="samples/actions/5_recon.wav" type="audio/wav"></audio> |
-| <audio controls><source src="samples/actions/9_real.wav" type="audio/wav"></audio> | <audio controls><source src="samples/actions/9_recon.wav" type="audio/wav"></audio> |
-| <audio controls><source src="samples/actions/11_real.wav" type="audio/wav"></audio> | <audio controls><source src="samples/actions/11_recon.wav" type="audio/wav"></audio> |
-| <audio controls><source src="samples/actions/13_real.wav" type="audio/wav"></audio> | <audio controls><source src="samples/actions/13_recon.wav" type="audio/wav"></audio> |
 
 The axes for building an action set with the continuous approach are: size, # of measures, and top-k. Thankfully training this network is relatively quick and cheap. Below are a few examples of the actions produced from different combinations to provide some intuition.
 
