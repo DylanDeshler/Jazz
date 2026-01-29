@@ -136,7 +136,7 @@ For comparison here are some real and generated samples from the latent action m
 <div style="display: flex; gap: 20px; margin-bottom: 50px; align-items: flex-start;">
 
   <div style="flex: 1; text-align: center;">
-    <img src="samples/actions/0_wavs.png" alt="Item 1" style="width: 100%; border-radius: 8px; aspect-ratio: 16/9; object-fit:contain; background: #f0f0f0;">
+    <img src="samples/actions/0_wavs.png" alt="Item 1" style="width: auto; max-width: 100%; height: 250px; object-fit: contain; border-radius: 8px;">
     <div style="margin-top: 12px; display: flex; justify-content: space-between; gap: 5px;">
       <audio controls style="width: 48%; transform: scale(0.85); transform-origin: left center;">
         <source src="samples/actions/0_real.wav" type="audio/mpeg">
@@ -148,7 +148,7 @@ For comparison here are some real and generated samples from the latent action m
   </div>
 
   <div style="flex: 1; text-align: center;">
-    <img src="samples/actions/5_wavs.png" alt="Item 2" style="width: 100%; border-radius: 8px; aspect-ratio: 16/9; object-fit:contain; background: #f0f0f0;">
+    <img src="samples/actions/5_wavs.png" alt="Item 2" style="width: auto; max-width: 100%; height: 250px; object-fit: contain; border-radius: 8px;">
     <div style="margin-top: 12px; display: flex; justify-content: space-between; gap: 5px;">
       <audio controls style="width: 48%; transform: scale(0.85); transform-origin: left center;">
         <source src="samples/actions/5_real.wav" type="audio/mpeg">
