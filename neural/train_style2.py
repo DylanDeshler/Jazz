@@ -486,7 +486,6 @@ while True:
     # determine and set the learning rate for this iteration
     lr = get_lr(iter_num) if decay_lr else learning_rate
     alpha = get_alpha(iter_num)
-    print(alpha)
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
     
