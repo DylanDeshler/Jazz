@@ -42,7 +42,7 @@ import matplotlib.pyplot as plt
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
 out_dir = 'Style2_256_adaln_1measures_bpm_S_nobias_poolfirst_norm_nohistory_1head_top5'
-eval_interval = 5000
+eval_interval = 500
 sample_interval = 5000
 log_interval = 100
 save_interval = 5000
@@ -486,6 +486,7 @@ while True:
     # determine and set the learning rate for this iteration
     lr = get_lr(iter_num) if decay_lr else learning_rate
     alpha = get_alpha(iter_num)
+    print(alpha)
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
     
