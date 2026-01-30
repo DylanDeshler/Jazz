@@ -754,7 +754,7 @@ class OldAttention(nn.Module):
     def __init__(self, hidden_size, n_embeddings, k, bias=False):
         super().__init__()
         self.E = nn.Parameter(torch.randn(n_embeddings, hidden_size) / hidden_size ** 0.5)
-        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=1, bias=bias, top_k=k)
+        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=1, bias=bias)#, top_k=k)
         
         self.x_norm = RMSNorm(hidden_size)
         self.style_norm = RMSNorm(hidden_size)
