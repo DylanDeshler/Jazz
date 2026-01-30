@@ -698,7 +698,6 @@ class BasisAttention(nn.Module):
         self.initialize_weights()
     
     def initialize_weights(self):
-        torch.nn.init.normal_(self.E, mean=0.0, std=0.02)
         self.Q.reset_parameters()
         self.K.reset_parameters()
         
@@ -739,10 +738,6 @@ class BasisAttention(nn.Module):
             global_scores,
             torch.tensor(float('-inf'), device=global_scores.device, dtype=global_scores.dtype)
         )
-        
-        # mask = torch.full_like(global_scores, float('-inf'))
-        # mask_indices = global_scores >= cutoff
-        # mask[mask_indices] = global_scores[mask_indices]
         
         dense_weights = F.softmax(global_scores, dim=-1)
         sparse_weights = F.softmax(mask, dim=-1)
