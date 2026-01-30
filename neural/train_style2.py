@@ -428,7 +428,7 @@ def generate_lam_vs_random_actions(step):
         
         T = len(og_wav) / 16000
         t = np.linspace(0, T, len(og_wav), endpoint=False)
-        fig, axes = plt.subplots(2, 3, figsize=(16, 10), layout="constrained")
+        fig, axes = plt.subplots(2, 2, figsize=(16, 10), layout="constrained")
         
         # Real
         axes.ravel()[0].plot(t, og_wav)
@@ -440,11 +440,11 @@ def generate_lam_vs_random_actions(step):
         frequencies, times, Sxx = signal.spectrogram(og_wav, 16000)
         Sxx_log = 10 * np.log10(Sxx + 1e-10)
 
-        pcm = axes.ravel()[3].pcolormesh(times, frequencies, Sxx_log, shading='gouraud', cmap='viridis')
-        axes.ravel()[3].set_title('Real Spectrogram')
-        axes.ravel()[3].set_xlabel('Time [s]')
-        axes.ravel()[3].set_ylabel('Frequency [Hz]')
-        fig.colorbar(pcm, ax=axes.ravel()[3], label='Intensity [dB]')
+        pcm = axes.ravel()[2].pcolormesh(times, frequencies, Sxx_log, shading='gouraud', cmap='viridis')
+        axes.ravel()[2].set_title('Real Spectrogram')
+        axes.ravel()[2].set_xlabel('Time [s]')
+        axes.ravel()[2].set_ylabel('Frequency [Hz]')
+        fig.colorbar(pcm, ax=axes.ravel()[2], label='Intensity [dB]')
         
         # Reconstruction
         axes.ravel()[1].plot(t, recon_wav)
@@ -456,27 +456,11 @@ def generate_lam_vs_random_actions(step):
         frequencies, times, Sxx = signal.spectrogram(recon_wav, 16000)
         Sxx_log = 10 * np.log10(Sxx + 1e-10)
 
-        pcm = axes.ravel()[4].pcolormesh(times, frequencies, Sxx_log, shading='gouraud', cmap='viridis')
-        axes.ravel()[4].set_title('Reconstruction Spectrogram')
-        axes.ravel()[4].set_xlabel('Time [s]')
-        axes.ravel()[4].set_ylabel('Frequency [Hz]')
-        fig.colorbar(pcm, ax=axes.ravel()[4], label='Intensity [dB]')
-        
-        # Random
-        axes.ravel()[2].plot(t, random_wav)
-        axes.ravel()[2].set_title('Random Waveform')
-        axes.ravel()[2].set_xlabel('Time [s]')
-        axes.ravel()[2].set_ylabel('Amplitude')
-        axes.ravel()[2].set_xlim(0, T)
-        
-        frequencies, times, Sxx = signal.spectrogram(random_wav, 16000)
-        Sxx_log = 10 * np.log10(Sxx + 1e-10)
-
-        pcm = axes.ravel()[5].pcolormesh(times, frequencies, Sxx_log, shading='gouraud', cmap='viridis')
-        axes.ravel()[5].set_title('Random Spectrogram')
-        axes.ravel()[5].set_xlabel('Time [s]')
-        axes.ravel()[5].set_ylabel('Frequency [Hz]')
-        fig.colorbar(pcm, ax=axes.ravel()[5], label='Intensity [dB]')
+        pcm = axes.ravel()[3].pcolormesh(times, frequencies, Sxx_log, shading='gouraud', cmap='viridis')
+        axes.ravel()[3].set_title('Reconstruction Spectrogram')
+        axes.ravel()[3].set_xlabel('Time [s]')
+        axes.ravel()[3].set_ylabel('Frequency [Hz]')
+        fig.colorbar(pcm, ax=axes.ravel()[3], label='Intensity [dB]')
 
         plt.savefig(os.path.join(batch_dir, f'{i}_wavs.png'))
         plt.close('all')
