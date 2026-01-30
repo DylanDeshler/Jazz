@@ -521,6 +521,20 @@ class Patcher(torch.nn.Module):
         x = self.block(x)
         return x
 
+class AttentionPool(nn.Module):
+    def __init__(self, hidden_size, num_heads, bias):
+        super().__init__()
+        self.query_token = nn.Parameter(torch.randn(1, 1, hidden_size) / hidden_size ** 0.5)
+        self.attn = nn.MultiheadAttention(hidden_size, num_heads, bias=bias, batch_first=True)
+    
+    def forward(self, x):
+        B = x.shape[0]
+        
+        query = self.query_token.expand(B, -1, -1)
+        out, _ = self.attn(query, x, x)
+        
+        return out.squeeze(1)
+
 class ActionTransformer(nn.Module):
     def __init__(self,
                  in_channels,
@@ -550,6 +564,7 @@ class ActionTransformer(nn.Module):
         self.pool_norm = RMSNorm(hidden_size)
         # GST uses 4 heads for style transfer, doesnt say for manual...
         # Could train manual attention with 1 head and transfer with num_heads
+        self.pre_pool = AttentionPool(hidden_size, num_heads, bias=False)
         self.pool_attn = MultiHeadAttention(hidden_size, num_heads=1, bias=False, top_k=5)
         # self.transfer_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
@@ -615,7 +630,8 @@ class ActionTransformer(nn.Module):
         style_embeddings = self.pool_norm(self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
         
         # loses x signal but interpretable
-        query = torch.mean(x, dim=-2, keepdim=False)
+        # query = torch.mean(x, dim=-2, keepdim=False)
+        query = self.pre_pool(x)
         style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings, return_weights=True)
         
         # better but less interpretable?
@@ -656,7 +672,8 @@ class ActionTransformer(nn.Module):
         style_embeddings = self.pool_norm(self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
         
         # loses x signal but more interpretable
-        query = torch.mean(x, dim=-2, keepdim=False)
+        # query = torch.mean(x, dim=-2, keepdim=False)
+        query = self.pre_pool(x)
         # style = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings).squeeze(1)
         style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings, return_weights=return_weights)
         
