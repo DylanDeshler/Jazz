@@ -734,9 +734,15 @@ class BasisAttention(nn.Module):
         top_k_val, _ = torch.topk(global_scores, k=self.k, dim=-1)
         cutoff = top_k_val[:, -1].unsqueeze(-1)
         
-        mask = torch.full_like(global_scores, float('-inf'))
-        mask_indices = global_scores >= cutoff
-        mask[mask_indices] = global_scores[mask_indices]
+        mask = torch.where(
+            global_scores >= cutoff,
+            global_scores,
+            torch.tensor(float('-inf'), device=global_scores.device, dtype=global_scores.dtype)
+        )
+        
+        # mask = torch.full_like(global_scores, float('-inf'))
+        # mask_indices = global_scores >= cutoff
+        # mask[mask_indices] = global_scores[mask_indices]
         
         dense_weights = F.softmax(global_scores, dim=-1)
         sparse_weights = F.softmax(mask, dim=-1)
