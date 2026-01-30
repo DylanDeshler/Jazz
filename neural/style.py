@@ -726,9 +726,9 @@ class BasisAttention(nn.Module):
         
         scores_per_token = torch.matmul(Q, K.t()) * self.scale
         
-        global_scores, _ = scores_per_token.max(dim=1)
+        # global_scores, _ = scores_per_token.max(dim=1)
         # global_scores = torch.logsumexp(scores_per_token, dim=1)
-        # global_scores = scores_per_token.mean(dim=1)
+        global_scores = scores_per_token.mean(dim=1)
         
         top_k_val, _ = torch.topk(global_scores, k=self.k, dim=-1)
         cutoff = top_k_val[:, -1].unsqueeze(-1)
