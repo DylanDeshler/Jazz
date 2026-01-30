@@ -335,7 +335,7 @@ class MultiHeadAttention(nn.Module):
             if return_weights:
                 return self.dropout_e(self.out(e)), w
         
-        return self.dropout_e(self.out(e))
+        return self.dropout_e(self.out(e)), None
 
 class Attention(nn.Module):
     def __init__(
@@ -658,7 +658,7 @@ class ActionTransformer(nn.Module):
         # loses x signal but more interpretable
         query = torch.mean(x, dim=-2, keepdim=False)
         # style = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings).squeeze(1)
-        style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings, return_weights=return_weights), None
+        style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings, return_weights=return_weights)
         
         # if self.training:
         #     manual_query, transfer_query = torch.mean(x, dim=-2, keepdim=False).chunk(2, dim=0)
