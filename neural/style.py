@@ -721,7 +721,7 @@ class BasisAttention(nn.Module):
         B, L, D = X.shape
         
         X = self.x_norm(X)
-        E = self.style_norm(self.E.unsqueeze(0).repeat(B, 1, 1))
+        E = self.style_norm(self.E.unsqueeze(0).repeat(B, 1, 1)).squeeze(0)
         
         Q = self.Q(X)
         K = self.K(E)
