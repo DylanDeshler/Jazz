@@ -534,7 +534,7 @@ class ActionTransformer(nn.Module):
                  mlp_ratio=4,
                  ):
         super().__init__()
-        self.n_decoder_chunks = n_decoder_chunks
+        self.n_decoder_chunks = n_decoder_chunks * spatial_window
         max_input_size = spatial_window * (n_encoder_chunks + n_decoder_chunks)
         
         self.x_embedder = Patcher(in_channels, hidden_size)
