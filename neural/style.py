@@ -695,7 +695,7 @@ class BasisAttention(nn.Module):
         self.style_norm = RMSNorm(hidden_size)
         self.out_norm = RMSNorm(hidden_size)
         
-        self.initialize_weights()
+        # self.initialize_weights()
     
     def initialize_weights(self):
         self.Q.reset_parameters()
