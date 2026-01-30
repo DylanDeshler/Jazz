@@ -521,7 +521,7 @@ class Patcher(torch.nn.Module):
         x = self.block(x)
         return x
 
-class OldActionTransformer(nn.Module):
+class ActionTransformer(nn.Module):
     def __init__(self,
                  in_channels,
                  hidden_size,
@@ -681,222 +681,6 @@ class OldActionTransformer(nn.Module):
         
         return self.out_norm(style.squeeze(1))
 
-class BasisAttention(nn.Module):
-    def __init__(self, hidden_size, n_embeddings, k, bias=False):
-        super().__init__()
-        self.k = k
-        self.E = nn.Parameter(torch.randn(n_embeddings, hidden_size) / hidden_size ** 0.5)
-        
-        self.Q = nn.Linear(hidden_size, hidden_size, bias=bias)
-        self.K = nn.Linear(hidden_size, hidden_size, bias=bias)
-        self.scale = hidden_size ** -0.5
-        
-        self.x_norm = RMSNorm(hidden_size)
-        self.style_norm = RMSNorm(hidden_size)
-        self.out_norm = RMSNorm(hidden_size)
-        
-        # self.initialize_weights()
-    
-    def initialize_weights(self):
-        self.Q.reset_parameters()
-        self.K.reset_parameters()
-        
-    def get_style_vector(self, weights):
-        """
-        weights: (B, n_style_embeddings)
-        """
-        
-        E = self.style_norm(self.E.unsqueeze(0)).squeeze(0)
-        O = torch.matmul(weights, E)
-        O = self.out_norm(O)
-        
-        return O
-    
-    def forward(self, X, alpha=0):
-        """
-        X: (Batch, Seq, Input_Dim)
-        E: (Seq, Input_Dim)
-        """
-        
-        X = self.x_norm(X)
-        E = self.style_norm(self.E.unsqueeze(0)).squeeze(0)
-        
-        Q = self.Q(X)
-        K = self.K(E)
-        
-        scores_per_token = torch.matmul(Q, K.t()) * self.scale
-        
-        global_scores, _ = scores_per_token.max(dim=1)    # higher utilization but sparse gradients
-        # global_scores = torch.logsumexp(scores_per_token, dim=1)  # somewhere in the middle?
-        # global_scores = scores_per_token.mean(dim=1)    # gradient safe but reduces utilizaiton
-        
-        top_k_val, _ = torch.topk(global_scores, k=self.k, dim=-1)
-        cutoff = top_k_val[:, -1].unsqueeze(-1)
-        
-        mask = torch.where(
-            global_scores >= cutoff,
-            global_scores,
-            torch.tensor(float('-inf'), device=global_scores.device, dtype=global_scores.dtype)
-        )
-        
-        dense_weights = F.softmax(global_scores, dim=-1)
-        sparse_weights = F.softmax(mask, dim=-1)
-        
-        weights = alpha * dense_weights + (1 - alpha) * sparse_weights
-        O = torch.matmul(weights, E)
-        O = self.out_norm(O)
-        
-        # orthogonal loss = ||E * E.t() - I||
-        
-        return O, weights
-
-class OldAttention(nn.Module):
-    def __init__(self, hidden_size, n_embeddings, k, bias=False):
-        super().__init__()
-        self.E = nn.Parameter(torch.randn(n_embeddings, hidden_size) / hidden_size ** 0.5)
-        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=1, bias=bias)#, top_k=k)
-        
-        self.x_norm = RMSNorm(hidden_size)
-        self.style_norm = RMSNorm(hidden_size)
-        self.out_norm = RMSNorm(hidden_size)
-        
-        self.initialize_weights()
-    
-    def initialize_weights(self):
-        self.pool_attn.Q.reset_parameters()
-        self.pool_attn.K.reset_parameters()
-        
-    def get_style_vector(self, weights):
-        """
-        weights: (B, n_style_embeddings)
-        """
-        
-        E = self.style_norm(self.E.unsqueeze(0)).squeeze(0)
-        O = torch.matmul(weights, E)
-        O = self.out_norm(O)
-        
-        return O
-    
-    def forward(self, X, alpha=0):
-        """
-        X: (Batch, Seq, Input_Dim)
-        """
-        
-        B = X.shape[0]
-        
-        X = X[:, -1:]
-        X = self.x_norm(X)
-        style_embeddings = self.style_norm(self.E.unsqueeze(0).repeat(B, 1, 1))
-        
-        query = torch.mean(X, dim=-2, keepdim=False)
-        style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings, return_weights=True)
-        
-        return self.out_norm(style.squeeze(1)), weights
-    
-class ActionTransformer(nn.Module):
-    def __init__(self,
-                 in_channels,
-                 hidden_size,
-                 spatial_window,
-                 n_encoder_chunks,
-                 n_decoder_chunks,
-                 n_style_embeddings,
-                 num_heads=12,
-                 depth=12,
-                 mlp_ratio=4,
-                 ):
-        super().__init__()
-        self.n_decoder_chunks = n_decoder_chunks * spatial_window
-        self.n_style_embeddings = n_style_embeddings
-        max_input_size = spatial_window * (n_encoder_chunks + n_decoder_chunks)
-        
-        self.x_embedder = Patcher(in_channels, hidden_size)
-        self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True, max_period=1000)
-        
-        # Cross-attention with style embeddings could help align representations for pooling... 
-        self.blocks = nn.ModuleList([
-            SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
-        ])
-        
-        self.pooler = OldAttention(hidden_size, n_style_embeddings, 5, bias=False)
-
-        self.initialize_weights()
-        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size, theta=1000))
-    
-    def initialize_weights(self):
-        self.apply(self._init_weights)
-        # zero out c_proj weights in all blocks
-        for block in self.blocks:
-            torch.nn.init.zeros_(block.mlp.w3.weight)
-            torch.nn.init.zeros_(block.attn.proj.weight)
-
-    def _init_weights(self, module):
-        if isinstance(module, nn.Linear):
-            # https://arxiv.org/pdf/2310.17813
-            fan_out = module.weight.size(0)
-            fan_in = module.weight.size(1)
-            std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
-            torch.nn.init.normal_(module.weight, mean=0.0, std=std)
-            if module.bias is not None:
-                torch.nn.init.zeros_(module.bias)
-        elif isinstance(module, nn.Embedding):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
-    
-    @torch.no_grad()
-    def style_entropy(self, x, bpm, alpha=0):
-        B, T, N, C = x.shape
-        
-        x = rearrange(x, 'b t n c -> (b t) c n')
-        x = self.x_embedder(x)
-        x = rearrange(x, '(b t) c n -> b t n c', b=B, t=T)
-        bpm = self.bpm_embedder(bpm.flatten()).view(B, T, 1, -1)
-        
-        x = x + bpm
-        x = rearrange(x, 'b t n c -> b (t n) c')
-        for block in self.blocks:
-            x = block(x, freqs_cis=self.freqs_cis)
-            
-        x = x[:, -self.n_decoder_chunks:]
-        
-        style, weights = self.pooler(x, alpha)
-        
-        weights = weights.squeeze(-2)
-        weights = weights.mean(dim=1)
-        
-        entropy = -torch.sum(weights * torch.log(weights + 1e-6), dim=-1)
-        batch_entropy = -torch.sum(weights.mean(dim=0) * torch.log(weights.mean(dim=0) + 1e-6))
-        
-        indices = torch.argmax(weights, dim=-1)
-        counts = torch.bincount(indices, minlength=self.n_style_embeddings).float()
-        utilization = (counts > 0).sum().item() / self.n_style_embeddings
-        
-        return entropy.mean().item(), batch_entropy.item(), utilization
-    
-    def forward(self, x, bpm, alpha=0, return_weights=False):
-        """
-        x: (B, T, N, C) latents
-        """
-        B, T, N, C = x.shape
-        
-        x = rearrange(x, 'b t n c -> (b t) c n')
-        x = self.x_embedder(x)
-        x = rearrange(x, '(b t) c n -> b t n c', b=B, t=T)
-        bpm = self.bpm_embedder(bpm.flatten()).view(B, T, 1, -1)
-        
-        x = x + bpm
-        x = rearrange(x, 'b t n c -> b (t n) c')
-        for block in self.blocks:
-            x = block(x, freqs_cis=self.freqs_cis)
-            
-        x = x[:, -self.n_decoder_chunks:]
-        
-        style, weights = self.pooler(x, alpha)
-        
-        if return_weights:
-            return style, weights
-        
-        return style
-
 class DiTBlock(nn.Module):
     def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
         super().__init__()
@@ -923,6 +707,23 @@ class DiTBlock(nn.Module):
         x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
         return x
 
+def token_drop(labels, null_token, training, p_uncond):
+    if not training:
+        return labels
+    
+    B = labels.shape[0]
+    device = labels.device
+    
+    batch_rand_shape = (B,) + (1,) * (labels.ndim - 2)
+    batch_rand = torch.rand(batch_rand_shape, device=device)
+    
+    mask_drop_all = batch_rand < p_uncond
+    
+    final_mask = mask_drop_all.unsqueeze(-1)
+    null_token = null_token.to(labels.dtype)
+    
+    return torch.where(final_mask, null_token, labels)
+
 class ModernDiT(nn.Module):
     def __init__(self,
                  in_channels,
@@ -945,6 +746,7 @@ class ModernDiT(nn.Module):
         
         self.fuse_conditioning = SwiGLUMlp(hidden_size * 2, hidden_size * 4, hidden_size, bias=False)
         self.x_embedder = Patcher(in_channels, hidden_size)
+        # self.null_embedding = nn.Parameter(torch.randn(1, in_channels) / in_channels ** 0.5)
         
         self.t_block = nn.Sequential(
             nn.SiLU(),
@@ -988,6 +790,8 @@ class ModernDiT(nn.Module):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
     def forward(self, x, t, bpm, actions, history):
+        # history = token_drop(history, self.null_embedding, self.training, 0.2)
+        
         x = torch.cat([history, x], dim=1)
         B, T, N, C = x.shape
         
@@ -1071,7 +875,7 @@ class IDM(nn.Module):
                                         depth=depth,
                                         mlp_ratio=mlp_ratio)
     
-    def forward(self, x, bpm, alpha=0):
+    def forward(self, x, bpm):
         """
         x: (B, T, N, C) latents
         alpha: (B) noise level for history latents
@@ -1079,7 +883,7 @@ class IDM(nn.Module):
         assert x.ndim == 4
         B, T, N, C = x.shape
         
-        z = self.action_model(x, bpm, alpha)
+        z = self.action_model(x, bpm)
         
         history = x[:, :self.n_encoder_chunks].clone()
         x = x[:, -self.n_decoder_chunks:].clone()
@@ -1087,14 +891,14 @@ class IDM(nn.Module):
         x = self.decoder(x, bpm, z, history)
         return x, z
     
-    def encode_actions(self, x, bpm, return_weights=False):
+    def encode_actions(self, x, bpm, force_manual, force_transfer, return_weights=False):
         """
         x: (B, T, N, C) latents
         alpha: (B) noise level for history latents
         """
         assert x.ndim == 4
         
-        z = self.action_model(x, bpm, return_weights=return_weights)
+        z = self.action_model(x, bpm, force_manual=force_manual, force_transfer=force_transfer, return_weights=return_weights)
         return z
     
     def generate(self, x, bpm, actions, n_steps=50, noise=None):
@@ -1104,7 +908,7 @@ class IDM(nn.Module):
         return self.decoder.sample(x, bpm, actions, history, n_steps=n_steps, noise=noise)
     
     def generate_from_actions(self, x, bpm, weights, n_steps=50, noise=None):
-        actions = self.action_model.pooler.get_style_vector(weights)
+        actions = self.action_model.get_style_vector(weights)
         
         return self.generate(x, bpm, actions, n_steps=n_steps, noise=noise)
     
@@ -1114,7 +918,7 @@ class IDM(nn.Module):
         z = self.action_model(x.clone(), bpm.clone())
         
         recon = self.generate(x, bpm, z,  n_steps=n_steps, noise=noise)
-        random = self.generate(x, bpm, self.action_model.pooler.E.mean(0).unsqueeze(0).repeat(B, 1), n_steps=n_steps, noise=noise)
+        random = self.generate(x, bpm, self.action_model.style_embeddings.mean(0).unsqueeze(0).repeat(B, 1), n_steps=n_steps, noise=noise)
         
         return recon, random
 
