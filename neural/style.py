@@ -784,7 +784,7 @@ class OldAttention(nn.Module):
         
         B = X.shape[0]
         
-        x = x[:, -1:]
+        # X = X[:, -1:]
         X = self.x_norm(X)
         style_embeddings = self.style_norm(self.E.unsqueeze(0).repeat(B, 1, 1))
         
