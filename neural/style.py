@@ -721,12 +721,12 @@ class BasisAttention(nn.Module):
         B, L, D = X.shape
         
         X = self.x_norm(X)
-        E = self.style_norm(self.E.unsqueeze(0).repeat(B, 1, 1)).squeeze(0)
+        E = self.style_norm(self.E.unsqueeze(0)).squeeze(0)
         
         Q = self.Q(X)
         K = self.K(E)
         
-        print(E.shape, Q.shape, K.shape)
+        print(E.shape, X.shape, Q.shape, K.shape)
         scores_per_token = torch.matmul(Q, K.t()) * self.scale
         
         global_scores, _ = scores_per_token.max(dim=1)

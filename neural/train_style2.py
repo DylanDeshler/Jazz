@@ -428,7 +428,7 @@ def generate_lam_vs_random_actions(step):
         
         T = len(og_wav) / 16000
         t = np.linspace(0, T, len(og_wav), endpoint=False)
-        fig, axes = plt.subplots(2, 2, figsize=(16, 10), layout="constrained")
+        fig, axes = plt.subplots(2, 2, figsize=(16, 16), layout="constrained")
         
         # Real
         axes.ravel()[0].plot(t, og_wav)
