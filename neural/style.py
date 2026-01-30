@@ -431,6 +431,20 @@ class SelfAttentionBlock(nn.Module):
         x = x + self.mlp(self.norm2(x))
         return x
 
+class CrossAttentionBlock(nn.Module):
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
+        super().__init__()
+        self.norm1 = RMSNorm(hidden_size)
+        self.attn = CrossAttention(hidden_size, num_heads=num_heads, qkv_bias=False, **block_kwargs)
+        self.norm2 = RMSNorm(hidden_size)
+        self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), bias=False)
+        self.norm3 = RMSNorm(hidden_size)
+    
+    def forward(self, x, context):
+        x = x + self.attn(self.norm1(x), self.norm3(context))
+        x = x + self.mlp(self.norm2(x))
+        return x
+
 class ConvBlock1d(nn.Module):
     def __init__(
         self,
@@ -521,6 +535,84 @@ class Patcher(torch.nn.Module):
         x = self.block(x)
         return x
 
+class CrossAttention(nn.Module):
+    """
+    Multi-head cross-attention module.
+    Query: x
+    Key/Value: context
+    """
+    def __init__(
+            self,
+            dim: int,
+            num_heads: int = 8,
+            qkv_bias: bool = False,
+            proj_bias: bool = True,
+            attn_drop: float = 0.,
+            proj_drop: float = 0.,
+    ) -> None:
+        super().__init__()
+        assert dim % num_heads == 0, 'dim should be divisible by num_heads'
+        self.num_heads = num_heads
+        self.head_dim = dim // num_heads
+        self.scale = self.head_dim ** -0.5
+        self.fused_attn = True
+
+        # Separate linear layers for query (from x) and key/value (from context)
+        self.q = nn.Linear(dim, dim, bias=qkv_bias)
+        self.kv = nn.Linear(dim, dim * 2, bias=qkv_bias)
+
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(dim, dim, bias=proj_bias)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+    def forward(
+            self,
+            x: torch.Tensor,
+            context: torch.Tensor,
+            freqs_cis: Optional[torch.Tensor] = None,
+            attn_mask = None,
+    ) -> torch.Tensor:
+        """
+        x: [B, N, C] query sequence
+        context: [B, M, C] key/value sequence
+        attn_mask: optional [B, N, M] mask
+        """
+        B, N, C = x.shape
+        _, M, _ = context.shape
+
+        # Linear projections
+        q = self.q(x).reshape(B, N, self.num_heads, self.head_dim).permute(0, 2, 1, 3)  # [B, H, N, D]
+        kv = self.kv(context).reshape(B, M, 2, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+        k, v = kv.unbind(0)  # [B, H, M, D]
+        
+        # RoPE
+        if freqs_cis is not None:
+            q = apply_rotary_emb(q.transpose(1, 2), freqs_cis[:q.shape[2]]).transpose(1, 2)
+            k = apply_rotary_emb(k.transpose(1, 2), freqs_cis[:k.shape[2]]).transpose(1, 2)
+
+        if self.fused_attn:
+            # PyTorch 2.1+ scaled_dot_product_attention supports cross-attention
+            x = F.scaled_dot_product_attention(
+                q, k, v,
+                attn_mask=attn_mask,
+                dropout_p=self.attn_drop.p if self.training else 0.,
+            )
+        else:
+            raise NotImplementedError()
+            # fallback: manual attention
+            q = q * self.scale
+            attn = q @ k.transpose(-2, -1)  # [B, H, N, M]
+            if attn_mask is not None:
+                attn = attn.masked_fill(attn_mask.bool(), float('-inf'))
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x = attn @ v  # [B, H, N, D]
+
+        x = x.transpose(1, 2).reshape(B, N, C)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        return x
+
 class AttentionPool(nn.Module):
     def __init__(self, hidden_size, num_heads, bias):
         super().__init__()
@@ -558,15 +650,18 @@ class ActionTransformer(nn.Module):
         self.blocks = nn.ModuleList([
             SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
-        
-        # Cross-attention with style embeddings could help align representations for pooling... 
+        # Cross-attention with style embeddings could help align representations for pooling...
+        self.query_token = nn.Parameter(torch.randn(1, 1, hidden_size) / hidden_size ** 0.5)
+        self.cross_blocks = nn.ModuleList([
+            CrossAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) if (i + 1) % 4 == 0 else nn.Idenity() for i in range(depth)
+        ])
         
         self.norm = RMSNorm(hidden_size)
         self.pool_norm = RMSNorm(hidden_size)
         # GST uses 4 heads for style transfer, doesnt say for manual...
         # Could train manual attention with 1 head and transfer with num_heads
         # self.pre_pool = AttentionPool(hidden_size, num_heads, bias=False)
-        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=1, bias=False, top_k=5)
+        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=1, bias=False)#, top_k=5)
         # self.transfer_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         self.out_norm = RMSNorm(hidden_size)
@@ -622,16 +717,19 @@ class ActionTransformer(nn.Module):
         
         x = x + bpm
         x = rearrange(x, 'b t n c -> b (t n) c')
-        for block in self.blocks:
+        query = self.query_token.expand(B, -1, -1)
+        for block, cross_block in zip(self.blocks, self.cross_blocks):
             x = block(x, freqs_cis=self.freqs_cis)
+            query = cross_block(query, x)
             
         x = x[:, -self.n_decoder_chunks:]
         
-        x = self.norm(x)
+        # x = self.norm(x)
+        query = self.norm(query)
         style_embeddings = self.pool_norm(self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
         
         # loses x signal but interpretable
-        query = torch.mean(x, dim=-2, keepdim=False)
+        # query = torch.mean(x, dim=-2, keepdim=False)
         # query = self.pre_pool(x)
         style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings, return_weights=True)
         
@@ -664,12 +762,15 @@ class ActionTransformer(nn.Module):
         
         x = x + bpm
         x = rearrange(x, 'b t n c -> b (t n) c')
-        for block in self.blocks:
+        query = self.query_token.expand(B, -1, -1)
+        for block, cross_block in zip(self.blocks, self.cross_blocks):
             x = block(x, freqs_cis=self.freqs_cis)
+            query = cross_block(query, x)
             
         x = x[:, -self.n_decoder_chunks:]
         
-        x = self.norm(x)
+        # x = self.norm(x)
+        query = self.norm(query)
         style_embeddings = self.pool_norm(self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
         
         # loses x signal but more interpretable
