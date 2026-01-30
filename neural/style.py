@@ -698,7 +698,7 @@ class BasisAttention(nn.Module):
         self.initialize_weights()
     
     def initialize_weights(self):
-        torch.nn.init.normal_(self.E.weight, mean=0.0, std=0.02)
+        torch.nn.init.normal_(self.E, mean=0.0, std=0.02)
         self.Q.reset_parameters()
         self.K.reset_parameters()
         
