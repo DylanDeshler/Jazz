@@ -497,8 +497,8 @@ while True:
         aentropy, abatch_entropy, ausage = estimate_style_entropy(alpha=alpha)
         losses = estimate_loss()
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-        print(f"iter {iter_num} [ALPHA = 0]: train entropy {entropy['train']:.6f}, val entropy {entropy['val']:.6f}, train usage {usage['train']:.6f}, val usage {usage['val']:.6f}, train batch entropy {batch_entropy['train']:.6f}, val batch entropy {batch_entropy['val']:.6f}")
-        print(f"iter {iter_num} [ALPHA = {alpha:.2f}]: train entropy {aentropy['train']:.6f}, val entropy {aentropy['val']:.6f}, train usage {ausage['train']:.6f}, val usage {ausage['val']:.6f}, train batch entropy {abatch_entropy['train']:.6f}, val batch entropy {abatch_entropy['val']:.6f}")
+        print(f"iter {iter_num} [ALPHA = 0]: train entropy {entropy['train']:.3f}, val entropy {entropy['val']:.3f}, train usage {usage['train']:.3f}, val usage {usage['val']:.3f}, train batch entropy {batch_entropy['train']:.3f}, val batch entropy {batch_entropy['val']:.3f}")
+        print(f"iter {iter_num} [ALPHA = {alpha:.2f}]: train entropy {aentropy['train']:.3f}, val entropy {aentropy['val']:.3f}, train usage {ausage['train']:.3f}, val usage {ausage['val']:.3f}, train batch entropy {abatch_entropy['train']:.3f}, val batch entropy {abatch_entropy['val']:.3f}")
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
             with ctx:

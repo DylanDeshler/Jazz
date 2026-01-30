@@ -719,6 +719,7 @@ class BasisAttention(nn.Module):
         """
         
         X = self.x_norm(X)
+        X = torch.mean(X, dim=-2, keepdim=False)
         E = self.style_norm(self.E.unsqueeze(0)).squeeze(0)
         
         Q = self.Q(X)
@@ -726,7 +727,8 @@ class BasisAttention(nn.Module):
         
         scores_per_token = torch.matmul(Q, K.t()) * self.scale
         
-        global_scores, _ = scores_per_token.max(dim=1)    # higher utilization but sparse gradients
+        global_scores = scores_per_token
+        # global_scores, _ = scores_per_token.max(dim=1)    # higher utilization but sparse gradients
         # global_scores = torch.logsumexp(scores_per_token, dim=1)  # somewhere in the middle?
         # global_scores = scores_per_token.mean(dim=1)    # gradient safe but reduces utilizaiton
         
@@ -743,7 +745,6 @@ class BasisAttention(nn.Module):
         sparse_weights = F.softmax(mask, dim=-1)
         
         weights = alpha * dense_weights + (1 - alpha) * sparse_weights
-        weights = dense_weights
         O = torch.matmul(weights, E)
         O = self.out_norm(O)
         
