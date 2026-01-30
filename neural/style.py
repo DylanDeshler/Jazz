@@ -1056,5 +1056,8 @@ def IDM_L(**kwargs):
 def IDM_M(**kwargs):
     return IDM(depth=24, hidden_size=1024, num_heads=16, **kwargs)
 
+def IDM_B(**kwargs):
+    return IDM(depth=20, hidden_size=1024, num_heads=16, **kwargs)
+
 def IDM_S(**kwargs):
     return IDM(depth=16, hidden_size=768, num_heads=12, **kwargs)
