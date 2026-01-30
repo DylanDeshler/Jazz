@@ -817,6 +817,7 @@ class ActionTransformer(nn.Module):
         print(weights.shape)
         weights = weights.squeeze(-2)
         weights = weights.mean(dim=1)
+        print(weights.shape)
         
         entropy = -torch.sum(weights * torch.log(weights + 1e-6), dim=-1)
         batch_entropy = -torch.sum(weights.mean(dim=0) * torch.log(weights.mean(dim=0) + 1e-6))
