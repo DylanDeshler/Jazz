@@ -814,15 +814,14 @@ class ActionTransformer(nn.Module):
         
         style, weights = self.pooler(x, alpha)
         
-        print(weights.shape)
         weights = weights.squeeze(-2)
         weights = weights.mean(dim=1)
-        print(weights.shape)
         
         entropy = -torch.sum(weights * torch.log(weights + 1e-6), dim=-1)
         batch_entropy = -torch.sum(weights.mean(dim=0) * torch.log(weights.mean(dim=0) + 1e-6))
         
         indices = torch.argmax(weights, dim=-1)
+        print(indices.shape)
         counts = torch.bincount(indices, minlength=self.n_style_embeddings).float()
         utilization = (counts > 0).sum().item() / self.n_style_embeddings
         
