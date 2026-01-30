@@ -1051,13 +1051,10 @@ class IDM(nn.Module):
         return recon, random
 
 def IDM_L(**kwargs):
-    return IDM(depth=24, hidden_size=1024, num_heads=16, **kwargs)
+    return IDM(depth=28, hidden_size=1152, num_heads=16, **kwargs)
 
 def IDM_M(**kwargs):
-    return IDM(depth=12, hidden_size=1024, num_heads=16, **kwargs)
+    return IDM(depth=24, hidden_size=1024, num_heads=16, **kwargs)
 
 def IDM_S(**kwargs):
     return IDM(depth=16, hidden_size=768, num_heads=12, **kwargs)
-
-def IDM_B(**kwargs):
-    return IDM(depth=12, hidden_size=768, num_heads=12, **kwargs)
