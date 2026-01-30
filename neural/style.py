@@ -653,7 +653,7 @@ class ActionTransformer(nn.Module):
         # Cross-attention with style embeddings could help align representations for pooling...
         self.query_token = nn.Parameter(torch.randn(1, 1, hidden_size) / hidden_size ** 0.5)
         self.cross_blocks = nn.ModuleList([
-            CrossAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) if (i + 1) % 4 == 0 else nn.Idenity() for i in range(depth)
+            CrossAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) if (i + 1) % 4 == 0 else nn.Identity() for i in range(depth)
         ])
         
         self.norm = RMSNorm(hidden_size)
