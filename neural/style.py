@@ -531,7 +531,7 @@ class AttentionPool(nn.Module):
         B = x.shape[0]
         
         # query = self.query_token.expand(B, -1, -1)
-        query = torch.mean(x, dim=-2, keepdim=False)
+        query = torch.mean(x, dim=-2, keepdim=True)
         out, _ = self.attn(query, x, x)
         
         return out.squeeze(1)
