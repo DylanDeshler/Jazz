@@ -718,7 +718,6 @@ class BasisAttention(nn.Module):
         X: (Batch, Seq, Input_Dim)
         E: (Seq, Input_Dim)
         """
-        B, L, D = X.shape
         
         X = self.x_norm(X)
         E = self.style_norm(self.E.unsqueeze(0)).squeeze(0)
@@ -762,7 +761,7 @@ class ActionTransformer(nn.Module):
                  mlp_ratio=4,
                  ):
         super().__init__()
-        self.n_decoder_chunks = n_decoder_chunks
+        self.n_decoder_chunks = n_decoder_chunks * spatial_window
         self.n_style_embeddings = n_style_embeddings
         max_input_size = spatial_window * (n_encoder_chunks + n_decoder_chunks)
         
