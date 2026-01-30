@@ -524,13 +524,14 @@ class Patcher(torch.nn.Module):
 class AttentionPool(nn.Module):
     def __init__(self, hidden_size, num_heads, bias):
         super().__init__()
-        self.query_token = nn.Parameter(torch.randn(1, 1, hidden_size) / hidden_size ** 0.5)
+        # self.query_token = nn.Parameter(torch.randn(1, 1, hidden_size) / hidden_size ** 0.5)
         self.attn = nn.MultiheadAttention(hidden_size, num_heads, bias=bias, batch_first=True)
     
     def forward(self, x):
         B = x.shape[0]
         
-        query = self.query_token.expand(B, -1, -1)
+        # query = self.query_token.expand(B, -1, -1)
+        query = torch.mean(x, dim=-2, keepdim=False)
         out, _ = self.attn(query, x, x)
         
         return out.squeeze(1)
