@@ -784,6 +784,7 @@ class OldAttention(nn.Module):
         
         B = X.shape[0]
         
+        x = x[:, -1:]
         X = self.x_norm(X)
         style_embeddings = self.style_norm(self.E.unsqueeze(0).repeat(B, 1, 1))
         
@@ -858,6 +859,9 @@ class ActionTransformer(nn.Module):
         x = x[:, -self.n_decoder_chunks:]
         
         style, weights = self.pooler(x, alpha)
+        
+        weights = weights.squeeze(-2)
+        weights = weights.mean(dim=1)
         
         entropy = -torch.sum(weights * torch.log(weights + 1e-6), dim=-1)
         batch_entropy = -torch.sum(weights.mean(dim=0) * torch.log(weights.mean(dim=0) + 1e-6))
