@@ -46,7 +46,7 @@ eval_interval = 500
 sample_interval = 5000
 log_interval = 100
 save_interval = 5000
-eval_iters = 400
+eval_iters = 100
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
@@ -228,7 +228,7 @@ def estimate_loss():
     return out
 
 @torch.no_grad()
-def estimate_style_entropy():
+def estimate_style_entropy(alpha):
     out1, out2, out3 = {}, {}, {}
     model.eval()
     for i, split in enumerate(['train', 'val']):
@@ -238,7 +238,7 @@ def estimate_style_entropy():
         for k in tqdm(range(eval_iters)):
             X, ratio, bpm = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
-                entropy, batch_entropy, usage = model.action_model.style_entropy(X, bpm)
+                entropy, batch_entropy, usage = model.action_model.style_entropy(X, bpm, alpha)
             entropies[k] = entropy
             batch_entropies[k] = batch_entropy
             usages[k] = usage
@@ -493,10 +493,12 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        entropy, batch_entropy, usage = estimate_style_entropy()
+        entropy, batch_entropy, usage = estimate_style_entropy(alpha=0)
+        aentropy, abatch_entropy, ausage = estimate_style_entropy(alpha=alpha)
         losses = estimate_loss()
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-        print(f"iter {iter_num}: train entropy {entropy['train']:.6f}, val entropy {entropy['val']:.6f}, train usage {usage['train']:.6f}, val usage {usage['val']:.6f}, train batch entropy {batch_entropy['train']:.6f}, val batch entropy {batch_entropy['val']:.6f}")
+        print(f"iter {iter_num} [ALPHA = 0]: train entropy {entropy['train']:.6f}, val entropy {entropy['val']:.6f}, train usage {usage['train']:.6f}, val usage {usage['val']:.6f}, train batch entropy {batch_entropy['train']:.6f}, val batch entropy {batch_entropy['val']:.6f}")
+        print(f"iter {iter_num} [ALPHA = {alpha:.2f}]: train entropy {aentropy['train']:.6f}, val entropy {aentropy['val']:.6f}, train usage {ausage['train']:.6f}, val usage {ausage['val']:.6f}, train batch entropy {abatch_entropy['train']:.6f}, val batch entropy {abatch_entropy['val']:.6f}")
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
             with ctx:
