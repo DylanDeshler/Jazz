@@ -424,7 +424,6 @@ def generate_lam_vs_random_actions(step):
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), og_wav, 16000)
         sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), recon_wav, 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_random_actions.wav'), random_wav, 16000)
         
         T = len(og_wav) / 16000
         t = np.linspace(0, T, len(og_wav), endpoint=False)

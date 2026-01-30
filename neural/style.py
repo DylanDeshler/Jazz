@@ -1065,7 +1065,7 @@ class IDM(nn.Module):
         z = self.action_model(x.clone(), bpm.clone())
         
         recon = self.generate(x, bpm, z,  n_steps=n_steps, noise=noise)
-        random = self.generate(x, bpm, self.action_model.style_embeddings.mean(0).unsqueeze(0).repeat(B, 1), n_steps=n_steps, noise=noise)
+        random = self.generate(x, bpm, self.action_model.pooler.E.mean(0).unsqueeze(0).repeat(B, 1), n_steps=n_steps, noise=noise)
         
         return recon, random
 
