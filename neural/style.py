@@ -725,7 +725,6 @@ class BasisAttention(nn.Module):
         Q = self.Q(X)
         K = self.K(E)
         
-        print(E.shape, X.shape, Q.shape, K.shape)
         scores_per_token = torch.matmul(Q, K.t()) * self.scale
         
         global_scores, _ = scores_per_token.max(dim=1)
@@ -815,6 +814,7 @@ class ActionTransformer(nn.Module):
         
         style, weights = self.pooler(x, alpha)
         
+        print(weights.shape)
         weights = weights.squeeze(-2)
         weights = weights.mean(dim=1)
         
