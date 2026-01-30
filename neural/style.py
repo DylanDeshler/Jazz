@@ -675,7 +675,8 @@ class ActionTransformer(nn.Module):
         # better but less interpretable?
         style, weights = self.pool_attn(query=x, key=style_embeddings, value=style_embeddings, return_weights=return_weights)
         style = torch.mean(style, dim=-2, keepdim=False)
-        weights = torch.mean(weights, dim=-1, keepdim=False)
+        if weights is not None:
+            weights = torch.mean(weights, dim=-1, keepdim=False)
         
         if return_weights:
             return self.out_norm(style.squeeze(1)), weights
