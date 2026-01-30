@@ -719,7 +719,6 @@ class BasisAttention(nn.Module):
         """
         
         X = self.x_norm(X)
-        X = torch.mean(X, dim=-2, keepdim=False)
         E = self.style_norm(self.E.unsqueeze(0)).squeeze(0)
         
         Q = self.Q(X)
@@ -727,8 +726,7 @@ class BasisAttention(nn.Module):
         
         scores_per_token = torch.matmul(Q, K.t()) * self.scale
         
-        global_scores = scores_per_token
-        # global_scores, _ = scores_per_token.max(dim=1)    # higher utilization but sparse gradients
+        global_scores, _ = scores_per_token.max(dim=1)    # higher utilization but sparse gradients
         # global_scores = torch.logsumexp(scores_per_token, dim=1)  # somewhere in the middle?
         # global_scores = scores_per_token.mean(dim=1)    # gradient safe but reduces utilizaiton
         
@@ -751,6 +749,48 @@ class BasisAttention(nn.Module):
         # orthogonal loss = ||E * E.t() - I||
         
         return O, weights
+
+class OldAttention(nn.Module):
+    def __init__(self, hidden_size, n_embeddings, k, bias=False):
+        super().__init__()
+        self.E = nn.Parameter(torch.randn(n_embeddings, hidden_size) / hidden_size ** 0.5)
+        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=1, bias=bias, top_k=k)
+        
+        self.x_norm = RMSNorm(hidden_size)
+        self.style_norm = RMSNorm(hidden_size)
+        self.out_norm = RMSNorm(hidden_size)
+        
+        self.initialize_weights()
+    
+    def initialize_weights(self):
+        self.pool_attn.Q.reset_parameters()
+        self.pool_attn.K.reset_parameters()
+        
+    def get_style_vector(self, weights):
+        """
+        weights: (B, n_style_embeddings)
+        """
+        
+        E = self.style_norm(self.E.unsqueeze(0)).squeeze(0)
+        O = torch.matmul(weights, E)
+        O = self.out_norm(O)
+        
+        return O
+    
+    def forward(self, X, alpha=0):
+        """
+        X: (Batch, Seq, Input_Dim)
+        """
+        
+        B = X.shape[0]
+        
+        X = self.x_norm(X)
+        style_embeddings = self.style_norm(self.E.unsqueeze(0).repeat(B, 1, 1))
+        
+        query = torch.mean(X, dim=-2, keepdim=False)
+        style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings, return_weights=True)
+        
+        return self.out_norm(style.squeeze(1)), weights
     
 class ActionTransformer(nn.Module):
     def __init__(self,
@@ -777,7 +817,7 @@ class ActionTransformer(nn.Module):
             SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
         
-        self.pooler = BasisAttention(hidden_size, n_style_embeddings, 5, bias=False)
+        self.pooler = OldAttention(hidden_size, n_style_embeddings, 5, bias=False)
 
         self.initialize_weights()
         self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size, theta=1000))
