@@ -76,7 +76,7 @@ beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
 decay_lr = False # whether to decay the learning rate
-warmup_iters = 15000 # how many steps to warm up for
+warmup_iters = 5000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
@@ -417,7 +417,7 @@ def generate_lam_vs_random_actions(step):
         
         T = len(og_wav) / 16000
         t = np.linspace(0, T, len(og_wav), endpoint=False)
-        fig, axes = plt.subplots(2, 3, figsize=(16, 10), layout="constrained")
+        fig, axes = plt.subplots(2, 2, figsize=(16, 16), layout="constrained")
         
         # Real
         axes.ravel()[0].plot(t, og_wav)
