@@ -712,7 +712,7 @@ class BasisAttention(nn.Module):
         
         return O
     
-    def forward(self, X, alpha=1):
+    def forward(self, X, alpha=0):
         """
         X: (Batch, Seq, Input_Dim)
         E: (Seq, Input_Dim)
@@ -742,7 +742,8 @@ class BasisAttention(nn.Module):
         dense_weights = F.softmax(global_scores, dim=-1)
         sparse_weights = F.softmax(mask, dim=-1)
         
-        weights = alpha * dense_weights + (1 - alpha) * sparse_weights
+        # weights = alpha * dense_weights + (1 - alpha) * sparse_weights
+        weights = dense_weights
         O = torch.matmul(weights, E)
         O = self.out_norm(O)
         
@@ -800,7 +801,7 @@ class ActionTransformer(nn.Module):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
     @torch.no_grad()
-    def style_entropy(self, x, bpm, alpha=1):
+    def style_entropy(self, x, bpm, alpha=0):
         B, T, N, C = x.shape
         
         x = rearrange(x, 'b t n c -> (b t) c n')
@@ -826,7 +827,7 @@ class ActionTransformer(nn.Module):
         
         return entropy.mean().item(), batch_entropy.item(), utilization
     
-    def forward(self, x, bpm, alpha=1, return_weights=False):
+    def forward(self, x, bpm, alpha=0, return_weights=False):
         """
         x: (B, T, N, C) latents
         """
@@ -1025,7 +1026,7 @@ class IDM(nn.Module):
                                         depth=depth,
                                         mlp_ratio=mlp_ratio)
     
-    def forward(self, x, bpm, alpha=1):
+    def forward(self, x, bpm, alpha=0):
         """
         x: (B, T, N, C) latents
         alpha: (B) noise level for history latents
