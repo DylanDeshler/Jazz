@@ -14,7 +14,7 @@ print('Normalizing...')
 X = normalize(X, norm='l2', axis=1)
 
 print('Fitting')
-kmeans = KMeans(n_clusters=256, n_init=100, max_iter=1000, verbose=2)
+kmeans = KMeans(n_clusters=256, n_init=100, max_iter=1000, verbose=2, n_jobs=-1)
 kmeans.fit(X)
 
 print('Renormalizing...')
