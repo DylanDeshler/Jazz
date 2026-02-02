@@ -635,6 +635,135 @@ class TupleIdentity(nn.Module):
     def forward(self, x, context):
         return x
 
+class StraightThroughTopK(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, scores, k):
+        # 1. Calculate Softmax (standard)
+        soft_weights = F.softmax(scores, dim=-1)
+        
+        # 2. Identify the Top K indices
+        # We keep the values of the top k, zero out the rest
+        topk_vals, topk_indices = torch.topk(soft_weights, k, dim=-1)
+        
+        # 3. Create a mask for "Keep these, kill those"
+        hard_weights = torch.zeros_like(soft_weights)
+        hard_weights.scatter_(-1, topk_indices, topk_vals)
+        
+        # 4. Renormalize so the top K sum to 1.0 (Optional but recommended)
+        hard_weights = hard_weights / (hard_weights.sum(dim=-1, keepdim=True) + 1e-9)
+        
+        # Save input for backward (we need the soft_weights gradients)
+        ctx.save_for_backward(soft_weights)
+        
+        return hard_weights
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        # MAGIC STEP: We pretend we just used Softmax during the backward pass.
+        # This allows gradients to flow to ALL 256 items, teaching the model
+        # which ones it SHOULD have put in the Top K.
+        soft_weights, = ctx.saved_tensors
+        
+        # Gradient of softmax (simplified proxy)
+        # In practice, passing grad_output directly often works for STE logic
+        return grad_output, None
+
+class MultiHeadAttention(nn.Module):
+    def __init__(self, dim_hidden, num_heads, dropout_w=0, dropout_e=0, bias=False, flash=True, top_k=None, **kwargs):
+        super().__init__()
+        self.Q = nn.Linear(dim_hidden, dim_hidden, bias)
+        self.K = nn.Linear(dim_hidden, dim_hidden, bias)
+        self.V = nn.Identity()#nn.Linear(dim_hidden, dim_hidden, bias)
+        self.out = nn.Identity()#nn.Linear(dim_hidden, dim_hidden, bias)
+        self.dropout_w = nn.Dropout(dropout_w)
+        self.dropout_e = nn.Dropout(dropout_e)
+        self.num_heads = num_heads
+        self.dim_hidden = dim_hidden
+        self.dim_attn = dim_hidden // num_heads
+        self.scale = self.dim_attn ** -0.5
+        self.top_k = top_k
+        self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention') and (flash and not top_k)
+
+    def forward(self, query, key, value, mask=None, return_weights=False):
+
+        ## PROJECT INPUTS
+        q = self.Q(query)
+        k = self.K(key)
+        v = self.V(value)
+
+        ## SPLIT ATTENTION HEADS
+        b = query.size(0) # Assume [batch, seq_len, hidden]
+        q = q.view(b, -1, self.num_heads, self.dim_attn).transpose(1, 2)
+        k = k.view(b, -1, self.num_heads, self.dim_attn).transpose(1, 2)
+        v = v.view(b, -1, self.num_heads, self.dim_attn).transpose(1, 2)
+
+        ## COMPUTE ATTENTION
+        if self.flash and not return_weights:
+            e = F.scaled_dot_product_attention(
+                q, k, v, 
+                attn_mask=mask, 
+                dropout_p=self.dropout_w.p if self.training else 0, 
+                is_causal=False,
+                scale=self.scale,
+            )
+            e = e.transpose(1, 2).contiguous().view_as(query) 
+            
+        else:
+            dot_product = torch.einsum("bhqa,bhka->bhqk", (q, k)) * self.scale
+            if mask is not None:
+                dot_product = dot_product.masked_fill_(mask.logical_not(), float("-inf"))
+            if self.top_k:
+                w = top_k_softmax(dot_product, self.top_k)
+            else:
+                w = torch.softmax(dot_product, dim=-1)
+            w = self.dropout_w(w)
+            e = torch.einsum("bhqv,bhva->bhqa", (w, v)).transpose(1, 2).contiguous().view_as(query) 
+            
+            if return_weights:
+                return self.dropout_e(self.out(e)), w
+        
+        return self.dropout_e(self.out(e)), None
+
+class TopKAttention(nn.Module):
+    def __init__(self, k, dim_hidden, num_heads, dropout_w=0, dropout_e=0, bias=False, flash=True, top_k=None, **kwargs):
+        super().__init__()
+        self.k = k
+        self.Q = nn.Linear(dim_hidden, dim_hidden, bias)
+        self.K = nn.Linear(dim_hidden, dim_hidden, bias)
+        self.V = nn.Identity()#nn.Linear(dim_hidden, dim_hidden, bias)
+        self.out = nn.Identity()#nn.Linear(dim_hidden, dim_hidden, bias)
+        self.dropout_w = nn.Dropout(dropout_w)
+        self.dropout_e = nn.Dropout(dropout_e)
+        self.num_heads = num_heads
+        self.dim_hidden = dim_hidden
+        self.dim_attn = dim_hidden // num_heads
+        self.scale = self.dim_attn ** -0.5
+        
+    def forward(self, query, key, value, mask=None, return_weights=False):
+        ## PROJECT INPUTS
+        q = self.Q(query)
+        k = self.K(key)
+        v = self.V(value)
+
+        ## SPLIT ATTENTION HEADS
+        b = query.size(0) # Assume [batch, seq_len, hidden]
+        q = q.view(b, -1, self.num_heads, self.dim_attn).transpose(1, 2)
+        k = k.view(b, -1, self.num_heads, self.dim_attn).transpose(1, 2)
+        v = v.view(b, -1, self.num_heads, self.dim_attn).transpose(1, 2)
+
+        ## COMPUTE ATTENTION
+        dot_product = torch.einsum("bhqa,bhka->bhqk", (q, k)) * self.scale
+        if mask is not None:
+            dot_product = dot_product.masked_fill_(mask.logical_not(), float("-inf"))
+        w = StraightThroughTopK.apply(dot_product, self.k)
+        w = self.dropout_w(w)
+        e = torch.einsum("bhqv,bhva->bhqa", (w, v)).transpose(1, 2).contiguous().view_as(query) 
+        
+        if return_weights:
+            return self.dropout_e(self.out(e)), w
+        
+        return self.dropout_e(self.out(e)), None
+
 class ActionTransformer(nn.Module):
     def __init__(self,
                  in_channels,
@@ -668,7 +797,8 @@ class ActionTransformer(nn.Module):
         # GST uses 4 heads for style transfer, doesnt say for manual...
         # Could train manual attention with 1 head and transfer with num_heads
         # self.pre_pool = AttentionPool(hidden_size, num_heads, bias=False)
-        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=1, bias=False, top_k=5)
+        self.pool_attn = TopKAttention(5, hidden_size, 1, bias=False)
+        # self.pool_attn = MultiHeadAttention(hidden_size, num_heads=1, bias=False, top_k=5)
         # self.transfer_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         self.out_norm = RMSNorm(hidden_size)
@@ -781,7 +911,7 @@ class ActionTransformer(nn.Module):
         style_embeddings = self.pool_norm(self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
         
         # loses x signal but more interpretable
-        query = torch.mean(x, dim=-2, keepdim=False)
+        # query = torch.mean(x, dim=-2, keepdim=False)
         # query = self.pre_pool(x)
         # style = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings).squeeze(1)
         style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings, return_weights=return_weights)
