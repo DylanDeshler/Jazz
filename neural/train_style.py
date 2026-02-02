@@ -317,7 +317,8 @@ def generate_lam_actions(step):
     
     B, T, N, D = x.shape
     
-    action_weights = torch.nn.functional.one_hot(torch.randint(n_style_embeddings, size=(n_samples,)), n_style_embeddings).float().pin_memory().to(device, non_blocking=True)
+    action_idxs = torch.randint(n_style_embeddings, size=(n_samples,))
+    action_weights = torch.nn.functional.one_hot(action_idxs, n_style_embeddings).float().pin_memory().to(device, non_blocking=True)
     
     with ctx:
         noise = torch.randn(x[:, -n_decoder_chunks:].shape, device=x.device)
@@ -342,7 +343,7 @@ def generate_lam_actions(step):
             recon_wav = np.concatenate([base, recon_wav])
         
         sf.write(os.path.join(batch_dir, f'real.wav'), og_wav, 16000)
-        sf.write(os.path.join(batch_dir, f'{i}.wav'), recon_wav, 16000)
+        sf.write(os.path.join(batch_dir, f'{action_idxs.tolist()[i]}.wav'), recon_wav, 16000)
         
         if i == 0:
             wavs.append(og_wav)
