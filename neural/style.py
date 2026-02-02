@@ -797,7 +797,7 @@ class ActionTransformer(nn.Module):
         # GST uses 4 heads for style transfer, doesnt say for manual...
         # Could train manual attention with 1 head and transfer with num_heads
         # self.pre_pool = AttentionPool(hidden_size, num_heads, bias=False)
-        self.pool_attn = TopKAttention(5, hidden_size, 1, bias=False)
+        self.pool_attn = TopKAttention(n_style_embeddings, hidden_size, 1, bias=False)
         # self.pool_attn = MultiHeadAttention(hidden_size, num_heads=1, bias=False, top_k=5)
         # self.transfer_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)

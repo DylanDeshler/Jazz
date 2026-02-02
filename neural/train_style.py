@@ -163,6 +163,11 @@ if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
     model = net(**model_args)
+    
+    with open('/home/ubuntu/Data/low_measures_large_clusters.npy', 'r') as f:
+        style_bank = np.load(f)
+    model.action_model.style_embeddings = style_bank
+    
     tokens_trained = 0
 elif init_from == 'resume':
     print(f"Resuming training from {out_dir}")
