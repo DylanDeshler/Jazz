@@ -42,10 +42,10 @@ import matplotlib.pyplot as plt
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
 out_dir = 'Style_fix_256_adaln_1measures_bpm_S_nobias_poolfirst_norm_nohistory_1head_top5'
-eval_interval = 5000
-sample_interval = 5000
+eval_interval = 2000
+sample_interval = 2000
 log_interval = 100
-save_interval = 5000
+save_interval = 2000
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
