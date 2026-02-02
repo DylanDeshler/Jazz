@@ -756,7 +756,7 @@ class ActionTransformer(nn.Module):
         
         return entropy.mean().item(), batch_entropy.item(), utilization
     
-    def forward(self, x, bpm, force_manual=False, force_transfer=False, return_weights=False):
+    def forward(self, x, bpm, alpha=0, force_manual=False, force_transfer=False, return_weights=False):
         """
         x: (B, T, N, C) latents
         """
