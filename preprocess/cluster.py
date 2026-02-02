@@ -14,7 +14,7 @@ X = X.mean(1)
 # X = np.concatenate([X.mean(1), X.std(1)], -1)
 
 print('Normalizing...')
-X = normalize(X, norm='l2', axis=-1)
+X = normalize(X, norm='l2', axis=1)
 
 print('Fitting')
 np.random.seed(0)
@@ -23,7 +23,7 @@ kmeans.fit(X)
 
 print('Renormalizing...')
 centroids = kmeans.cluster_centers_
-style_bank = normalize(centroids, norm='l2', axis=-1)
+style_bank = normalize(centroids, norm='l2', axis=1)
 
 print('Writing...')
 with open('/home/ubuntu/Data/low_measures_large_clusters.npy', 'w+') as f:
