@@ -49,7 +49,7 @@ save_interval = 5000
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir
@@ -389,6 +389,11 @@ def generate_lam_vs_random_actions(step):
     model.eval()
     x, ratio, bpm = get_batch('val')
     x, ratio, bpm = x[:20], ratio[:20], bpm[:20]
+    
+    # duplicate for eye-balling overfitting
+    x = torch.cat([x, x[[-1]], x[[-1]], x[[-1]]], 0)
+    ratio = torch.cat([ratio, ratio[[-1]], ratio[[-1]], ratio[[-1]]], 0)
+    bpm = torch.cat([bpm, bpm[[-1]], bpm[[-1]], bpm[[-1]]], 0)
 
     B, T, N, D = x.shape
 
@@ -404,7 +409,7 @@ def generate_lam_vs_random_actions(step):
     recon = recon.cpu().detach().float().numpy().squeeze(-2)
     random_recon = random_recon.cpu().detach().float().numpy().squeeze(-2)
     
-    for i in range(20):
+    for i in range(B):
         og, y, random_y, r = x[i], recon[i], random_recon[i], ratio[i].cpu().detach().numpy()
         tail_r = r[-n_decoder_chunks:]
         
