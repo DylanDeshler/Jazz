@@ -731,7 +731,7 @@ class ActionTransformer(nn.Module):
             SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
         # Cross-attention with style embeddings could help align representations for pooling...
-        # self.query_token = nn.Parameter(torch.randn(1, 1, hidden_size) / hidden_size ** 0.5)
+        self.query_token = nn.Parameter(torch.randn(1, 1, hidden_size) / hidden_size ** 0.5)
         # self.cross_blocks = nn.ModuleList([
         #     CrossAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) if (i + 1) % 2 == 0 else TupleIdentity() for i in range(depth)
         # ])
@@ -740,7 +740,7 @@ class ActionTransformer(nn.Module):
         self.pool_norm = RMSNorm(hidden_size)
         # GST uses 4 heads for style transfer, doesnt say for manual...
         # Could train manual attention with 1 head and transfer with num_heads
-        self.pre_pool = AttentionPool(hidden_size, num_heads, bias=False)
+        # self.pre_pool = AttentionPool(hidden_size, num_heads, bias=False)
         # self.pool_attn = TopKAttention(n_style_embeddings, hidden_size, num_heads=1, bias=False)
         self.pool_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)#, top_k=5)
         # self.transfer_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
@@ -798,7 +798,7 @@ class ActionTransformer(nn.Module):
         
         x = x + bpm
         x = rearrange(x, 'b t n c -> b (t n) c')
-        # query = self.query_token.expand(B, -1, -1)
+        query = self.query_token.expand(B, -1, -1)
         # for block, cross_block in zip(self.blocks, self.cross_blocks):
         #     x = block(x, freqs_cis=self.freqs_cis)
         #     query = cross_block(query, x)
@@ -807,13 +807,13 @@ class ActionTransformer(nn.Module):
             
         x = x[:, -self.n_decoder_chunks:]
         
-        x = self.norm(x)
-        # query = self.norm(query)
+        # x = self.norm(x)
+        query = self.norm(query)
         style_embeddings = self.pool_norm(self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
         
         # loses x signal but interpretable
         # query = torch.mean(x, dim=-2, keepdim=False)
-        query = self.pre_pool(x)
+        # query = self.pre_pool(x)
         style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings, return_weights=True)
         
         # better but less interpretable?
@@ -845,7 +845,7 @@ class ActionTransformer(nn.Module):
         
         x = x + bpm
         x = rearrange(x, 'b t n c -> b (t n) c')
-        # query = self.query_token.expand(B, -1, -1)
+        query = self.query_token.expand(B, -1, -1)
         # for block, cross_block in zip(self.blocks, self.cross_blocks):
         #     x = block(x, freqs_cis=self.freqs_cis)
         #     query = cross_block(query, x)
@@ -854,13 +854,13 @@ class ActionTransformer(nn.Module):
             
         x = x[:, -self.n_decoder_chunks:]
         
-        x = self.norm(x)
-        # query = self.norm(query)
+        # x = self.norm(x)
+        query = self.norm(query)
         style_embeddings = self.pool_norm(self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
         
         # loses x signal but more interpretable
         # query = torch.mean(x, dim=-2, keepdim=False)
-        query = self.pre_pool(x)
+        # query = self.pre_pool(x)
         # style = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings).squeeze(1)
         style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings, return_weights=return_weights)
         
