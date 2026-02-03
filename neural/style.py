@@ -812,13 +812,13 @@ class ActionTransformer(nn.Module):
         style_embeddings = self.pool_norm(self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
         
         # loses x signal but interpretable
-        query = torch.mean(x, dim=-2, keepdim=False)
+        # query = torch.mean(x, dim=-2, keepdim=False)
         # query = self.pre_pool(x)
-        style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings, return_weights=True)
+        # style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings, return_weights=True)
         
         # better but less interpretable?
-        # style = self.pool_attn(query=x, key=style_embeddings, value=style_embeddings)
-        # style = torch.mean(style, dim=-2, keepdim=False)
+        style, weights = self.pool_attn(query=x, key=style_embeddings, value=style_embeddings, return_weights=True)
+        style = torch.mean(style, dim=-2, keepdim=False)
         
         weights = weights.squeeze(-2)
         weights = weights.mean(dim=1)
@@ -859,10 +859,10 @@ class ActionTransformer(nn.Module):
         style_embeddings = self.pool_norm(self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
         
         # loses x signal but more interpretable
-        query = torch.mean(x, dim=-2, keepdim=False)
+        # query = torch.mean(x, dim=-2, keepdim=False)
         # query = self.pre_pool(x)
         # style = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings).squeeze(1)
-        style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings, return_weights=return_weights)
+        # style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings, return_weights=return_weights)
         
         # if self.training:
         #     manual_query, transfer_query = torch.mean(x, dim=-2, keepdim=False).chunk(2, dim=0)
@@ -877,10 +877,10 @@ class ActionTransformer(nn.Module):
         #     style = self.transfer_attn(query=query, key=style_embeddings, value=style_embeddings).squeeze(1)
         
         # better but less interpretable?
-        # style, weights = self.pool_attn(query=x, key=style_embeddings, value=style_embeddings, return_weights=return_weights)
-        # style = torch.mean(style, dim=-2, keepdim=False)
-        # if weights is not None:
-        #     weights = torch.mean(weights, dim=-1, keepdim=False)
+        style, weights = self.pool_attn(query=x, key=style_embeddings, value=style_embeddings, return_weights=return_weights)
+        style = torch.mean(style, dim=-2, keepdim=False)
+        if weights is not None:
+            weights = torch.mean(weights, dim=-1, keepdim=False)
         
         if return_weights:
             return self.out_norm(style.squeeze(1)), weights
