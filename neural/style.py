@@ -742,7 +742,7 @@ class ActionTransformer(nn.Module):
         # Could train manual attention with 1 head and transfer with num_heads
         # self.pre_pool = AttentionPool(hidden_size, num_heads, bias=False)
         # self.pool_attn = TopKAttention(n_style_embeddings, hidden_size, num_heads=1, bias=False)
-        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)#, top_k=5)
+        self.pool_attn = MultiHeadAttention(hidden_size, num_heads=1, bias=False)#, top_k=5)
         # self.transfer_attn = MultiHeadAttention(hidden_size, num_heads=num_heads, bias=False)
         self.style_embeddings = nn.Parameter(torch.randn(n_style_embeddings, hidden_size) / hidden_size ** 0.5)
         self.out_norm = RMSNorm(hidden_size)
@@ -812,14 +812,14 @@ class ActionTransformer(nn.Module):
         style_embeddings = self.pool_norm(self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
         
         # loses x signal but interpretable
-        query = torch.mean(x, dim=-2, keepdim=False)
+        # query = torch.mean(x, dim=-2, keepdim=False)
         # query = self.pre_pool(x)
-        style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings, return_weights=True)
+        # style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings, return_weights=True)
         
         # better but less interpretable?
-        # style, weights = self.pool_attn(query=x, key=style_embeddings, value=style_embeddings, return_weights=True)
-        # style = torch.mean(style, dim=-2, keepdim=False)
-        # weights = torch.sum(weights, dim=1, keepdim=False)
+        style, weights = self.pool_attn(query=x, key=style_embeddings, value=style_embeddings, return_weights=True)
+        style = torch.mean(style, dim=-2, keepdim=False)
+        weights = torch.sum(weights, dim=1, keepdim=False)
         
         weights = weights.squeeze(-2)
         weights = weights.mean(dim=1)
@@ -860,10 +860,10 @@ class ActionTransformer(nn.Module):
         style_embeddings = self.pool_norm(self.style_embeddings.unsqueeze(0).repeat(B, 1, 1))
         
         # loses x signal but more interpretable
-        query = torch.mean(x, dim=-2, keepdim=False)
+        # query = torch.mean(x, dim=-2, keepdim=False)
         # query = self.pre_pool(x)
         # style = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings).squeeze(1)
-        style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings, return_weights=return_weights)
+        # style, weights = self.pool_attn(query=query, key=style_embeddings, value=style_embeddings, return_weights=return_weights)
         
         # if self.training:
         #     manual_query, transfer_query = torch.mean(x, dim=-2, keepdim=False).chunk(2, dim=0)
@@ -878,10 +878,10 @@ class ActionTransformer(nn.Module):
         #     style = self.transfer_attn(query=query, key=style_embeddings, value=style_embeddings).squeeze(1)
         
         # better but less interpretable?
-        # style, weights = self.pool_attn(query=x, key=style_embeddings, value=style_embeddings, return_weights=return_weights)
-        # style = torch.mean(style, dim=-2, keepdim=False)
-        # if weights is not None:
-        #     weights = torch.mean(weights, dim=-1, keepdim=False)
+        style, weights = self.pool_attn(query=x, key=style_embeddings, value=style_embeddings, return_weights=return_weights)
+        style = torch.mean(style, dim=-2, keepdim=False)
+        if weights is not None:
+            weights = torch.mean(weights, dim=-1, keepdim=False)
         
         if return_weights:
             return self.out_norm(style.squeeze(1)), weights
