@@ -41,7 +41,7 @@ import matplotlib.pyplot as plt
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'Style_fix_16_adaln_1measures_bpm_S_nobias_poollast_mean_norm_nohistory_multihead'
+out_dir = 'Style_fix_16_adaln_1measures_bpm_S_nobias_poolfirst_mean_norm_nohistory_multihead'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
