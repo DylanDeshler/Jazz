@@ -41,7 +41,7 @@ import matplotlib.pyplot as plt
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'Style_fix_256_adaln_1measures_bpm_S_nobias_poollast_mean_norm_nohistory_multihead'
+out_dir = 'Style_fix_16_adaln_1measures_bpm_S_nobias_poollast_mean_norm_nohistory_multihead'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -49,7 +49,7 @@ save_interval = 5000
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir
@@ -66,7 +66,7 @@ n_decoder_chunks = 1
 n_chunks = n_encoder_chunks + n_decoder_chunks
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
-n_style_embeddings = 256
+n_style_embeddings = 16
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
@@ -391,11 +391,9 @@ def generate_lam_vs_random_actions(step):
     x, ratio, bpm = x[:20], ratio[:20], bpm[:20]
     
     # duplicate for eye-balling overfitting
-    print(x.shape)
     x = torch.cat([x, x[[-1]], x[[-1]], x[[-1]]], 0)
     ratio = torch.cat([ratio, ratio[[-1]], ratio[[-1]], ratio[[-1]]], 0)
     bpm = torch.cat([bpm, bpm[[-1]], bpm[[-1]], bpm[[-1]]], 0)
-    print(x.shape)
     
     B, T, N, D = x.shape
 
