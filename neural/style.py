@@ -818,10 +818,9 @@ class ActionTransformer(nn.Module):
         
         # better but less interpretable?
         style, weights = self.pool_attn(query=x, key=style_embeddings, value=style_embeddings, return_weights=True)
-        print(style.shape)
         style = torch.mean(style, dim=-2, keepdim=False)
         weights = torch.mean(weights, dim=-1, keepdim=False)
-        print(weights.shape)
+        
         weights = weights.squeeze(-2)
         weights = weights.mean(dim=1)
         
