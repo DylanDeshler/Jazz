@@ -391,10 +391,12 @@ def generate_lam_vs_random_actions(step):
     x, ratio, bpm = x[:20], ratio[:20], bpm[:20]
     
     # duplicate for eye-balling overfitting
+    print(x.shape)
     x = torch.cat([x, x[[-1]], x[[-1]], x[[-1]]], 0)
     ratio = torch.cat([ratio, ratio[[-1]], ratio[[-1]], ratio[[-1]]], 0)
     bpm = torch.cat([bpm, bpm[[-1]], bpm[[-1]], bpm[[-1]]], 0)
-
+    print(x.shape)
+    
     B, T, N, D = x.shape
 
     with ctx:
