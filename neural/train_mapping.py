@@ -126,8 +126,8 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 # poor man's data loader
 def get_batch(split='train', batch_size=batch_size):
     # TODO: sample within songs (this can go over song boundaries)
-    X = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_256.bin', dtype=np.float16, mode='w+', shape=(4403211, 768))
-    Y = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}.bin', dtype=np.float16, mode='w+', shape=(4403211, 768))
+    X = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_256.bin', dtype=np.float16, mode='r', shape=(4403211, 768))
+    Y = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}.bin', dtype=np.float16, mode='r', shape=(4403211, 768))
     # meta = np.memmap('/home/ubuntu/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(4403211, 2))
     if split == 'train':
         idxs = torch.randint(int(len(X) * 0.98) - n_chunks, (batch_size,))
@@ -372,7 +372,7 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
-        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        print(f"iter {iter_num}: train loss {losses['train']:4E}, val loss {losses['val']:4E}")
         # if iter_num % sample_interval == 0 and master_process:
         #     model.eval()
         #     with ctx:
