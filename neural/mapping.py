@@ -159,7 +159,7 @@ class DiffusionResNetMLP(nn.Module):
         self.t_embedder = TimestepEmbedder(dim, bias=False, swiglu=True)
         self.t_block = nn.Sequential(
             nn.SiLU(),
-            nn.Linear(dim, dim * 6, bias=True),
+            nn.Linear(dim, dim * 3, bias=True),
         )
         
         self.blocks = nn.ModuleList([
