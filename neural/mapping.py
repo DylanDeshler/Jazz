@@ -5,6 +5,8 @@ import torch.nn.functional as F
 import math
 from typing import Optional, Callable
 
+from fm import FM, FMEulerSampler
+
 class RMSNorm(nn.Module):
     def __init__(self, dim, eps=1e-6):
         super().__init__()
@@ -84,6 +86,20 @@ class ResNetMLP(nn.Module):
         
         loss = F.mse_loss(x, y)
         return loss, x
+
+class ResNetDiffusion(nn.Module):
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.net = ResNetMLP(**kwargs)
+        
+        self.diffusion = FM(timescale=1000)
+        self.sampler = FMEulerSampler()
+    
+    def forward(self, x, y):
+        return self.diffusion.target_loss(self.net, x, y), None
+
+def DiffusionMLP_B(**kwargs):
+    return ResNetDiffusion(n_blocks=12, **kwargs)
 
 def MLP_B(**kwargs):
     return ResNetMLP(n_blocks=12, **kwargs)

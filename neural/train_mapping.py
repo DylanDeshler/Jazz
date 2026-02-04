@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from mapping import MLP_B as net
+from mapping import DiffusionMLP_B as net
 import soundfile as sf
 from scipy import signal
 
@@ -40,7 +40,7 @@ import matplotlib.pyplot as plt
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'style_mapping_256top5_64'
+out_dir = 'style_diffusion_mapping_256top5_64'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
