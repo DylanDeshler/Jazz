@@ -157,6 +157,7 @@ class DiffusionResNetMLP(nn.Module):
     def __init__(self, dim=768, n_blocks=4, mlp_ratio=4, bias=False, dropout=0):
         super().__init__()
         self.t_embedder = TimestepEmbedder(dim, bias=False, swiglu=True)
+        self.fuse_conditioning = SwiGLUMlp(dim * 2, int(2 / 3 * mlp_ratio * dim), dim, bias=False)
         self.t_block = nn.Sequential(
             nn.SiLU(),
             nn.Linear(dim, dim * 3, bias=True),
@@ -194,8 +195,10 @@ class DiffusionResNetMLP(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
-    def forward(self, x, t):
+    def forward(self, x, t, actions):
         t = self.t_embedder(t)
+        t = torch.cat([t, actions], dim=-1)
+        t = self.fuse_conditioning(t)
         t0 = self.t_block(t)
         
         for block in self.blocks:
@@ -217,8 +220,11 @@ class ResNetDiffusion(nn.Module):
         self.diffusion = FM(timescale=1000)
         self.sampler = FMEulerSampler(self.diffusion)
     
-    def forward(self, x, y):
-        return self.diffusion.target_loss(self.net, x, y), None
+    def forward(self, actions, x):
+        return self.diffusion.loss(self.net, x, net_kwargs={'actions': actions}), None
+
+    def sample(self, actions, x, n_steps=50, noise=None):
+        return self.sampler.sample(self.net, x.shape, net_kwargs={'actions': actions}, n_steps=n_steps, noise=noise)
 
 def DiffusionMLP_B(**kwargs):
     return ResNetDiffusion(n_blocks=12, **kwargs)
