@@ -213,7 +213,7 @@ class DiffusionResNetMLP(nn.Module):
 class ResNetDiffusion(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
-        self.net = ResNetMLP(**kwargs)
+        self.net = DiffusionResNetMLP(**kwargs)
         
         self.diffusion = FM(timescale=1000)
         self.sampler = FMEulerSampler(self.diffusion)
