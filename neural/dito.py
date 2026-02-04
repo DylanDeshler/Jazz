@@ -79,8 +79,8 @@ class DiToV5(nn.Module):
         x, z = self.encode(x)
         return self.decode(z, shape=x.shape, n_steps=n_steps)
     
-    def decode(self, z, shape=(1, 24576), n_steps=50):
-        x = self.sampler.sample(self.unet, (z.shape[0], *shape[-2:]), n_steps, net_kwargs={'z_dec': z})
+    def decode(self, z, shape=(1, 24576), n_steps=50, noise=None):
+        x = self.sampler.sample(self.unet, (z.shape[0], *shape[-2:]), n_steps, net_kwargs={'z_dec': z}, noise=noise)
         return x
 
 class DiToV4(nn.Module):
