@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from mapping import MLP_S as net
+from mapping import MLP_B as net
 import soundfile as sf
 from scipy import signal
 
@@ -372,7 +372,7 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
-        print(f"iter {iter_num}: train loss {losses['train']:4E}, val loss {losses['val']:4E}")
+        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         # if iter_num % sample_interval == 0 and master_process:
         #     model.eval()
         #     with ctx:
