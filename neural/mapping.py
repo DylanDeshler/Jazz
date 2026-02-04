@@ -93,7 +93,7 @@ class ResNetDiffusion(nn.Module):
         self.net = ResNetMLP(**kwargs)
         
         self.diffusion = FM(timescale=1000)
-        self.sampler = FMEulerSampler()
+        self.sampler = FMEulerSampler(self.diffusion)
     
     def forward(self, x, y):
         return self.diffusion.target_loss(self.net, x, y), None
