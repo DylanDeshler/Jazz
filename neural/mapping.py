@@ -197,7 +197,7 @@ class DiffusionResNetMLP(nn.Module):
     
     def forward(self, x, t, actions):
         t = self.t_embedder(t)
-        t = torch.cat([t, actions], dim=-1)
+        t = torch.cat([t, actions.squeeze(1)], dim=-1)
         t = self.fuse_conditioning(t)
         t0 = self.t_block(t)
         
