@@ -49,7 +49,7 @@ save_interval = 5000
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir
@@ -400,10 +400,11 @@ def generate_lam_vs_random_actions(step):
     with ctx:
         noise = torch.randn(x[:, -n_decoder_chunks:].shape, device=x.device)
         recon, random_recon = model.lam_vs_random_actions(x.clone(), bpm, n_steps=50, noise=noise)
-    
-        x = tokenizer.decode(x.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
-        recon = tokenizer.decode(recon.view(B * n_decoder_chunks, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, n_decoder_chunks, 1, 24576 * cut_seconds)
-        random_recon = tokenizer.decode(random_recon.view(B * n_decoder_chunks, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, n_decoder_chunks, 1, 24576 * cut_seconds)
+
+        noise = torch.randn((1 * T, N, D).permute(0, 2, 1), device=x.device).repeat(B, 1, 1)
+        x = tokenizer.decode(x.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50, noise=noise).view(B, T, 1, 24576 * cut_seconds)
+        recon = tokenizer.decode(recon.view(B * n_decoder_chunks, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50, noise=noise).view(B, n_decoder_chunks, 1, 24576 * cut_seconds)
+        random_recon = tokenizer.decode(random_recon.view(B * n_decoder_chunks, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50, noise=noise).view(B, n_decoder_chunks, 1, 24576 * cut_seconds)
     
     x = x.cpu().detach().float().numpy().squeeze(-2)
     recon = recon.cpu().detach().float().numpy().squeeze(-2)
