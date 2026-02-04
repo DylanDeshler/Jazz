@@ -51,7 +51,7 @@ class ResBlock(nn.Module):
         return x + self.mlp(self.norm(x))
 
 class ResNetMLP(nn.Module):
-    def __init__(self, dim, n_blocks, mlp_ratio=4, bias=False, dropout=0):
+    def __init__(self, dim=768, n_blocks=4, mlp_ratio=4, bias=False, dropout=0):
         super().__init__()
         self.blocks = nn.ModuleList([
             ResBlock(dim, mlp_ratio=mlp_ratio, bias=bias, dropout=dropout) for _ in range(n_blocks)
@@ -85,11 +85,11 @@ class ResNetMLP(nn.Module):
         loss = F.mse_loss(x, y)
         return loss, x
 
-def MLP_B(dim, **kwargs):
-    return ResNetMLP(dim, 12, **kwargs)
+def MLP_B(**kwargs):
+    return ResNetMLP(n_blocks=12, **kwargs)
 
-def MLP_S(dim, **kwargs):
-    return ResNetMLP(dim, 8, **kwargs)
+def MLP_S(**kwargs):
+    return ResNetMLP(n_blocks=8, **kwargs)
 
-def MLP_T(dim, **kwargs):
-    return ResNetMLP(dim, 4, **kwargs)
+def MLP_T(**kwargs):
+    return ResNetMLP(n_blocks=4, **kwargs)

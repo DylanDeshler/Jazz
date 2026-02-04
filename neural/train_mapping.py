@@ -143,7 +143,7 @@ def get_batch(split='train', batch_size=batch_size):
 iter_num = 0
 best_val_loss = 1e9
 
-model_args = dict()
+model_args = dict(dim=768)
 
 if init_from == 'scratch':
     # init a new model from scratch
