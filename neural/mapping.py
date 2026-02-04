@@ -108,7 +108,7 @@ class DiffusionResBlock(nn.Module):
         )
         
     def forward(self, x, t):
-        biases = self.scale_shift_table[None] + t.reshape(x.size(0), 3)
+        biases = self.scale_shift_table[None] + t.reshape(x.size(0), 3, -1)
         (
             shift_mlp,
             scale_mlp,
