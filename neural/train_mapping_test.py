@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from diffusion_forcing import ModernDiT_large as net
+from diffusion_forcing import ModernDiT_small as net
 from dito import DiToV5 as Tokenizer
 import soundfile as sf
 
