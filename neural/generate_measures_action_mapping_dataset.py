@@ -42,7 +42,7 @@ with torch.no_grad():
         batch = torch.from_numpy(np.stack([data[j:j+1] for j in range(i*batch_size, (i+1)*batch_size)], axis=0)).pin_memory().to(device, non_blocking=True)
         
         with ctx:
-            actions = model.sample(batch)
+            actions = model(batch)
         
         arr[i*batch_size:(i+1)*batch_size] = actions.float().cpu().detach().numpy().astype(np.float16)
 
