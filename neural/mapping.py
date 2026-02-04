@@ -194,7 +194,7 @@ class DiffusionResNetMLP(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
-    def forward(self, x, y, t):
+    def forward(self, x, t):
         t = self.t_embedder(t)
         t0 = self.t_block(t)
         
@@ -207,8 +207,7 @@ class DiffusionResNetMLP(nn.Module):
         x = modulate(self.norm(x), shift, scale)
         x = self.fc(x)
         
-        loss = F.mse_loss(x, y)
-        return loss, x
+        return x
 
 class ResNetDiffusion(nn.Module):
     def __init__(self, **kwargs):
