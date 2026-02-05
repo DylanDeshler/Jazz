@@ -107,7 +107,7 @@ When inspecting model outputs, I noticed that some generations were incredibly f
 
 Providing the conditioning signals via AdaLN modulation consistently outperformed concatenation.
 
-![LAPA Architecture](LAPA.png "LAPA Architecture")
+<img src="LAPA.png" alt="LAPA Architecture" style="width: auto; max-width: 100%; height: 400px; object-fit: contain; border-radius: 8px;">
 
 ## Action Spaces and the Demon that is Quantization
 ### Considerations for Building an Action Space
@@ -196,8 +196,10 @@ The axes for building an action set with the continuous approach are: size, # of
 3.  *256 actions, 1 measure, top-5*: Good quality, diverse, interpretable
 
 ### Action Curation
-
 A combination of manual inspection and automated metrics were used to downsample the learned action set to a more high quality subset. I tried using several music -> text LLMs for curation but they often hallucianted instruments, did not follow instructions, and could not generalize to this domain.
+
+### Improving Action Conditioning
+As we've seen, enforcing interpretable actions reduces conditioning information. Likely this can be compensated for with larger models and larger datasets, but I don't have those. It's possible, and even easy, to train highly informative yet uninterpretable action sets. So easy in fact, that a few times I trained models that cheated and practically made the diffusion sampling process deterministic! I trained a simple residual MLP to transform from action set A to action set B, replacing action set A with B' immediately improved downstream modeling performance. The model is extremely lightweight (< 50M parameters) and introduces practically no inference latency. Now the user interfaces with the same interpretable action set and the model recieves more informative conditioning information to produce higher quality generations.
 
 # Dynamics Model
 Thankfully, after all of the previous complexity, training the final generative model is simple and straightforward. The dynamics model is a Diffusion Transformer trained with timestep, BPM, and actions as conditioning. I trained three versions, one where the conditioning signals are applied via cross-attention, one by concatenating them to the latent tokens, and one with measure specific AdaLN-zero. The model is trained with [Diffusion Forcing](https://arxiv.org/pdf/2407.01392) where seperate noise levels are sampled for each measure during training. This lets a single model do autoregressive generation, bidirectional generation, and in-painting simply by varying the noise levels. The independent noise levels also help solve the compounding error problem by applying a small amount of noise to past chunks when generating sequences longer than those seen during training. I initially trained a standard Classifier Free Guidance (GFG) model but then came across a new paper proposing a more performant alternative. [Independent Condition Guidance](https://proceedings.iclr.cc/paper_files/paper/2025/file/bf331c87e29f473b610336f00fe1cb51-Paper-Conference.pdf) (Independent Condition Guidance) is a method for obtaining CFG quality without having to train an unconditional model. Later I realized having an unconditional model would be best for initial generation and simplifying "fill in the middle" editing.
