@@ -55,11 +55,11 @@ wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 2
-batch_size = 80#384
+gradient_accumulation_steps = 4
+batch_size = 40#384
 # model
 spatial_window = 48
-n_chunks = 15
+n_chunks = 30
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
 n_style_embeddings = 256
