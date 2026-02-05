@@ -40,7 +40,7 @@ import pyrubberband as pyrb
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'ModernDiT_measures_bpm_large_256top5_64_long_uncond'
+out_dir = 'ModernDiT_measures_bpm_large_256top5_64_uncond'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -55,11 +55,11 @@ wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 4
-batch_size = 40#384
+gradient_accumulation_steps = 2
+batch_size = 80#384
 # model
 spatial_window = 48
-n_chunks = 30
+n_chunks = 15
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
 n_style_embeddings = 256
