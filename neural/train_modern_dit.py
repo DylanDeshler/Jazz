@@ -364,19 +364,6 @@ while True:
     if eval_only:
         break
 
-    # if iter_num % eval_interval == 0 and master_process and local_iter_num > 0:
-    #     checkpoint = {
-    #         'model': raw_model.state_dict(),
-    #         'optimizer': optimizer.state_dict(),
-    #         'model_args': model_args,
-    #         'iter_num': iter_num,
-    #         'best_val_loss': best_val_loss,
-    #         'config': config,
-    #         'tokens': tokens_trained,
-    #     }
-    #     print(f"saving checkpoint to {out_dir}")
-    #     torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
-
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
     for micro_step in range(gradient_accumulation_steps):
