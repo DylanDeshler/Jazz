@@ -78,13 +78,14 @@ class SwiGLUMlp(nn.Module):
         hidden_features = hidden_features or in_features
         self.w12 = nn.Linear(in_features, 2 * hidden_features, bias=bias)
         self.w3 = nn.Linear(hidden_features, out_features, bias=bias)
+        self.drop = nn.Dropout(drop)
 
     # @torch.compile
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x12 = self.w12(x)
         x1, x2 = x12.chunk(2, dim=-1)
         hidden = F.silu(x1) * x2
-        return self.w3(hidden)
+        return self.w3(self.drop(hidden))
 
 class ResBlock(nn.Module):
     def __init__(self, dim, mlp_ratio=4, bias=False, dropout=0):
@@ -119,7 +120,7 @@ class DiffusionResBlock(nn.Module):
         return x
 
 class ResNetMLP(nn.Module):
-    def __init__(self, dim=768, n_blocks=4, mlp_ratio=4, bias=False, dropout=0):
+    def __init__(self, dim=768, n_blocks=4, mlp_ratio=4, bias=True, dropout=0.1):
         super().__init__()
         self.blocks = nn.ModuleList([
             ResBlock(dim, mlp_ratio=mlp_ratio, bias=bias, dropout=dropout) for _ in range(n_blocks)
