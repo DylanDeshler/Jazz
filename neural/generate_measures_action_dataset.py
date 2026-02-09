@@ -17,7 +17,7 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 batch_size = 2**10
 
-ckpt_path = os.path.join('Style_256_adaln_1measures_bpm_S_nobias_poolfirst_norm_nohistory_1head_top5', 'ckpt.pt')
+ckpt_path = os.path.join('Style_fix_64_adaln_1measures_bpm_S_nobias_poollast_mean_norm_nohistory_1head', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 model_args = checkpoint['model_args']
 vae_embed_dim = model_args['in_channels']
@@ -43,7 +43,8 @@ hidden_size = 768
 N = 4403211
 data = np.memmap('/home/ubuntu/Data/low_measures_large.bin', dtype=np.float16, mode='r', shape=(N, 48, vae_embed_dim))
 meta = np.memmap('/home/ubuntu/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(N, 2))
-arr = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}.bin', dtype=np.float16, mode='w+', shape=(N, hidden_size))
+# arr = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}.bin', dtype=np.float16, mode='w+', shape=(N, hidden_size))
+arr = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}.bin', dtype=np.float16, mode='r', shape=(N, hidden_size))
 
 with torch.no_grad():
     for i in tqdm(range(N // batch_size)):
@@ -53,6 +54,7 @@ with torch.no_grad():
         with ctx:
             actions = model.encode_actions(batch, bpm, force_manual=True, force_transfer=False)
         
+        print(((arr[i*batch_size:(i+1)*batch_size] - actions.float().cpu().detach().numpy().astype(np.float16)) ** 2).mean().item())
         arr[i*batch_size:(i+1)*batch_size] = actions.float().cpu().detach().numpy().astype(np.float16)
 
 arr.flush()
