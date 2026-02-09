@@ -43,7 +43,7 @@ save_interval = 5000
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir
@@ -122,7 +122,8 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 def get_batch(split='train', batch_size=batch_size):
     # TODO: sample within songs (this can go over song boundaries)
     X = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_256.bin', dtype=np.float16, mode='r', shape=(4403211, 768))
-    Y = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}.bin', dtype=np.float16, mode='r', shape=(4403211, 768))
+    # Y = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}.bin', dtype=np.float16, mode='r', shape=(4403211, 768))
+    Y = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_256top5_64.bin', dtype=np.float16, mode='r', shape=(4403211, 768))
     # meta = np.memmap('/home/ubuntu/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(4403211, 2))
     if split == 'train':
         idxs = torch.randint(int(len(X) * 0.98) - n_chunks, (batch_size,))
