@@ -55,6 +55,6 @@ with torch.no_grad():
             actions = model.encode_actions(batch, bpm, force_manual=True, force_transfer=False)
         
         print(((arr[i*batch_size:(i+1)*batch_size] - actions.float().cpu().detach().numpy().astype(np.float16)) ** 2).mean().item())
-        arr[i*batch_size:(i+1)*batch_size] = actions.float().cpu().detach().numpy().astype(np.float16)
+        # arr[i*batch_size:(i+1)*batch_size] = actions.float().cpu().detach().numpy().astype(np.float16)
 
 arr.flush()
