@@ -574,6 +574,7 @@ class Transformer(nn.Module):
         """
         B, T, D = x.shape
         
+        x = self.x_embedder(x)
         bpm = self.bpm_embedder(bpm.flatten()).view(B, T, -1)
         
         x = x + bpm
