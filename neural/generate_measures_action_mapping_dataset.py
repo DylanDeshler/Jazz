@@ -34,7 +34,7 @@ model.eval()
 model = torch.compile(model)
 
 N = 4403211
-data = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_256.bin', dtype=np.float16, mode='r', shape=(N, 768))
+data = np.memmap(f'/home/ubuntu/base/Data/low_measures_large_actions_256.bin', dtype=np.float16, mode='r', shape=(N, 768))
 # arr = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_256top5_64.bin', dtype=np.float16, mode='w+', shape=(N, 768))
 arr = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_256top5_64.bin', dtype=np.float16, mode='r', shape=(N, 768))
 
