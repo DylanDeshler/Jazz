@@ -17,7 +17,8 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 batch_size = 2**10
 
-ckpt_path = os.path.join('Style_fix_64_adaln_1measures_bpm_S_nobias_poollast_mean_norm_nohistory_1head', 'ckpt.pt')
+# ckpt_path = os.path.join('Style_fix_64_adaln_1measures_bpm_S_nobias_poollast_mean_norm_nohistory_1head', 'ckpt.pt')
+ckpt_path = os.path.join('Style_256_adaln_1measures_bpm_S_nobias_poolfirst_norm_nohistory_1head_top5', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 model_args = checkpoint['model_args']
 vae_embed_dim = model_args['in_channels']
