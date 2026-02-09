@@ -134,7 +134,7 @@ def get_batch(split='train', batch_size=batch_size):
 iter_num = 0
 best_val_loss = 1e9
 
-model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, max_seq_len=max_seq_len)
+model_args = dict(in_channels=style_dim, max_seq_len=max_seq_len)
 
 if init_from == 'scratch':
     # init a new model from scratch
