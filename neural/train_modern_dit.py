@@ -129,7 +129,7 @@ def get_batch(split='train', batch_size=batch_size):
     data = np.memmap('/home/ubuntu/Data/low_measures_large.bin', dtype=np.float16, mode='r', shape=(4403211, spatial_window, vae_embed_dim))
     meta = np.memmap('/home/ubuntu/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(4403211, 2))
     # actions = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}.bin', dtype=np.float16, mode='r', shape=(4403211, style_dim))
-    actions = np.memmap('/home/ubuntu/Data/low_measures_large_actions_256top5_64_redo.bin', dtype=np.float16, mode='r', shape=(4403211, style_dim))
+    actions = np.memmap('/home/ubuntu/Data/low_measures_large_actions_64.bin', dtype=np.float16, mode='r', shape=(4403211, style_dim))
     if split == 'train':
         idxs = torch.randint(int(len(data) * 0.98) - n_chunks, (batch_size,))
     else:
