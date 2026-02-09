@@ -38,6 +38,7 @@ data = np.memmap(f'/home/ubuntu/base/Data/low_measures_large_actions_256.bin', d
 # arr = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_256top5_64.bin', dtype=np.float16, mode='w+', shape=(N, 768))
 arr = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_256top5_64.bin', dtype=np.float16, mode='r', shape=(N, 768))
 
+mses = []
 with torch.no_grad():
     for i in tqdm(range(N // batch_size)):
         batch = torch.from_numpy(np.stack([data[j:j+1] for j in range(i*batch_size, (i+1)*batch_size)], axis=0)).pin_memory().to(device, non_blocking=True)
@@ -46,7 +47,8 @@ with torch.no_grad():
             actions = model(batch).squeeze(1)
         
         mse = (arr[i*batch_size:(i+1)*batch_size] - actions.float().cpu().detach().numpy().astype(np.float16)) ** 2
-        print(mse.mean().item())
+        mses.append(mse.mean().item())
+        print(np.mean(mses))
         # arr[i*batch_size:(i+1)*batch_size] = actions.float().cpu().detach().numpy().astype(np.float16)
 
 arr.flush()
