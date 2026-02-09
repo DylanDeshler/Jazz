@@ -26,6 +26,7 @@ n_encoder_chunks = model_args['n_encoder_chunks']
 n_decoder_chunks = model_args['n_decoder_chunks']
 n_chunks = n_encoder_chunks + n_decoder_chunks
 n_style_embeddings = model_args['n_style_embeddings']
+print(n_style_embeddings, checkpoint['iter_num'], checkpoint['best_val_loss'])
 
 model = net(**model_args).to(device)
 state_dict = checkpoint['model']
