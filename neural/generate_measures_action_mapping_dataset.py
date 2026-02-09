@@ -17,7 +17,7 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 batch_size = 2**10
 
-ckpt_path = os.path.join('style_mapping_256top5_64', 'ckpt.pt')
+ckpt_path = os.path.join('style_mapping_256top5_64_redo', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 model_args = checkpoint['model_args']
 
