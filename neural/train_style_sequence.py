@@ -29,7 +29,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from style_sequence import ModernDiT_large as net
+from style_sequence import Transformer_large as net
 import torch
 
 # -----------------------------------------------------------------------------
