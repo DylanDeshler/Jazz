@@ -31,11 +31,6 @@ from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
 from mapping import MLP_B as net
-import soundfile as sf
-from scipy import signal
-
-import pyrubberband as pyrb
-import matplotlib.pyplot as plt
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -224,124 +219,6 @@ def get_lr(it):
     assert 0 <= decay_ratio <= 1
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
-
-def restore_measure(audio, stretch_ratio, sr=16000):
-    """
-    Restores a time-warped measure to its original duration.
-    
-    Args:
-        audio (np.array): The fixed-length audio (from VAE or .npy file).
-                          Can be shape (1, 24576) or (24576,).
-        stretch_ratio (float): The ratio saved in your metadata 
-                               (Original Length / Target Length).
-        sr (int): Sampling rate (default 16000).
-        
-    Returns:
-        np.array: The restored audio array at original duration.
-    """
-    
-    if audio.dtype == np.float16:
-        audio = audio.astype(np.float32)
-    restore_rate = 1.0 / stretch_ratio
-    
-    y_restored = pyrb.time_stretch(audio, sr, restore_rate)
-    return y_restored
-
-def create_auto_grid(n_plots, figsize=(12, 8)):
-    """
-    Automatically creates a grid of subplots closest to a square shape.
-    Returns the figure and a flattened list of axes.
-    """
-    cols = math.ceil(math.sqrt(n_plots))
-    rows = math.ceil(n_plots / cols)
-    
-    fig, axes = plt.subplots(rows, cols, figsize=figsize, constrained_layout=True)
-    axes_flat = axes.flatten()
-    
-    for i in range(n_plots, len(axes_flat)):
-        axes_flat[i].set_axis_off()
-        
-    return fig, axes_flat[:n_plots]
-
-@torch.no_grad()
-def generate_lam_vs_random_actions(step):
-    batch_dir = os.path.join(out_dir, str(step))
-    os.makedirs(batch_dir, exist_ok=True)
-    
-    model.eval()
-    x, ratio, bpm = get_batch('val')
-    x, ratio, bpm = x[:20], ratio[:20], bpm[:20]
-    
-    B, T, N, D = x.shape
-
-    with ctx:
-        noise = torch.randn(x[:, -n_decoder_chunks:].shape, device=x.device)
-        recon, random_recon = model.lam_vs_random_actions(x.clone(), bpm, n_steps=50, noise=noise)
-
-        noise = torch.randn((1, 1, 24576 * cut_seconds), device=x.device).repeat(B, 1, 1)
-        x = tokenizer.decode(x.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50, noise=noise).view(B, T, 1, 24576 * cut_seconds)
-        recon = tokenizer.decode(recon.view(B * n_decoder_chunks, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50, noise=noise).view(B, n_decoder_chunks, 1, 24576 * cut_seconds)
-        random_recon = tokenizer.decode(random_recon.view(B * n_decoder_chunks, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50, noise=noise).view(B, n_decoder_chunks, 1, 24576 * cut_seconds)
-    
-    x = x.cpu().detach().float().numpy().squeeze(-2)
-    recon = recon.cpu().detach().float().numpy().squeeze(-2)
-    random_recon = random_recon.cpu().detach().float().numpy().squeeze(-2)
-    
-    for i in range(B):
-        og, y, random_y, r = x[i], recon[i], random_recon[i], ratio[i].cpu().detach().numpy()
-        tail_r = r[-n_decoder_chunks:]
-        
-        og_wav = np.concatenate([restore_measure(og[j], r[j].item()) for j in range(n_chunks)])
-        recon_wav = np.concatenate([restore_measure(y[j], tail_r[j].item()) for j in range(n_decoder_chunks)])
-        random_wav = np.concatenate([restore_measure(random_y[j], tail_r[j].item()) for j in range(n_decoder_chunks)])
-        
-        if n_encoder_chunks > 0:
-            base = np.concatenate([restore_measure(og[j], r[j].item()) for j in range(n_encoder_chunks)])
-            recon_wav = np.concatenate([base, recon_wav])
-            random_wav = np.concatenate([base, random_wav])
-        
-        # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), og_wav, 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), recon_wav, 16000)
-        
-        T = len(og_wav) / 16000
-        t = np.linspace(0, T, len(og_wav), endpoint=False)
-        fig, axes = plt.subplots(2, 2, figsize=(16, 16), layout="constrained")
-        
-        # Real
-        axes.ravel()[0].plot(t, og_wav)
-        axes.ravel()[0].set_title('Real Waveform')
-        axes.ravel()[0].set_xlabel('Time [s]')
-        axes.ravel()[0].set_ylabel('Amplitude')
-        axes.ravel()[0].set_xlim(0, T)
-        
-        frequencies, times, Sxx = signal.spectrogram(og_wav, 16000)
-        Sxx_log = 10 * np.log10(Sxx + 1e-10)
-
-        pcm = axes.ravel()[2].pcolormesh(times, frequencies, Sxx_log, shading='gouraud', cmap='viridis')
-        axes.ravel()[2].set_title('Real Spectrogram')
-        axes.ravel()[2].set_xlabel('Time [s]')
-        axes.ravel()[2].set_ylabel('Frequency [Hz]')
-        fig.colorbar(pcm, ax=axes.ravel()[2], label='Intensity [dB]')
-        
-        # Reconstruction
-        axes.ravel()[1].plot(t, recon_wav)
-        axes.ravel()[1].set_title('Reconstruction Waveform')
-        axes.ravel()[1].set_xlabel('Time [s]')
-        axes.ravel()[1].set_ylabel('Amplitude')
-        axes.ravel()[1].set_xlim(0, T)
-        
-        frequencies, times, Sxx = signal.spectrogram(recon_wav, 16000)
-        Sxx_log = 10 * np.log10(Sxx + 1e-10)
-
-        pcm = axes.ravel()[3].pcolormesh(times, frequencies, Sxx_log, shading='gouraud', cmap='viridis')
-        axes.ravel()[3].set_title('Reconstruction Spectrogram')
-        axes.ravel()[3].set_xlabel('Time [s]')
-        axes.ravel()[3].set_ylabel('Frequency [Hz]')
-        fig.colorbar(pcm, ax=axes.ravel()[3], label='Intensity [dB]')
-
-        plt.savefig(os.path.join(batch_dir, f'{i}_wavs.png'))
-        plt.close('all')
 
 # logging
 if wandb_log and master_process:
