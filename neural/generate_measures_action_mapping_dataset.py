@@ -45,7 +45,7 @@ with torch.no_grad():
         with ctx:
             actions = model(batch).squeeze(1)
             
-        print(arr[i*batch_size:(i)*batch_size+100], actions.mean(), actions.std())
+        print(np.mean(arr[i*batch_size:(i+1)*batch_size].copy()), np.std(arr[i*batch_size:(i+1)*batch_size].copy()), actions.mean(), actions.std())
         # arr[i*batch_size:(i+1)*batch_size] = actions.float().cpu().detach().numpy().astype(np.float16)
 
 arr.flush()
