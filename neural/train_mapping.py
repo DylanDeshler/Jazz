@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from mapping import MLP_L as net
+from mapping import MLP_S as net
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText

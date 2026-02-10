@@ -121,12 +121,12 @@ class DiffusionResBlock(nn.Module):
         return x
 
 class ResNetMLP(nn.Module):
-    def __init__(self, dim=768, n_blocks=4, mlp_ratio=4, bias=True, dropout=0.1):
+    def __init__(self, dim=768, n_blocks=4, mlp_ratio=4, bias=False, dropout=0):
         super().__init__()
         self.blocks = nn.ModuleList([
             ResBlock(dim, mlp_ratio=mlp_ratio, bias=bias, dropout=dropout) for _ in range(n_blocks)
         ])
-        # self.norm = RMSNorm(dim)
+        self.norm = RMSNorm(dim)
         
         self.initialize_weights()
     
@@ -150,7 +150,7 @@ class ResNetMLP(nn.Module):
     def forward(self, x, y=None):
         for block in self.blocks:
             x = block(x)
-        # x = self.norm(x)
+        x = self.norm(x)
         
         if y is not None:
             loss = F.mse_loss(x, y)
