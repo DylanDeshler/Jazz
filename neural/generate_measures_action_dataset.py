@@ -6,8 +6,8 @@ from tqdm import tqdm
 import numpy as np
 import torch
 
-from style import IDM_S as net
-# from style_functional import IDM_S as net
+# from style import IDM_S as net
+from style_functional import IDM_S as net
 
 device = 'cuda'
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto 
@@ -18,8 +18,8 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 batch_size = 2**10
 
-ckpt_path = os.path.join('Style_fix_64_adaln_1measures_bpm_S_nobias_poollast_mean_norm_nohistory_1head', 'ckpt.pt')
-# ckpt_path = os.path.join('Style_256_adaln_1measures_bpm_S_nobias_poolfirst_norm_nohistory_1head_top5', 'ckpt.pt')
+# ckpt_path = os.path.join('Style_fix_64_adaln_1measures_bpm_S_nobias_poollast_mean_norm_nohistory_1head', 'ckpt.pt')
+ckpt_path = os.path.join('Style_256_adaln_1measures_bpm_S_nobias_poolfirst_norm_nohistory_1head_top5', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 model_args = checkpoint['model_args']
 vae_embed_dim = model_args['in_channels']
@@ -47,7 +47,6 @@ N = 4403211
 data = np.memmap('/home/ubuntu/Data/low_measures_large.bin', dtype=np.float16, mode='r', shape=(N, 48, vae_embed_dim))
 meta = np.memmap('/home/ubuntu/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(N, 2))
 arr = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}_redo.bin', dtype=np.float16, mode='w+', shape=(N, hidden_size))
-# arr = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}.bin', dtype=np.float16, mode='r', shape=(N, hidden_size))
 
 with torch.no_grad():
     for i in tqdm(range(N // batch_size)):
