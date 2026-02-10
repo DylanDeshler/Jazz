@@ -126,7 +126,7 @@ class ResNetMLP(nn.Module):
         self.blocks = nn.ModuleList([
             ResBlock(dim, mlp_ratio=mlp_ratio, bias=bias, dropout=dropout) for _ in range(n_blocks)
         ])
-        self.norm = RMSNorm(dim)
+        # self.norm = RMSNorm(dim)
         
         self.initialize_weights()
     
