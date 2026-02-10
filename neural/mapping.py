@@ -150,7 +150,7 @@ class ResNetMLP(nn.Module):
     def forward(self, x, y=None):
         for block in self.blocks:
             x = block(x)
-        x = self.norm(x)
+        # x = self.norm(x)
         
         if y is not None:
             loss = F.mse_loss(x, y)
