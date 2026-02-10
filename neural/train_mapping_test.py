@@ -127,7 +127,7 @@ def get_batch(split='train', batch_size=batch_size):
     # TODO: sample within songs (this can go over boundaries)
     data = np.memmap('/home/ubuntu/Data/low_measures_large.bin', dtype=np.float16, mode='r', shape=(4403211, spatial_window, vae_embed_dim))
     meta = np.memmap('/home/ubuntu/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(4403211, 2))
-    actions = np.memmap('/home/ubuntu/Data/low_measures_large_actions_256top5_64.bin', dtype=np.float16, mode='r', shape=(4403211, style_dim))
+    actions = np.memmap('/home/ubuntu/Data/low_measures_large_actions_256top5_64_redo.bin', dtype=np.float16, mode='r', shape=(4403211, style_dim))
     if split == 'train':
         idxs = torch.randint(int(len(data) * 0.98) - n_chunks, (batch_size,))
     else:
@@ -361,19 +361,6 @@ while True:
     
     if eval_only:
         break
-
-    if iter_num % eval_interval == 0 and master_process and local_iter_num > 0:
-        checkpoint = {
-            'model': raw_model.state_dict(),
-            'optimizer': optimizer.state_dict(),
-            'model_args': model_args,
-            'iter_num': iter_num,
-            'best_val_loss': best_val_loss,
-            'config': config,
-            'tokens': tokens_trained,
-        }
-        print(f"saving checkpoint to {out_dir}")
-        torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
