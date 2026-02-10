@@ -51,7 +51,7 @@ wandb_run_name = str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 1 # used to simulate larger batch sizes
-batch_size = 768 # * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 2048 # * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 cut_seconds = 1
 spatial_window = 48
@@ -62,7 +62,7 @@ max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
 n_style_embeddings = 64
 # adamw optimizer
-learning_rate = 1e-3 # max learning rate
+learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
