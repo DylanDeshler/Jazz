@@ -92,9 +92,10 @@ class ResBlock(nn.Module):
         super().__init__()
         self.norm = RMSNorm(dim)
         self.mlp = SwiGLUMlp(dim, int(2 / 3 * mlp_ratio * dim), bias=bias, drop=dropout)
+        self.gate = nn.Parameter(torch.ones(dim) * 1e-2)
     
     def forward(self, x):
-        return x + self.mlp(self.norm(x))
+        return x + self.gate * self.mlp(self.norm(x))
 
 def modulate(x: torch.Tensor, shift: torch.Tensor, scale: torch.Tensor):
     return x * (1 + scale) + shift
@@ -231,6 +232,9 @@ class ResNetDiffusion(nn.Module):
 
 def DiffusionMLP_B(**kwargs):
     return ResNetDiffusion(n_blocks=12, **kwargs)
+
+def MLP_L(**kwargs):
+    return ResNetMLP(n_blocks=24, **kwargs)
 
 def MLP_B(**kwargs):
     return ResNetMLP(n_blocks=12, **kwargs)
