@@ -120,7 +120,7 @@ class DiffusionResBlock(nn.Module):
         return x
 
 class ResNetMLP(nn.Module):
-    def __init__(self, dim=768, n_blocks=4, mlp_ratio=4, bias=False, dropout=0.1):
+    def __init__(self, dim=768, n_blocks=4, mlp_ratio=4, bias=False, dropout=0):
         super().__init__()
         self.blocks = nn.ModuleList([
             ResBlock(dim, mlp_ratio=mlp_ratio, bias=bias, dropout=dropout) for _ in range(n_blocks)
