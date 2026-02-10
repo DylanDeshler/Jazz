@@ -121,7 +121,7 @@ class DiffusionResBlock(nn.Module):
         return x
 
 class ResNetMLP(nn.Module):
-    def __init__(self, dim=768, n_blocks=4, mlp_ratio=4, bias=False, dropout=0):
+    def __init__(self, dim=768, n_blocks=4, mlp_ratio=4, bias=True, dropout=0):
         super().__init__()
         self.blocks = nn.ModuleList([
             ResBlock(dim, mlp_ratio=mlp_ratio, bias=bias, dropout=dropout) for _ in range(n_blocks)
@@ -132,8 +132,8 @@ class ResNetMLP(nn.Module):
     
     def initialize_weights(self):
         self.apply(self._init_weights)
-        for block in self.blocks:
-            torch.nn.init.zeros_(block.mlp.w3.weight)
+        # for block in self.blocks:
+        #     torch.nn.init.zeros_(block.mlp.w3.weight)
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
