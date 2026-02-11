@@ -41,7 +41,7 @@ import matplotlib.pyplot as plt
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'Style_fix_64_adaln_1measures_bpm_S_nobias_poollast_mean_norm_nohistory_1head'
+out_dir = 'Style_fix_16_ortho_adaln_1measures_bpm_S_nobias_poollast_mean_norm_nohistory_1head'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -49,7 +49,7 @@ save_interval = 5000
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir
@@ -66,17 +66,18 @@ n_decoder_chunks = 1
 n_chunks = n_encoder_chunks + n_decoder_chunks
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
-n_style_embeddings = 64
+n_style_embeddings = 16
+ortho_weight = 0.1
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 240000 # total number of training iterations
+max_iters = 1000000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
-decay_lr = True # whether to decay the learning rate
-warmup_iters = 200000 # how many steps to warm up for
+decay_lr = False # whether to decay the learning rate
+warmup_iters = 5000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
@@ -157,7 +158,7 @@ for k,v in list(state_dict.items()):
 tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 
-model_args = dict(in_channels=vae_embed_dim, spatial_window=spatial_window, n_encoder_chunks=n_encoder_chunks, n_decoder_chunks=n_decoder_chunks, n_style_embeddings=n_style_embeddings)
+model_args = dict(in_channels=vae_embed_dim, spatial_window=spatial_window, n_encoder_chunks=n_encoder_chunks, n_decoder_chunks=n_decoder_chunks, n_style_embeddings=n_style_embeddings, ortho_weight=ortho_weight)
 
 if init_from == 'scratch':
     # init a new model from scratch

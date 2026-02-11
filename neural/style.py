@@ -1056,6 +1056,7 @@ class IDM(nn.Module):
                  n_encoder_chunks,
                  n_decoder_chunks,
                  n_style_embeddings,
+                 ortho_weight=0,
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4,
@@ -1063,6 +1064,7 @@ class IDM(nn.Module):
         super().__init__()
         self.n_encoder_chunks = n_encoder_chunks
         self.n_decoder_chunks = n_decoder_chunks
+        self.ortho_weight = ortho_weight
         
         self.action_model = ActionTransformer(in_channels=in_channels, 
                                               hidden_size=hidden_size,
@@ -1096,6 +1098,13 @@ class IDM(nn.Module):
         x = x[:, -self.n_decoder_chunks:].clone()
 
         x = self.decoder(x, bpm, z, history)
+        if self.ortho_weight > 0:
+            embs = F.normalize(self.action_model.style_embeddings, p=2, dim=1, eps=1e-8)
+            gram = torch.matmul(embs, embs.T)
+            eye = torch.eye(embs.shape[0], device=embs.device)
+            ortho_loss = torch.norm(gram - eye, p='fro') ** 2
+            print(ortho_loss)
+            x = x + self.ortho_weight * ortho_loss
         return x, z
     
     def encode_actions(self, x, bpm, force_manual, force_transfer, return_weights=False):
@@ -1107,6 +1116,9 @@ class IDM(nn.Module):
         
         z = self.action_model(x, bpm, force_manual=force_manual, force_transfer=force_transfer, return_weights=return_weights)
         return z
+    
+    def get_style_vector(self, weights):
+        return self.action_model.get_style_vector(weights)
     
     def generate(self, x, bpm, actions, n_steps=50, noise=None):
         history = x[:, :self.n_encoder_chunks].clone()
