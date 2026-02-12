@@ -18,7 +18,8 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
-checkpoint = torch.load(os.path.join('Style_256_adaln_1measures_bpm_S_nobias_poolfirst_norm_nohistory_1head_top5', 'ckpt.pt'), map_location='cpu')
+# checkpoint = torch.load(os.path.join('Style_256_adaln_1measures_bpm_S_nobias_poolfirst_norm_nohistory_1head_top5', 'ckpt.pt'), map_location='cpu')
+checkpoint = torch.load(os.path.join('Style_fix_16_ortho_adaln_1measures_bpm_S_nobias_poollast_mean_norm_nohistory_1head', 'ckpt.pt'), map_location='cpu')
 model_args = checkpoint['model_args']
 vae_embed_dim = model_args['in_channels']
 spatial_window = model_args['spatial_window']
