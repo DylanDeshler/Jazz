@@ -1103,7 +1103,7 @@ class IDM(nn.Module):
             gram = torch.matmul(embs, embs.T)
             eye = torch.eye(embs.shape[0], device=embs.device)
             ortho_loss = torch.norm(gram - eye, p='fro') ** 2
-            print(ortho_loss)
+            
             x = x + self.ortho_weight * ortho_loss
         return x, z
     
