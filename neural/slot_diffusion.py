@@ -5,7 +5,6 @@ import torchaudio.transforms as T
 
 from typing import Optional, Callable
 from einops import rearrange
-import numpy as np
 import math
 
 from fm import FM, FMEulerSampler
