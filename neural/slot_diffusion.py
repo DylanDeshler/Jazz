@@ -541,7 +541,9 @@ class Encoder(nn.Module):
         print(x.shape)
         
         x = rearrange(x, 'b c (h p1) (w p2) -> b (h w) (c p1 p2)', p1=self.patch_size, p2=self.patch_size)
+        print(x.shape)
         x = self.x_embedder(x)
+        print(x.shape)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
         for block in self.blocks:
@@ -550,7 +552,6 @@ class Encoder(nn.Module):
         x = self.norm(x)
         x = self.fc(x)
         
-        print(x.shape)
         return x
 
 class ModernDiT(nn.Module):
