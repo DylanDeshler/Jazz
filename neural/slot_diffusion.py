@@ -5,6 +5,7 @@ import torchaudio.transforms as T
 
 from typing import Optional, Callable
 from einops import rearrange
+import numpy as np
 import math
 
 from fm import FM, FMEulerSampler
@@ -594,7 +595,8 @@ class ModernDiT(nn.Module):
         # zero out c_proj weights in all blocks
         for block in self.blocks:
             nn.init.zeros_(block.mlp.w3.weight)
-            nn.init.zeros_(block.attn.proj.weight)
+            nn.init.zeros_(block.attn1.proj.weight)
+            nn.init.zeros_(block.attn2.proj.weight)
     
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
