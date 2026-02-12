@@ -646,7 +646,7 @@ class ModernDiTWrapper(nn.Module):
     def generate(self, x, slots, n_steps=50):
         return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'slots': slots})
 
-class SADiffusion:
+class SADiffusion(nn.Module):
     """SlotDiffusion model on images."""
 
     def __init__(
