@@ -29,13 +29,13 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from style_sequence import Transformer_large as net
+from style_sequence import ModernDiT_large as net
 import torch
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'style_sequence_large_256top5_64'
+out_dir = 'style_sequence_diffusion_large_256'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -54,7 +54,6 @@ gradient_accumulation_steps = 1
 batch_size = 384
 # model
 max_seq_len = 128
-vae_embed_dim = 16
 style_dim = 768
 cut_seconds = 1
 # adamw optimizer
@@ -117,7 +116,7 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 # poor man's data loader
 def get_batch(split='train', batch_size=batch_size):
     meta = np.memmap('/home/ubuntu/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(4403211, 2))
-    actions = np.memmap('/home/ubuntu/Data/low_measures_large_actions_256top5_64.bin', dtype=np.float16, mode='r', shape=(4403211, style_dim))
+    actions = np.memmap('/home/ubuntu/Data/low_measures_large_actions_256.bin', dtype=np.float16, mode='r', shape=(4403211, style_dim))
     if split == 'train':
         idxs = torch.randint(int(len(actions) * 0.98) - max_seq_len - 1, (batch_size,))
     else:
@@ -126,9 +125,8 @@ def get_batch(split='train', batch_size=batch_size):
     ratio = torch.from_numpy(np.stack([meta[idx:idx+max_seq_len, 0] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     bpm = torch.from_numpy(np.stack([meta[idx:idx+max_seq_len, 1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     X = torch.from_numpy(np.stack([actions[idx:idx+max_seq_len] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    Y = torch.from_numpy(np.stack([actions[idx+1:idx+max_seq_len+1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     
-    return X, Y, ratio, bpm
+    return X, ratio, bpm
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
@@ -193,9 +191,9 @@ def estimate_loss():
     for i, split in enumerate(['train', 'val']):
         losses = torch.zeros(eval_iters)
         for k in tqdm(range(eval_iters)):
-            X, Y, ratio, bpm = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
+            X, ratio, bpm = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
-                _, loss = model(X, bpm, Y)
+                _, loss = model(X, bpm)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -221,7 +219,7 @@ if wandb_log and master_process:
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
-X, Y, ratio, bpm = get_batch('train') # fetch the very first batch
+X, ratio, bpm = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
@@ -283,10 +281,10 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            _, loss = model(X, bpm, Y)
+            _, loss = model(X, bpm)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
-        X, Y, ratio, bpm = get_batch('train')
+        X, ratio, bpm = get_batch('train')
         # backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
     # clip the gradient

@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
+from einops import rearrange, repeat
 
 import math
 from typing import Optional, List, Callable
-
-from einops import rearrange, repeat
 
 class FM:
     
@@ -31,21 +31,24 @@ class FM:
     
     def add_noise(self, x, t, noise=None):
         noise = torch.randn_like(x) if noise is None else noise
-        s = [x.shape[0]] + [1] * (x.dim() - 1)
+        s = [x.shape[0], x.shape[1], x.shape[2], 1]
         x_t = self.alpha(t).view(*s) * x + self.sigma(t).view(*s) * noise
         return x_t, noise
     
     def loss(self, net, x, t=None, net_kwargs=None, return_loss_unreduced=False, return_all=False):
+        B, T, N, C = x.shape
+        
         if net_kwargs is None:
             net_kwargs = {}
         
         if t is None:
-            t = torch.rand(x.shape[0], device=x.device)
-        x_t, noise = self.add_noise(x, t)
+            t = torch.rand(B, T, device=x.device)
+            repeat_t = t.unsqueeze(2).repeat(1, 1, N)
+        x_t, noise = self.add_noise(x, repeat_t)
         
         pred = net(x_t, t=t * self.timescale, **net_kwargs)
         
-        target = self.A(t) * x + self.B(t) * noise # -dxt/dt
+        target = self.A(repeat_t) * x + self.B(repeat_t) * noise # -dxt/dt
         if return_loss_unreduced:
             loss = ((pred.float() - target.float()) ** 2).mean(dim=[1, 2])
             if return_all:
@@ -70,11 +73,28 @@ class FM:
     ):
         if net_kwargs is None:
             net_kwargs = {}
+        
         pred = net(x_t, t=t * self.timescale, **net_kwargs)
         if guidance != 1.0:
             assert uncond_net_kwargs is not None
             uncond_pred = net(x_t, t=t * self.timescale, **uncond_net_kwargs)
             pred = uncond_pred + guidance * (pred - uncond_pred)
+        
+        # if guidance != 1.0:
+        #     assert uncond_net_kwargs is not None
+            
+        #     x_t = torch.cat([x_t, x_t], dim=0)
+        #     t = torch.cat([t, t], dim=0)
+        #     combined_kwargs = {}
+        #     # we assume the keys match
+        #     for k, v in net_kwargs.items():
+        #         combined_kwargs[k] = torch.cat([v, uncond_net_kwargs[k]], dim=0)
+        #     combined_pred = net(x_t, t=t * self.timescale, **combined_kwargs)
+        #     pred, uncond_pred = combined_pred.chunk(2, dim=0)
+        #     pred = uncond_pred + guidance * (pred - uncond_pred)
+        else:
+            pred = net(x_t, t=t * self.timescale, **net_kwargs)
+            
         return pred
     
     def convert_sample_prediction(self, x_t, t, pred):
@@ -101,13 +121,16 @@ class FMEulerSampler:
         guidance=1.0,
         noise=None,
     ):
+        """
+        Implements simple uniform noise sampling for bidirectional generation
+        """
         device = next(net.parameters()).device
         x_t = torch.randn(shape, device=device) if noise is None else noise
         t_steps = torch.linspace(1, 0, n_steps + 1, device=device)
 
         with torch.no_grad():
             for i in range(n_steps):
-                t = t_steps[i].repeat(x_t.shape[0])
+                t = t_steps[i].repeat(x_t.shape[0], x_t.shape[1])
                 neg_v = self.diffusion.get_prediction(
                     net,
                     x_t,
@@ -176,34 +199,6 @@ def apply_rotary_emb(x, freqs_cis):
     # x_out2 is now (bs, seqlen, n_heads, head_dim), e.g. (4, 8, 32, 128)
     return x_out2.type_as(x)
 
-def create_block_causal_mask(block_size: int, num_blocks: int, dtype=torch.float32):
-    """
-    Creates a block causal mask where tokens can attend to their own block 
-    and all previous blocks, but not future blocks.
-    
-    Args:
-        block_size (int): The length of each block.
-        num_blocks (int): The number of blocks.
-        dtype: The data type for the mask (default: torch.float32).
-        
-    Returns:
-        torch.Tensor: A mask of shape (seq_len, seq_len) where 
-                      0.0 indicates 'attend' and -inf indicates 'mask'.
-                      (seq_len = block_size * num_blocks)
-    """
-    # 1. Create a vector of block IDs: [0, 0, ..., 1, 1, ..., 2, 2, ...]
-    block_ids = torch.arange(num_blocks).repeat_interleave(block_size)
-    
-    # 2. Broadcast to create a grid of block comparisons
-    # Shape becomes (seq_len, 1) and (1, seq_len) for broadcasting
-    row_ids = block_ids.unsqueeze(1)
-    col_ids = block_ids.unsqueeze(0)
-    
-    # 3. Create boolean mask: True if row_block >= col_block (Past or Current Block)
-    # This allows full bidirectional attention within the block
-    mask_bool = row_ids >= col_ids
-    return mask_bool
-
 class TimestepEmbedder(nn.Module):
     """
     Embeds scalar timesteps into vector representations.
@@ -260,83 +255,6 @@ class RMSNorm(nn.Module):
         output = self._norm(x.float()).type_as(x)
         return output * self.weight
 
-def top_k_softmax(scores, k=5):
-    """
-    scores: (Batch, Heads, Queries, Styles)
-    Keeps top k values, masks the rest to -inf, then softmax.
-    """
-    # 1. Find the top K scores
-    top_k_values, _ = torch.topk(scores, k=k, dim=-1)
-    
-    # 2. Determine the cutoff (smallest of the top K)
-    # maintain shape for broadcasting
-    cutoff = top_k_values[..., -1].unsqueeze(-1) 
-    
-    # 3. Mask everything below cutoff
-    # 1e-9 or -inf ensures they become absolute zero after softmax
-    scores_masked = scores.clone()
-    scores_masked[scores < cutoff] = float('-inf')
-    
-    # 4. Standard Softmax on the remaining 5 items
-    return F.softmax(scores_masked, dim=-1)
-
-## Just for attention pooling
-class MultiHeadAttention(nn.Module):
-    def __init__(self, dim_hidden, num_heads, dropout_w=0, dropout_e=0, bias=False, flash=True, top_k=None, **kwargs):
-        super().__init__()
-        self.Q = nn.Linear(dim_hidden, dim_hidden, bias)
-        self.K = nn.Linear(dim_hidden, dim_hidden, bias)
-        self.V = nn.Identity()#nn.Linear(dim_hidden, dim_hidden, bias)
-        self.out = nn.Identity()#nn.Linear(dim_hidden, dim_hidden, bias)
-        self.dropout_w = nn.Dropout(dropout_w)
-        self.dropout_e = nn.Dropout(dropout_e)
-        self.num_heads = num_heads
-        self.dim_hidden = dim_hidden
-        self.dim_attn = dim_hidden // num_heads
-        self.scale = self.dim_attn ** -0.5
-        self.top_k = top_k
-        self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention') and (flash and not top_k)
-
-    def forward(self, query, key, value, mask=None, return_weights=False):
-
-        ## PROJECT INPUTS
-        q = self.Q(query)
-        k = self.K(key)
-        v = self.V(value)
-
-        ## SPLIT ATTENTION HEADS
-        b = query.size(0) # Assume [batch, seq_len, hidden]
-        q = q.view(b, -1, self.num_heads, self.dim_attn).transpose(1, 2)
-        k = k.view(b, -1, self.num_heads, self.dim_attn).transpose(1, 2)
-        v = v.view(b, -1, self.num_heads, self.dim_attn).transpose(1, 2)
-
-        ## COMPUTE ATTENTION
-        if self.flash and not return_weights:
-            e = F.scaled_dot_product_attention(
-                q, k, v, 
-                attn_mask=mask, 
-                dropout_p=self.dropout_w.p if self.training else 0, 
-                is_causal=False,
-                scale=self.scale,
-            )
-            e = e.transpose(1, 2).contiguous().view_as(query) 
-            
-        else:
-            dot_product = torch.einsum("bhqa,bhka->bhqk", (q, k)) * self.scale
-            if mask is not None:
-                dot_product = dot_product.masked_fill_(mask.logical_not(), float("-inf"))
-            if self.top_k:
-                w = top_k_softmax(dot_product, self.top_k)
-            else:
-                w = torch.softmax(dot_product, dim=-1)
-            w = self.dropout_w(w)
-            e = torch.einsum("bhqv,bhva->bhqa", (w, v)).transpose(1, 2).contiguous().view_as(query) 
-            
-            if return_weights:
-                return self.dropout_e(self.out(e)), w
-        
-        return self.dropout_e(self.out(e))
-
 class Attention(nn.Module):
     def __init__(
             self,
@@ -373,7 +291,7 @@ class Attention(nn.Module):
         if freqs_cis is not None:
             q = apply_rotary_emb(q.transpose(1, 2), freqs_cis).transpose(1, 2)
             k = apply_rotary_emb(k.transpose(1, 2), freqs_cis).transpose(1, 2)
-        
+
         if self.fused_attn:
             x = F.scaled_dot_product_attention(
                 q, k, v,
@@ -418,110 +336,33 @@ class SwiGLUMlp(nn.Module):
         hidden = F.silu(x1) * x2
         return self.w3(hidden)
 
-class SelfAttentionBlock(nn.Module):
+class DiTBlock(nn.Module):
     def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
         super().__init__()
         self.norm1 = RMSNorm(hidden_size)
-        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=False, **block_kwargs)
+        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=False, proj_bias=False, **block_kwargs)
         self.norm2 = RMSNorm(hidden_size)
         self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), bias=False)
+        self.scale_shift_table = nn.Parameter(
+            torch.randn(6, hidden_size) / hidden_size ** 0.5,
+        )
     
-    def forward(self, x, freqs_cis=None, is_causal=False):
-        x = x + self.attn(self.norm1(x), is_causal=is_causal, freqs_cis=freqs_cis[:x.shape[1]] if freqs_cis is not None else None)
-        x = x + self.mlp(self.norm2(x))
+    def forward(self, x, t, freqs_cis=None, attn_mask=None):
+        biases = self.scale_shift_table[None, None] + t.reshape(x.size(0), x.size(1), 6, -1)
+        (
+            shift_msa,
+            scale_msa,
+            gate_msa,
+            shift_mlp,
+            scale_mlp,
+            gate_mlp,
+        ) = biases.chunk(6, dim=-2)
+        
+        x = x + gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask)
+        x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
         return x
 
-class ConvBlock1d(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        *,
-        kernel_size: int = 3,
-        stride: int = 1,
-        dilation: int = 1,
-        num_groups: int = 8,
-    ) -> None:
-        super().__init__()
-
-        self.groupnorm = nn.GroupNorm(
-            num_groups=num_groups, num_channels=in_channels
-        )
-        self.activation = nn.SiLU()
-        self.project = nn.Conv1d(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            kernel_size=kernel_size,
-            stride=stride,
-            dilation=dilation,
-            padding=kernel_size//2
-        )
-
-    def forward(
-        self,
-        x: torch.Tensor,
-    ) -> torch.Tensor:
-        x = self.groupnorm(x)
-        x = self.activation(x)
-        return self.project(x)
-
-class ResnetBlock1d(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        *,
-        kernel_size: int = 3,
-        stride: int = 1,
-        dilation: int = 1,
-        num_groups: int = 8,
-    ) -> None:
-        super().__init__()
-
-        self.block1 = ConvBlock1d(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            kernel_size=kernel_size,
-            stride=stride,
-            dilation=dilation,
-            num_groups=num_groups,
-        )
-
-        self.block2 = ConvBlock1d(
-            in_channels=out_channels,
-            out_channels=out_channels,
-            num_groups=num_groups,
-        )
-
-        self.to_out = (
-            nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=1)
-            if in_channels != out_channels
-            else nn.Identity()
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h = self.block1(x)
-        h = self.block2(h)
-        return h + self.to_out(x)
-
-class Patcher(torch.nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-    ):
-        super().__init__()
-        self.block = ResnetBlock1d(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            num_groups=1,
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.block(x)
-        return x
-
-class Transformer(nn.Module):
+class ModernDiT(nn.Module):
     def __init__(self,
                  in_channels,
                  hidden_size,
@@ -529,79 +370,100 @@ class Transformer(nn.Module):
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4,
-                 min_log_std=1e-6,
-                 max_log_std=1
                  ):
         super().__init__()
-        self.min_log_std = min_log_std
-        self.max_log_std = max_log_std
         
-        self.x_embedder = nn.Linear(in_channels, hidden_size)
+        self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
         self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True, max_period=1000)
+        self.x_embedder = nn.Linear(in_channels, hidden_size, bias=False)
+        
+        self.t_block = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(hidden_size, hidden_size * 6, bias=True),
+        )
         
         self.blocks = nn.ModuleList([
-            SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
-        
+
         self.norm = RMSNorm(hidden_size)
-        self.proj = nn.Linear(hidden_size, 2 * in_channels)
+        self.final_layer_scale_shift_table = nn.Parameter(
+            torch.randn(2, hidden_size) / hidden_size ** 0.5,
+        )
+        self.fc = nn.Linear(hidden_size, in_channels, bias=False)
         
         self.initialize_weights()
-        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_seq_len, theta=1000))
+        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_seq_len))
     
     def initialize_weights(self):
         self.apply(self._init_weights)
+        # zero out classifier weights
+        nn.init.zeros_(self.fc.weight)
+        nn.init.zeros_(self.t_block[-1].weight)
+        nn.init.zeros_(self.t_block[-1].bias)
         # zero out c_proj weights in all blocks
         for block in self.blocks:
-            torch.nn.init.zeros_(block.mlp.w3.weight)
-            torch.nn.init.zeros_(block.attn.proj.weight)
-
+            nn.init.zeros_(block.mlp.w3.weight)
+            nn.init.zeros_(block.attn.proj.weight)
+    
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
             # https://arxiv.org/pdf/2310.17813
             fan_out = module.weight.size(0)
             fan_in = module.weight.size(1)
             std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
-            torch.nn.init.normal_(module.weight, mean=0.0, std=std)
+            nn.init.normal_(module.weight, mean=0.0, std=std)
             if module.bias is not None:
-                torch.nn.init.zeros_(module.bias)
+                nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
-    def forward(self, x, bpm, y=None):
-        """
-        x: (B, T, D) latents
-        """
-        B, T, D = x.shape
+    def forward(self, x, t, bpm):
+        B, T, C = x.shape
         
         x = self.x_embedder(x)
         bpm = self.bpm_embedder(bpm.flatten()).view(B, T, -1)
         
         x = x + bpm
+        
+        t = self.t_embedder(t.flatten()).view(B, T, -1)
+        t0 = self.t_block(t)
+        
+        freqs_cis = self.freqs_cis[:x.shape[1]]
         for block in self.blocks:
-            x = block(x, freqs_cis=self.freqs_cis, is_causal=True)
+            x = block(x, t0, freqs_cis=freqs_cis)
         
-        x = self.norm(x)
-        mu, log_std = self.proj(x).chunk(2, dim=-1)
-        log_std = torch.clamp(log_std, self.min_log_std, self.max_log_std)
-        std = log_std.exp()
+        # SAM Audio does not use a non-linearity on t here
+        shift, scale = (self.final_layer_scale_shift_table[None, None] + F.silu(t[:, :, None])).chunk(
+            2, dim=2
+        )
+        x = modulate(self.norm(x), shift, scale)
+        x = self.fc(x)
         
-        dist = torch.distributions.Normal(mu, std)
+        return x
+
+class ModernDiTWrapper(nn.Module):
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.net = ModernDiT(**kwargs)
         
-        if y is not None:
-            loss = -dist.log_prob(y).mean()
-            return dist, loss
-        
-        return dist
+        self.diffusion = FM(timescale=1000.0)
+        self.sampler = FMEulerSampler(self.diffusion)
+    
+    def forward(self, x, bpm, t=None):
+        return self.diffusion.loss(self.net, x, t=t, net_kwargs={'bpm': bpm})
+    
+    def generate(self, x, bpm, n_steps=50):
+        return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'bpm': bpm})
 
-def Transformer_large(**kwargs):
-    return Transformer(depth=28, hidden_size=1152, num_heads=16, **kwargs)
+def ModernDiT_large(**kwargs):
+    return ModernDiTWrapper(depth=28, hidden_size=1152, num_heads=16, **kwargs)
 
-def Transformer_medium(**kwargs):
-    return Transformer(depth=24, hidden_size=1024, num_heads=16, **kwargs)
+def ModernDiT_medium(**kwargs):
+    return ModernDiTWrapper(depth=24, hidden_size=1024, num_heads=16, **kwargs)
 
-def Transformer_small(**kwargs):
-    return Transformer(depth=16, hidden_size=1024, num_heads=16, **kwargs)
+def ModernDiT_small(**kwargs):
+    return ModernDiTWrapper(depth=16, hidden_size=1024, num_heads=16, **kwargs)
 
-def Transformer_tiny(**kwargs):
-    return Transformer(depth=16, hidden_size=768, num_heads=12, **kwargs)
+def ModernDiT_tiny(**kwargs):
+    return ModernDiTWrapper(depth=16, hidden_size=768, num_heads=12, **kwargs)
