@@ -6,7 +6,7 @@ from tqdm import tqdm
 import numpy as np
 import torch
 
-from mapping import MLP_B as net
+from mapping import DiffusionMLP_BMLP_B as net
 
 device = 'cuda'
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto 
@@ -17,7 +17,7 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 batch_size = 2**10
 
-ckpt_path = os.path.join('style_mapping_256top5_64_redo', 'ckpt.pt')
+ckpt_path = os.path.join('style_diffusion_mapping_256top5_64_redo', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 model_args = checkpoint['model_args']
 
@@ -42,7 +42,7 @@ with torch.no_grad():
         batch = torch.from_numpy(np.stack([data[j:j+1] for j in range(i*batch_size, (i+1)*batch_size)], axis=0)).pin_memory().to(device, non_blocking=True)
         
         with ctx:
-            actions = model(batch).squeeze(1)
+            actions = model.sample(batch, batch).squeeze(1)
 
         arr[i*batch_size:(i+1)*batch_size] = actions.float().cpu().detach().numpy().astype(np.float16)
 
