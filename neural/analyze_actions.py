@@ -86,7 +86,7 @@ n_bpms = 10
 bpms = torch.linspace(100, 250, n_bpms)
 x = torch.randn(n_samples * n_bpms, n_decoder_chunks, spatial_window, vae_embed_dim).to(device)
 
-out_dir = '/home/ubuntu/Data/256_action_wavs'
+out_dir = '/home/ubuntu/Data/16_action_wavs'
 os.makedirs(out_dir, exist_ok=True)
 
 with torch.no_grad():
