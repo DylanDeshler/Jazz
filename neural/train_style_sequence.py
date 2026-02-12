@@ -51,7 +51,7 @@ wandb_run_name = str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 1
-batch_size = 384
+batch_size = 256
 # model
 max_seq_len = 128
 style_dim = 768
