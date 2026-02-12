@@ -550,6 +550,7 @@ class Encoder(nn.Module):
         x = self.norm(x)
         x = self.fc(x)
         
+        print(x.shape)
         return x
 
 class ModernDiT(nn.Module):
