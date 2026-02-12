@@ -35,12 +35,12 @@ from mapping import MLP_B as net
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'style_mapping_256top5_64_redo'
+out_dir = 'style_diffusion_mapping_256top5_64_redo'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
 save_interval = 5000
-eval_iters = 400
+eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
@@ -51,7 +51,7 @@ wandb_run_name = str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 1 # used to simulate larger batch sizes
-batch_size = 2048 # * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 1024 # * 5 * 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 cut_seconds = 1
 spatial_window = 48
@@ -121,7 +121,7 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 # poor man's data loader
 def get_batch(split='train', batch_size=batch_size):
     # TODO: sample within songs (this can go over song boundaries)
-    X = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_256_redo.bin', dtype=np.float16, mode='r', shape=(4403211, 768))
+    X = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_256.bin', dtype=np.float16, mode='r', shape=(4403211, 768))
     Y = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}_redo.bin', dtype=np.float16, mode='r', shape=(4403211, 768))
     # meta = np.memmap('/home/ubuntu/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(4403211, 2))
     if split == 'train':
