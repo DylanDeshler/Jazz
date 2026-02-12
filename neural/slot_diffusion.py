@@ -510,7 +510,7 @@ class Encoder(nn.Module):
         ])
 
         self.norm = RMSNorm(hidden_size)
-        self.fc = nn.Linear(hidden_size, in_channels, bias=False)
+        self.fc = nn.Linear(hidden_size, hidden_size, bias=False)
         
         self.initialize_weights()
         self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_seq_len))
