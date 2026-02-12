@@ -687,7 +687,7 @@ class SADiffusion(nn.Module):
 
     def encode(self, img, init_slots=None):
         """Encode from img to slots."""
-        B, C, H, W = img.shape
+        B = img.shape[0]
 
         encoder_out = self._get_encoder_out(img)
         # `encoder_out` has shape: [B, H*W, out_features]
