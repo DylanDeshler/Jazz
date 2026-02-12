@@ -31,24 +31,23 @@ class FM:
     
     def add_noise(self, x, t, noise=None):
         noise = torch.randn_like(x) if noise is None else noise
-        s = [x.shape[0], x.shape[1], x.shape[2], 1]
+        s = [x.shape[0], x.shape[1], 1]
         x_t = self.alpha(t).view(*s) * x + self.sigma(t).view(*s) * noise
         return x_t, noise
     
     def loss(self, net, x, t=None, net_kwargs=None, return_loss_unreduced=False, return_all=False):
-        B, T, N, C = x.shape
+        B, T, C = x.shape
         
         if net_kwargs is None:
             net_kwargs = {}
         
         if t is None:
             t = torch.rand(B, T, device=x.device)
-            repeat_t = t.unsqueeze(2).repeat(1, 1, N)
-        x_t, noise = self.add_noise(x, repeat_t)
+        x_t, noise = self.add_noise(x, t)
         
         pred = net(x_t, t=t * self.timescale, **net_kwargs)
         
-        target = self.A(repeat_t) * x + self.B(repeat_t) * noise # -dxt/dt
+        target = self.A(t) * x + self.B(t) * noise # -dxt/dt
         if return_loss_unreduced:
             loss = ((pred.float() - target.float()) ** 2).mean(dim=[1, 2])
             if return_all:
