@@ -718,7 +718,7 @@ class SADiffusion(nn.Module):
                     mode='bilinear',
                     align_corners=False,
                 )
-                print(masks)
+                print(masks.shape)
                 mask = mask.squeeze(1).unflatten(0, (B, self.num_slots))  # [B, N, H, W]
                 print(masks.shape)
 
