@@ -73,7 +73,8 @@ def create_resampled_memmap(wav_files, output_filename, target_sr=16000, force_m
     for f_path, start_idx, num_samples, orig_sr, orig_channels in tqdm(file_offsets, desc="Processing"):
         try:
             # Load audio
-            waveform, sr = torchaudio.load(f_path)
+            waveform, sr = sf.read(f_path)
+            waveform = torch.from_numpy(waveform.T)
             
             # Mix to Mono if requested
             if force_mono and waveform.shape[0] > 1:
@@ -81,14 +82,14 @@ def create_resampled_memmap(wav_files, output_filename, target_sr=16000, force_m
             
             # Resample if needed
             if sr != target_sr:
-                resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=target_sr)
-                waveform = resampler(waveform)
+                waveform = torchaudio.functional.resample(waveform, orig_freq=sr, new_freq=target_sr)
 
             # Ensure we strictly match the pre-calculated length
             # (Resampling can sometimes be off by 1 sample due to rounding)
             current_frames = waveform.shape[1]
             
             if current_frames != num_samples:
+                print('AHHH ERROR')
                 # Pad or Trim to match the space we reserved
                 if current_frames > num_samples:
                     waveform = waveform[:, :num_samples]
