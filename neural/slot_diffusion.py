@@ -30,10 +30,7 @@ class ToMel(nn.Module):
         )
     
     def forward(self, x):
-        x = (self.transform(x) + 40) / 40
-        x = F.pad(x, (0, 2, 0, 0))
-        print(x.shape)
-        return x
+        return (self.transform(x) + 40) / 40
 
 class SlotAttention(nn.Module):
     """Slot attention module that iteratively performs cross-attention."""
@@ -767,7 +764,7 @@ class SADiffusion(nn.Module):
         self.n_mels = n_mels
         self.num_slots = num_slots
         self.resolution = resolution
-        self.width = (sample_rate // hop_length) + 1 + 2
+        self.width = (sample_rate // hop_length) + 1
         
         self.to_mel = ToMel(sample_rate, n_fft, hop_length, n_mels)
         self.encoder = Encoder(**encoder_dict)
