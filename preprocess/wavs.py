@@ -115,11 +115,8 @@ def create_resampled_memmap(wav_files, output_filename, target_sr=16000, force_m
 if __name__ == "__main__":
     import glob
     
-    wavs = glob.glob('/home/ubuntu/base/Data/wavs/*.wav')
+    wavs = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
     print(f'Found {len(wavs)} wavs')
-    output_path = "/home/ubuntu/Data/wavs_16khz.bin"
+    output_path = "/home/dylan.d/research/music/Jazz/wavs_16khz.bin"
     mmap = create_resampled_memmap(wavs, output_path, target_sr=16000, force_mono=True)
-    
-    # Cleanup
-    for f in wavs:
-        if os.path.exists(f): os.remove(f)
+
