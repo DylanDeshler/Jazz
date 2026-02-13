@@ -75,6 +75,7 @@ def create_resampled_memmap(wav_files, output_filename, target_sr=16000, force_m
         # Load audio
         waveform, sr = sf.read(f_path)
         waveform = torch.from_numpy(waveform.T)
+        print(waveform.shape)
         
         # Mix to Mono if requested
         if force_mono and waveform.shape[0] > 1:
