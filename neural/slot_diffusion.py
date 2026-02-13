@@ -685,7 +685,7 @@ class SADiffusion(nn.Module):
         """Encode from img to slots."""
         B = img.shape[0]
 
-        img = self.to_mel(img)
+        img = self.to_mel(img).squeeze(1)
         encoder_out = self.encoder(img).type(self.dtype)
         # `encoder_out` has shape: [B, H*W, out_features]
 
