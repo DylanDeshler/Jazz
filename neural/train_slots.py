@@ -280,7 +280,8 @@ def save_samples(iter_num):
     recons = to_numpy(samples)
     mask_nps = to_numpy(masks)
     
-    for gt, recon, mask_np in zip(gts, recons, mask_nps):
+    for j in range(gts.shape[0]):
+        gt, recon, mask_np = gts[j], recons[j], mask_nps[j]
         fig, axes = plt.subplots(1, 3, figsize=(16, 12))
         
         plot_kwargs = {'origin': 'lower', 'aspect': 'auto', 'interpolation': 'nearest'}
