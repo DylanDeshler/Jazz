@@ -792,7 +792,7 @@ if __name__ == '__main__':
     sample_rate=16000
     n_fft=1024
     hop_length=512
-    n_mels=256
+    n_mels=192
     num_slots=7
     slot_size=128
     slot_mlp_size=256
