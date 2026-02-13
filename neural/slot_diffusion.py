@@ -749,6 +749,7 @@ class SADiffusion(nn.Module):
             self,
             resolution,
             sample_rate,
+            n_samples,
             n_fft,
             hop_length,
             n_mels,
@@ -764,7 +765,7 @@ class SADiffusion(nn.Module):
         self.n_mels = n_mels
         self.num_slots = num_slots
         self.resolution = resolution
-        self.width = (sample_rate // hop_length) + 1
+        self.width = (n_samples // hop_length) + 1
         
         self.to_mel = ToMel(sample_rate, n_fft, hop_length, n_mels)
         self.encoder = Encoder(**encoder_dict)

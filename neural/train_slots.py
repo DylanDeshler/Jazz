@@ -169,6 +169,7 @@ model_args = dict(
     encoder_dict=encoder_dict,
     resolution=patch_size,
     sample_rate=sample_rate,
+    n_samples=n_samples,
     n_fft=n_fft,
     hop_length=hop_length,
     n_mels=n_mels,
