@@ -791,7 +791,9 @@ class SADiffusion(nn.Module):
         """Encode from img to slots."""
         B = img.shape[0]
 
+        print(img.mean())
         img = self._compute_mel(img)
+        print(img.mean())
         encoder_out = self.encoder(img).type(self.dtype)
         # `encoder_out` has shape: [B, H*W, out_features]
 
@@ -830,7 +832,6 @@ class SADiffusion(nn.Module):
             samples = self.decoder.generate(img.shape, slots)
             return {'masks': masks, 'slots': slots, 'samples': samples}
         
-        print(img.mean(), slots.mean())
         loss = self.decoder(img, slots)
         print(loss)
 
