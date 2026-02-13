@@ -619,12 +619,9 @@ class Encoder(nn.Module):
     
     def forward(self, x):
         B, C, H, W = x.shape
-        print(x.shape)
         
         x = rearrange(x, 'b c (h p1) (w p2) -> b (h w) (c p1 p2)', p1=self.patch_size, p2=self.patch_size)
-        print(x.shape)
         x = self.x_embedder(x)
-        print(x.shape)
         
         # freqs_cis = self.freqs_cis[:x.shape[1]]
         freqs_cis = precompute_freqs_cis_2d(
@@ -800,25 +797,20 @@ class SADiffusion(nn.Module):
 
         # perform slot attention operation
         slots, masks = self.slot_attention(encoder_out, init_slots)
-        print(slots.shape, masks.shape)
         masks = masks.unflatten(-1, (self.n_mels // self.resolution, self.width // self.resolution))
         # [B, N, C], [B, N, h, w]
-        print(slots.shape, masks.shape)
 
         # resize masks to the original resolution
         if not self.training:
             with torch.no_grad():
                 masks = masks.flatten(0, 1).unsqueeze(1)  # [BN, 1, h, w]
-                print(masks.shape)
                 masks = F.interpolate(
                     masks,
                     scale_factor=self.resolution,
                     mode='bilinear',
                     align_corners=False,
                 )
-                print(masks.shape)
                 masks = masks.squeeze(1).unflatten(0, (B, self.num_slots))  # [B, N, H, W]
-                print(masks.shape)
 
         # [B, N, C], [B, N, H, W]
         return img, slots, masks
@@ -837,30 +829,6 @@ class SADiffusion(nn.Module):
         loss = self.decoder(img, slots)
 
         return {'masks': masks, 'slots': slots, 'loss': loss}
-
-    # def decode(self, slots):
-    #     """Decode from slots to reconstructed images and masks."""
-    #     # `slots` has shape: [B, self.num_slots, self.slot_size].
-    #     bs, num_slots, slot_size = slots.shape
-    #     height = width = self.resolution
-    #     num_channels = 1
-
-    #     print(slots.shape)
-    #     # spatial broadcast
-    #     decoder_in = slots.view(bs * num_slots, slot_size, 1, 1)
-    #     print(decoder_in.shape)
-    #     decoder_in = decoder_in.repeat(1, 1, self.resolution, self.resolution)
-    #     print(decoder_in.shape)
-
-    #     out = self.decoder.sample(decoder_in)
-    #     # `out` has shape: [B*num_slots, num_channels+1, H, W].
-
-    #     out = out.view(bs, num_slots, num_channels + 1, height, width)
-    #     recons = out[:, :, :num_channels, :, :]  # [B, num_slots, num_channels, H, W]
-    #     masks = out[:, :, -1:, :, :]
-    #     masks = F.softmax(masks, dim=1)  # [B, num_slots, 1, H, W]
-    #     recon_combined = torch.sum(recons * masks, dim=1)  # [B, num_channels, H, W]
-    #     return recon_combined, recons, masks, slots
 
     @property
     def dtype(self):
