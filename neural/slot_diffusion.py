@@ -668,8 +668,10 @@ class SADiffusion(nn.Module):
             eps=1e-6,
     ):
         super().__init__()
+        self.n_mels = n_mels
         self.num_slots = num_slots
         self.resolution = resolution
+        self.width = (sample_rate // hop_length) + 1
         
         self.to_mel = ToMel(sample_rate, n_fft, hop_length, n_mels)
         self.encoder = Encoder(**encoder_dict)
@@ -703,7 +705,7 @@ class SADiffusion(nn.Module):
         # perform slot attention operation
         slots, masks = self.slot_attention(encoder_out, init_slots)
         print(slots.shape, masks.shape)
-        masks = masks.unflatten(-1, (128 // self.resolution, 32 // self.resolution))
+        masks = masks.unflatten(-1, (self.n_mels // self.resolution, self.width // self.resolution))
         # [B, N, C], [B, N, h, w]
         print(slots.shape, masks.shape)
 
