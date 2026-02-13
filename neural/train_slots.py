@@ -33,8 +33,9 @@ from einops import rearrange
 from slot_diffusion import SADiffusion as net
 import soundfile as sf
 
-import torch
 import pyrubberband as pyrb
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -258,14 +259,97 @@ def get_lr(it):
     return min_lr + coeff * (learning_rate - min_lr)
 
 def save_samples(iter_num):
-    X = get_batch('valid', 32)
+    batch_dir = os.path.join(out_dir, iter_num)
+    os.makedirs(batch_dir, exist_ok=True)
     
+    def to_numpy(x):
+        if isinstance(x, torch.Tensor):
+            return x.detach().cpu().numpy().squeeze()
+        return x
+    
+    X = get_batch('valid', 32)
     out = model(X)
     
+    gt = model.to_mel(X)
     masks = out['masks'].argmax(dim=1)
     samples = out['samples']
     
-    print(X.shape, masks.shape, samples.shape)
+    print(gt.shape, masks.shape, samples.shape)
+    
+    gts = to_numpy(gt)
+    recons = to_numpy(samples)
+    mask_nps = to_numpy(masks)
+    
+    for gt, recon, mask_np in zip(gts, recons, mask_nps):
+        fig, axes = plt.subplots(1, 3, figsize=(16, 12))
+        
+        plot_kwargs = {'origin': 'lower', 'aspect': 'auto', 'interpolation': 'nearest'}
+        
+        vmin = min(gt.min(), recon.min())
+        vmax = max(gt.max(), recon.max())
+
+        # --- Panel 1: Ground Truth ---
+        im1 = axes[0].imshow(gt, cmap='magma', vmin=vmin, vmax=vmax, **plot_kwargs)
+        axes[0].set_title("Ground Truth")
+        axes[0].set_ylabel("Mel Bins")
+        axes[0].set_xlabel("Time Frames")
+        plt.colorbar(im1, ax=axes[0], format='%+2.0f dB')
+
+        # --- Panel 2: Reconstruction ---
+        im2 = axes[1].imshow(recon, cmap='magma', vmin=vmin, vmax=vmax, **plot_kwargs)
+        axes[1].set_title("Reconstruction")
+        axes[1].set_xlabel("Time Frames")
+        axes[1].set_yticks([]) # Hide Y-axis labels for cleanliness
+        plt.colorbar(im2, ax=axes[1], format='%+2.0f dB')
+
+        # --- Panel 3: Reconstruction + Masks ---
+        axes[2].imshow(recon, cmap='gray', vmin=vmin, vmax=vmax, **plot_kwargs)
+        
+        # Define a distinct color palette for masks (Red, Blue, Green, Yellow...)
+        # Using matplotlib's 'tab10' qualitative colormap
+        colors = plt.cm.tab10.colors 
+        legend_patches = []
+
+        # Overlay each mask layer
+        for i in range(mask_np.shape[0]):
+            current_mask = mask_np[i]
+            
+            # Only process if mask is not empty
+            if np.sum(current_mask) > 0:
+                # Create an RGBA image for this mask
+                # H, W = height, width
+                H, W = current_mask.shape
+                color_rgba = np.zeros((H, W, 4))
+                
+                # Assign the specific color to this mask index
+                c = colors[i % len(colors)]
+                
+                # Paint the color (R, G, B)
+                color_rgba[..., 0] = c[0]
+                color_rgba[..., 1] = c[1]
+                color_rgba[..., 2] = c[2]
+                
+                # Set Alpha (Transparency): 0.0 where no mask, 0.4 where mask exists
+                color_rgba[..., 3] = np.where(current_mask > 0, 0.4, 0.0)
+                
+                # Overlay it
+                axes[2].imshow(color_rgba, origin='lower', aspect='auto')
+                
+                # Add to legend
+                legend_patches.append(mpatches.Patch(color=c, label=f'Mask {i+1}', alpha=0.6))
+
+        axes[2].set_title("Recon + Mask Overlay")
+        axes[2].set_xlabel("Time Frames")
+        axes[2].set_yticks([])
+        
+        # Add a legend if we have masks
+        if legend_patches:
+            axes[2].legend(handles=legend_patches, loc='upper right', framealpha=0.9)
+
+        plt.tight_layout()
+        
+        plt.savefig(os.path.join(batch_dir, f'{j}.png'), dpi=150)
+            
 
 # logging
 if wandb_log and master_process:
