@@ -790,7 +790,7 @@ if __name__ == '__main__':
     num_iterations=3
     
     decoder_dict = dict(
-        in_channels=hidden_size,
+        in_channels=1,
         slot_size=slot_size,
         max_seq_len=max_seq_len,
         patch_size=patch_size,
