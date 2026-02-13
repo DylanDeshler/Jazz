@@ -257,6 +257,15 @@ def get_lr(it):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
 
+def save_samples(iter_num):
+    X = get_batch('valid', 32)
+    
+    out = model(X)
+    
+    masks = out['masks'].argmax(dim=1)
+    samples = out['samples']
+    
+    print(X.shape, masks.shape, samples.shape)
 
 # logging
 if wandb_log and master_process:
@@ -285,39 +294,39 @@ while True:
     tokens_trained += batch_size * gradient_accumulation_steps * max_seq_len
 
     # evaluate the loss on train/val sets and write checkpoints
-    # if iter_num % eval_interval == 0 and master_process:
-    #     losses = estimate_loss()
-    #     print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+    if iter_num % eval_interval == 0 and master_process:
+        losses = estimate_loss()
+        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         
-    #     # if iter_num % sample_interval == 0 and master_process:
-    #     #     model.eval()
-    #     #     with ctx:
-    #     #         save_samples(iter_num)
-    #     #     model.train()
+        if iter_num % sample_interval == 0 and master_process:
+            model.eval()
+            with ctx:
+                save_samples(iter_num)
+            model.train()
         
-    #     if wandb_log:
-    #         wandb.log({
-    #             "iter": iter_num,
-    #             "train/loss": losses['train'],
-    #             "val/loss": losses['val'],
-    #             "lr": lr,
-    #             "mfu": running_mfu*100, # convert to percentage
-    #             "tokens": tokens_trained,
-    #         })
-    #     if losses['val'] < best_val_loss or always_save_checkpoint:
-    #         best_val_loss = losses['val']
-    #         if iter_num > 0:
-    #             checkpoint = {
-    #                 'model': raw_model.state_dict(),
-    #                 'optimizer': optimizer.state_dict(),
-    #                 'model_args': model_args,
-    #                 'iter_num': iter_num,
-    #                 'best_val_loss': best_val_loss,
-    #                 'config': config,
-    #                 'tokens': tokens_trained,
-    #             }
-    #             print(f"saving checkpoint to {out_dir}")
-    #             torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+        if wandb_log:
+            wandb.log({
+                "iter": iter_num,
+                "train/loss": losses['train'],
+                "val/loss": losses['val'],
+                "lr": lr,
+                "mfu": running_mfu*100, # convert to percentage
+                "tokens": tokens_trained,
+            })
+        if losses['val'] < best_val_loss or always_save_checkpoint:
+            best_val_loss = losses['val']
+            if iter_num > 0:
+                checkpoint = {
+                    'model': raw_model.state_dict(),
+                    'optimizer': optimizer.state_dict(),
+                    'model_args': model_args,
+                    'iter_num': iter_num,
+                    'best_val_loss': best_val_loss,
+                    'config': config,
+                    'tokens': tokens_trained,
+                }
+                print(f"saving checkpoint to {out_dir}")
+                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
     
     if eval_only:
         break
