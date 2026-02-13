@@ -490,10 +490,6 @@ class Encoder(nn.Module):
                  in_channels,
                  hidden_size,
                  max_seq_len,
-                 sample_rate,
-                 n_fft,
-                 hop_length,
-                 n_mels,
                  patch_size,
                  num_heads=12,
                  depth=12,
@@ -653,6 +649,10 @@ class SADiffusion(nn.Module):
     def __init__(
             self,
             resolution,
+            sample_rate,
+            n_fft,
+            hop_length,
+            n_mels,
             num_slots=7,
             slot_size=128,
             slot_mlp_size=256,
@@ -766,10 +766,6 @@ if __name__ == '__main__':
     encoder_dict = dict(
         in_channels=1,
         max_seq_len=max_seq_len,
-        sample_rate=16000,
-        n_fft=1024,
-        hop_length=512,
-        n_mels=128,
         patch_size=16,
         depth=depth,
         hidden_size=hidden_size,
@@ -777,6 +773,10 @@ if __name__ == '__main__':
     )
     
     resolution=16
+    sample_rate=16000
+    n_fft=1024
+    hop_length=512
+    n_mels=128
     num_slots=7
     slot_size=128
     slot_mlp_size=256
@@ -791,7 +791,9 @@ if __name__ == '__main__':
         num_heads=num_heads
     )
     
-    model = SADiffusion(resolution, num_slots, slot_size, slot_mlp_size, num_iterations, encoder_dict, decoder_dict).to('cuda')
+    model = SADiffusion(
+        resolution, sample_rate, n_fft, hop_length, n_mels, num_slots, slot_size, slot_mlp_size, num_iterations, encoder_dict, decoder_dict
+    ).to('cuda')
     
     x = torch.randn(16, 1, 16000).to('cuda')
     out = model(x)
