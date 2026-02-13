@@ -86,7 +86,7 @@ def create_resampled_memmap(wav_files, output_filename, target_sr=16000, force_m
 
         # Ensure we strictly match the pre-calculated length
         # (Resampling can sometimes be off by 1 sample due to rounding)
-        current_frames = waveform.shape[1]
+        current_frames = waveform.shape[0]
         
         if current_frames != num_samples:
             print('AHHH ERROR')
