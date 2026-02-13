@@ -783,11 +783,15 @@ class SADiffusion(nn.Module):
         
         self.decoder = ModernDiTWrapper(**decoder_dict)
 
+    @torch.compiler.disable
+    def _compute_mel(self, x):
+        return self.to_mel(x)
+
     def encode(self, img, init_slots=None):
         """Encode from img to slots."""
         B = img.shape[0]
 
-        img = self.to_mel(img)
+        img = self._compute_mel(img)
         encoder_out = self.encoder(img).type(self.dtype)
         # `encoder_out` has shape: [B, H*W, out_features]
 
@@ -826,6 +830,7 @@ class SADiffusion(nn.Module):
             samples = self.decoder.generate(img.shape, slots)
             return {'masks': masks, 'slots': slots, 'samples': samples}
         
+        print(img.mean(), slots.mean())
         loss = self.decoder(img, slots)
         print(loss)
 
