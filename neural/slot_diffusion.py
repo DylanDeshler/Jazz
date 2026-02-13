@@ -806,4 +806,4 @@ if __name__ == '__main__':
     x = torch.randn(16, 1, 16000).to('cuda')
     out = model(x)
     
-    recon_combined, recons, masks, slots = model.decode(out{'slots'})
+    recon_combined, recons, masks, slots = model.decode(out['slots'])
