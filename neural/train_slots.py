@@ -314,6 +314,7 @@ def save_samples(iter_num):
             
             # Boolean mask for this specific class
             is_this_class = mask_nps == mask_idx
+            print(is_this_class.shape)
             
             if np.sum(is_this_class) > 0:
                 # Paint the pixels
