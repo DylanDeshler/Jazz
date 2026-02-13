@@ -741,11 +741,14 @@ class SADiffusion(nn.Module):
         height = width = self.resolution
         num_channels = 1
 
+        print(slots.shape)
         # spatial broadcast
         decoder_in = slots.view(bs * num_slots, slot_size, 1, 1)
+        print(decoder_in.shape)
         decoder_in = decoder_in.repeat(1, 1, self.resolution, self.resolution)
+        print(decoder_in.shape)
 
-        out = self.decoder(out)
+        out = self.decoder(decoder_in)
         # `out` has shape: [B*num_slots, num_channels+1, H, W].
 
         out = out.view(bs, num_slots, num_channels + 1, height, width)
