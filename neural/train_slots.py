@@ -285,26 +285,23 @@ def save_samples(iter_num):
         fig, axes = plt.subplots(1, 3, figsize=(16, 12))
         
         plot_kwargs = {'origin': 'lower', 'aspect': 'auto', 'interpolation': 'nearest'}
-        
-        vmin = min(gt.min(), recon.min())
-        vmax = max(gt.max(), recon.max())
 
         # --- Panel 1: Ground Truth ---
-        im1 = axes[0].imshow(gt, cmap='magma', vmin=vmin, vmax=vmax, **plot_kwargs)
+        im1 = axes[0].imshow(gt, cmap='magma', vmin=gt.min(), vmax=gt.max(), **plot_kwargs)
         axes[0].set_title("Ground Truth")
         axes[0].set_ylabel("Mel Bins")
         axes[0].set_xlabel("Time Frames")
         plt.colorbar(im1, ax=axes[0], format='%+2.0f dB')
 
         # --- Panel 2: Reconstruction ---
-        im2 = axes[1].imshow(recon, cmap='magma', vmin=vmin, vmax=vmax, **plot_kwargs)
+        im2 = axes[1].imshow(recon, cmap='magma', vmin=recon.min(), vmax=recon.max(), **plot_kwargs)
         axes[1].set_title("Reconstruction")
         axes[1].set_xlabel("Time Frames")
         axes[1].set_yticks([]) # Hide Y-axis labels for cleanliness
         plt.colorbar(im2, ax=axes[1], format='%+2.0f dB')
 
         # --- Panel 3: Reconstruction + Masks ---
-        axes[2].imshow(recon, cmap='gray', vmin=vmin, vmax=vmax, **plot_kwargs)
+        axes[2].imshow(recon, cmap='gray', vmin=recon.min(), vmax=recon.max(), **plot_kwargs)
         
         # Define a distinct color palette for masks (Red, Blue, Green, Yellow...)
         # Using matplotlib's 'tab10' qualitative colormap
