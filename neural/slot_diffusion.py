@@ -502,7 +502,6 @@ class Encoder(nn.Module):
         super().__init__()
         self.patch_size = patch_size
         
-        self.to_mel = ToMel(sample_rate, n_fft, hop_length, n_mels)
         self.x_embedder = nn.Linear(in_channels * patch_size * patch_size, hidden_size, bias=False)
         
         self.blocks = nn.ModuleList([
@@ -645,8 +644,8 @@ class ModernDiTWrapper(nn.Module):
     def forward(self, x, slots, t=None):
         return self.diffusion.loss(self.net, x, t=t, net_kwargs={'slots': slots})
     
-    def generate(self, x, slots, n_steps=50):
-        return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'slots': slots})
+    def generate(self, shape, slots, n_steps=50):
+        return self.sampler.sample(self.net, shape, n_steps=n_steps, net_kwargs={'slots': slots})
 
 class SADiffusion(nn.Module):
     """SlotDiffusion model on images."""
@@ -666,6 +665,7 @@ class SADiffusion(nn.Module):
         self.num_slots = num_slots
         self.resolution = resolution
         
+        self.to_mel = ToMel(sample_rate, n_fft, hop_length, n_mels)
         self.encoder = Encoder(**encoder_dict)
 
         self.init_latents = nn.Parameter(
@@ -681,17 +681,13 @@ class SADiffusion(nn.Module):
         )
         
         self.decoder = ModernDiTWrapper(**decoder_dict)
-    
-    def _get_encoder_out(self, img):
-        """Encode image"""
-        encoder_out = self.encoder(img).type(self.dtype)
-        return encoder_out
 
     def encode(self, img, init_slots=None):
         """Encode from img to slots."""
         B = img.shape[0]
 
-        encoder_out = self._get_encoder_out(img)
+        img = self.to_mel(img)
+        encoder_out = self.encoder(img).type(self.dtype)
         # `encoder_out` has shape: [B, H*W, out_features]
 
         # init slots
@@ -703,6 +699,7 @@ class SADiffusion(nn.Module):
         print(slots.shape, masks.shape)
         masks = masks.unflatten(-1, (128 // self.resolution, 32 // self.resolution))
         # [B, N, C], [B, N, h, w]
+        print(slots.shape, masks.shape)
 
         # resize masks to the original resolution
         if not self.training:
@@ -721,11 +718,12 @@ class SADiffusion(nn.Module):
     def forward(self, img):
         """Forward function."""
 
-        slots, masks = self.encode(img)
+        img, slots, masks = self.encode(img)
         # `slots` has shape: [B, self.num_slots, self.slot_size]
         # `masks` has shape: [B, self.num_slots, H, W]
         
-        loss = self.decoder(slots)
+        loss = self.decoder(img, slots)
+        print(loss)
 
         out_dict = {'masks': masks, 'slots': slots, 'loss': loss}
         return out_dict
