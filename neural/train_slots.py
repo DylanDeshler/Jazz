@@ -271,7 +271,7 @@ def save_samples(iter_num):
     out = model(X)
     
     gt = model.to_mel(X)
-    masks = out['masks'].argmax(dim=1)
+    masks = out['masks']#.argmax(dim=1)
     samples = out['samples']
     
     print(gt.shape, masks.shape, samples.shape)
@@ -348,8 +348,8 @@ def save_samples(iter_num):
             axes[2].legend(handles=legend_patches, loc='upper right', framealpha=0.9)
 
         plt.tight_layout()
-        
         plt.savefig(os.path.join(batch_dir, f'{j}.png'), dpi=150)
+        plt.close('all')
             
 
 # logging
