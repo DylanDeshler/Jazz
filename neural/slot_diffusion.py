@@ -609,7 +609,7 @@ class ModernDiT(nn.Module):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
     def forward(self, x, t, slots):
-        B, H, W = x.shape
+        B, C, H, W = x.shape
         
         print(x.shape)
         x = rearrange(x, 'b c (h p1) (w p2) -> b (h w) (c p1 p2)', p1=self.patch_size, p2=self.patch_size)
@@ -630,7 +630,7 @@ class ModernDiT(nn.Module):
         x = modulate(self.norm(x), shift, scale)
         x = self.fc(x)
         
-        x = rearrange(x, 'b (h w) (c p1 p2) -> b c (h p1) (w p2)', h=H // self.patch_size, w=W // self.patch_size, p1=self.patch_size, p2=self.patch_size)
+        x = rearrange(x, 'b (h w) (c p1 p2) -> b c (h p1) (w p2)', c=C, h=H // self.patch_size, w=W // self.patch_size, p1=self.patch_size, p2=self.patch_size)
         
         return x
 
