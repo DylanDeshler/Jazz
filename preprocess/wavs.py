@@ -62,7 +62,7 @@ def create_resampled_memmap(wav_files, output_filename, target_sr=16000, force_m
     print(f"Memmap Size (GB): {total_samples * 4 / (1024**3):.2f} GB")
 
     # Create the file on disk
-    fp = np.memmap(output_filename, dtype=np.float32, mode='w+', shape=final_shape)
+    fp = np.memmap(output_filename, dtype=np.float16, mode='w+', shape=final_shape)
 
     print(f"\n--- Pass 2: Resampling and Writing ---")
     
@@ -99,7 +99,7 @@ def create_resampled_memmap(wav_files, output_filename, target_sr=16000, force_m
 
         # Write to memmap
         # .squeeze() to drop the channel dim if it's 1 (mono) and our shape is 1D
-        data_np = waveform.numpy().squeeze()
+        data_np = waveform.numpy().squeeze().astype(np.float16)
         
         # Assign to slice
         fp[start_idx : start_idx + num_samples] = data_np
