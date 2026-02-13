@@ -728,35 +728,37 @@ class SADiffusion(nn.Module):
         # `slots` has shape: [B, self.num_slots, self.slot_size]
         # `masks` has shape: [B, self.num_slots, H, W]
         
+        if not self.training:
+            samples = self.decoder(img.shape, slots)
+            return {'masks': masks, 'slots': slots, 'samples': samples}
+        
         loss = self.decoder(img, slots)
-        print(loss)
 
-        out_dict = {'masks': masks, 'slots': slots, 'loss': loss}
-        return out_dict
+        return {'masks': masks, 'slots': slots, 'loss': loss}
 
-    def decode(self, slots):
-        """Decode from slots to reconstructed images and masks."""
-        # `slots` has shape: [B, self.num_slots, self.slot_size].
-        bs, num_slots, slot_size = slots.shape
-        height = width = self.resolution
-        num_channels = 1
+    # def decode(self, slots):
+    #     """Decode from slots to reconstructed images and masks."""
+    #     # `slots` has shape: [B, self.num_slots, self.slot_size].
+    #     bs, num_slots, slot_size = slots.shape
+    #     height = width = self.resolution
+    #     num_channels = 1
 
-        print(slots.shape)
-        # spatial broadcast
-        decoder_in = slots.view(bs * num_slots, slot_size, 1, 1)
-        print(decoder_in.shape)
-        decoder_in = decoder_in.repeat(1, 1, self.resolution, self.resolution)
-        print(decoder_in.shape)
+    #     print(slots.shape)
+    #     # spatial broadcast
+    #     decoder_in = slots.view(bs * num_slots, slot_size, 1, 1)
+    #     print(decoder_in.shape)
+    #     decoder_in = decoder_in.repeat(1, 1, self.resolution, self.resolution)
+    #     print(decoder_in.shape)
 
-        out = self.decoder(decoder_in)
-        # `out` has shape: [B*num_slots, num_channels+1, H, W].
+    #     out = self.decoder.sample(decoder_in)
+    #     # `out` has shape: [B*num_slots, num_channels+1, H, W].
 
-        out = out.view(bs, num_slots, num_channels + 1, height, width)
-        recons = out[:, :, :num_channels, :, :]  # [B, num_slots, num_channels, H, W]
-        masks = out[:, :, -1:, :, :]
-        masks = F.softmax(masks, dim=1)  # [B, num_slots, 1, H, W]
-        recon_combined = torch.sum(recons * masks, dim=1)  # [B, num_channels, H, W]
-        return recon_combined, recons, masks, slots
+    #     out = out.view(bs, num_slots, num_channels + 1, height, width)
+    #     recons = out[:, :, :num_channels, :, :]  # [B, num_slots, num_channels, H, W]
+    #     masks = out[:, :, -1:, :, :]
+    #     masks = F.softmax(masks, dim=1)  # [B, num_slots, 1, H, W]
+    #     recon_combined = torch.sum(recons * masks, dim=1)  # [B, num_channels, H, W]
+    #     return recon_combined, recons, masks, slots
 
     @property
     def dtype(self):
@@ -809,4 +811,8 @@ if __name__ == '__main__':
     x = torch.randn(16, 1, 16000).to('cuda')
     out = model(x)
     
-    recon_combined, recons, masks, slots = model.decode(out['slots'])
+    model.eval()
+    out = model(x)
+    
+    for k, v in out.items():
+        print(k, v.shape)
