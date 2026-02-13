@@ -1,5 +1,6 @@
 import torch
 import torchaudio
+import soundfile as sf
 import numpy as np
 import os
 from tqdm import tqdm  # For progress bar
@@ -27,7 +28,7 @@ def create_resampled_memmap(wav_files, output_filename, target_sr=16000, force_m
     for f in tqdm(wav_files, desc="Scanning Metadata"):
         try:
             # torchaudio.info is much faster than loading the file
-            info = torchaudio.info(f)
+            info = sf.info(f)
             orig_sr = info.sample_rate
             orig_frames = info.num_frames
             channels = info.num_channels
