@@ -71,41 +71,38 @@ def create_resampled_memmap(wav_files, output_filename, target_sr=16000, force_m
     # but for simplicity/robustness we use the functional API here.
     
     for f_path, start_idx, num_samples, orig_sr, orig_channels in tqdm(file_offsets, desc="Processing"):
-        try:
-            # Load audio
-            waveform, sr = sf.read(f_path)
-            waveform = torch.from_numpy(waveform.T)
-            
-            # Mix to Mono if requested
-            if force_mono and waveform.shape[0] > 1:
-                waveform = torch.mean(waveform, dim=0, keepdim=True)
-            
-            # Resample if needed
-            if sr != target_sr:
-                waveform = torchaudio.functional.resample(waveform, orig_freq=sr, new_freq=target_sr)
+        
+        # Load audio
+        waveform, sr = sf.read(f_path)
+        waveform = torch.from_numpy(waveform.T)
+        
+        # Mix to Mono if requested
+        if force_mono and waveform.shape[0] > 1:
+            waveform = torch.mean(waveform, dim=0, keepdim=True)
+        
+        # Resample if needed
+        if sr != target_sr:
+            waveform = torchaudio.functional.resample(waveform, orig_freq=sr, new_freq=target_sr)
 
-            # Ensure we strictly match the pre-calculated length
-            # (Resampling can sometimes be off by 1 sample due to rounding)
-            current_frames = waveform.shape[1]
-            
-            if current_frames != num_samples:
-                print('AHHH ERROR')
-                # Pad or Trim to match the space we reserved
-                if current_frames > num_samples:
-                    waveform = waveform[:, :num_samples]
-                else:
-                    padding = num_samples - current_frames
-                    waveform = torch.nn.functional.pad(waveform, (0, padding))
+        # Ensure we strictly match the pre-calculated length
+        # (Resampling can sometimes be off by 1 sample due to rounding)
+        current_frames = waveform.shape[1]
+        
+        if current_frames != num_samples:
+            print('AHHH ERROR')
+            # Pad or Trim to match the space we reserved
+            if current_frames > num_samples:
+                waveform = waveform[:, :num_samples]
+            else:
+                padding = num_samples - current_frames
+                waveform = torch.nn.functional.pad(waveform, (0, padding))
 
-            # Write to memmap
-            # .squeeze() to drop the channel dim if it's 1 (mono) and our shape is 1D
-            data_np = waveform.numpy().squeeze()
-            
-            # Assign to slice
-            fp[start_idx : start_idx + num_samples] = data_np
-            
-        except Exception as e:
-            print(f"Error processing {f_path}: {e}")
+        # Write to memmap
+        # .squeeze() to drop the channel dim if it's 1 (mono) and our shape is 1D
+        data_np = waveform.numpy().squeeze()
+        
+        # Assign to slice
+        fp[start_idx : start_idx + num_samples] = data_np
 
     # Flush changes
     fp.flush()
