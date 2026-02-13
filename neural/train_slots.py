@@ -313,7 +313,7 @@ def save_samples(iter_num):
             color = colors[mask_idx]
             
             # Boolean mask for this specific class
-            is_this_class = mask_nps == mask_idx
+            is_this_class = mask_np == mask_idx
             print(is_this_class.shape)
             
             if np.sum(is_this_class) > 0:
