@@ -149,18 +149,14 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
-# poor man's data loader
 def get_batch(split='train', batch_size=batch_size):
-    # TODO: sample within songs (this can go over boundaries)
-    data = np.memmap("/home/dylan.d/research/music/Jazz/wavs_16khz.bin", dtype=np.float16, mode='r')
+    data = np.memmap("/home/dylan.d/research/music/Jazz/wavs_16khz.bin", dtype=np.float32, mode='r')
     if split == 'train':
         idxs = torch.randint(int(len(data) * 0.98) - n_samples, (batch_size,))
     else:
         idxs = torch.randint(int(len(data) * 0.98), len(data) - n_samples, (batch_size,))
         
     x = torch.from_numpy(np.stack([data[idx:idx+n_samples] for idx in idxs], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-    print(x[:100])
-    print(x.mean())
     # x = torch.randn_like(x)
     return x
 
