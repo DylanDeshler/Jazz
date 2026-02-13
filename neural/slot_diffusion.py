@@ -30,7 +30,8 @@ class ToMel(nn.Module):
         )
     
     def forward(self, x):
-        return (self.transform(x) + 40) / 40
+        x = (self.transform(x) + 40) / 40
+        print(x.shape)
 
 class SlotAttention(nn.Module):
     """Slot attention module that iteratively performs cross-attention."""
