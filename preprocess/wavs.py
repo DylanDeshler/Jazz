@@ -29,9 +29,9 @@ def create_resampled_memmap(wav_files, output_filename, target_sr=16000, force_m
         try:
             # torchaudio.info is much faster than loading the file
             info = sf.info(f)
-            orig_sr = info.sample_rate
-            orig_frames = info.num_frames
-            channels = info.num_channels
+            orig_sr = info.samplerate
+            orig_frames = info.frames
+            channels = info.channels
 
             # Calculate new duration
             if orig_sr != target_sr:
