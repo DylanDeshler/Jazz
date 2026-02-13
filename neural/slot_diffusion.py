@@ -653,6 +653,7 @@ class ModernDiT(nn.Module):
                  ):
         super().__init__()
         self.patch_size = patch_size
+        self.head_dim = hidden_size // num_heads
 
         self.slot_embedder = SwiGLUMlp(slot_size, hidden_size, hidden_size, bias=False)
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
