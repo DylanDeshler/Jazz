@@ -58,7 +58,7 @@ dataset = ''
 gradient_accumulation_steps = 1
 batch_size = 384
 # model
-n_samples = 16383 * 4
+n_samples = 16383 * 2
 depth = 12
 hidden_size = 768
 num_heads = 12
