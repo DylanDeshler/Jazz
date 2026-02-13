@@ -166,22 +166,6 @@ def get_batch(split='train', batch_size=batch_size):
 iter_num = 0
 best_val_loss = 1e9
 
-ckpt_path = os.path.join('tokenizer_low_measures_large', 'ckpt.pt')
-checkpoint = torch.load(ckpt_path, map_location=device)
-tokenizer_args = checkpoint['model_args']
-
-tokenizer = Tokenizer(**tokenizer_args).to(device)
-state_dict = checkpoint['model']
-# fix the keys of the state dictionary :(
-# honestly no idea how checkpoints sometimes get this prefix, have to debug more
-unwanted_prefix = '_orig_mod.'
-for k,v in list(state_dict.items()):
-    if k.startswith(unwanted_prefix):
-        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-tokenizer.load_state_dict(state_dict)
-tokenizer.eval()
-del state_dict
-
 model_args = dict(
     encoder_dict=encoder_dict,
     resolution=patch_size,
@@ -239,8 +223,7 @@ scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 if compile and 'cuda' in device:
     print("compiling the model... (takes a ~minute)")
     unoptimized_model = model
-    model = torch.compile(model) # requires PyTorch 2.0
-    tokenizer = torch.compile(tokenizer)
+    model = torch.compile(model)
 
 # wrap model into DDP container
 if ddp:
@@ -276,61 +259,6 @@ def get_lr(it):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
 
-def restore_measure(audio, stretch_ratio, sr=16000):
-    """
-    Restores a time-warped measure to its original duration.
-    
-    Args:
-        audio (np.array): The fixed-length audio (from VAE or .npy file).
-                          Can be shape (1, 24576) or (24576,).
-        stretch_ratio (float): The ratio saved in your metadata 
-                               (Original Length / Target Length).
-        sr (int): Sampling rate (default 16000).
-        
-    Returns:
-        np.array: The restored audio array at original duration.
-    """
-    
-    if audio.dtype == np.float16:
-        audio = audio.astype(np.float32)
-    restore_rate = 1.0 / stretch_ratio
-    
-    y_restored = pyrb.time_stretch(audio, sr, restore_rate)
-    return y_restored
-
-@torch.no_grad()
-def save_samples(step):
-    """
-    Generates samples with the same actions as the input audio
-    """
-    batch_dir = os.path.join(out_dir, str(step))
-    os.makedirs(batch_dir, exist_ok=True)
-    
-    n_samples = 20
-    x = get_batch('val')
-    x = x[:n_samples]
-
-    B, T, N, D = x.shape
-    
-    with ctx:
-        recon = raw_model.generate(x.clone(), bpm, actions, n_steps=50)
-        x = tokenizer.decode(x.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
-        recon = tokenizer.decode(recon.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
-    
-    x = x.cpu().detach().float().numpy().squeeze(-2)
-    recon = recon.cpu().detach().float().numpy().squeeze(-2)
-
-    for i in range(n_samples):
-        og, y, r = x[i], recon[i], ratio[i].cpu().detach().numpy()
-
-        og_ms, y_ms = [], []
-        for og_m, y_m, r_m in zip(og, y, r):
-            og_ms.append(restore_measure(og_m, r_m.item()))
-            y_ms.append(restore_measure(y_m, r_m.item()))
-        
-        # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), np.concatenate(og_ms), 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), np.concatenate(y_ms), 16000)
 
 # logging
 if wandb_log and master_process:
@@ -363,11 +291,11 @@ while True:
         losses = estimate_loss()
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         
-        if iter_num % sample_interval == 0 and master_process:
-            model.eval()
-            with ctx:
-                save_samples(iter_num)
-            model.train()
+        # if iter_num % sample_interval == 0 and master_process:
+        #     model.eval()
+        #     with ctx:
+        #         save_samples(iter_num)
+        #     model.train()
         
         if wandb_log:
             wandb.log({
