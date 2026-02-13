@@ -579,7 +579,7 @@ class ModernDiT(nn.Module):
         self.final_layer_scale_shift_table = nn.Parameter(
             torch.randn(2, hidden_size) / hidden_size ** 0.5,
         )
-        self.fc = nn.Linear(hidden_size, in_channels, bias=False)
+        self.fc = nn.Linear(hidden_size, in_channels * patch_size * patch_size, bias=False)
         
         self.initialize_weights()
         self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_seq_len))
@@ -613,6 +613,7 @@ class ModernDiT(nn.Module):
         
         print(x.shape)
         x = rearrange(x, 'b c (h p1) (w p2) -> b (h w) (c p1 p2)', p1=self.patch_size, p2=self.patch_size)
+        print(x.shape)
         x = self.x_embedder(x)
         
         slots = self.slot_embedder(slots)
