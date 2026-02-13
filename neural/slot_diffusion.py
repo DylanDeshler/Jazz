@@ -685,7 +685,7 @@ class SADiffusion(nn.Module):
         """Encode from img to slots."""
         B = img.shape[0]
 
-        img = self.to_mel(img).squeeze(1)
+        img = self.to_mel(img)
         encoder_out = self.encoder(img).type(self.dtype)
         # `encoder_out` has shape: [B, H*W, out_features]
 
@@ -712,7 +712,7 @@ class SADiffusion(nn.Module):
                 ).squeeze(1).unflatten(0, (B, self.num_slots))  # [B, N, H, W]
 
         # [B, N, C], [B, N, H, W]
-        return img, slots, masks
+        return img.squeeze(1), slots, masks
 
     def forward(self, img):
         """Forward function."""
