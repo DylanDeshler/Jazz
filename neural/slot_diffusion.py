@@ -767,17 +767,18 @@ if __name__ == '__main__':
     hidden_size = 1024
     num_heads = 16
     max_seq_len = 128
+    patch_size = 16
     
     encoder_dict = dict(
         in_channels=1,
         max_seq_len=max_seq_len,
-        patch_size=16,
+        patch_size=patch_size,
         depth=depth,
         hidden_size=hidden_size,
         num_heads=num_heads
     )
     
-    resolution=16
+    resolution=patch_size
     sample_rate=16000
     n_fft=1024
     hop_length=512
@@ -791,6 +792,7 @@ if __name__ == '__main__':
         in_channels=hidden_size,
         slot_size=slot_size,
         max_seq_len=max_seq_len,
+        patch_size=patch_size,
         depth=depth,
         hidden_size=hidden_size,
         num_heads=num_heads
