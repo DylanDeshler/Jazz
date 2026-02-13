@@ -738,7 +738,7 @@ class SADiffusion(nn.Module):
         """Decode from slots to reconstructed images and masks."""
         # `slots` has shape: [B, self.num_slots, self.slot_size].
         bs, num_slots, slot_size = slots.shape
-        height, width = self.resolution
+        height = width = self.resolution
         num_channels = 1
 
         # spatial broadcast
