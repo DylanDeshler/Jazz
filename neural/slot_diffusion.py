@@ -554,15 +554,17 @@ class ModernDiT(nn.Module):
                  slot_size,
                  hidden_size,
                  max_seq_len,
+                 patch_size,
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4,
                  ):
         super().__init__()
+        self.patch_size = patch_size
 
         self.slot_embedder = SwiGLUMlp(slot_size, hidden_size, hidden_size, bias=False)
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
-        self.x_embedder = nn.Linear(in_channels, hidden_size, bias=False)
+        self.x_embedder = nn.Linear(in_channels * patch_size * patch_size, hidden_size, bias=False)
         
         self.t_block = nn.Sequential(
             nn.SiLU(),
@@ -607,13 +609,14 @@ class ModernDiT(nn.Module):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
     def forward(self, x, t, slots):
-        B, T, C = x.shape
+        B, H, W = x.shape
         
         print(x.shape)
+        x = rearrange(x, 'b c (h p1) (w p2) -> b (h w) (c p1 p2)', p1=self.patch_size, p2=self.patch_size)
         x = self.x_embedder(x)
         
         slots = self.slot_embedder(slots)
-        t = self.t_embedder(t.flatten()).view(B, T, -1)
+        t = self.t_embedder(t.flatten()).view(B, x.shape[1], -1)
         t0 = self.t_block(t)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
@@ -626,6 +629,8 @@ class ModernDiT(nn.Module):
         )
         x = modulate(self.norm(x), shift, scale)
         x = self.fc(x)
+        
+        x = rearrange(x, 'b (h w) (c p1 p2) -> b c (h p1) (w p2)', h=H // self.patch_size, w=W // self.patch_size, p1=self.patch_size, p2=self.patch_size)
         
         return x
 
