@@ -777,7 +777,7 @@ if __name__ == '__main__':
     hidden_size = 1024
     num_heads = 16
     max_seq_len = 128
-    patch_size = 16
+    patch_size = 8
     
     encoder_dict = dict(
         in_channels=1,
