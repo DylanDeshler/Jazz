@@ -532,7 +532,6 @@ class Encoder(nn.Module):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
     def forward(self, x):
-        x = self.to_mel(x)
         print(x.shape)
         
         x = rearrange(x, 'b c (h p1) (w p2) -> b (h w) (c p1 p2)', p1=self.patch_size, p2=self.patch_size)
