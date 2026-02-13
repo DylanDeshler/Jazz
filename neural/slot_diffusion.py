@@ -714,7 +714,7 @@ class SADiffusion(nn.Module):
                 print(masks.shape)
                 masks = F.interpolate(
                     masks,
-                    (self.resolution, self.resolution),
+                    scale_factor=self.resolution,
                     mode='bilinear',
                     align_corners=False,
                 )
