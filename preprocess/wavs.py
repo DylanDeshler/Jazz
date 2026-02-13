@@ -74,12 +74,11 @@ def create_resampled_memmap(wav_files, output_filename, target_sr=16000, force_m
         
         # Load audio
         waveform, sr = sf.read(f_path)
-        waveform = torch.from_numpy(waveform.T)
-        print(waveform.shape)
+        waveform = torch.from_numpy(waveform)
         
         # Mix to Mono if requested
-        if force_mono and waveform.shape[0] > 1:
-            waveform = torch.mean(waveform, dim=0, keepdim=True)
+        if force_mono and waveform.ndim() == 2 and waveform.shape[0] > 1:
+            waveform = torch.mean(waveform, dim=0, keepdim=False)
         
         # Resample if needed
         if sr != target_sr:
@@ -87,14 +86,13 @@ def create_resampled_memmap(wav_files, output_filename, target_sr=16000, force_m
 
         # Ensure we strictly match the pre-calculated length
         # (Resampling can sometimes be off by 1 sample due to rounding)
-        print(waveform.shape)
         current_frames = waveform.shape[1]
         
         if current_frames != num_samples:
             print('AHHH ERROR')
             # Pad or Trim to match the space we reserved
             if current_frames > num_samples:
-                waveform = waveform[:, :num_samples]
+                waveform = waveform[:num_samples]
             else:
                 padding = num_samples - current_frames
                 waveform = torch.nn.functional.pad(waveform, (0, padding))
