@@ -259,7 +259,7 @@ def get_lr(it):
     return min_lr + coeff * (learning_rate - min_lr)
 
 def save_samples(iter_num):
-    batch_dir = os.path.join(out_dir, iter_num)
+    batch_dir = os.path.join(out_dir, str(iter_num))
     os.makedirs(batch_dir, exist_ok=True)
     
     def to_numpy(x):
