@@ -718,7 +718,7 @@ class SADiffusion(nn.Module):
                 ).squeeze(1).unflatten(0, (B, self.num_slots))  # [B, N, H, W]
 
         # [B, N, C], [B, N, H, W]
-        return img.squeeze(1), slots, masks
+        return img, slots, masks
 
     def forward(self, img):
         """Forward function."""
