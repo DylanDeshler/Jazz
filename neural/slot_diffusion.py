@@ -776,7 +776,7 @@ if __name__ == '__main__':
     depth = 16
     hidden_size = 1024
     num_heads = 16
-    max_seq_len = 128
+    max_seq_len = 256
     patch_size = 8
     
     encoder_dict = dict(
@@ -812,7 +812,7 @@ if __name__ == '__main__':
         resolution, sample_rate, n_fft, hop_length, n_mels, num_slots, slot_size, slot_mlp_size, num_iterations, encoder_dict, decoder_dict
     ).to('cuda')
     
-    x = torch.randn(16, 1, sample_rate * 2).to('cuda')
+    x = torch.randn(16, 1, sample_rate * 3).to('cuda')
     out = model(x)
     
     model.eval()
