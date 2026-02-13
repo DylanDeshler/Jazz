@@ -701,7 +701,7 @@ class SADiffusion(nn.Module):
         # perform slot attention operation
         slots, masks = self.slot_attention(encoder_out, init_slots)
         print(slots.shape, masks.shape)
-        masks = masks.unflatten(-1, self.visual_resolution)
+        masks = masks.unflatten(-1, (128, 32))
         # [B, N, C], [B, N, h, w]
 
         # resize masks to the original resolution
