@@ -230,6 +230,91 @@ def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0, use_scaled:
     freqs_cis_real = torch.stack([freqs_cis.real, freqs_cis.imag], dim=-1)
     return freqs_cis_real
 
+import torch
+
+def precompute_freqs_cis_2d(dim: int, height: int, width: int, theta: float = 10000.0):
+    """
+    Precompute 2D rotary position embeddings.
+    
+    Args:
+        dim: Dimension of the head (must be even and divisible by 2 for split).
+        height: Maximum height (H).
+        width: Maximum width (W).
+        theta: Base period for the angles.
+    
+    Returns:
+        freqs_cis: [H*W, dim/2, 2] complex64 tensor representing the flattened 2D position grid.
+    """
+    # Split the dimension into two halves: one for H (Freq), one for W (Time)
+    dim_h = dim // 2
+    dim_w = dim // 2
+    
+    # 1. Compute frequencies for Height (Y-axis / Frequency)
+    freqs_h = 1.0 / (theta ** (torch.arange(0, dim_h, 2)[: (dim_h // 2)].float() / dim_h))
+    t_h = torch.arange(height, device=freqs_h.device)
+    freqs_h = torch.outer(t_h, freqs_h)  # [H, dim_h/2]
+    
+    # 2. Compute frequencies for Width (X-axis / Time)
+    freqs_w = 1.0 / (theta ** (torch.arange(0, dim_w, 2)[: (dim_w // 2)].float() / dim_w))
+    t_w = torch.arange(width, device=freqs_w.device)
+    freqs_w = torch.outer(t_w, freqs_w)  # [W, dim_w/2]
+
+    # 3. Broadcast to create the 2D grid
+    # We want every row (H) to have the same Width embeddings, 
+    # and every column (W) to have the same Height embeddings.
+    
+    # freqs_h: [H, 1, dim_h/2] -> Broadcast over W
+    freqs_h_grid = freqs_h.unsqueeze(1).repeat(1, width, 1)
+    
+    # freqs_w: [1, W, dim_w/2] -> Broadcast over H
+    freqs_w_grid = freqs_w.unsqueeze(0).repeat(height, 1, 1)
+    
+    # 4. Concatenate the frequencies [H, W, dim/2]
+    # This aligns with the channel split: first half Y, second half X
+    freqs_2d = torch.cat([freqs_h_grid, freqs_w_grid], dim=-1)
+    
+    # 5. Convert to complex form (polar)
+    freqs_cis = torch.polar(torch.ones_like(freqs_2d), freqs_2d)
+    
+    # 6. Return as real/imag stack for efficient multiplication
+    # Shape: [H, W, dim/2, 2]
+    freqs_cis_real = torch.stack([freqs_cis.real, freqs_cis.imag], dim=-1)
+    
+    # Flatten spatial dims to match the transformer sequence [N, dim/2, 2]
+    # N = H * W
+    return freqs_cis_real.reshape(-1, freqs_cis_real.shape[-2], 2)
+
+def apply_rotary_emb_2d(x, freqs_cis):
+    """
+    Apply 2D RoPE.
+    Args:
+        x: [B, N, num_heads, head_dim] input tensor (where N = H*W).
+        freqs_cis: [N, head_dim/2, 2] precomputed frequencies.
+    """
+    # x: (bs, seqlen, n_heads, head_dim)
+    # freqs_cis: (seq_len, head_dim/2, 2)
+    
+    # Reshape x into pairs for complex multiplication
+    # xshaped: (bs, seqlen, n_heads, head_dim/2, 2)
+    xshaped = x.float().reshape(*x.shape[:-1], -1, 2)
+    
+    # Broadcast freqs_cis to match batch and heads
+    # freqs_cis: (1, seqlen, 1, head_dim/2, 2)
+    freqs_cis = freqs_cis.view(1, xshaped.size(1), 1, xshaped.size(3), 2)
+    
+    # Complex multiplication (rotation)
+    x_out2 = torch.stack(
+        [
+            xshaped[..., 0] * freqs_cis[..., 0] - xshaped[..., 1] * freqs_cis[..., 1],
+            xshaped[..., 1] * freqs_cis[..., 0] + xshaped[..., 0] * freqs_cis[..., 1],
+        ],
+        -1,
+    )
+    
+    # Flatten back to original shape
+    x_out2 = x_out2.flatten(3)
+    return x_out2.type_as(x)
+
 def apply_rotary_emb(x, freqs_cis):
     # shape gymnastics let's go
     # x is (bs, seqlen, n_heads, head_dim), e.g. (4, 8, 32, 128)
@@ -340,8 +425,8 @@ class SelfAttention(nn.Module):
         q, k, v = qkv.unbind(0)
         # RoPE
         if freqs_cis is not None:
-            q = apply_rotary_emb(q.transpose(1, 2), freqs_cis).transpose(1, 2)
-            k = apply_rotary_emb(k.transpose(1, 2), freqs_cis).transpose(1, 2)
+            q = apply_rotary_emb_2d(q.transpose(1, 2), freqs_cis).transpose(1, 2)
+            k = apply_rotary_emb_2d(k.transpose(1, 2), freqs_cis).transpose(1, 2)
 
         if self.fused_attn:
             x = F.scaled_dot_product_attention(
@@ -497,6 +582,7 @@ class Encoder(nn.Module):
                  ):
         super().__init__()
         self.patch_size = patch_size
+        self.head_dim = hidden_size // num_heads
         
         self.x_embedder = nn.Linear(in_channels * patch_size * patch_size, hidden_size, bias=False)
         
@@ -508,7 +594,7 @@ class Encoder(nn.Module):
         self.fc = nn.Linear(hidden_size, hidden_size, bias=False)
         
         self.initialize_weights()
-        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_seq_len))
+        # self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_seq_len))
     
     def initialize_weights(self):
         self.apply(self._init_weights)
@@ -532,6 +618,7 @@ class Encoder(nn.Module):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
     def forward(self, x):
+        B, C, H, W = x.shape
         print(x.shape)
         
         x = rearrange(x, 'b c (h p1) (w p2) -> b (h w) (c p1 p2)', p1=self.patch_size, p2=self.patch_size)
@@ -539,7 +626,12 @@ class Encoder(nn.Module):
         x = self.x_embedder(x)
         print(x.shape)
         
-        freqs_cis = self.freqs_cis[:x.shape[1]]
+        # freqs_cis = self.freqs_cis[:x.shape[1]]
+        freqs_cis = precompute_freqs_cis_2d(
+            dim=self.head_dim, 
+            height=H // self.patch_size, 
+            width=W // self.patch_size
+        ).to(x.device)
         for block in self.blocks:
             x = block(x, freqs_cis=freqs_cis)
         
@@ -582,7 +674,7 @@ class ModernDiT(nn.Module):
         self.fc = nn.Linear(hidden_size, in_channels * patch_size * patch_size, bias=False)
         
         self.initialize_weights()
-        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_seq_len))
+        # self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_seq_len))
     
     def initialize_weights(self):
         self.apply(self._init_weights)
@@ -618,7 +710,12 @@ class ModernDiT(nn.Module):
         t = self.t_embedder(t)
         t0 = self.t_block(t)
         
-        freqs_cis = self.freqs_cis[:x.shape[1]]
+        # freqs_cis = self.freqs_cis[:x.shape[1]]
+        freqs_cis = precompute_freqs_cis_2d(
+            dim=self.head_dim, 
+            height=H // self.patch_size, 
+            width=W // self.patch_size
+        ).to(x.device)
         for block in self.blocks:
             x = block(x, slots, t0, freqs_cis=freqs_cis)
         
