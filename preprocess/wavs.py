@@ -100,7 +100,6 @@ def create_resampled_memmap(wav_files, output_filename, target_sr=16000, force_m
         # Write to memmap
         # .squeeze() to drop the channel dim if it's 1 (mono) and our shape is 1D
         data_np = waveform.numpy().squeeze()
-        print(data_np.mean())
         
         # Assign to slice
         fp[start_idx : start_idx + num_samples] = data_np
