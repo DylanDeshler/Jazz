@@ -617,7 +617,7 @@ class ModernDiT(nn.Module):
         x = self.x_embedder(x)
         
         slots = self.slot_embedder(slots)
-        t = self.t_embedder(t.flatten()).view(B, x.shape[1], -1)
+        t = self.t_embedder(t)
         t0 = self.t_block(t)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
