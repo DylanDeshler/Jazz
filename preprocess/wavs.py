@@ -62,7 +62,7 @@ def create_resampled_memmap(wav_files, output_filename, target_sr=16000, force_m
     print(f"Memmap Size (GB): {total_samples * 4 / (1024**3):.2f} GB")
 
     # Create the file on disk
-    fp = np.memmap(output_filename, dtype=np.float16, mode='w+', shape=final_shape)
+    fp = np.memmap(output_filename, dtype=np.float32, mode='w+', shape=final_shape)
 
     print(f"\n--- Pass 2: Resampling and Writing ---")
     
