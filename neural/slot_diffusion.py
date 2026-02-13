@@ -827,6 +827,7 @@ class SADiffusion(nn.Module):
             return {'masks': masks, 'slots': slots, 'samples': samples}
         
         loss = self.decoder(img, slots)
+        print(loss)
 
         return {'masks': masks, 'slots': slots, 'loss': loss}
 
