@@ -31,7 +31,7 @@ class ToMel(nn.Module):
     
     def forward(self, x):
         x = (self.transform(x) + 40) / 40
-        x = F.pad(x, (0, 0, 0, 2))
+        x = F.pad(x, (0, 2, 0, 0))
         print(x.shape)
         return x
 
