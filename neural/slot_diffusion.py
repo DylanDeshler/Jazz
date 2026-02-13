@@ -609,6 +609,7 @@ class ModernDiT(nn.Module):
     def forward(self, x, t, slots):
         B, T, C = x.shape
         
+        print(x.shape)
         x = self.x_embedder(x)
         
         slots = self.slot_embedder(slots)
