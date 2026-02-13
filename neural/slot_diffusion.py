@@ -30,7 +30,7 @@ class ToMel(nn.Module):
         )
     
     def forward(self, x):
-        return self.transform(x)
+        return (self.transform(x) + 40) / 40
 
 class SlotAttention(nn.Module):
     """Slot attention module that iteratively performs cross-attention."""
@@ -827,7 +827,7 @@ class SADiffusion(nn.Module):
         # `masks` has shape: [B, self.num_slots, H, W]
         
         if not self.training:
-            samples = self.decoder.generate(img.shape, slots)
+            samples = 40 * (self.decoder.generate(img.shape, slots) - 40)
             return {'masks': masks, 'slots': slots, 'samples': samples}
         
         loss = self.decoder(img, slots)
