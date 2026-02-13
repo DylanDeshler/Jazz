@@ -611,9 +611,7 @@ class ModernDiT(nn.Module):
     def forward(self, x, t, slots):
         B, C, H, W = x.shape
         
-        print(x.shape)
         x = rearrange(x, 'b c (h p1) (w p2) -> b (h w) (c p1 p2)', p1=self.patch_size, p2=self.patch_size)
-        print(x.shape)
         x = self.x_embedder(x)
         
         slots = self.slot_embedder(slots)
@@ -807,3 +805,5 @@ if __name__ == '__main__':
     
     x = torch.randn(16, 1, 16000).to('cuda')
     out = model(x)
+    
+    recon_combined, recons, masks, slots = model.decode(out{'slots'})
