@@ -59,9 +59,9 @@ gradient_accumulation_steps = 1
 batch_size = 128
 # model
 n_samples = 16000
-depth = 16
-hidden_size = 1024
-num_heads = 16
+depth = 12
+hidden_size = 768
+num_heads = 12
 max_seq_len = 256
 patch_size = 8
 
@@ -271,14 +271,13 @@ def save_samples(iter_num):
     out = model(X)
     
     gt = model.to_mel(X)
-    masks = out['masks']#.argmax(dim=1)
+    masks = out['masks'].argmax(1)
     samples = out['samples']
     
-    print(gt.shape, masks.shape, samples.shape)
     
     gts = to_numpy(gt)
     recons = to_numpy(samples)
-    mask_nps = to_numpy(masks).argmax(1)
+    mask_nps = to_numpy(masks)
     
     for j in range(gts.shape[0]):
         gt, recon, mask_np = gts[j], recons[j], mask_nps[j]
@@ -303,27 +302,18 @@ def save_samples(iter_num):
         # --- Panel 3: Reconstruction + Masks ---
         axes[2].imshow(recon, cmap='gray', vmin=recon.min(), vmax=recon.max(), **plot_kwargs)
         
-        # Define a distinct color palette for masks (Red, Blue, Green, Yellow...)
-        # Using matplotlib's 'tab10' qualitative colormap
         colors = plt.cm.tab20.colors
-        overlay_rgba = np.zeros((mask_nps.shape[-2], mask_nps.shape[-1], 4)) # RGBA buffer
+        overlay_rgba = np.zeros((mask_nps.shape[-2], mask_nps.shape[-1], 4))
 
         for mask_idx in range(num_slots):
-            # Get color for this index (modulo 40 to prevent crash if >40 masks)
             color = colors[mask_idx]
             
-            # Boolean mask for this specific class
             is_this_class = mask_np == mask_idx
-            print(is_this_class.shape)
-            
             if np.sum(is_this_class) > 0:
-                # Paint the pixels
-                # R, G, B
                 overlay_rgba[is_this_class, 0] = color[0]
                 overlay_rgba[is_this_class, 1] = color[1]
                 overlay_rgba[is_this_class, 2] = color[2]
                 
-                # Alpha (Transparency) - Set to 0.5 for visibility
                 overlay_rgba[is_this_class, 3] = 0.5
                 
         axes[2].imshow(overlay_rgba, origin='lower', aspect='auto')
