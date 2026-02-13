@@ -278,7 +278,7 @@ def save_samples(iter_num):
     
     gts = to_numpy(gt)
     recons = to_numpy(samples)
-    mask_nps = to_numpy(masks)
+    mask_nps = to_numpy(masks).argmax(1)
     
     for j in range(gts.shape[0]):
         gt, recon, mask_np = gts[j], recons[j], mask_nps[j]
@@ -305,44 +305,31 @@ def save_samples(iter_num):
         
         # Define a distinct color palette for masks (Red, Blue, Green, Yellow...)
         # Using matplotlib's 'tab10' qualitative colormap
-        colors = plt.cm.tab10.colors 
-        legend_patches = []
+        colors = plt.cm.tab20.colors
+        overlay_rgba = np.zeros((mask_nps.shape[-2], mask_nps.shape[-1], 4)) # RGBA buffer
 
-        # Overlay each mask layer
-        for i in range(mask_np.shape[0]):
-            current_mask = mask_np[i]
+        for mask_idx in range(num_slots):
+            # Get color for this index (modulo 40 to prevent crash if >40 masks)
+            color = colors[mask_idx]
             
-            # Only process if mask is not empty
-            if np.sum(current_mask) > 0:
-                # Create an RGBA image for this mask
-                # H, W = height, width
-                H, W = current_mask.shape
-                color_rgba = np.zeros((H, W, 4))
+            # Boolean mask for this specific class
+            is_this_class = mask_nps == mask_idx
+            
+            if np.sum(is_this_class) > 0:
+                # Paint the pixels
+                # R, G, B
+                overlay_rgba[is_this_class, 0] = color[0]
+                overlay_rgba[is_this_class, 1] = color[1]
+                overlay_rgba[is_this_class, 2] = color[2]
                 
-                # Assign the specific color to this mask index
-                c = colors[i % len(colors)]
+                # Alpha (Transparency) - Set to 0.5 for visibility
+                overlay_rgba[is_this_class, 3] = 0.5
                 
-                # Paint the color (R, G, B)
-                color_rgba[..., 0] = c[0]
-                color_rgba[..., 1] = c[1]
-                color_rgba[..., 2] = c[2]
-                
-                # Set Alpha (Transparency): 0.0 where no mask, 0.4 where mask exists
-                color_rgba[..., 3] = np.where(current_mask > 0, 0.4, 0.0)
-                
-                # Overlay it
-                axes[2].imshow(color_rgba, origin='lower', aspect='auto')
-                
-                # Add to legend
-                legend_patches.append(mpatches.Patch(color=c, label=f'Mask {i+1}', alpha=0.6))
+        axes[2].imshow(overlay_rgba, origin='lower', aspect='auto')
 
         axes[2].set_title("Recon + Mask Overlay")
         axes[2].set_xlabel("Time Frames")
         axes[2].set_yticks([])
-        
-        # Add a legend if we have masks
-        if legend_patches:
-            axes[2].legend(handles=legend_patches, loc='upper right', framealpha=0.9)
 
         plt.tight_layout()
         plt.savefig(os.path.join(batch_dir, f'{j}.png'), dpi=150)
