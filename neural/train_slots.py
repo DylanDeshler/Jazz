@@ -80,7 +80,7 @@ n_fft=1024
 hop_length=512
 n_mels=192
 num_slots=2
-slot_size=128
+slot_size=16
 slot_mlp_size=256
 num_iterations=3
 
