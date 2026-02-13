@@ -711,12 +711,14 @@ class SADiffusion(nn.Module):
         if not self.training:
             with torch.no_grad():
                 masks = masks.flatten(0, 1).unsqueeze(1)  # [BN, 1, h, w]
+                print(masks.shape)
                 masks = F.interpolate(
                     masks,
                     self.resolution,
                     mode='bilinear',
                     align_corners=False,
                 ).squeeze(1).unflatten(0, (B, self.num_slots))  # [B, N, H, W]
+                print(masks.shape)
 
         # [B, N, C], [B, N, H, W]
         return img, slots, masks
