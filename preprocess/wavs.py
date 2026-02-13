@@ -77,7 +77,7 @@ def create_resampled_memmap(wav_files, output_filename, target_sr=16000, force_m
         waveform = torch.from_numpy(waveform)
         
         # Mix to Mono if requested
-        if force_mono and waveform.ndim() == 2 and waveform.shape[0] > 1:
+        if force_mono and waveform.ndim == 2 and waveform.shape[0] > 1:
             waveform = torch.mean(waveform, dim=0, keepdim=False)
         
         # Resample if needed
