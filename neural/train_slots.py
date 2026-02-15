@@ -79,10 +79,10 @@ sample_rate=16000
 n_fft=1024
 hop_length=512
 n_mels=192
-num_slots=7
+num_slots=4
 slot_size=8
 slot_mlp_size=256
-num_iterations=3
+num_iterations=10
 
 decoder_dict = dict(
     in_channels=1,
@@ -271,7 +271,7 @@ def save_samples(iter_num):
     X = get_batch('valid', 32)
     out = model(X)
     
-    gt = model.to_mel(X)
+    gt = (model.to_mel(X) * 40) - 40
     masks = out['masks'].argmax(1)
     samples = out['samples']
     
@@ -284,24 +284,26 @@ def save_samples(iter_num):
         gt, recon, mask_np = gts[j], recons[j], mask_nps[j]
         fig, axes = plt.subplots(1, 3, figsize=(16, 12))
         
+        vmin = gt.min()
+        vmax = gt.max()
         plot_kwargs = {'origin': 'lower', 'aspect': 'auto', 'interpolation': 'nearest'}
 
         # --- Panel 1: Ground Truth ---
-        im1 = axes[0].imshow(gt, cmap='magma', vmin=gt.min(), vmax=gt.max(), **plot_kwargs)
+        im1 = axes[0].imshow(gt, cmap='magma', vmin=vmin, vmax=vmax, **plot_kwargs)
         axes[0].set_title("Ground Truth")
         axes[0].set_ylabel("Mel Bins")
         axes[0].set_xlabel("Time Frames")
         plt.colorbar(im1, ax=axes[0], format='%+2.0f dB')
 
         # --- Panel 2: Reconstruction ---
-        im2 = axes[1].imshow(recon, cmap='magma', vmin=recon.min(), vmax=recon.max(), **plot_kwargs)
+        im2 = axes[1].imshow(recon, cmap='magma', vmin=vmin, vmax=vmax, **plot_kwargs)
         axes[1].set_title("Reconstruction")
         axes[1].set_xlabel("Time Frames")
         axes[1].set_yticks([]) # Hide Y-axis labels for cleanliness
         plt.colorbar(im2, ax=axes[1], format='%+2.0f dB')
 
         # --- Panel 3: Reconstruction + Masks ---
-        axes[2].imshow(recon, cmap='gray', vmin=recon.min(), vmax=recon.max(), **plot_kwargs)
+        axes[2].imshow(recon, cmap='gray', vmin=vmin, vmax=vmax, **plot_kwargs)
         
         colors = plt.cm.tab20.colors
         overlay_rgba = np.zeros((mask_nps.shape[-2], mask_nps.shape[-1], 4))

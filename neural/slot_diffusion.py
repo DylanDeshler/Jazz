@@ -828,7 +828,7 @@ class SADiffusion(nn.Module):
         # `masks` has shape: [B, self.num_slots, H, W]
         
         if not self.training:
-            samples = 40 * (self.decoder.generate(img.shape, slots) - 40)
+            samples = (40 * self.decoder.generate(img.shape, slots)) - 40
             return {'masks': masks, 'slots': slots, 'samples': samples}
         
         loss = self.decoder(img, slots)
