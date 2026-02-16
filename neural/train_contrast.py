@@ -132,8 +132,10 @@ file_offsets = np.load(
 def sample_non_overlapping(data, start_fraction, end_fraction):
     # pos = np.random.choice(np.arange(int(len(file_offsets) * start_fraction), int(len(file_offsets) * end_fraction)), size=(batch_size // 2, ), replace=False)
     pos = np.random.randint(int(len(file_offsets) * start_fraction), int(len(file_offsets) * end_fraction), size=(batch_size // 2,))
-    starts = torch.from_numpy(file_offsets[pos, 0]).repeat_interleave(2, dim=0)
-    lengths = torch.from_numpy(file_offsets[pos, 1]).repeat_interleave(2, dim=0)
+    # starts = torch.from_numpy(file_offsets[pos, 0]).repeat_interleave(2, dim=0)
+    # lengths = torch.from_numpy(file_offsets[pos, 1]).repeat_interleave(2, dim=0)
+    starts = torch.randint(int(len(data) * start_fraction), int(len(data) * end_fraction), size=(batch_size, ))
+    lengths = torch.zeros_like(starts)
     idxs = starts + torch.rand(lengths.shape) * lengths
     # idxs = torch.cat([torch.randint(start, start + length - n_samples, size=(2,)) for start, length in zip(starts, lengths)], dim=0)
     return idxs.long()
