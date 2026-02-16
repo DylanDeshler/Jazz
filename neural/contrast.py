@@ -398,6 +398,8 @@ class Transformer(nn.Module):
         return self.to_mel(x)
     
     def _compute_loss(self, x):
+        embs = x[::2]
+        ref_embs = x[1::2]
         return x
     
     def forward(self, x):
@@ -406,7 +408,6 @@ class Transformer(nn.Module):
         if self.training:
             x = self.augment(x)
         
-        print(x.shape)
         mu = x.mean((-1, -2), keepdims=True)
         std = x.std((-1, -2), keepdims=True)
         
@@ -416,6 +417,8 @@ class Transformer(nn.Module):
         
         x = rearrange(x, 'b c (h p1) (w p2) -> b (h w) (c p1 p2)', p1=self.patch_size, p2=self.patch_size)
         x = self.x_embedder(x)
+        
+        print(x.shape)
         
         freqs_cis = precompute_freqs_cis_2d(
             dim=self.head_dim, 
@@ -427,7 +430,7 @@ class Transformer(nn.Module):
         
         x = self.norm(x)
         
-        x = self.pool(x.mean(1), x)
+        x = self.pool(x.mean(1, keepdims=True), x)
         x = self.fc(x)
         loss = self._compute_loss(x)
         
