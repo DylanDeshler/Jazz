@@ -406,8 +406,10 @@ class Transformer(nn.Module):
         if self.training:
             x = self.augment(x)
         
-        mu = x.mean((-1, -2))
-        std = x.std((-1, -2))
+        print(x.shape)
+        mu = x.mean((-1, -2), keepdims=True)
+        std = x.std((-1, -2), keepdims=True)
+        
         x = (x - mu) / (std + 1e-6)
         
         B, C, H, W = x.shape
