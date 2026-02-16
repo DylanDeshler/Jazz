@@ -124,10 +124,10 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
-with open('/home/dylan.d/research/music/Jazz/file_offsets.pkl', 'rb') as f:
-    file_offsets = pickle.load(f)
-    file_offsets = np.array([x[1:] for x in file_offsets], dtype=np.int64)
-np.save('/home/dylan.d/research/music/Jazz/file_offsets.npy', file_offsets)
+file_offsets = np.load(
+    '/home/dylan.d/research/music/Jazz/file_offsets.npy', 
+    mmap_mode='r'
+)
 
 def sample_non_overlapping(data, start_fraction, end_fraction):
     # pos = np.random.choice(np.arange(int(len(file_offsets) * start_fraction), int(len(file_offsets) * end_fraction)), size=(batch_size // 2, ), replace=False)
