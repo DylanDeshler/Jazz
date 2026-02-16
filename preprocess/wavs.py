@@ -2,7 +2,7 @@ import torch
 import torchaudio
 import soundfile as sf
 import numpy as np
-import os
+import pickle
 from tqdm import tqdm  # For progress bar
 
 def create_resampled_memmap(wav_files, output_filename, target_sr=16000, force_mono=True):
@@ -48,6 +48,10 @@ def create_resampled_memmap(wav_files, output_filename, target_sr=16000, force_m
         except Exception as e:
             print(f"Skipping corrupt file {f}: {e}")
 
+    with open('file_offsets.pkl', 'wb') as f:
+        pickle.dump(file_offsets, f)
+    return
+    
     # Define shape
     # We default to float32 because resampling usually outputs float
     if force_mono:
