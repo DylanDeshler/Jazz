@@ -126,10 +126,7 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 with open('/home/dylan.d/research/music/Jazz/file_offsets.pkl', 'rb') as f:
     file_offsets = pickle.load(f)
-    out = {}
-    for i in range(len(file_offsets)):
-        out[i] = file_offsets[i]
-    file_offsets = out
+    file_offsets = np.array(file_offsets, dtype=np.int64)
 
 def sample_non_overlapping(data, start_fraction, end_fraction):
     pos = np.random.choice(np.arange(int(len(file_offsets) * start_fraction), int(len(file_offsets) * end_fraction)), size=(batch_size // 2, ), replace=False)
@@ -150,6 +147,42 @@ def sample_non_overlapping(data, start_fraction, end_fraction):
             idxs.append(idx)
     idxs = torch.cat(idxs, dim=0)
     print(idxs.shape)
+    return idxs
+
+def sample_non_overlapping_optimized(start_fraction, end_fraction):
+    n_candidates = len(file_offsets)
+    
+    # 2. VECTORIZED LOOKUP
+    # Generate all random file indices at once
+    pos = np.random.choice(
+        np.arange(int(n_candidates * start_fraction), int(n_candidates * end_fraction)), 
+        size=(batch_size // 2,), 
+        replace=False
+    )
+    
+    # Slice the numpy array directly. This is extremely fast.
+    # We get a shape of (batch_size//2, 2) where col 0 is start, col 1 is length
+    selected_data = file_offsets[pos] 
+    
+    starts = torch.from_numpy(selected_data[:, 1]) # Column 1 corresponds to your original [1]
+    lengths = torch.from_numpy(selected_data[:, 2]) # Column 2 corresponds to your original [2]
+    
+    # 3. VECTORIZED SAMPLING (Eliminating the loop + torch.cat)
+    # Your original code picks 2 samples per file position.
+    # We repeat the starts/lengths so we can process everything in one tensor operation.
+    starts = starts.repeat_interleave(2)
+    lengths = lengths.repeat_interleave(2)
+    
+    # Calculate valid ranges: length - n_samples
+    valid_ranges = lengths - n_samples
+    
+    # Generate random offsets for all samples in one go
+    # torch.rand generates [0, 1), so we scale it to the range and floor it
+    random_offsets = (torch.rand(starts.shape[0]) * valid_ranges).long()
+    
+    # Add offsets to starts
+    idxs = starts + random_offsets
+    
     return idxs
 
 def get_batch(split='train', batch_size=batch_size):
