@@ -149,7 +149,8 @@ def get_batch(split='train', batch_size=batch_size):
         idxs = sample_non_overlapping(0, 0.98)
     else:
         idxs = sample_non_overlapping(0.98, 1)
-        
+    
+    print(idxs[:10])
     x = torch.from_numpy(np.stack([data[idx:idx+n_samples] for idx in idxs], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
     return x
 
