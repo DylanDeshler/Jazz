@@ -129,80 +129,28 @@ file_offsets = np.load(
     mmap_mode='r'
 )
 
-def sample_non_overlapping(data, start_fraction, end_fraction):
-    return torch.randint(len(data), size=(batch_size,))
-    
-    # pos = np.random.choice(np.arange(int(len(file_offsets) * start_fraction), int(len(file_offsets) * end_fraction)), size=(batch_size // 2, ), replace=False)
+def sample_non_overlapping(start_fraction, end_fraction):
+    pos = np.random.choice(np.arange(int(len(file_offsets) * start_fraction), int(len(file_offsets) * end_fraction)), size=(batch_size // 2, ), replace=False)
     # pos = np.random.randint(int(len(file_offsets) * start_fraction), int(len(file_offsets) * end_fraction), size=(batch_size // 2,))
     
-    # starts = torch.from_numpy(file_offsets[pos, 0]).repeat_interleave(2, dim=0)
-    # lengths = torch.from_numpy(file_offsets[pos, 1]).repeat_interleave(2, dim=0)
-    starts = torch.randint(int(len(data) * start_fraction), int(len(data) * end_fraction), size=(batch_size, ))
-    lengths = torch.zeros_like(starts)
+    starts = torch.from_numpy(file_offsets[pos, 0]).repeat_interleave(2, dim=0)
+    lengths = torch.from_numpy(file_offsets[pos, 1]).repeat_interleave(2, dim=0)
+    # starts = torch.randint(int(len(data) * start_fraction), int(len(data) * end_fraction), size=(batch_size, ))
+    # lengths = torch.zeros_like(starts)
     idxs = starts + torch.rand(lengths.shape) * lengths
     # idxs = torch.cat([torch.randint(start, start + length - n_samples, size=(2,)) for start, length in zip(starts, lengths)], dim=0)
     return idxs.long()
     
-    idxs = []
-    while len(idxs) < batch_size:
-        start, length = file_offsets[pos[len(idxs)]][1], file_offsets[pos[len(idxs)]][2]
-        
-        # low chance of overlap
-        idx = torch.randint(start, start + length - n_samples, size=(2,))
-        
-        if idx + n_samples >= start and idx < start + length:
-            idx = torch.randint(len(data) - n_samples, (1,))
-        else:
-            idxs.append(idx)
-    idxs = torch.cat(idxs, dim=0)
-    print(idxs.shape)
-    return idxs
-
-# def sample_non_overlapping_optimized(start_fraction, end_fraction):
-#     n_candidates = len(file_offsets)
-    
-#     # 2. VECTORIZED LOOKUP
-#     # Generate all random file indices at once
-#     pos = np.random.choice(
-#         np.arange(int(n_candidates * start_fraction), int(n_candidates * end_fraction)), 
-#         size=(batch_size // 2,), 
-#         replace=False
-#     )
-    
-#     # Slice the numpy array directly. This is extremely fast.
-#     # We get a shape of (batch_size//2, 2) where col 0 is start, col 1 is length
-#     selected_data = file_offsets[pos] 
-    
-#     starts = torch.from_numpy(selected_data[:, 0]) # Column 1 corresponds to your original [1]
-#     lengths = torch.from_numpy(selected_data[:, 1]) # Column 2 corresponds to your original [2]
-    
-#     # 3. VECTORIZED SAMPLING (Eliminating the loop + torch.cat)
-#     # Your original code picks 2 samples per file position.
-#     # We repeat the starts/lengths so we can process everything in one tensor operation.
-#     starts = starts.repeat_interleave(2)
-#     lengths = lengths.repeat_interleave(2)
-    
-#     # Calculate valid ranges: length - n_samples
-#     valid_ranges = lengths - n_samples
-    
-#     # Generate random offsets for all samples in one go
-#     # torch.rand generates [0, 1), so we scale it to the range and floor it
-#     random_offsets = (torch.rand(starts.shape[0]) * valid_ranges).long()
-    
-#     # Add offsets to starts
-#     idxs = starts + random_offsets
-    
-#     return idxs
 
 def get_batch(split='train', batch_size=batch_size):
     data = np.memmap("/home/dylan.d/research/music/Jazz/wavs_16khz.bin", dtype=np.float32, mode='r')
+    
     if split == 'train':
-        idxs = torch.randint(int(len(data) * 0.98) - n_samples, (batch_size,))
+        idxs = sample_non_overlapping(0, 0.98)
     else:
-        idxs = torch.randint(int(len(data) * 0.98), len(data) - n_samples, (batch_size,))
+        idxs = sample_non_overlapping(0.98, 1)
         
     x = torch.from_numpy(np.stack([data[idx:idx+n_samples] for idx in idxs], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-    # x = torch.randn_like(x)
     return x
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
