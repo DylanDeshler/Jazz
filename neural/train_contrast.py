@@ -130,7 +130,8 @@ with open('/home/dylan.d/research/music/Jazz/file_offsets.pkl', 'rb') as f:
 def sample_non_overlapping(data, start_fraction, end_fraction):
     # pos = np.random.choice(np.arange(int(len(file_offsets) * start_fraction), int(len(file_offsets) * end_fraction)), size=(batch_size // 2, ), replace=False)
     pos = np.random.randint(int(len(file_offsets) * start_fraction), int(len(file_offsets) * end_fraction), size=(batch_size // 2, ))
-    starts, lengths = [file_offsets[p][1] for p in pos], [file_offsets[p][2] for p in pos]
+    # starts, lengths = [file_offsets[p][1] for p in pos], [file_offsets[p][2] for p in pos]
+    starts, lengths = [p for p in pos], [n_samples * 10 for p in pos]
     idxs = torch.cat([torch.randint(start, start + length - n_samples, size=(2,)) for start, length in zip(starts, lengths)], dim=0)
     return idxs
     
