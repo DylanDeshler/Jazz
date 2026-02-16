@@ -404,7 +404,6 @@ class Transformer(nn.Module):
     def _compute_loss(self, x):
         embs = x[::2]
         ref_embs = x[1::2]
-        print(x.shape, embs.shape)
         loss = self.criterion(embs, ref_embs)
         return loss
     
@@ -433,7 +432,7 @@ class Transformer(nn.Module):
         
         x = self.norm(x)
         
-        x = self.pool(x.mean(1, keepdims=True), x)
+        x = self.pool(x.mean(1, keepdims=True), x).squeeze(1)
         x = self.fc(x)
         loss = self._compute_loss(x)
         
