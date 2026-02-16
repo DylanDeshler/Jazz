@@ -170,7 +170,6 @@ model_args = dict(
     hidden_size=hidden_size,
     num_heads=num_heads,
     sample_rate=sample_rate,
-    n_samples=n_samples,
     n_fft=n_fft,
     hop_length=hop_length,
     n_mels=n_mels,
