@@ -434,7 +434,7 @@ class Transformer(nn.Module):
         
         x = self.pool(x.mean(1, keepdims=True), x).squeeze(1)
         x = self.fc(x)
-        loss = F.mse_loss(x, x)#self._compute_loss(x)
+        loss = self._compute_loss(x)
         
         out = {'loss': loss, 'z': x}
         
