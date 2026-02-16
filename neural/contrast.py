@@ -404,6 +404,7 @@ class Transformer(nn.Module):
     def _compute_loss(self, x):
         embs = x[::2]
         ref_embs = x[1::2]
+        print(x.shape, embs.shape)
         loss = self.criterion(embs, ref_embs)
         return loss
     
