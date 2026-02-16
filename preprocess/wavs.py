@@ -48,7 +48,7 @@ def create_resampled_memmap(wav_files, output_filename, target_sr=16000, force_m
         except Exception as e:
             print(f"Skipping corrupt file {f}: {e}")
 
-    with open('file_offsets.pkl', 'wb') as f:
+    with open('/home/dylan.d/research/music/Jazz/file_offsets.pkl', 'wb') as f:
         pickle.dump(file_offsets, f)
     return
     
