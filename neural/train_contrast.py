@@ -139,7 +139,7 @@ def sample_non_overlapping(start_fraction, end_fraction):
     # lengths = torch.zeros_like(starts)
     idxs = starts + np.random.rand(*lengths.shape) * lengths
     # idxs = torch.cat([torch.randint(start, start + length - n_samples, size=(2,)) for start, length in zip(starts, lengths)], dim=0)
-    return idxs.tolist()
+    return idxs.astype(np.int64).tolist()
     
 
 def get_batch(split='train', batch_size=batch_size):
@@ -150,7 +150,6 @@ def get_batch(split='train', batch_size=batch_size):
     else:
         idxs = sample_non_overlapping(0.98, 1)
     
-    print(idxs[:10])
     x = torch.from_numpy(np.stack([data[idx:idx+n_samples] for idx in idxs], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
     return x
 
