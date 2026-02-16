@@ -198,9 +198,9 @@ def get_batch(split='train', batch_size=batch_size):
     data = np.memmap("/home/dylan.d/research/music/Jazz/wavs_16khz.bin", dtype=np.float32, mode='r')
     
     if split == 'train':
-        idxs = sample_non_overlapping(data, 0, 0.98)
+        idxs = torch.randint(len(data), size=(batch_size,))
     else:
-        idxs = sample_non_overlapping(data, 0.98, 1)
+        idxs = torch.randint(len(data), size=(batch_size,))
         
     x = torch.from_numpy(np.stack([data[idx:idx+n_samples] for idx in idxs], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
     return x
