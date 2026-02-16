@@ -178,7 +178,7 @@ def sample_non_overlapping_optimized(start_fraction, end_fraction):
     
     # Generate random offsets for all samples in one go
     # torch.rand generates [0, 1), so we scale it to the range and floor it
-    random_offsets = (torch.rand(starts.shape[0]) * valid_ranges).long()
+    random_offsets = n_samples + (torch.rand(starts.shape[0]) * valid_ranges).long()
     
     # Add offsets to starts
     idxs = starts + random_offsets
