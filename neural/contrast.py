@@ -7,6 +7,8 @@ from typing import Optional
 from einops import rearrange
 import math
 
+from pytorch_metric_learning import losses
+
 class ToMel(nn.Module):
     def __init__(self, sample_rate, n_fft, hop_length, n_mels):
         super().__init__()
@@ -370,6 +372,8 @@ class Transformer(nn.Module):
         self.norm = RMSNorm(hidden_size)
         self.fc = nn.Linear(hidden_size, hidden_size, bias=False)
         
+        self.criterion = losses.SelfSupervisedLoss(losses.NTXentLoss(temperature=0.5), symmetric=True)
+        
         self.initialize_weights()
     
     def initialize_weights(self):
@@ -400,7 +404,8 @@ class Transformer(nn.Module):
     def _compute_loss(self, x):
         embs = x[::2]
         ref_embs = x[1::2]
-        return x
+        loss = self.criterion(embs, ref_embs)
+        return loss
     
     def forward(self, x):
         x = self._compute_mel(x)
@@ -410,15 +415,12 @@ class Transformer(nn.Module):
         
         mu = x.mean((-1, -2), keepdims=True)
         std = x.std((-1, -2), keepdims=True)
-        
         x = (x - mu) / (std + 1e-6)
         
         B, C, H, W = x.shape
         
         x = rearrange(x, 'b c (h p1) (w p2) -> b (h w) (c p1 p2)', p1=self.patch_size, p2=self.patch_size)
         x = self.x_embedder(x)
-        
-        print(x.shape)
         
         freqs_cis = precompute_freqs_cis_2d(
             dim=self.head_dim, 
