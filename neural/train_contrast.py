@@ -130,7 +130,9 @@ with open('/home/dylan.d/research/music/Jazz/file_offsets.pkl', 'rb') as f:
 
 def sample_non_overlapping(data, start_fraction, end_fraction):
     pos = np.random.choice(np.arange(int(len(file_offsets) * start_fraction), int(len(file_offsets) * end_fraction)), size=(batch_size // 2, ), replace=False)
-    starts, lengths = [file_offsets[p][1] for p in pos], [file_offsets[p][2] for p in pos]
+    starts = file_offsets[pos, 0]
+    lengths = file_offsets[pos, 1]
+    # , lengths = [file_offsets[p][1] for p in pos], [file_offsets[p][2] for p in pos]
     idxs = torch.cat([torch.randint(start, start + length - n_samples, size=(2,)) for start, length in zip(starts, lengths)], dim=0)
     return idxs
     
@@ -149,41 +151,41 @@ def sample_non_overlapping(data, start_fraction, end_fraction):
     print(idxs.shape)
     return idxs
 
-def sample_non_overlapping_optimized(start_fraction, end_fraction):
-    n_candidates = len(file_offsets)
+# def sample_non_overlapping_optimized(start_fraction, end_fraction):
+#     n_candidates = len(file_offsets)
     
-    # 2. VECTORIZED LOOKUP
-    # Generate all random file indices at once
-    pos = np.random.choice(
-        np.arange(int(n_candidates * start_fraction), int(n_candidates * end_fraction)), 
-        size=(batch_size // 2,), 
-        replace=False
-    )
+#     # 2. VECTORIZED LOOKUP
+#     # Generate all random file indices at once
+#     pos = np.random.choice(
+#         np.arange(int(n_candidates * start_fraction), int(n_candidates * end_fraction)), 
+#         size=(batch_size // 2,), 
+#         replace=False
+#     )
     
-    # Slice the numpy array directly. This is extremely fast.
-    # We get a shape of (batch_size//2, 2) where col 0 is start, col 1 is length
-    selected_data = file_offsets[pos] 
+#     # Slice the numpy array directly. This is extremely fast.
+#     # We get a shape of (batch_size//2, 2) where col 0 is start, col 1 is length
+#     selected_data = file_offsets[pos] 
     
-    starts = torch.from_numpy(selected_data[:, 0]) # Column 1 corresponds to your original [1]
-    lengths = torch.from_numpy(selected_data[:, 1]) # Column 2 corresponds to your original [2]
+#     starts = torch.from_numpy(selected_data[:, 0]) # Column 1 corresponds to your original [1]
+#     lengths = torch.from_numpy(selected_data[:, 1]) # Column 2 corresponds to your original [2]
     
-    # 3. VECTORIZED SAMPLING (Eliminating the loop + torch.cat)
-    # Your original code picks 2 samples per file position.
-    # We repeat the starts/lengths so we can process everything in one tensor operation.
-    starts = starts.repeat_interleave(2)
-    lengths = lengths.repeat_interleave(2)
+#     # 3. VECTORIZED SAMPLING (Eliminating the loop + torch.cat)
+#     # Your original code picks 2 samples per file position.
+#     # We repeat the starts/lengths so we can process everything in one tensor operation.
+#     starts = starts.repeat_interleave(2)
+#     lengths = lengths.repeat_interleave(2)
     
-    # Calculate valid ranges: length - n_samples
-    valid_ranges = lengths - n_samples
+#     # Calculate valid ranges: length - n_samples
+#     valid_ranges = lengths - n_samples
     
-    # Generate random offsets for all samples in one go
-    # torch.rand generates [0, 1), so we scale it to the range and floor it
-    random_offsets = (torch.rand(starts.shape[0]) * valid_ranges).long()
+#     # Generate random offsets for all samples in one go
+#     # torch.rand generates [0, 1), so we scale it to the range and floor it
+#     random_offsets = (torch.rand(starts.shape[0]) * valid_ranges).long()
     
-    # Add offsets to starts
-    idxs = starts + random_offsets
+#     # Add offsets to starts
+#     idxs = starts + random_offsets
     
-    return idxs
+#     return idxs
 
 def get_batch(split='train', batch_size=batch_size):
     data = np.memmap("/home/dylan.d/research/music/Jazz/wavs_16khz.bin", dtype=np.float32, mode='r')
