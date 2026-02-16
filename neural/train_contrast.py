@@ -164,8 +164,8 @@ def sample_non_overlapping_optimized(start_fraction, end_fraction):
     # We get a shape of (batch_size//2, 2) where col 0 is start, col 1 is length
     selected_data = file_offsets[pos] 
     
-    starts = torch.from_numpy(selected_data[:, 1]) # Column 1 corresponds to your original [1]
-    lengths = torch.from_numpy(selected_data[:, 2]) # Column 2 corresponds to your original [2]
+    starts = torch.from_numpy(selected_data[:, 0]) # Column 1 corresponds to your original [1]
+    lengths = torch.from_numpy(selected_data[:, 1]) # Column 2 corresponds to your original [2]
     
     # 3. VECTORIZED SAMPLING (Eliminating the loop + torch.cat)
     # Your original code picks 2 samples per file position.
@@ -178,7 +178,7 @@ def sample_non_overlapping_optimized(start_fraction, end_fraction):
     
     # Generate random offsets for all samples in one go
     # torch.rand generates [0, 1), so we scale it to the range and floor it
-    random_offsets = n_samples + (torch.rand(starts.shape[0]) * valid_ranges).long()
+    random_offsets = (torch.rand(starts.shape[0]) * valid_ranges).long()
     
     # Add offsets to starts
     idxs = starts + random_offsets
