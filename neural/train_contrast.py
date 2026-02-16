@@ -126,7 +126,7 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 with open('/home/dylan.d/research/music/Jazz/file_offsets.pkl', 'rb') as f:
     file_offsets = pickle.load(f)
-    file_offsets = np.array(file_offsets, dtype=np.int64)
+    file_offsets = np.array([x[1:3] for x in file_offsets], dtype=np.int64)
 
 def sample_non_overlapping(data, start_fraction, end_fraction):
     pos = np.random.choice(np.arange(int(len(file_offsets) * start_fraction), int(len(file_offsets) * end_fraction)), size=(batch_size // 2, ), replace=False)
