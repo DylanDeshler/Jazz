@@ -32,8 +32,8 @@ class ToMel(nn.Module):
 class SpecAugment(nn.Module):
     def __init__(self, ):
         super().__init__()
-        self.time_mask = T.TimeMasking()
-        self.freq_mask = T.FrequencyMasking()
+        self.time_mask = T.TimeMasking(30)
+        self.freq_mask = T.FrequencyMasking(30)
     
     def forward(self, x):
         x = self.time_mask(x)
