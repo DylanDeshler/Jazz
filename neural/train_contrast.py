@@ -129,7 +129,7 @@ file_offsets = np.memmap('/home/dylan.d/research/music/Jazz/file_offsets.bin', d
 n_files = len(file_offsets)
 
 def sample_non_overlapping(start_fraction, end_fraction):
-    pos = np.random.choice(np.arange(int(n_files * start_fraction), int(n_files * end_fraction)), size=(batch_size // 2, ), replace=False)
+    pos = np.random.choice(np.arange(int(n_files * start_fraction), int(n_files * end_fraction)), size=(batch_size // 2,), replace=False)
     
     starts = np.repeat(file_offsets[pos, 0], 2)
     lengths = np.repeat(file_offsets[pos, 1], 2)

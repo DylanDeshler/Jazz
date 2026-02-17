@@ -18,7 +18,7 @@ class ToMel(nn.Module):
                 n_fft=n_fft,
                 hop_length=hop_length,
                 n_mels=n_mels,
-                f_min=0.0,
+                f_min=40.0,
                 f_max=sample_rate // 2,
                 power=2.0,
                 normalized=True,      # Normalizes the STFT to be magnitude invariant
