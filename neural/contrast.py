@@ -434,7 +434,6 @@ class Transformer(nn.Module):
         
         x = self.pool(x.mean(1, keepdims=True), x).squeeze(1)
         x = self.fc(x)
-        print(x.shape)
         x = F.normalize(x, dim=-1)
         
         loss = self._compute_loss(x)
