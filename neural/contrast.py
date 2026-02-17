@@ -349,6 +349,7 @@ class Transformer(nn.Module):
     def __init__(self,
                  in_channels,
                  hidden_size,
+                 proj_size,
                  patch_size,
                  sample_rate,
                  n_fft,
@@ -371,12 +372,15 @@ class Transformer(nn.Module):
             SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
         
+        self.pool_norm = RMSNorm(hidden_size)
         self.pool = CrossAttention(hidden_size, num_heads, qkv_bias=False, proj_bias=False)
 
-        self.norm = RMSNorm(hidden_size)
-        self.fc = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.mlp_norm = RMSNorm(hidden_size)
+        self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), bias=False)
         
-        # self.criterion = losses.SelfSupervisedLoss(losses.NTXentLoss(temperature=0.5), symmetric=True)
+        self.fc_norm = RMSNorm(hidden_size)
+        self.fc = nn.Linear(hidden_size, proj_size, bias=False)
+        
         self.criterion = nn.CrossEntropyLoss()
         
         self.apply(self._init_weights)
@@ -454,9 +458,13 @@ class Transformer(nn.Module):
         for block in self.blocks:
             x = block(x, freqs_cis=freqs_cis)
         
-        x = self.norm(x)
-        
+        x = self.pool_norm(x)
         x = self.pool(x.mean(1, keepdims=True), x).squeeze(1)
+        
+        x = self.mlp_norm(x)
+        x = self.mlp(x)
+        
+        x = self.fc_norm(x)
         x = self.fc(x)
         
         logits, labels = self.info_nce_loss(x)
