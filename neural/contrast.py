@@ -405,7 +405,7 @@ class Transformer(nn.Module):
     def _compute_loss(self, x):
         embs = x[::2]
         ref_embs = x[1::2]
-        loss = self.criterion(embs, ref_embs)
+        loss = self.criterion(embs, torch.zeros_like(embs))
         return loss
     
     def forward(self, x):
