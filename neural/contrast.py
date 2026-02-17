@@ -432,9 +432,9 @@ class Transformer(nn.Module):
     def forward(self, x):
         x = self._compute_mel(x)
         
-        # means.append(x.mean())
-        # stds.append(x.std())
-        # print(np.mean(means), np.mean(stds))
+        means.append(x.mean())
+        stds.append(x.std())
+        print(torch.mean(means), torch.mean(stds))
         
         if self.training:
             x = self.augment(x)
