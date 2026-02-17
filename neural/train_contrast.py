@@ -55,7 +55,7 @@ wandb_run_name = str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 1
-batch_size = 2048
+batch_size = 1024
 # model
 n_samples = 16383 * 10
 depth = 12
