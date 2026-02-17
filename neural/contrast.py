@@ -361,7 +361,7 @@ class Transformer(nn.Module):
         super().__init__()
         self.patch_size = patch_size
         self.head_dim = hidden_size // num_heads
-        self.log_temperature = nn.Parameter(torch.ones([]) * torch.log(1 / 0.07))
+        self.log_temperature = nn.Parameter(torch.log(torch.ones(1,) / 0.07))
         
         self.to_mel = ToMel(sample_rate, n_fft, hop_length, n_mels)
         self.augment = SpecAugment()
