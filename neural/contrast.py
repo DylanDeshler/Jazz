@@ -44,6 +44,7 @@ class SpecAugment(nn.Module):
         x = self.time_mask(x)
         x = self.freq_mask(x)
         x = self.freq_mask(x)
+        x = self.freq_mask(x)
         return x
 
 def apply_scaling(freqs: torch.Tensor):
@@ -452,10 +453,10 @@ class Transformer(nn.Module):
             x = self.augment(x)
         
         # x = (x + 40) / 40
-        # mu = x.mean((-1, -2), keepdims=True)
-        # std = x.std((-1, -2), keepdims=True)
-        mu = -34.36543
-        std = 15.82586
+        mu = x.mean((-1, -2), keepdims=True)
+        std = x.std((-1, -2), keepdims=True)
+        # mu = -34.36543
+        # std = 15.82586
         x = (x - mu) / (std + 1e-6)
         
         B, C, H, W = x.shape
