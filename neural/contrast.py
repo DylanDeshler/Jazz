@@ -373,7 +373,7 @@ class Transformer(nn.Module):
         self.norm = RMSNorm(hidden_size)
         self.fc = nn.Linear(hidden_size, hidden_size, bias=False)
         
-        self.criterion = F.mse_loss()#losses.SelfSupervisedLoss(losses.NTXentLoss(temperature=0.5), symmetric=True)
+        self.criterion = nn.MSELoss()#losses.SelfSupervisedLoss(losses.NTXentLoss(temperature=0.5), symmetric=True)
         
         self.initialize_weights()
     
