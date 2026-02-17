@@ -63,7 +63,7 @@ depth = 12
 hidden_size = 768
 num_heads = 12
 max_seq_len = 256
-patch_size = 8
+patch_size = 16
 
 encoder_dict = dict(
     in_channels=1,
@@ -158,7 +158,6 @@ def get_batch(split='train', batch_size=batch_size):
         idxs = torch.randint(int(len(data) * 0.98), len(data) - n_samples, (batch_size,))
         
     x = torch.from_numpy(np.stack([data[idx:idx+n_samples] for idx in idxs], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-    # x = torch.randn_like(x)
     return x
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
