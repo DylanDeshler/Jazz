@@ -403,9 +403,10 @@ class Transformer(nn.Module):
         return self.to_mel(x)
     
     def _compute_loss(self, x):
-        embs = x[::2]
-        ref_embs = x[1::2]
+        embs = x[:len(x)//2]
+        ref_embs = x[len(x)//2:]
         loss = self.criterion(embs, ref_embs)
+        print(loss)
         return loss
     
     def forward(self, x):
@@ -438,7 +439,6 @@ class Transformer(nn.Module):
         x = F.normalize(x, dim=-1)
         
         loss = self._compute_loss(x)
-        print(loss)
         
         out = {'loss': loss, 'z': x}
         
