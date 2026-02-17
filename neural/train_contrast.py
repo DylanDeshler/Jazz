@@ -33,6 +33,7 @@ from einops import rearrange
 from contrast import Transformer as net
 import soundfile as sf
 
+import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
@@ -247,72 +248,20 @@ def save_samples(iter_num):
     batch_dir = os.path.join(out_dir, str(iter_num))
     os.makedirs(batch_dir, exist_ok=True)
     
-    def to_numpy(x):
-        if isinstance(x, torch.Tensor):
-            return x.detach().cpu().numpy().squeeze()
-        return x
-    
     X = get_batch('valid', 32)
     out = model(X)
     
-    gt = (model.to_mel(X) * 40) - 40
-    masks = out['masks'].argmax(1)
-    samples = out['samples']
-    
-    
-    gts = to_numpy(gt)
-    recons = to_numpy(samples)
-    mask_nps = to_numpy(masks)
-    
-    for j in range(gts.shape[0]):
-        gt, recon, mask_np = gts[j], recons[j], mask_nps[j]
-        fig, axes = plt.subplots(1, 3, figsize=(16, 12))
-        
-        vmin = gt.min()
-        vmax = gt.max()
-        plot_kwargs = {'origin': 'lower', 'aspect': 'auto', 'interpolation': 'nearest'}
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(
+        out['sim'],
+        annot=True,
+        cmap='Blues',
+        fmt=".2f",
+        square=True
+    )
 
-        # --- Panel 1: Ground Truth ---
-        im1 = axes[0].imshow(gt, cmap='magma', vmin=vmin, vmax=vmax, **plot_kwargs)
-        axes[0].set_title("Ground Truth")
-        axes[0].set_ylabel("Mel Bins")
-        axes[0].set_xlabel("Time Frames")
-        plt.colorbar(im1, ax=axes[0], format='%+2.0f dB')
-
-        # --- Panel 2: Reconstruction ---
-        im2 = axes[1].imshow(recon, cmap='magma', vmin=vmin, vmax=vmax, **plot_kwargs)
-        axes[1].set_title("Reconstruction")
-        axes[1].set_xlabel("Time Frames")
-        axes[1].set_yticks([]) # Hide Y-axis labels for cleanliness
-        plt.colorbar(im2, ax=axes[1], format='%+2.0f dB')
-
-        # --- Panel 3: Reconstruction + Masks ---
-        axes[2].imshow(recon, cmap='gray', vmin=vmin, vmax=vmax, **plot_kwargs)
-        
-        colors = plt.cm.tab20.colors
-        overlay_rgba = np.zeros((mask_nps.shape[-2], mask_nps.shape[-1], 4))
-
-        for mask_idx in range(num_slots):
-            color = colors[mask_idx]
-            
-            is_this_class = mask_np == mask_idx
-            if np.sum(is_this_class) > 0:
-                overlay_rgba[is_this_class, 0] = color[0]
-                overlay_rgba[is_this_class, 1] = color[1]
-                overlay_rgba[is_this_class, 2] = color[2]
-                
-                overlay_rgba[is_this_class, 3] = 0.5
-                
-        axes[2].imshow(overlay_rgba, origin='lower', aspect='auto')
-
-        axes[2].set_title("Recon + Mask Overlay")
-        axes[2].set_xlabel("Time Frames")
-        axes[2].set_yticks([])
-
-        plt.tight_layout()
-        plt.savefig(os.path.join(batch_dir, f'{j}.png'), dpi=150)
-        plt.close('all')
-            
+    plt.title('Similarity Matrix Heatmap with Seaborn')
+    plt.savefig(os.path.join(batch_dir, 'sim.png'))
 
 # logging
 if wandb_log and master_process:
@@ -342,14 +291,14 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        losses = estimate_loss()
-        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        # losses = estimate_loss()
+        # print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         
-        # if iter_num % sample_interval == 0 and master_process:
-        #     model.eval()
-        #     with ctx:
-        #         save_samples(iter_num)
-        #     model.train()
+        if iter_num % sample_interval == 0 and master_process:
+            model.eval()
+            with ctx:
+                save_samples(iter_num)
+            model.train()
         
         if wandb_log:
             wandb.log({

@@ -426,20 +426,20 @@ class Transformer(nn.Module):
         # discard the main diagonal from both: labels and similarities matrix
         mask = torch.eye(labels.shape[0], dtype=torch.bool).to(features.device)
         labels = labels[~mask].view(labels.shape[0], -1)
-        similarity_matrix = similarity_matrix[~mask].view(similarity_matrix.shape[0], -1)
+        similarity_matrix_no_diag = similarity_matrix[~mask].view(similarity_matrix.shape[0], -1)
         # assert similarity_matrix.shape == labels.shape
 
         # select and combine multiple positives
-        positives = similarity_matrix[labels.bool()].view(labels.shape[0], -1)
+        positives = similarity_matrix_no_diag[labels.bool()].view(labels.shape[0], -1)
 
         # select only the negatives the negatives
-        negatives = similarity_matrix[~labels.bool()].view(similarity_matrix.shape[0], -1)
+        negatives = similarity_matrix_no_diag[~labels.bool()].view(similarity_matrix_no_diag.shape[0], -1)
 
         logits = torch.cat([positives, negatives], dim=1)
         labels = torch.zeros(logits.shape[0], dtype=torch.long).to(features.device)
 
         logits = logits * torch.exp(self.log_temperature).clamp(max=100)
-        return logits, labels
+        return logits, labels, similarity_matrix
     
     @torch.compiler.disable
     def _compute_mel(self, x):
@@ -473,6 +473,7 @@ class Transformer(nn.Module):
         
         x = self.pool_norm(x)
         x = self.pool(x.mean(1, keepdims=True), x).squeeze(1)
+        features = x.clone().detach()
         
         x = self.mlp_norm(x)
         x = self.mlp(x)
@@ -480,10 +481,10 @@ class Transformer(nn.Module):
         x = self.fc_norm(x)
         x = self.fc(x)
         
-        logits, labels = self.info_nce_loss(x)
+        logits, labels, sim = self.info_nce_loss(x)
         loss = self.criterion(logits, labels)
         
-        out = {'loss': loss, 'z': logits}
+        out = {'loss': loss, 'logits': logits, 'features': features, 'sim': sim}
         
         return out
 
