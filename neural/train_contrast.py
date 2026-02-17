@@ -266,7 +266,7 @@ def save_samples(iter_num):
     plt.savefig(os.path.join(batch_dir, 'sim.png'))
     plt.close()
     
-    evaluate_latent_space(out['features'].cpu(), X, batch_dir)
+    evaluate_latent_space(out['features'].float().cpu(), X.float().cpu(), batch_dir)
 
 def simple_spectrogram(x, n_fft=1024, hop_length=512):
     """
