@@ -34,13 +34,14 @@ class ToMel(nn.Module):
 class SpecAugment(nn.Module):
     def __init__(self, ):
         super().__init__()
-        self.time_mask = T.TimeMasking(80)
+        self.time_mask = T.TimeMasking(32)
         self.freq_mask = T.FrequencyMasking(64)
     
     @torch.compiler.disable
     def forward(self, x):
-        print(x.shape)
         x = self.time_mask(x)
+        x = self.time_mask(x)
+        x = self.freq_mask(x)
         x = self.freq_mask(x)
         return x
 
