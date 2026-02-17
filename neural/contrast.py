@@ -377,7 +377,7 @@ class Transformer(nn.Module):
         self.fc = nn.Linear(hidden_size, hidden_size, bias=False)
         
         # self.criterion = losses.SelfSupervisedLoss(losses.NTXentLoss(temperature=0.5), symmetric=True)
-        self.criterion = torch.nn.CrossEntropyLoss()
+        self.criterion = nn.CrossEntropyLoss()
         
         self.initialize_weights()
 
@@ -415,12 +415,12 @@ class Transformer(nn.Module):
     
     def initialize_weights(self):
         self.apply(self._init_weights)
-        # zero out classifier weights
-        nn.init.zeros_(self.fc.weight)
-        # zero out c_proj weights in all blocks
-        for block in self.blocks:
-            nn.init.zeros_(block.mlp.w3.weight)
-            nn.init.zeros_(block.attn.proj.weight)
+        # # zero out classifier weights
+        # nn.init.zeros_(self.fc.weight)
+        # # zero out c_proj weights in all blocks
+        # for block in self.blocks:
+        #     nn.init.zeros_(block.mlp.w3.weight)
+        #     nn.init.zeros_(block.attn.proj.weight)
     
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
