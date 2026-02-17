@@ -138,7 +138,7 @@ def sample_non_overlapping(start_fraction, end_fraction):
     # idxs = (starts + np.random.rand(*lengths.shape) * lengths).astype(np.int64)
     # idxs = starts
     idxs = np.concatenate([np.random.randint(start, start + length - n_samples, size=(1,)) for start, length in zip(starts, lengths)], axis=0)
-    return idxs.tolist()
+    return idxs#.tolist()
     
 
 def get_batch(split='train', batch_size=batch_size):
