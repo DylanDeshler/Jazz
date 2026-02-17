@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchaudio.transforms as T
+from torch.utils.checkpoint import checkpoint
 
 from typing import Optional
 from einops import rearrange
@@ -340,10 +341,22 @@ class SelfAttentionBlock(nn.Module):
         self.norm2 = RMSNorm(hidden_size)
         self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), bias=False)
     
-    def forward(self, x, freqs_cis=None, is_causal=False):
+    def _forward_impl(self, x, freqs_cis=None, is_causal=False):
         x = x + self.attn(self.norm1(x), is_causal=is_causal, freqs_cis=freqs_cis[:x.shape[1]] if freqs_cis is not None else None)
         x = x + self.mlp(self.norm2(x))
         return x
+    
+    def forward(self, x, freqs_cis=None, is_causal=False):
+        if self.training and x.requires_grad:
+            return checkpoint(
+                self._forward_impl, 
+                x, 
+                freqs_cis, 
+                is_causal, 
+                use_reentrant=False
+            )
+        else:
+            return self._forward_impl(x, freqs_cis, is_causal)
 
 class Transformer(nn.Module):
     def __init__(self,
