@@ -438,6 +438,7 @@ class Transformer(nn.Module):
         x = F.normalize(x, dim=-1)
         
         loss = self._compute_loss(x)
+        print(loss)
         
         out = {'loss': loss, 'z': x}
         
