@@ -26,6 +26,7 @@ from torchinfo import summary
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
@@ -263,6 +264,166 @@ def save_samples(iter_num):
 
     plt.title('Similarity Matrix Heatmap with Seaborn')
     plt.savefig(os.path.join(batch_dir, 'sim.png'))
+    plt.close()
+    
+    evaluate_latent_space(out['features'].cpu(), X, batch_dir)
+
+def simple_spectrogram(x, n_fft=1024, hop_length=512):
+    """
+    Compute simple log-magnitude spectrogram using pure PyTorch.
+    Removes dependency on torchaudio.transforms.
+    """
+    # x shape: (Time,) or (1, Time)
+    if x.dim() == 1:
+        x = x.unsqueeze(0)
+    
+    # Hann window
+    window = torch.hann_window(n_fft, device=x.device)
+    
+    # STFT
+    stft = torch.stft(
+        x, 
+        n_fft=n_fft, 
+        hop_length=hop_length, 
+        window=window, 
+        return_complex=True
+    )
+    
+    # Magnitude
+    mag = torch.abs(stft)
+    
+    # Log (add epsilon to prevent -inf)
+    log_spec = torch.log(mag + 1e-9)
+    
+    return log_spec.squeeze(0)
+
+def evaluate_latent_space(embeddings, audio_batch, output_dir, k=1, sample_rate=16000):
+    """
+    Comprehensive Latent Space Evaluation.
+    
+    Args:
+        embeddings: (B, D) tensor structure [A1, A2, B1, B2, ...]
+        audio_batch: (B, 1, T) tensor containing raw waveforms
+        output_dir: Folder to save results
+        k: Top-k for accuracy calculation
+        sample_rate: For saving wav files
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    B, D = embeddings.shape
+    
+    # ------------------------------------------------------------------
+    # Part A: KNN Accuracy (Instance Discrimination)
+    # ------------------------------------------------------------------
+    
+    # Normalize embeddings
+    embeddings = F.normalize(embeddings, dim=1)
+    
+    # Query (View 1) vs Key (View 2)
+    queries = embeddings[0::2]
+    keys = embeddings[1::2]
+    
+    # Compute Similarity (N/2 x N/2)
+    sim_matrix = torch.matmul(queries, keys.T)
+    
+    # Ground Truth: The diagonal elements are the correct pairs
+    targets = torch.arange(len(queries), device=embeddings.device)
+    
+    # Compute Top-K
+    _, topk_indices = sim_matrix.topk(k, dim=1, largest=True, sorted=True)
+    correct = topk_indices.eq(targets.view(-1, 1).expand_as(topk_indices))
+    
+    top1 = correct[:, :1].float().mean().item()
+    print(f"--- Instance Discrimination Results ---")
+    print(f"Batch Size: {B} ( {B//2} Pairs )")
+    print(f"Top-1 Accuracy: {top1*100:.2f}%")
+    
+    # ------------------------------------------------------------------
+    # Part B: Semantic Neighbor Analysis (Latent Calibration)
+    # ------------------------------------------------------------------
+    
+    print(f"--- Generating Semantic Ranking Reports in '{output_dir}' ---")
+    
+    # We want to see what the model thinks is similar APART from the ground truth.
+    # 1. Compute Full Batch Similarity (B x B)
+    full_sim = torch.matmul(embeddings, embeddings.T)
+    
+    # 2. Mask out trivial matches (Self + Partner)
+    indices = torch.arange(B, device=embeddings.device)
+    pair_indices = indices ^ 1  # 0->1, 1->0, 2->3, etc.
+    
+    mask = torch.eye(B, device=embeddings.device).bool()
+    mask[indices, pair_indices] = True
+    
+    # Apply Mask (-inf prevents selection)
+    full_sim.masked_fill_(mask, -float('inf'))
+    
+    # 3. Get Top-3 "Semantic" Neighbors (Non-identical tracks)
+    sem_scores, sem_indices = full_sim.topk(3, dim=1)
+    
+    # ------------------------------------------------------------------
+    # Part C: Visualization
+    # ------------------------------------------------------------------
+    
+    # Pick 5 random samples to visualize
+    sample_idxs = torch.randperm(B)[:5].tolist()
+    
+    for i, query_idx in enumerate(sample_idxs):
+        # 1. Get Query Data
+        query_wav = audio_batch[query_idx].squeeze().cpu().numpy()
+        
+        # 2. Get Neighbor Data
+        neighbors = sem_indices[query_idx].tolist()
+        scores = sem_scores[query_idx].tolist()
+        
+        # Setup Plot: 1 (Query) + 3 (Neighbors)
+        fig, axes = plt.subplots(1, 4, figsize=(20, 5))
+        
+        # --- Plot Query ---
+        # Save Audio (SoundFile expects (Time,) or (Time, Channels))
+        sf.write(f"{output_dir}/sample_{i}_query.wav", query_wav, sample_rate)
+        
+        # Plot Spec
+        spec_q = simple_spectrogram(torch.from_numpy(query_wav)).numpy()
+        axes[0].imshow(spec_q, origin='lower', aspect='auto', cmap='inferno')
+        axes[0].set_title(f"Query (Idx {query_idx})")
+        axes[0].axis('off')
+        
+        # --- Plot Neighbors ---
+        for n, (n_idx, score) in enumerate(zip(neighbors, scores)):
+            n_wav = audio_batch[n_idx].squeeze().cpu().numpy()
+            
+            # Save Audio
+            sf.write(f"{output_dir}/sample_{i}_rank{n+1}_sim{score:.2f}.wav", n_wav, sample_rate)
+            
+            # Plot Spec
+            spec_n = simple_spectrogram(torch.from_numpy(n_wav)).numpy()
+            
+            ax = axes[n+1]
+            ax.imshow(spec_n, origin='lower', aspect='auto', cmap='inferno')
+            ax.set_title(f"Rank #{n+1}\nSim: {score:.3f}")
+            ax.axis('off')
+
+        plt.tight_layout()
+        plt.savefig(f"{output_dir}/sample_{i}_analysis.png")
+        plt.close()
+        
+    # ------------------------------------------------------------------
+    # Part D: Calibration Histogram
+    # ------------------------------------------------------------------
+    
+    # Flatten all valid semantic scores (excluding self/partner) to see distribution
+    # We take the top-k values we computed earlier to avoid sorting the whole matrix again
+    flat_scores = sem_scores.flatten().detach().cpu().numpy()
+    
+    plt.figure(figsize=(8, 6))
+    plt.hist(flat_scores, bins=50, color='teal', alpha=0.7)
+    plt.title("Distribution of Semantic Similarity (Excluding Exact Matches)")
+    plt.xlabel("Cosine Similarity")
+    plt.ylabel("Count")
+    plt.axvline(x=0.0, color='k', linestyle='--', label="Orthogonal")
+    plt.legend()
+    plt.savefig(f"{output_dir}/calibration_histogram.png")
+    plt.close()
 
 # logging
 if wandb_log and master_process:
