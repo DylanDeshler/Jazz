@@ -253,7 +253,7 @@ def save_samples(iter_num):
     
     plt.figure(figsize=(8, 6))
     sns.heatmap(
-        out['sim'],
+        out['sim'].cpu().detach().numpy(),
         annot=True,
         cmap='Blues',
         fmt=".2f",
