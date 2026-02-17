@@ -343,8 +343,6 @@ class SelfAttentionBlock(nn.Module):
         x = x + self.mlp(self.norm2(x))
         return x
 
-import numpy as np
-means, stds = [], []
 class Transformer(nn.Module):
     def __init__(self,
                  in_channels,
@@ -380,9 +378,20 @@ class Transformer(nn.Module):
         self.criterion = nn.CrossEntropyLoss()
         
         self.apply(self._init_weights)
+    
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            # https://arxiv.org/pdf/2310.17813
+            fan_out = module.weight.size(0)
+            fan_in = module.weight.size(1)
+            std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
+            nn.init.normal_(module.weight, mean=0.0, std=std)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
     def info_nce_loss(self, features):
-
         # labels = torch.cat([torch.arange(self.args.batch_size) for i in range(self.args.n_views)], dim=0)
         labels = torch.arange(len(features) // 2).repeat_interleave(2, dim=0)
         labels = (labels.unsqueeze(0) == labels.unsqueeze(1)).float()
@@ -413,18 +422,6 @@ class Transformer(nn.Module):
         logits = logits / self.temperature
         return logits, labels
     
-    def _init_weights(self, module):
-        if isinstance(module, nn.Linear):
-            # https://arxiv.org/pdf/2310.17813
-            fan_out = module.weight.size(0)
-            fan_in = module.weight.size(1)
-            std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
-            nn.init.normal_(module.weight, mean=0.0, std=std)
-            if module.bias is not None:
-                nn.init.zeros_(module.bias)
-        elif isinstance(module, nn.Embedding):
-            nn.init.normal_(module.weight, mean=0.0, std=0.02)
-    
     @torch.compiler.disable
     def _compute_mel(self, x):
         return self.to_mel(x)
@@ -432,16 +429,14 @@ class Transformer(nn.Module):
     def forward(self, x):
         x = self._compute_mel(x)
         
-        means.append(x.mean().item())
-        stds.append(x.std().item())
-        print(np.mean(means), np.mean(stds))
-        
         if self.training:
             x = self.augment(x)
         
         # x = (x + 40) / 40
-        mu = x.mean((-1, -2), keepdims=True)
-        std = x.std((-1, -2), keepdims=True)
+        # mu = x.mean((-1, -2), keepdims=True)
+        # std = x.std((-1, -2), keepdims=True)
+        mu = -34.36543
+        std = 15.82586
         x = (x - mu) / (std + 1e-6)
         
         B, C, H, W = x.shape
