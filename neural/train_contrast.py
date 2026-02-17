@@ -254,11 +254,11 @@ def save_samples(iter_num):
     plt.figure(figsize=(8, 6))
     sns.heatmap(
         out['sim'].float().cpu().detach().numpy(),
-        annot=True,
+        annot=False,
         cmap='Blues',
-        fmt=".2f",
         square=True
     )
+    plt.gca().set_visible(False)
 
     plt.title('Similarity Matrix Heatmap with Seaborn')
     plt.savefig(os.path.join(batch_dir, 'sim.png'))
