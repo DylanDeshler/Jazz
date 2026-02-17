@@ -478,9 +478,10 @@ class Transformer(nn.Module):
         x = self.pool(x.mean(1, keepdims=True), x).squeeze(1)
         x = self.fc(x)
         
-        loss = self._compute_loss(x)
+        logits, labels = self._compute_loss(x)
+        loss = self.criterion(logits, labels)
         
-        out = {'loss': loss, 'z': x}
+        out = {'loss': loss, 'z': logits}
         
         return out
 
