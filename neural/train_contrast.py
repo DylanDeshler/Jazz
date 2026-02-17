@@ -258,7 +258,8 @@ def save_samples(iter_num):
         cmap='Blues',
         square=True
     )
-    plt.gca().set_visible(False)
+    plt.gca().set_xticks([])
+    plt.gca().set_yticks([])
 
     plt.title('Similarity Matrix Heatmap with Seaborn')
     plt.savefig(os.path.join(batch_dir, 'sim.png'))
