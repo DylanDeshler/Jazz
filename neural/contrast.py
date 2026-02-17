@@ -434,8 +434,7 @@ class Transformer(nn.Module):
         
         x = self.norm(x)
         
-        # x = self.pool(x.mean(1, keepdims=True), x).squeeze(1)
-        x = x[:, 0]
+        x = self.pool(x.mean(1, keepdims=True), x).squeeze(1)
         x = self.fc(x)
         x = F.normalize(x, dim=-1)
         
