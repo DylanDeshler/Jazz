@@ -361,7 +361,7 @@ class Transformer(nn.Module):
         super().__init__()
         self.patch_size = patch_size
         self.head_dim = hidden_size // num_heads
-        self.temperature = 0.5
+        self.log_temperature = nn.Parameter(torch.ones([]) * torch.log(1 / 0.07))
         
         self.to_mel = ToMel(sample_rate, n_fft, hop_length, n_mels)
         self.augment = SpecAugment()
@@ -421,7 +421,7 @@ class Transformer(nn.Module):
         logits = torch.cat([positives, negatives], dim=1)
         labels = torch.zeros(logits.shape[0], dtype=torch.long).to(features.device)
 
-        logits = logits / self.temperature
+        logits = logits * torch.exp(self.log_temperature).clamp(max=100)
         return logits, labels
     
     @torch.compiler.disable
