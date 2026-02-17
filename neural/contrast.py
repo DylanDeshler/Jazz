@@ -343,6 +343,8 @@ class SelfAttentionBlock(nn.Module):
         x = x + self.mlp(self.norm2(x))
         return x
 
+import numpy as np
+means, stds = [], []
 class Transformer(nn.Module):
     def __init__(self,
                  in_channels,
@@ -410,6 +412,10 @@ class Transformer(nn.Module):
     
     def forward(self, x):
         x = self._compute_mel(x)
+        
+        means.append(x.mean())
+        stds.append(x.std())
+        print(np.mean(means), np.mean(stds))
         
         if self.training:
             x = self.augment(x)
