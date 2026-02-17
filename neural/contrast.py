@@ -379,7 +379,7 @@ class Transformer(nn.Module):
         # self.criterion = losses.SelfSupervisedLoss(losses.NTXentLoss(temperature=0.5), symmetric=True)
         self.criterion = nn.CrossEntropyLoss()
         
-        self.initialize_weights()
+        self.apply(self._init_weights)
 
     def info_nce_loss(self, features):
 
@@ -413,15 +413,6 @@ class Transformer(nn.Module):
         logits = logits / self.temperature
         return logits, labels
     
-    def initialize_weights(self):
-        self.apply(self._init_weights)
-        # # zero out classifier weights
-        # nn.init.zeros_(self.fc.weight)
-        # # zero out c_proj weights in all blocks
-        # for block in self.blocks:
-        #     nn.init.zeros_(block.mlp.w3.weight)
-        #     nn.init.zeros_(block.attn.proj.weight)
-    
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
             # https://arxiv.org/pdf/2310.17813
@@ -438,13 +429,6 @@ class Transformer(nn.Module):
     def _compute_mel(self, x):
         return self.to_mel(x)
     
-    def _compute_loss(self, x):
-        return self.info_nce_loss(x)
-        embs = x[::2]
-        ref_embs = x[1::2]
-        loss = self.criterion(embs, ref_embs)
-        return loss
-    
     def forward(self, x):
         x = self._compute_mel(x)
         
@@ -455,10 +439,10 @@ class Transformer(nn.Module):
         if self.training:
             x = self.augment(x)
         
-        x = (x + 40) / 40
-        # mu = x.mean((-1, -2), keepdims=True)
-        # std = x.std((-1, -2), keepdims=True)
-        # x = (x - mu) / (std + 1e-6)
+        # x = (x + 40) / 40
+        mu = x.mean((-1, -2), keepdims=True)
+        std = x.std((-1, -2), keepdims=True)
+        x = (x - mu) / (std + 1e-6)
         
         B, C, H, W = x.shape
         
@@ -478,7 +462,7 @@ class Transformer(nn.Module):
         x = self.pool(x.mean(1, keepdims=True), x).squeeze(1)
         x = self.fc(x)
         
-        logits, labels = self._compute_loss(x)
+        logits, labels = self.info_nce_loss(x)
         loss = self.criterion(logits, labels)
         
         out = {'loss': loss, 'z': logits}
