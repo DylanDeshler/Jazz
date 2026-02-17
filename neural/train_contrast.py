@@ -39,7 +39,7 @@ import matplotlib.patches as mpatches
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'contrast'
+out_dir = 'contrast_learntmep'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
