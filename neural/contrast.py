@@ -384,7 +384,7 @@ class Transformer(nn.Module):
     def info_nce_loss(self, features):
 
         # labels = torch.cat([torch.arange(self.args.batch_size) for i in range(self.args.n_views)], dim=0)
-        labels = torch.arange(len(features)).repeat_interleave(2, dim=0)
+        labels = torch.arange(len(features) // 2).repeat_interleave(2, dim=0)
         labels = (labels.unsqueeze(0) == labels.unsqueeze(1)).float()
         labels = labels.to(features.device)
 
