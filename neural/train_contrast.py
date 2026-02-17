@@ -129,17 +129,15 @@ file_offsets = np.load(
     mmap_mode='r'
 )
 n_files = len(file_offsets)
+print(file_offsets.shape)
 
 def sample_non_overlapping(start_fraction, end_fraction):
     pos = np.random.choice(np.arange(int(n_files * start_fraction), int(n_files * end_fraction)), size=(batch_size // 2, ), replace=False)
     
     starts = np.repeat(file_offsets[pos, 0], 2)
     lengths = np.repeat(file_offsets[pos, 1], 2)
-    # idxs = (starts + np.random.rand(*lengths.shape) * lengths).astype(np.int64)
-    # idxs = starts
     idxs = np.concatenate([np.random.randint(start, start + length - n_samples, size=(1,)) for start, length in zip(starts, lengths)], axis=0)
-    return idxs#.tolist()
-    
+    return idxs
 
 def get_batch(split='train', batch_size=batch_size):
     data = np.memmap("/home/dylan.d/research/music/Jazz/wavs_16khz.bin", dtype=np.float32, mode='r')
