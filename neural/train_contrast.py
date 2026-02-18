@@ -383,7 +383,7 @@ def evaluate_latent_space(iter_num, k=1, sample_rate=16000):
         sf.write(f"{batch_dir}/sample_{i}_query.wav", query_wav, sample_rate)
         
         # Plot Spec
-        spec_q = simple_spectrogram(torch.from_numpy(query_wav)).numpy()
+        spec_q = simple_spectrogram(torch.from_numpy(query_wav, device=query_wav.device)).numpy()
         axes[0].imshow(spec_q, origin='lower', aspect='auto', cmap='inferno')
         axes[0].set_title(f"Query (Idx {query_idx})")
         axes[0].axis('off')
@@ -396,7 +396,7 @@ def evaluate_latent_space(iter_num, k=1, sample_rate=16000):
             sf.write(f"{batch_dir}/sample_{i}_rank{n+1}_sim{score:.2f}.wav", n_wav, sample_rate)
             
             # Plot Spec
-            spec_n = simple_spectrogram(torch.from_numpy(n_wav)).numpy()
+            spec_n = simple_spectrogram(torch.from_numpy(n_wav, device=n_wav.device)).numpy()
             
             ax = axes[n+1]
             ax.imshow(spec_n, origin='lower', aspect='auto', cmap='inferno')
