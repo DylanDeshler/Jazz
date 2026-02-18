@@ -245,6 +245,7 @@ def get_lr(it):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
 
+@torch.no_grad()
 def save_samples(iter_num):
     batch_dir = os.path.join(out_dir, str(iter_num))
     os.makedirs(batch_dir, exist_ok=True)
@@ -266,6 +267,7 @@ def save_samples(iter_num):
     plt.savefig(os.path.join(batch_dir, 'sim.png'))
     plt.close()
 
+@torch.no_grad()
 def simple_spectrogram(x, n_fft=1024, hop_length=512):
     """
     Compute simple log-magnitude spectrogram using pure PyTorch.
@@ -295,6 +297,7 @@ def simple_spectrogram(x, n_fft=1024, hop_length=512):
     
     return log_spec.squeeze(0)
 
+@torch.no_grad()
 def evaluate_latent_space(iter_num, k=1, sample_rate=16000):
     """
     Comprehensive Latent Space Evaluation.
@@ -454,8 +457,8 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        losses = estimate_loss()
-        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        # losses = estimate_loss()
+        # print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
