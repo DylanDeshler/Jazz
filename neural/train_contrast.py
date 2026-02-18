@@ -306,8 +306,9 @@ def evaluate_latent_space(iter_num, k=1, sample_rate=16000):
     batch_dir = os.path.join(out_dir, str(iter_num))
     os.makedirs(batch_dir, exist_ok=True)
     
-    audio_batch = get_batch('valid').float().cpu()
-    embeddings = model(audio_batch)['features'].float().cpu()
+    X = get_batch('valid')
+    embeddings = model(X)['features'].float().cpu()
+    audio_batch = X.float().cpu()
     
     B, D = embeddings.shape
     
@@ -383,7 +384,7 @@ def evaluate_latent_space(iter_num, k=1, sample_rate=16000):
         sf.write(f"{batch_dir}/sample_{i}_query.wav", query_wav, sample_rate)
         
         # Plot Spec
-        spec_q = simple_spectrogram(torch.from_numpy(query_wav, device=query_wav.device)).numpy()
+        spec_q = simple_spectrogram(torch.from_numpy(query_wav)).numpy()
         axes[0].imshow(spec_q, origin='lower', aspect='auto', cmap='inferno')
         axes[0].set_title(f"Query (Idx {query_idx})")
         axes[0].axis('off')
@@ -396,7 +397,7 @@ def evaluate_latent_space(iter_num, k=1, sample_rate=16000):
             sf.write(f"{batch_dir}/sample_{i}_rank{n+1}_sim{score:.2f}.wav", n_wav, sample_rate)
             
             # Plot Spec
-            spec_n = simple_spectrogram(torch.from_numpy(n_wav, device=n_wav.device)).numpy()
+            spec_n = simple_spectrogram(torch.from_numpy(n_wav)).numpy()
             
             ax = axes[n+1]
             ax.imshow(spec_n, origin='lower', aspect='auto', cmap='inferno')
