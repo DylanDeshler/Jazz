@@ -49,7 +49,7 @@ save_interval = 5000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir
@@ -265,8 +265,6 @@ def save_samples(iter_num):
     plt.title('Similarity Matrix Heatmap with Seaborn')
     plt.savefig(os.path.join(batch_dir, 'sim.png'))
     plt.close()
-    
-    evaluate_latent_space(out['features'].float().cpu(), X.float().cpu(), batch_dir)
 
 def simple_spectrogram(x, n_fft=1024, hop_length=512):
     """
@@ -297,18 +295,20 @@ def simple_spectrogram(x, n_fft=1024, hop_length=512):
     
     return log_spec.squeeze(0)
 
-def evaluate_latent_space(embeddings, audio_batch, output_dir, k=1, sample_rate=16000):
+def evaluate_latent_space(iter_num, k=1, sample_rate=16000):
     """
     Comprehensive Latent Space Evaluation.
     
     Args:
-        embeddings: (B, D) tensor structure [A1, A2, B1, B2, ...]
-        audio_batch: (B, 1, T) tensor containing raw waveforms
-        output_dir: Folder to save results
         k: Top-k for accuracy calculation
         sample_rate: For saving wav files
     """
-    os.makedirs(output_dir, exist_ok=True)
+    batch_dir = os.path.join(out_dir, str(iter_num))
+    os.makedirs(batch_dir, exist_ok=True)
+    
+    audio_batch = get_batch('valid').float().cpu()
+    embeddings = model(audio_batch)['features'].float().cpu()
+    
     B, D = embeddings.shape
     
     # ------------------------------------------------------------------
@@ -341,7 +341,7 @@ def evaluate_latent_space(embeddings, audio_batch, output_dir, k=1, sample_rate=
     # Part B: Semantic Neighbor Analysis (Latent Calibration)
     # ------------------------------------------------------------------
     
-    print(f"--- Generating Semantic Ranking Reports in '{output_dir}' ---")
+    print(f"--- Generating Semantic Ranking Reports ---")
     
     # We want to see what the model thinks is similar APART from the ground truth.
     # 1. Compute Full Batch Similarity (B x B)
@@ -358,14 +358,14 @@ def evaluate_latent_space(embeddings, audio_batch, output_dir, k=1, sample_rate=
     full_sim.masked_fill_(mask, -float('inf'))
     
     # 3. Get Top-3 "Semantic" Neighbors (Non-identical tracks)
-    sem_scores, sem_indices = full_sim.topk(3, dim=1)
+    sem_scores, sem_indices = full_sim.topk(5, dim=1)
     
     # ------------------------------------------------------------------
     # Part C: Visualization
     # ------------------------------------------------------------------
     
     # Pick 5 random samples to visualize
-    sample_idxs = torch.randperm(B)[:5].tolist()
+    sample_idxs = torch.randperm(B)[:10].tolist()
     
     for i, query_idx in enumerate(sample_idxs):
         # 1. Get Query Data
@@ -380,7 +380,7 @@ def evaluate_latent_space(embeddings, audio_batch, output_dir, k=1, sample_rate=
         
         # --- Plot Query ---
         # Save Audio (SoundFile expects (Time,) or (Time, Channels))
-        sf.write(f"{output_dir}/sample_{i}_query.wav", query_wav, sample_rate)
+        sf.write(f"{batch_dir}/sample_{i}_query.wav", query_wav, sample_rate)
         
         # Plot Spec
         spec_q = simple_spectrogram(torch.from_numpy(query_wav)).numpy()
@@ -393,7 +393,7 @@ def evaluate_latent_space(embeddings, audio_batch, output_dir, k=1, sample_rate=
             n_wav = audio_batch[n_idx].squeeze().cpu().numpy()
             
             # Save Audio
-            sf.write(f"{output_dir}/sample_{i}_rank{n+1}_sim{score:.2f}.wav", n_wav, sample_rate)
+            sf.write(f"{batch_dir}/sample_{i}_rank{n+1}_sim{score:.2f}.wav", n_wav, sample_rate)
             
             # Plot Spec
             spec_n = simple_spectrogram(torch.from_numpy(n_wav)).numpy()
@@ -404,7 +404,7 @@ def evaluate_latent_space(embeddings, audio_batch, output_dir, k=1, sample_rate=
             ax.axis('off')
 
         plt.tight_layout()
-        plt.savefig(f"{output_dir}/sample_{i}_analysis.png")
+        plt.savefig(f"{batch_dir}/sample_{i}_analysis.png")
         plt.close()
         
     # ------------------------------------------------------------------
@@ -422,7 +422,7 @@ def evaluate_latent_space(embeddings, audio_batch, output_dir, k=1, sample_rate=
     plt.ylabel("Count")
     plt.axvline(x=0.0, color='k', linestyle='--', label="Orthogonal")
     plt.legend()
-    plt.savefig(f"{output_dir}/calibration_histogram.png")
+    plt.savefig(f"{batch_dir}/calibration_histogram.png")
     plt.close()
 
 # logging
@@ -460,6 +460,7 @@ while True:
             model.eval()
             with ctx:
                 save_samples(iter_num)
+                evaluate_latent_space(iter_num)
             model.train()
         
         if wandb_log:
