@@ -362,14 +362,14 @@ def evaluate_latent_space(iter_num, k=1, sample_rate=16000):
     full_sim.masked_fill_(mask, -float('inf'))
     
     # 3. Get Top-3 "Semantic" Neighbors (Non-identical tracks)
-    sem_scores, sem_indices = full_sim.topk(5, dim=1)
+    sem_scores, sem_indices = full_sim.topk(3, dim=1)
     
     # ------------------------------------------------------------------
     # Part C: Visualization
     # ------------------------------------------------------------------
     
     # Pick 5 random samples to visualize
-    sample_idxs = torch.randperm(B)[:10].tolist()
+    sample_idxs = torch.randperm(B)[:5].tolist()
     
     for i, query_idx in enumerate(sample_idxs):
         # 1. Get Query Data
