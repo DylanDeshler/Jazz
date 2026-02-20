@@ -41,7 +41,7 @@ import matplotlib.patches as mpatches
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'contrast_learntmep_instance'
+out_dir = 'contrast_learntmep_instance_1s'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -57,9 +57,9 @@ wandb_run_name = str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 1
-batch_size = 1024
+batch_size = 2048
 # model
-n_samples = 16383 * 10
+n_samples = 16383 * 1
 depth = 12
 hidden_size = 768
 proj_size = 128
