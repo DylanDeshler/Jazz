@@ -42,10 +42,10 @@ import matplotlib.patches as mpatches
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
 out_dir = 'contrast_learntmep_instance_2s'
-eval_interval = 5000
-sample_interval = 5000
+eval_interval = 10000
+sample_interval = 10000
 log_interval = 100
-save_interval = 5000
+save_interval = 10000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
@@ -218,13 +218,12 @@ if ddp:
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
 def estimate_loss():
-    ratio = 8
     out = {}
     model.eval()
     for i, split in enumerate(['train', 'val']):
-        losses = torch.zeros(eval_iters // ratio)
-        for k in tqdm(range(eval_iters // ratio)):
-            X = get_batch(split, batch_size=batch_size * gradient_accumulation_steps * ratio)
+        losses = torch.zeros(eval_iters)
+        for k in tqdm(range(eval_iters)):
+            X = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
                 loss = model(X)['loss']
             losses[k] = loss.item()
