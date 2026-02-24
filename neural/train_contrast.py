@@ -218,12 +218,13 @@ if ddp:
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
 def estimate_loss():
+    ratio = 8
     out = {}
-    # model.eval()
+    model.eval()
     for i, split in enumerate(['train', 'val']):
-        losses = torch.zeros(eval_iters)
-        for k in tqdm(range(eval_iters)):
-            X = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
+        losses = torch.zeros(eval_iters // ratio)
+        for k in tqdm(range(eval_iters // ratio)):
+            X = get_batch(split, batch_size=batch_size * gradient_accumulation_steps * ratio)
             with ctx:
                 loss = model(X)['loss']
             losses[k] = loss.item()
