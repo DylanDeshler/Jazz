@@ -33,13 +33,14 @@ class ToMel(nn.Module):
         return self.transform(x)
 
 class SpecAugment(nn.Module):
-    def __init__(self, ):
+    def __init__(self, time_length=32, frequency_length=64):
         super().__init__()
-        self.time_mask = T.TimeMasking(32)
-        self.freq_mask = T.FrequencyMasking(64)
+        self.time_mask = T.TimeMasking(time_length)
+        self.freq_mask = T.FrequencyMasking(frequency_length)
     
     @torch.compiler.disable
     def forward(self, x):
+        print(x.shape)
         x = self.time_mask(x)
         x = self.time_mask(x)
         x = self.freq_mask(x)
@@ -369,6 +370,8 @@ class Transformer(nn.Module):
                  n_fft,
                  hop_length,
                  n_mels,
+                 time_length,
+                 frequency_length,
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4,
@@ -379,7 +382,7 @@ class Transformer(nn.Module):
         self.log_temperature = nn.Parameter(torch.log(torch.ones(1,) / 0.07))
         
         self.to_mel = ToMel(sample_rate, n_fft, hop_length, n_mels)
-        self.augment = SpecAugment()
+        self.augment = SpecAugment(time_length, frequency_length)
         self.x_embedder = nn.Linear(in_channels * patch_size * patch_size, hidden_size, bias=False)
         
         self.blocks = nn.ModuleList([
