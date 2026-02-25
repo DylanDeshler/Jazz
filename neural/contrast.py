@@ -40,7 +40,6 @@ class SpecAugment(nn.Module):
     
     @torch.compiler.disable
     def forward(self, x):
-        print(x.shape)
         x = self.time_mask(x)
         x = self.time_mask(x)
         x = self.freq_mask(x)
