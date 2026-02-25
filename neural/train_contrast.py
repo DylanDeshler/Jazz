@@ -71,7 +71,7 @@ hop_length = 512
 n_mels = 192
 max_seq_len = 256
 time_length = 32
-frequency_length = 64
+frequency_length = 12
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
