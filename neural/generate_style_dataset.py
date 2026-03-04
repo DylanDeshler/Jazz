@@ -48,7 +48,7 @@ file_offsets = np.memmap('/home/dylan.d/research/music/Jazz/file_offsets.bin', d
 n_files = len(file_offsets)
 
 data = np.memmap("/home/dylan.d/research/music/Jazz/wavs_16khz.bin", dtype=np.float32, mode='r')
-arr = np.memmap(f'/home/ubuntu/Data/style.bin', dtype=np.float16, mode='w+', shape=(len(data), hidden_size))
+arr = np.memmap(f'/home/dylan.d/research/music/Jazz/style.bin', dtype=np.float16, mode='w+', shape=(len(data), hidden_size))
 
 def extract_centered_style_windows(audio, sr=16000, window_sec=10, hop_sec=1):
     """
