@@ -27,10 +27,10 @@ sample_rate = model_args['sample_rate']
 n_seconds = 10
 n_samples = 16383
 time_length = 32
-freq_length = 64
+frequency_length = 64
 
 model_args['time_length'] = time_length
-model_args['freq_length'] = freq_length
+model_args['frequency_length'] = frequency_length
 
 model = net(**model_args).to(device)
 state_dict = checkpoint['model']
