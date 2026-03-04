@@ -448,7 +448,7 @@ class Transformer(nn.Module):
     def _compute_mel(self, x):
         return self.to_mel(x)
     
-    def forward(self, x):
+    def forward(self, x, features_only=False):
         x = self._compute_mel(x)
         
         if self.training:
@@ -477,6 +477,9 @@ class Transformer(nn.Module):
         x = self.pool_norm(x)
         x = self.pool(x.mean(1, keepdims=True), x).squeeze(1)
         features = x.clone().detach()
+        
+        if features_only:
+            return features
         
         x = self.mlp_norm(x)
         x = self.mlp(x)
