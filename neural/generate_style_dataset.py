@@ -116,7 +116,7 @@ with torch.no_grad():
         batch = torch.from_numpy(batch).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
         with ctx:
-            out = model(batch)['features']
+            out = model(batch, features_only=True)
         
         arr[cur_i:cur_i + len(batch)] = out.float().cpu().detach().numpy().astype(np.float16)
         cur_i += len(batch)
