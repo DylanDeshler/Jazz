@@ -98,7 +98,7 @@ for i in tqdm(range(n_files)):
     start = file_offsets[i, 0]
     length = file_offsets[i, 1]
     
-    batch = extract_centered_style_windows(data[start:start+length], sr=n_samples)
+    batch = extract_centered_style_windows(data[start:start+length].copy(), sr=n_samples)
     print(batch.shape)
 
 arr = np.memmap(f'/home/dylan.d/research/music/Jazz/style.bin', dtype=np.float16, mode='w+', shape=(len(data), hidden_size))
