@@ -94,14 +94,15 @@ n_files = len(file_offsets)
 
 data = np.memmap("/home/dylan.d/research/music/Jazz/wavs_16khz.bin", dtype=np.float32, mode='r')
 
-N = 0
-for i in tqdm(range(n_files)):
-    start = file_offsets[i, 0]
-    length = file_offsets[i, 1]
+# N = 0
+# for i in tqdm(range(n_files)):
+#     start = file_offsets[i, 0]
+#     length = file_offsets[i, 1]
     
-    batch = extract_centered_style_windows(data[start:start+length].copy(), sr=n_samples)
-    N += len(batch)
+#     batch = extract_centered_style_windows(data[start:start+length].copy(), sr=n_samples)
+#     N += len(batch)
 
+N = 6381425
 print(f'Counted {N} segments')
 arr = np.memmap(f'/home/dylan.d/research/music/Jazz/style.bin', dtype=np.float16, mode='w+', shape=(N, hidden_size))
 
@@ -112,7 +113,7 @@ with torch.no_grad():
         length = file_offsets[i, 1]
         
         batch = extract_centered_style_windows(data[start:start+length].copy(), sr=n_samples)
-        batch = torch.from_numpy(batch).pin_memory().to(device, non_blocking=True)
+        batch = torch.from_numpy(batch).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
         with ctx:
             out = model(batch)['features']
