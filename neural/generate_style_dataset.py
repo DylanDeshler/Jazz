@@ -44,12 +44,6 @@ model.load_state_dict(state_dict)
 model.eval()
 model = torch.compile(model)
 
-file_offsets = np.memmap('/home/dylan.d/research/music/Jazz/file_offsets.bin', dtype=np.int64, mode='r', shape=(32939, 4))
-n_files = len(file_offsets)
-
-data = np.memmap("/home/dylan.d/research/music/Jazz/wavs_16khz.bin", dtype=np.float32, mode='r')
-arr = np.memmap(f'/home/dylan.d/research/music/Jazz/style.bin', dtype=np.float16, mode='w+', shape=(len(data), hidden_size))
-
 def extract_centered_style_windows(audio, sr=16000, window_sec=10, hop_sec=1):
     """
     Extracts centered 10s windows with a 1s hop length from a 1D audio array.
@@ -94,6 +88,20 @@ def extract_centered_style_windows(audio, sr=16000, window_sec=10, hop_sec=1):
     # .copy() forces NumPy to allocate contiguous memory. 
     # Highly recommended before feeding this into PyTorch or a contrastive model!
     return np.ascontiguousarray(windows)
+
+file_offsets = np.memmap('/home/dylan.d/research/music/Jazz/file_offsets.bin', dtype=np.int64, mode='r', shape=(32939, 4))
+n_files = len(file_offsets)
+
+data = np.memmap("/home/dylan.d/research/music/Jazz/wavs_16khz.bin", dtype=np.float32, mode='r')
+
+for i in tqdm(range(n_files)):
+    start = data[i, 0]
+    length = data[i, 1]
+    
+    batch = extract_centered_style_windows(data[start:start+length], sr=n_samples)
+    print(batch.shape)
+
+arr = np.memmap(f'/home/dylan.d/research/music/Jazz/style.bin', dtype=np.float16, mode='w+', shape=(len(data), hidden_size))
 
 with torch.no_grad():
     for i in tqdm(range(len(data) // batch_size)):
