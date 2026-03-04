@@ -95,8 +95,8 @@ n_files = len(file_offsets)
 data = np.memmap("/home/dylan.d/research/music/Jazz/wavs_16khz.bin", dtype=np.float32, mode='r')
 
 for i in tqdm(range(n_files)):
-    start = data[i, 0]
-    length = data[i, 1]
+    start = file_offsets[i, 0]
+    length = file_offsets[i, 1]
     
     batch = extract_centered_style_windows(data[start:start+length], sr=n_samples)
     print(batch.shape)
@@ -105,8 +105,8 @@ arr = np.memmap(f'/home/dylan.d/research/music/Jazz/style.bin', dtype=np.float16
 
 with torch.no_grad():
     for i in tqdm(range(len(data) // batch_size)):
-        start = data[i, 0]
-        length = data[i, 1]
+        start = file_offsets[i, 0]
+        length = file_offsets[i, 1]
         
         batch = extract_centered_style_windows(data[start:start+length], sr=n_samples)
         print(batch.shape)
