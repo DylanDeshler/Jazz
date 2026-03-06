@@ -265,7 +265,7 @@ with torch.no_grad():
         spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sample_rate, n_fft=n_fft, hop_length=hop_length)[0]
         onset_strength = librosa.onset.onset_strength(y=y, sr=sample_rate, hop_length=hop_length)
         zcr = librosa.feature.zero_crossing_rate(y, frame_length=n_fft, hop_length=hop_length)[0]
-        print(rms.shape, key_chromagram.shape, spectral_centroid.shape, onset_strength.shape, zcr.shape)
+        print(y.shape, rms.shape, key_chromagram.shape, spectral_centroid.shape, onset_strength.shape, zcr.shape)
         continue
         
         # key_chroma[cur_i:cur_i + len(key_chromagram)] = key_chromagram
