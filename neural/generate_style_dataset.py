@@ -250,6 +250,7 @@ with torch.no_grad():
         start = file_offsets[i, 0]
         length = file_offsets[i, 1]
         n_seconds = length // sample_rate
+        n_frames = n_seconds * sample_rate // hop_length
         y = data[start:start+n_seconds*sample_rate].copy()
         
         # Compute latents
@@ -269,7 +270,7 @@ with torch.no_grad():
         key_chromagram = create_conditioned_chromagram(keys, torch.from_numpy(rms.flatten()), sr=sample_rate)#.view(n_seconds, -1, 12)
         chroma = librosa.feature.chroma_cqt(y=data[start:start+length].copy(), sr=sample_rate, hop_length=500).T[:n_seconds * 32]#.reshape(n_seconds, -1, 12)
         
-        print(batch.shape, y.shape, rms.shape, key_chromagram.shape, chroma.shape, spectral_centroid.shape, onset_strength.shape, zcr.shape)
+        print(batch.shape, y.shape, n_frames, rms.shape, key_chromagram.shape, chroma.shape, spectral_centroid.shape, onset_strength.shape, zcr.shape)
         continue
         
         # key_chroma[cur_i:cur_i + len(key_chromagram)] = key_chromagram
