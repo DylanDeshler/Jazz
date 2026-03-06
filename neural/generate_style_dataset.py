@@ -254,6 +254,7 @@ with torch.no_grad():
         batch = extract_centered_style_windows(data[start:start+length].copy(), hop_samples=sample_rate, window_samples=window_samples)
         
         for y in batch:
+            y = y.copy()
             print(y.shape)
             
             # Compute features
