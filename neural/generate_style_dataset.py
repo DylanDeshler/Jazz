@@ -261,7 +261,8 @@ with torch.no_grad():
         spectral_centroid = []
         onset_strength = []
         zcr = []
-        for y in data[start:start+sample_rate*length//sample_rate].copy().reshape(-1, sample_rate):
+        n_seconds = length // sample_rate
+        for y in data[start:start+n_seconds*length].copy().reshape(-1, sample_rate):
             rms.append(librosa.feature.rms(y=y, frame_length=n_fft, hop_length=hop_length)[0])
             
             spectral_centroid.append(librosa.feature.spectral_centroid(y=y, sr=sample_rate, n_fft=n_fft, hop_length=hop_length)[0])
