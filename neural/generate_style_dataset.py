@@ -271,7 +271,7 @@ with torch.no_grad():
         timestamps, keys = extract_local_keys(data[start:start+length].copy(), window_sec=15.0, hop_sec=1.0, sr=sample_rate)
         keys = smooth_key_timeline(keys, smoothing_window=15)
         key_chromagram = create_conditioned_chromagram(keys, torch.from_numpy(rms.flatten()), sr=sample_rate).view(len(rms), -1, 12)
-        chroma = librosa.feature.chroma_cqt(y=data[start:start+length].copy(), sr=sample_rate, hop_length=hop_length).T#[:, None, :].reshape(len(rms), -1, 12)
+        chroma = librosa.feature.chroma_cqt(y=data[start:start+length].copy(), sr=sample_rate, hop_length=500).T.reshape(len(rms), -1, 12)
         
         print(y.shape, rms.shape, key_chromagram.shape, chroma.shape, spectral_centroid.shape, onset_strength.shape, zcr.shape)
         
