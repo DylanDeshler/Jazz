@@ -252,9 +252,6 @@ with torch.no_grad():
         
         # Compute latents
         batch = extract_centered_style_windows(data[start:start+length].copy(), hop_samples=sample_rate, window_samples=window_samples)
-        timestamps, keys = extract_local_keys(data[start:start+length].copy(), window_sec=15.0, hop_sec=1.0, sr=sample_rate)
-        keys = smooth_key_timeline(keys, smoothing_window=15)
-        key_chromagram = create_conditioned_chromagram(keys, torch.from_numpy(rms), sr=sample_rate)
         
         for y in batch:
             print(y.shape)
@@ -265,6 +262,10 @@ with torch.no_grad():
             spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sample_rate, n_fft=n_fft, hop_length=hop_length)[0]
             onset_strength = librosa.onset.onset_strength(y=y, sr=sample_rate, hop_length=hop_length)
             zcr = librosa.feature.zero_crossing_rate(y, frame_length=n_fft, hop_length=hop_length)[0]
+        timestamps, keys = extract_local_keys(data[start:start+length].copy(), window_sec=15.0, hop_sec=1.0, sr=sample_rate)
+        keys = smooth_key_timeline(keys, smoothing_window=15)
+        key_chromagram = create_conditioned_chromagram(keys, torch.from_numpy(rms), sr=sample_rate)
+        
         print(y.shape, rms.shape, key_chromagram.shape, spectral_centroid.shape, onset_strength.shape, zcr.shape)
         
         batch = torch.from_numpy(batch).unsqueeze(1).pin_memory().to(device, non_blocking=True)
