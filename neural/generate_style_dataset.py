@@ -253,15 +253,24 @@ with torch.no_grad():
         batch = extract_centered_style_windows(data[start:start+length].copy(), hop_samples=sample_rate, window_samples=window_samples)
         
         # Compute features
+        rms = []
+        spectral_centroid = []
+        onset_strength = []
+        zcr = []
         for y in batch:
-            rms = librosa.feature.rms(y=y, frame_length=n_fft, hop_length=hop_length)[0]
+            rms.append(librosa.feature.rms(y=y, frame_length=n_fft, hop_length=hop_length)[0])
             
-            spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sample_rate, n_fft=n_fft, hop_length=hop_length)[0]
-            onset_strength = librosa.onset.onset_strength(y=y, sr=sample_rate, hop_length=hop_length)
-            zcr = librosa.feature.zero_crossing_rate(y, frame_length=n_fft, hop_length=hop_length)[0]
+            spectral_centroid.append(librosa.feature.spectral_centroid(y=y, sr=sample_rate, n_fft=n_fft, hop_length=hop_length)[0])
+            onset_strength.append(librosa.onset.onset_strength(y=y, sr=sample_rate, hop_length=hop_length))
+            zcr.append(librosa.feature.zero_crossing_rate(y, frame_length=n_fft, hop_length=hop_length)[0])
+        rms = np.stack(rms)
+        spectral_centroid = np.stack(spectral_centroid)
+        onset_strength = np.stack(onset_strength)
+        zcr = np.stack(zcr)
+        
         timestamps, keys = extract_local_keys(data[start:start+length].copy(), window_sec=15.0, hop_sec=1.0, sr=sample_rate)
         keys = smooth_key_timeline(keys, smoothing_window=15)
-        key_chromagram = create_conditioned_chromagram(keys, torch.from_numpy(rms), sr=sample_rate)
+        key_chromagram = create_conditioned_chromagram(keys, torch.from_numpy(rms.flatten()), sr=sample_rate)
         
         print(y.shape, rms.shape, key_chromagram.shape, spectral_centroid.shape, onset_strength.shape, zcr.shape)
         
