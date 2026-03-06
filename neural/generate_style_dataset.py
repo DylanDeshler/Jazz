@@ -257,6 +257,14 @@ with torch.no_grad():
         length = file_offsets[i, 1]
         y = data[start:start+length].copy()
         
+        # Compute latents
+        batch = extract_centered_style_windows(data[start:start+length].copy(), sr=n_samples)
+        batch = torch.from_numpy(batch).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+        
+        with ctx:
+            out = model(batch, features_only=True)
+        print(batch.shape, out.shape)
+        
         # Compute features
         timestamps, keys = extract_local_keys(y, window_sec=15.0, hop_sec=1.0, sr=sample_rate)
         keys = smooth_key_timeline(keys, smoothing_window=15)
@@ -274,12 +282,7 @@ with torch.no_grad():
         # spectral_centroid[cur_i:cur_i + len(rms)] = 
         # onset_strength[cur_i:cur_i + len()]
         
-        # Compute latents
-        batch = extract_centered_style_windows(data[start:start+length].copy(), sr=n_samples)
-        batch = torch.from_numpy(batch).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
-        with ctx:
-            out = model(batch, features_only=True)
         
         style[cur_i:cur_i + len(batch)] = out.float().cpu().detach().numpy().astype(np.float16)
         cur_i += len(batch)
