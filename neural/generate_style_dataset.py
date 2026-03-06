@@ -252,7 +252,7 @@ with torch.no_grad():
         y = data[start:start+length].copy()
         
         # Compute latents
-        batch = extract_centered_style_windows(data[start:start+length].copy(), hop_samples=sample_rate, widnow_samples=window_samples)
+        batch = extract_centered_style_windows(data[start:start+length].copy(), hop_samples=sample_rate, window_samples=window_samples)
         batch = torch.from_numpy(batch).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
         with ctx:
