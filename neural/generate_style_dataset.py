@@ -263,6 +263,7 @@ with torch.no_grad():
             spectral_centroid.append(librosa.feature.spectral_centroid(y=y, sr=sample_rate, n_fft=n_fft, hop_length=hop_length)[0])
             onset_strength.append(librosa.onset.onset_strength(y=y, sr=sample_rate, hop_length=hop_length))
             zcr.append(librosa.feature.zero_crossing_rate(y, frame_length=n_fft, hop_length=hop_length)[0])
+        print(y.shape)
         rms = np.stack(rms)
         spectral_centroid = np.stack(spectral_centroid)
         onset_strength = np.stack(onset_strength)
