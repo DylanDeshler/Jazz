@@ -33,6 +33,7 @@ time_length = 32
 frequency_length = 64
 n_fft = 1024
 hop_length = 500
+n_windows = sample_rate // hop_length
 
 model_args['time_length'] = time_length
 model_args['frequency_length'] = frequency_length
@@ -232,17 +233,23 @@ data = np.memmap("/home/dylan.d/research/music/Jazz/wavs_16khz.bin", dtype=np.fl
 # for i in tqdm(range(n_files)):
 #     start = file_offsets[i, 0]
 #     length = file_offsets[i, 1]
+#     n_seconds = length // sample_rate
+#     n_windows = sample_rate // hop_length
+#     n_frames = n_seconds * sample_rate // hop_length
+#     y = data[start:start+n_seconds*sample_rate].copy()
     
-#     batch = extract_centered_style_windows(data[start:start+length].copy(), sr=n_samples)
+#     batch = extract_centered_style_windows(y, hop_samples=sample_rate, window_samples=window_samples)
 #     N += len(batch)
 
 N = 6381425
 print(f'Counted {N} segments')
-# style = np.memmap(f'/home/dylan.d/research/music/Jazz/style.bin', dtype=np.float16, mode='w+', shape=(N, hidden_size))
-# key_chroma = np.memmap(f'/home/dylan.d/research/music/Jazz/meta.bin', dtype=np.float16, mode='w+', shape=(N, 12))
-# true_chroma = np.memmap(f'/home/dylan.d/research/music/Jazz/meta.bin', dtype=np.float16, mode='w+', shape=(N, 12))
-# rms = np.memmap(f'/home/dylan.d/research/music/Jazz/meta.bin', dtype=np.float16, mode='w+', shape=(N, 12))
-# key_chroma = np.memmap(f'/home/dylan.d/research/music/Jazz/meta.bin', dtype=np.float16, mode='w+', shape=(N, 12))
+style_arr = np.memmap(f'/home/dylan.d/research/music/Jazz/style.bin', dtype=np.float16, mode='w+', shape=(N, hidden_size))
+key_chroma_arr = np.memmap(f'/home/dylan.d/research/music/Jazz/key_chroma.bin', dtype=np.float16, mode='w+', shape=(N, n_windows, 12))
+true_chroma_arr = np.memmap(f'/home/dylan.d/research/music/Jazz/true_chroma.bin', dtype=np.float16, mode='w+', shape=(N, n_windows, 12))
+rms_arr = np.memmap(f'/home/dylan.d/research/music/Jazz/rms.bin', dtype=np.float16, mode='w+', shape=(N, n_windows))
+spectral_centroid_arr = np.memmap(f'/home/dylan.d/research/music/Jazz/spectral_centroid.bin', dtype=np.float16, mode='w+', shape=(N, n_windows))
+onset_strength_arr = np.memmap(f'/home/dylan.d/research/music/Jazz/onset_strength.bin', dtype=np.float16, mode='w+', shape=(N, n_windows))
+zcr_arr = np.memmap(f'/home/dylan.d/research/music/Jazz/zcr.bin', dtype=np.float16, mode='w+', shape=(N, n_windows))
 
 cur_i = 0
 with torch.no_grad():
@@ -250,7 +257,6 @@ with torch.no_grad():
         start = file_offsets[i, 0]
         length = file_offsets[i, 1]
         n_seconds = length // sample_rate
-        n_windows = sample_rate // hop_length
         n_frames = n_seconds * sample_rate // hop_length
         y = data[start:start+n_seconds*sample_rate].copy()
         
@@ -268,21 +274,26 @@ with torch.no_grad():
         
         timestamps, keys = extract_local_keys(data[start:start+length].copy(), window_sec=15.0, hop_sec=1.0, sr=sample_rate)[:n_frames]
         keys = smooth_key_timeline(keys, smoothing_window=15)
-        key_chromagram = create_conditioned_chromagram(keys, torch.from_numpy(rms.flatten()), sr=sample_rate)[:n_frames].view(n_seconds, n_windows, 12)
-        chroma = librosa.feature.chroma_cqt(y=data[start:start+length].copy(), sr=sample_rate, hop_length=500).T[:n_frames].reshape(n_seconds, n_windows, 12)
+        key_chromagram = create_conditioned_chromagram(keys, torch.from_numpy(rms.flatten()), sr=sample_rate).numpy()[:n_frames].reshape(n_seconds, n_windows, 12)
+        true_chromagram = librosa.feature.chroma_cqt(y=data[start:start+length].copy(), sr=sample_rate, hop_length=500).T[:n_frames].reshape(n_seconds, n_windows, 12)
         
-        print(batch.shape, y.shape, n_frames, rms.shape, key_chromagram.shape, chroma.shape, spectral_centroid.shape, onset_strength.shape, zcr.shape)
-        continue
+        print(batch.shape, rms.shape, key_chromagram.shape, true_chromagram.shape, spectral_centroid.shape, onset_strength.shape, zcr.shape)
         
-        # key_chroma[cur_i:cur_i + len(key_chromagram)] = key_chromagram
-        # true_chroma[cur_i:cur_i + len(true_chromagram)] = true_chromagram
-        # rms[cur_i:cur_i + len(rms)] = rms.astype(np.float16)
-        # spectral_centroid[cur_i:cur_i + len(rms)] = 
-        # onset_strength[cur_i:cur_i + len()]
+        # Write
+        style_arr[cur_i:cur_i + n_seconds] = out.float().cpu().detach().numpy().astype(np.float16)
+        key_chroma_arr[cur_i:cur_i + n_seconds] = key_chromagram.astype(np.float16)
+        true_chroma_arr[cur_i:cur_i + n_seconds] = true_chromagram.astype(np.float16)
+        rms_arr[cur_i:cur_i + n_seconds] = rms.astype(np.float16)
+        spectral_centroid_arr[cur_i:cur_i + n_seconds] = spectral_centroid.astype(np.float16)
+        onset_strength_arr[cur_i:cur_i + n_seconds] = onset_strength.astype(np.float16)
+        zcr_arr[cur_i:cur_i + n_seconds] = zcr.astype(np.float16)
         
-        
-        
-        style[cur_i:cur_i + len(batch)] = out.float().cpu().detach().numpy().astype(np.float16)
         cur_i += len(batch)
 
-style.flush()
+style_arr.flush()
+key_chroma_arr.flush()
+true_chroma_arr.flush()
+rms_arr.flush()
+spectral_centroid_arr.flush()
+onset_strength_arr.flush()
+zcr_arr.flush()
