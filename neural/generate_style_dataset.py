@@ -250,6 +250,7 @@ with torch.no_grad():
         start = file_offsets[i, 0]
         length = file_offsets[i, 1]
         n_seconds = length // sample_rate
+        n_windows = sample_rate // hop_length
         n_frames = n_seconds * sample_rate // hop_length
         y = data[start:start+n_seconds*sample_rate].copy()
         
@@ -260,15 +261,15 @@ with torch.no_grad():
             out = model(batch, features_only=True)
         
         # Compute features
-        rms = librosa.feature.rms(y=y, frame_length=n_fft, hop_length=hop_length)[0][:n_frames]
-        spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sample_rate, n_fft=n_fft, hop_length=hop_length)[0][:n_frames]
-        onset_strength = librosa.onset.onset_strength(y=y, sr=sample_rate, hop_length=hop_length)[:n_frames]
-        zcr = librosa.feature.zero_crossing_rate(y, frame_length=n_fft, hop_length=hop_length)[0][:n_frames]
+        rms = librosa.feature.rms(y=y, frame_length=n_fft, hop_length=hop_length)[0][:n_frames].reshape(n_seconds, n_windows)
+        spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sample_rate, n_fft=n_fft, hop_length=hop_length)[0][:n_frames].reshape(n_seconds, n_windows)
+        onset_strength = librosa.onset.onset_strength(y=y, sr=sample_rate, hop_length=hop_length)[:n_frames].reshape(n_seconds, n_windows)
+        zcr = librosa.feature.zero_crossing_rate(y, frame_length=n_fft, hop_length=hop_length)[0][:n_frames].reshape(n_seconds, n_windows)
         
         timestamps, keys = extract_local_keys(data[start:start+length].copy(), window_sec=15.0, hop_sec=1.0, sr=sample_rate)[:n_frames]
         keys = smooth_key_timeline(keys, smoothing_window=15)
-        key_chromagram = create_conditioned_chromagram(keys, torch.from_numpy(rms.flatten()), sr=sample_rate)[:n_frames].view(n_seconds, -1, 12)
-        chroma = librosa.feature.chroma_cqt(y=data[start:start+length].copy(), sr=sample_rate, hop_length=500).T[:n_frames].reshape(n_seconds, -1, 12)
+        key_chromagram = create_conditioned_chromagram(keys, torch.from_numpy(rms.flatten()), sr=sample_rate)[:n_frames].view(n_seconds, n_windows, 12)
+        chroma = librosa.feature.chroma_cqt(y=data[start:start+length].copy(), sr=sample_rate, hop_length=500).T[:n_frames].reshape(n_seconds, n_windows, 12)
         
         print(batch.shape, y.shape, n_frames, rms.shape, key_chromagram.shape, chroma.shape, spectral_centroid.shape, onset_strength.shape, zcr.shape)
         continue
