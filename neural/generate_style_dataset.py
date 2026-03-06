@@ -250,29 +250,19 @@ with torch.no_grad():
         start = file_offsets[i, 0]
         length = file_offsets[i, 1]
         n_seconds = length // sample_rate
+        y = data[start:start+n_seconds*sample_rate].copy()
         
         # Compute latents
-        batch = extract_centered_style_windows(data[start:start+n_seconds*sample_rate].copy(), hop_samples=sample_rate, window_samples=window_samples)
+        batch = extract_centered_style_windows(y, hop_samples=sample_rate, window_samples=window_samples)
         batch = torch.from_numpy(batch).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         with ctx:
             out = model(batch, features_only=True)
         
         # Compute features
-        rms = []
-        spectral_centroid = []
-        onset_strength = []
-        zcr = []
-        ys = data[start:start+n_seconds*sample_rate].copy().reshape(-1, sample_rate)
-        for y in ys:
-            rms.append(librosa.feature.rms(y=y, frame_length=n_fft, hop_length=hop_length)[0])
-            
-            spectral_centroid.append(librosa.feature.spectral_centroid(y=y, sr=sample_rate, n_fft=n_fft, hop_length=hop_length)[0])
-            onset_strength.append(librosa.onset.onset_strength(y=y, sr=sample_rate, hop_length=hop_length))
-            zcr.append(librosa.feature.zero_crossing_rate(y, frame_length=n_fft, hop_length=hop_length)[0])
-        rms = np.stack(rms)
-        spectral_centroid = np.stack(spectral_centroid)
-        onset_strength = np.stack(onset_strength)
-        zcr = np.stack(zcr)
+        rms = librosa.feature.rms(y=y, frame_length=n_fft, hop_length=hop_length)[0]
+        spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sample_rate, n_fft=n_fft, hop_length=hop_length)[0]
+        onset_strength = librosa.onset.onset_strength(y=y, sr=sample_rate, hop_length=hop_length)
+        zcr = librosa.feature.zero_crossing_rate(y, frame_length=n_fft, hop_length=hop_length)[0]
         
         timestamps, keys = extract_local_keys(data[start:start+length].copy(), window_sec=15.0, hop_sec=1.0, sr=sample_rate)
         keys = smooth_key_timeline(keys, smoothing_window=15)
