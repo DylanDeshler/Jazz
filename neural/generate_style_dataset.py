@@ -263,7 +263,6 @@ with torch.no_grad():
             spectral_centroid.append(librosa.feature.spectral_centroid(y=y, sr=sample_rate, n_fft=n_fft, hop_length=hop_length)[0])
             onset_strength.append(librosa.onset.onset_strength(y=y, sr=sample_rate, hop_length=hop_length))
             zcr.append(librosa.feature.zero_crossing_rate(y, frame_length=n_fft, hop_length=hop_length)[0])
-        print(y.shape)
         rms = np.stack(rms)
         spectral_centroid = np.stack(spectral_centroid)
         onset_strength = np.stack(onset_strength)
@@ -274,7 +273,7 @@ with torch.no_grad():
         key_chromagram = create_conditioned_chromagram(keys, torch.from_numpy(rms.flatten()), sr=sample_rate).view(len(rms), -1, 12)
         chroma = librosa.feature.chroma_cqt(y=data[start:start+length].copy(), sr=sample_rate, hop_length=500).T#.reshape(len(rms), -1, 12)
         
-        print(y.shape, rms.shape, key_chromagram.shape, chroma.shape, spectral_centroid.shape, onset_strength.shape, zcr.shape)
+        print(batch.shape, y.shape, rms.shape, key_chromagram.shape, chroma.shape, spectral_centroid.shape, onset_strength.shape, zcr.shape)
         
         # Compute latents
         batch = torch.from_numpy(batch).unsqueeze(1).pin_memory().to(device, non_blocking=True)
