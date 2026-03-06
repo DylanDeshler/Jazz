@@ -249,9 +249,10 @@ with torch.no_grad():
     for i in tqdm(range(n_files)):
         start = file_offsets[i, 0]
         length = file_offsets[i, 1]
+        n_seconds = length // sample_rate
         
         # Compute latents
-        batch = extract_centered_style_windows(data[start:start+length].copy(), hop_samples=sample_rate, window_samples=window_samples)
+        batch = extract_centered_style_windows(data[start:start+n_seconds*sample_rate].copy(), hop_samples=sample_rate, window_samples=window_samples)
         batch = torch.from_numpy(batch).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         with ctx:
             out = model(batch, features_only=True)
@@ -261,8 +262,8 @@ with torch.no_grad():
         spectral_centroid = []
         onset_strength = []
         zcr = []
-        n_seconds = length // sample_rate
-        for y in data[start:start+n_seconds*sample_rate].copy().reshape(-1, sample_rate):
+        ys = data[start:start+n_seconds*sample_rate].copy().reshape(-1, sample_rate)
+        for y in ys:
             rms.append(librosa.feature.rms(y=y, frame_length=n_fft, hop_length=hop_length)[0])
             
             spectral_centroid.append(librosa.feature.spectral_centroid(y=y, sr=sample_rate, n_fft=n_fft, hop_length=hop_length)[0])
