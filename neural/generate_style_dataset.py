@@ -33,6 +33,7 @@ time_length = 32
 frequency_length = 64
 n_fft = 1024
 hop_length = 512
+print(sample_rate)
 
 model_args['time_length'] = time_length
 model_args['frequency_length'] = frequency_length
