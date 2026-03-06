@@ -28,8 +28,7 @@ model_args = checkpoint['model_args']
 
 hidden_size = model_args['hidden_size']
 sample_rate = model_args['sample_rate']
-n_seconds = 10
-n_samples = 16383
+window_samples = 16383
 time_length = 32
 frequency_length = 64
 n_fft = 1024
@@ -50,49 +49,44 @@ model.load_state_dict(state_dict)
 model.eval()
 model = torch.compile(model)
 
-def extract_centered_style_windows(audio, sr=16000, window_sec=10, hop_sec=1):
+def extract_centered_style_windows(audio, hop_samples=16000, window_samples=163830):
     """
-    Extracts centered 10s windows with a 1s hop length from a 1D audio array.
-    Automatically pads with zeros to maintain center focus for edge frames.
+    Extracts perfectly centered style windows using exact sample counts 
+    to align STFT bins with the 1 Hz (16,000 sample) latent frames.
     
     Args:
-        audio (np.ndarray): 1D array of audio samples.
-        sr (int): Sample rate (default 16000).
-        window_sec (int): Length of the extracted window in seconds.
-        hop_sec (int): Hop length in seconds (aligns with latent frames).
+        audio (np.ndarray): 1D array of raw audio samples.
+        hop_samples (int): Hop length in samples (16000 for 1Hz at 16kHz).
+        window_samples (int): Exact window length in samples (163830 for STFT alignment).
         
     Returns:
         np.ndarray: 2D array of shape (num_frames, window_samples)
     """
-    # 1. Convert seconds to samples
-    window_samples = window_sec * sr        # e.g., 160,000
-    hop_samples = hop_sec * sr              # e.g., 16,000
-    
-    # 2. Determine the total number of 1Hz latent frames we need to match
+    # 1. Determine the total number of 1Hz latent frames we need to match
+    # np.ceil ensures we get a frame even for the final fractional second of audio
     num_frames = int(np.ceil(len(audio) / hop_samples))
     
-    # 3. Calculate exact padding needed for centering
-    # To center a 10s window over a 1s chunk, we need 4.5s on the left.
+    # 2. Calculate exact padding needed for centering
+    # Pad = (Style_Window - Latent_Window) / 2
+    # For 163830 and 16000, this naturally evaluates to exactly 73915
     pad_left = (window_samples - hop_samples) // 2
     
-    # Calculate the total length the array *must* be to extract all frames safely
+    # Calculate the absolute total length the array *must* be to extract all frames
     required_length = (num_frames - 1) * hop_samples + window_samples
     
-    # Right pad is whatever is leftover to reach the required length
+    # Right pad is whatever is leftover to reach the required length safely
     pad_right = max(0, required_length - (len(audio) + pad_left))
     
-    # 4. Pad the audio array with 0s (silence)
+    # 3. Pad the audio array with 0s (silence)
     padded_audio = np.pad(audio, (pad_left, pad_right), mode='constant', constant_values=0.0)
     
-    # 5. Extract the windows using insanely fast NumPy stride tricks
-    # This creates a sliding view of 160,000 samples, moving 1 sample at a time
+    # 4. Extract the windows using insanely fast NumPy stride tricks
     view = sliding_window_view(padded_audio, window_shape=window_samples)
     
-    # Slice the view to jump by our hop_length (16,000 samples)
+    # Slice the view to jump strictly by our latent hop_length
     windows = view[::hop_samples]
     
-    # .copy() forces NumPy to allocate contiguous memory. 
-    # Highly recommended before feeding this into PyTorch or a contrastive model!
+    # Force memory contiguity before sending to your Contrastive Style Model
     return np.ascontiguousarray(windows)
 
 def get_key_essentia(audio_path):
@@ -258,7 +252,7 @@ with torch.no_grad():
         y = data[start:start+length].copy()
         
         # Compute latents
-        batch = extract_centered_style_windows(data[start:start+length].copy(), sr=n_samples)
+        batch = extract_centered_style_windows(data[start:start+length].copy(), hop_samples=sample_rate, widnow_samples=window_samples)
         batch = torch.from_numpy(batch).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
         with ctx:
@@ -269,7 +263,7 @@ with torch.no_grad():
         timestamps, keys = extract_local_keys(y, window_sec=15.0, hop_sec=1.0, sr=sample_rate)
         keys = smooth_key_timeline(keys, smoothing_window=15)
         rms = librosa.feature.rms(y=y, frame_length=n_fft, hop_length=hop_length)[0]
-        key_chromagram = create_conditioned_chromagram(keys, torch.from_numpy(rms), sr=sample_rate).T.numpy().astype(np.float16)
+        key_chromagram = create_conditioned_chromagram(keys, torch.from_numpy(rms), sr=sample_rate)
         spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sample_rate, n_fft=n_fft, hop_length=hop_length)[0]
         onset_strength = librosa.onset.onset_strength(y=y, sr=sample_rate, hop_length=hop_length)
         zcr = librosa.feature.zero_crossing_rate(y, frame_length=n_fft, hop_length=hop_length)[0]
