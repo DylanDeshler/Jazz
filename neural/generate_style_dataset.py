@@ -33,7 +33,6 @@ time_length = 32
 frequency_length = 64
 n_fft = 1024
 hop_length = 512
-print(sample_rate)
 
 model_args['time_length'] = time_length
 model_args['frequency_length'] = frequency_length
@@ -263,7 +262,7 @@ with torch.no_grad():
         onset_strength = []
         zcr = []
         n_seconds = length // sample_rate
-        chunk = data[start:start+n_seconds*length].copy()
+        chunk = data[start:start+n_seconds*sample_rate].copy()
         print(len(data), start, length, chunk.shape)
         for y in chunk:
             rms.append(librosa.feature.rms(y=y, frame_length=n_fft, hop_length=hop_length)[0])
