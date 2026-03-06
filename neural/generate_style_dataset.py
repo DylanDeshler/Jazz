@@ -263,7 +263,7 @@ with torch.no_grad():
         zcr = []
         n_seconds = length // sample_rate
         chunk = data[start:start+n_seconds*length].copy()
-        print(chunk.shape)
+        print(len(data), start, length, chunk.shape)
         for y in chunk:
             rms.append(librosa.feature.rms(y=y, frame_length=n_fft, hop_length=hop_length)[0])
             
