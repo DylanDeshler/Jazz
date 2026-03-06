@@ -28,7 +28,7 @@ model_args = checkpoint['model_args']
 
 hidden_size = model_args['hidden_size']
 sample_rate = model_args['sample_rate']
-window_samples = 16383
+window_samples = 163830
 time_length = 32
 frequency_length = 64
 n_fft = 1024
@@ -250,14 +250,18 @@ with torch.no_grad():
         start = file_offsets[i, 0]
         length = file_offsets[i, 1]
         
+        # Compute latents
         batch = extract_centered_style_windows(data[start:start+length].copy(), hop_samples=sample_rate, window_samples=window_samples)
+        batch = torch.from_numpy(batch).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+        with ctx:
+            out = model(batch, features_only=True)
         
         # Compute features
         rms = []
         spectral_centroid = []
         onset_strength = []
         zcr = []
-        for y in batch:
+        for y in data[start:start+sample_rate*length//sample_rate].copy().reshape(-1, sample_rate):
             rms.append(librosa.feature.rms(y=y, frame_length=n_fft, hop_length=hop_length)[0])
             
             spectral_centroid.append(librosa.feature.spectral_centroid(y=y, sr=sample_rate, n_fft=n_fft, hop_length=hop_length)[0])
@@ -274,12 +278,6 @@ with torch.no_grad():
         chroma = librosa.feature.chroma_cqt(y=data[start:start+length].copy(), sr=sample_rate, hop_length=500).T#.reshape(len(rms), -1, 12)
         
         print(batch.shape, y.shape, rms.shape, key_chromagram.shape, chroma.shape, spectral_centroid.shape, onset_strength.shape, zcr.shape)
-        
-        # Compute latents
-        batch = torch.from_numpy(batch).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-        with ctx:
-            out = model(batch, features_only=True)
-        print(batch.shape, out.shape)
         continue
         
         # key_chroma[cur_i:cur_i + len(key_chromagram)] = key_chromagram
