@@ -12,7 +12,7 @@ from beat_this.utils import save_beat_tsv
 paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
 file2beats = File2Beats(checkpoint_path="final0", device="cuda", dbn=False)
 
-for audio_path in paths:
+for audio_path in tqdm(paths):
     outpath = audio_path.replace('wavs', 'beats').replace('.wav', '.beats')
     
     if os.path.exists(outpath):
@@ -24,4 +24,3 @@ for audio_path in paths:
     except Exception as e:
         print(e)
         continue
-print('Done!')
