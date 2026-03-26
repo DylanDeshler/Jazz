@@ -335,7 +335,7 @@ if __name__ == "__main__":
     timestamps = read_beat_timestamps(beat)
     bpm = calculate_subset_bpm(timestamps, 1, 6)
     print(bpm)
-    print(timestamps[-1], len(sf.read(wav)) / 16000)
+    print(timestamps[-1], sf.read(wav).shape)
 
     cards = pickle.load(open('JazzSet.0.9.pkl', "rb"))
     cards = [card for card in cards if card]
