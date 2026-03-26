@@ -13,7 +13,7 @@ paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/
 file2beats = File2Beats(checkpoint_path="final0", device="cuda", dbn=False)
 
 for audio_path in tqdm(paths):
-    outpath = audio_path.replace('wavs', 'beats').replace('.wav', '.beats')
+    outpath = audio_path.replace('jazz_data_16000_full_clean', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats')
     
     if os.path.exists(outpath):
         continue
