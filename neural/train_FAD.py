@@ -332,10 +332,11 @@ if __name__ == "__main__":
     wav = '/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/JV-9999-1935-QmNmKtxL36DZskiHCYeGz7yRGF6UTxbeqfY6rLGsUiyt93.wav-DV519464.wav'
     beat = '/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats/JV-9999-1935-QmNmKtxL36DZskiHCYeGz7yRGF6UTxbeqfY6rLGsUiyt93.beats-DV519464.beats'
     
+    data, rate = sf.read(wav)
     timestamps = read_beat_timestamps(beat)
     bpm = calculate_subset_bpm(timestamps, 1, 6)
     print(bpm)
-    print(timestamps[-1], sf.read(wav).shape)
+    print(timestamps[-1], data.shape, rate)
 
     cards = pickle.load(open('JazzSet.0.9.pkl', "rb"))
     cards = [card for card in cards if card]
