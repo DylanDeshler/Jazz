@@ -9,7 +9,7 @@ from tqdm import tqdm
 from beat_this.inference import File2Beats
 from beat_this.utils import save_beat_tsv
 
-paths = glob.glob('/home/ubuntu/base/Data/wavs/*.wav')
+paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
 file2beats = File2Beats(checkpoint_path="final0", device="cuda", dbn=False)
 
 for audio_path in tqdm(paths):
