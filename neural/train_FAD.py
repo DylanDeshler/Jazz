@@ -387,17 +387,18 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
-        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        print(f"iter {iter_num}: train loss {losses['train']['total']:.6f}, val loss {losses['val']['total']:.6f}")
         
         if wandb_log:
-            wandb.log({
+            log_dict = {
                 "iter": iter_num,
-                "train/loss": losses['train'],
-                "val/loss": losses['val'],
                 "lr": lr,
                 "mfu": running_mfu*100, # convert to percentage
                 "tokens": tokens_trained,
-            })
+            }
+            log_dict = log_dict | {f'train/{k}': v for k, v in losses['train'].items()}
+            log_dict = log_dict | {f'val/{k}': v for k, v in losses['val'].items()}
+            wandb.log(log_dict)
         if losses['val'] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses['val']
             if iter_num > 0:
