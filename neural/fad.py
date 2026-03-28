@@ -83,7 +83,7 @@ class ToMel(nn.Module):
         self.mu = -34.36543
         self.std = 15.82586
     
-    @torch.compile.disable
+    @torch.compiler.disable
     def forward(self, x):
         x = self.transform(x)
         x = (x - self.mu) / (self.std + 1e-6)
