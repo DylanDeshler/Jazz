@@ -345,10 +345,12 @@ class MultiTaskFAD(nn.Module):
 
         total_loss = loss_bpm + loss_year + loss_inst + loss_label
 
-        outputs['loss'] = total_loss
-        outputs['loss_bpm'] = loss_bpm
-        outputs['loss_year'] = loss_year
-        outputs['loss_inst'] = loss_inst
-        outputs['loss_label'] = loss_label
+        outputs['loss'] = {
+            'total': total_loss,
+            'bpm': loss_bpm,
+            'year': loss_year,
+            'inst': loss_inst,
+            'label': loss_label
+        }
         
         return outputs

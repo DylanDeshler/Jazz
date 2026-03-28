@@ -3,6 +3,7 @@ import torch.nn.functional as F
 
 import os
 import csv
+import math
 import time
 import numpy as np
 import soundfile as sf
@@ -320,13 +321,14 @@ def estimate_loss():
     out = {}
     model.eval()
     for i, split in enumerate(['train', 'val']):
-        losses = torch.zeros(eval_iters)
+        losses = defaultdict(torch.zeros(eval_iters))
         for k in tqdm(range(eval_iters)):
             X, targets = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
                 loss = model(X, targets, task_weights)['loss']
-            losses[k] = loss.item()
-        out[split] = losses.mean()
+            for key, value in loss.items():
+                losses[key][k] = value.item()
+        out[split] = {key: value.mean() for key, value in losses.items()}
     model.train()
     return out
 
