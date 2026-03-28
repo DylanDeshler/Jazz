@@ -264,14 +264,14 @@ best_val_loss = 1e9
 
 num_instruments = instrument_labels.shape[1]
 num_labels = record_labels.shape[1]
-bpm_bins = len(bpm_bins)
-year_bins = len(year_bins)
+num_bpm_bins = len(bpm_bins)
+num_year_bins = len(year_bins)
 
 model_args = dict(
     num_instruments=num_instruments,
     num_labels=num_labels,
-    bpm_bins=bpm_bins,
-    year_bins=year_bins,
+    bpm_bins=num_bpm_bins,
+    year_bins=num_year_bins,
     n_fft=n_fft,
     hop_length=hop_length,
     n_mels=n_mels,
