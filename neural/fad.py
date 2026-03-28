@@ -89,156 +89,13 @@ class ToMel(nn.Module):
         x = (x - self.mu) / (self.std + 1e-6)
         return x
 
-class SEBlock1D(nn.Module):
-    """Squeeze-and-Excitation: Dynamically recalibrates channel weights."""
-    def __init__(self, channels, reduction=16):
-        super().__init__()
-        self.squeeze = nn.AdaptiveAvgPool1d(1)
-        self.excite = nn.Sequential(
-            nn.Linear(channels, channels // reduction, bias=False),
-            nn.GELU(),
-            nn.Linear(channels // reduction, channels, bias=False),
-            nn.Sigmoid()
-        )
-
-    def forward(self, x):
-        b, c, _ = x.shape
-        # Squeeze time down to a single vector per channel
-        y = self.squeeze(x).view(b, c)
-        # Calculate channel attention weights
-        y = self.excite(y).view(b, c, 1)
-        # Broadcast multiply
-        return x * y
-
-class ModernResBlock1D(nn.Module):
-    def __init__(self, in_channels, out_channels, stride=1, drop_path=0.0):
-        super().__init__()
-        
-        self.norm1 = nn.GroupNorm(1, in_channels)
-        self.act1 = nn.GELU()
-        self.conv1 = nn.Conv1d(in_channels, out_channels, kernel_size=3, padding=1, bias=False)
-        
-        self.norm2 = nn.GroupNorm(1, out_channels)
-        self.act2 = nn.GELU()
-        self.conv2 = nn.Conv1d(out_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
-        
-        self.se = SEBlock1D(out_channels)
-        self.drop_path = DropPath(drop_path)
-
-        self.shortcut = nn.Identity()
-        if stride != 1 or in_channels != out_channels:
-            layers = []
-            if stride != 1:
-                layers.append(nn.AvgPool1d(kernel_size=2, stride=stride))
-            layers.append(nn.Conv1d(in_channels, out_channels, kernel_size=1, bias=False))
-            self.shortcut = nn.Sequential(*layers)
-
-    def forward(self, x):
-        shortcut = self.shortcut(x)
-        
-        out = self.norm1(x)
-        out = self.act1(out)
-        out = self.conv1(out)
-        
-        out = self.norm2(out)
-        out = self.act2(out)
-        out = self.conv2(out)
-        
-        out = self.se(out)
-        out = self.drop_path(out)
-        
-        return out + shortcut
-
-class MultiTaskFADResNet(nn.Module):
-    def __init__(self, num_instruments, num_labels, bpm_bins, year_bins, n_fft=1024, hop_length=512, n_mels=192):
-        super().__init__()
-        
-        self.to_mel = ToMel(16000, n_fft, hop_length, n_mels)
-        self.ema_tracker = EMATracker(beta=0.99)
-        
-        self.stem = nn.Sequential(
-            nn.Conv1d(128, 128, kernel_size=7, stride=1, padding=3, bias=False),
-            nn.GroupNorm(1, 128),
-            nn.GELU()
-        )
-        
-        dp_rates = [0.0, 0.05, 0.1, 0.15]
-        
-        self.stage1 = nn.Sequential(
-            ModernResBlock1D(128, 128, stride=1, drop_path=dp_rates[0]),
-            ModernResBlock1D(128, 128, stride=1, drop_path=dp_rates[0])
-        )
-        self.stage2 = nn.Sequential(
-            ModernResBlock1D(128, 256, stride=2, drop_path=dp_rates[1]),
-            ModernResBlock1D(256, 256, stride=1, drop_path=dp_rates[1])
-        )
-        self.stage3 = nn.Sequential(
-            ModernResBlock1D(256, 512, stride=2, drop_path=dp_rates[2]),
-            ModernResBlock1D(512, 512, stride=1, drop_path=dp_rates[2])
-        )
-        self.stage4 = nn.Sequential(
-            ModernResBlock1D(512, 512, stride=1, drop_path=dp_rates[3]),
-            ModernResBlock1D(512, 512, stride=1, drop_path=dp_rates[3]),
-            nn.GroupNorm(1, 512),
-            nn.GELU()
-        )
-        
-        self.norm = nn.LayerNorm
-        self.global_pool = nn.AdaptiveAvgPool1d(1)
-        self.head_bpm = nn.Linear(512, bpm_bins)
-        self.head_year = nn.Linear(512, year_bins)
-        self.head_instruments = nn.Linear(512, num_instruments)
-        self.head_label = nn.Linear(512, num_labels)
-
-    def forward(self, x, targets, task_weights):
-        out = self.stem(x)
-        out = self.stage1(out)
-        out = self.stage2(out)
-        out = self.stage3(out)
-        trunk_out = self.stage4(out)
-        
-        outputs = {}
-        
-        global_features = self.global_pool(trunk_out).squeeze(2) 
-        
-        bpm = GradientBalancer.apply(global_features, self.ema_tracker, 'bpm', task_weights['bpm'])
-        outputs['bpm'] = self.head_bpm(bpm).squeeze(1)
-        
-        year = GradientBalancer.apply(global_features, self.ema_tracker, 'year', task_weights['year'])
-        outputs['year'] = self.head_year(year).squeeze(1)
-        
-        inst = GradientBalancer.apply(global_features, self.ema_tracker, 'instruments', task_weights['instruments'])
-        outputs['instruments'] = self.head_instruments(inst)
-        
-        label = GradientBalancer.apply(global_features, self.ema_tracker, 'label', task_weights['label'])
-        outputs['label'] = self.head_label(label)
-        
-        loss_bpm = F.kl_div(F.log_softmax(bpm, dim=-1), targets['bpm'])
-        loss_year = F.kl_div(F.log_softmax(year, dim=-1), targets['year'])
-        loss_inst = F.binary_cross_entropy_with_logits(inst, targets['inst'])
-        loss_label = F.cross_entropy(label, targets['label'])
-
-        total_loss = loss_bpm + loss_year + loss_inst + loss_label
-
-        outputs['loss'] = total_loss
-        outputs['loss_bpm'] = loss_bpm
-        outputs['loss_year'] = loss_year
-        outputs['loss_inst'] = loss_inst
-        outputs['loss_label'] = loss_label
-        
-        return outputs
-
 class ConvNeXtBlock(nn.Module):
     """ConvNeXt Block adapted for 2D Audio Spectrograms"""
     def __init__(self, dim):
         super().__init__()
-        # 1. Depthwise Convolution (7x7) - Captures wide time-frequency context
         self.dwconv = nn.Conv2d(dim, dim, kernel_size=7, padding=3, groups=dim)
-        
-        # 2. LayerNorm (requires channel-last format temporarily)
         self.norm = nn.LayerNorm(dim, eps=1e-6)
         
-        # 3. Inverted Bottleneck (Expand by 4x, then compress back)
         self.pwconv1 = nn.Linear(dim, 4 * dim) 
         self.act = nn.GELU()
         self.pwconv2 = nn.Linear(4 * dim, dim)
@@ -247,14 +104,12 @@ class ConvNeXtBlock(nn.Module):
         input = x
         x = self.dwconv(x)
         
-        # ConvNeXt applies LayerNorm and Pointwise convs on the channel dimension.
-        # So we permute: (Batch, Channels, Height, Width) -> (Batch, Height, Width, Channels)
         x = x.permute(0, 2, 3, 1) 
         x = self.norm(x)
         x = self.pwconv1(x)
         x = self.act(x)
         x = self.pwconv2(x)
-        x = x.permute(0, 3, 1, 2) # Permute back
+        x = x.permute(0, 3, 1, 2)
         
         return input + x
 
@@ -265,16 +120,13 @@ class MultiTaskFAD(nn.Module):
         self.to_mel = ToMel(16000, n_fft, hop_length, n_mels)
         self.ema_tracker = EMATracker(beta=0.99)
         
-        # 1. The "Patchify" Stem
-        # Aggressively downsamples the Mel Spectrogram right at the start
         self.downsample_layers = nn.ModuleList()
         stem = nn.Sequential(
             nn.Conv2d(in_chans, dims[0], kernel_size=4, stride=4),
-            nn.LayerNorm(dims[0], eps=1e-6) # Note: requires permute in forward pass or custom 2D LayerNorm
+            nn.LayerNorm(dims[0], eps=1e-6)
         )
         self.downsample_layers.append(stem)
         
-        # Add intermediate downsampling between stages
         for i in range(3):
             downsample = nn.Sequential(
                 nn.LayerNorm(dims[i], eps=1e-6),
@@ -282,7 +134,6 @@ class MultiTaskFAD(nn.Module):
             )
             self.downsample_layers.append(downsample)
 
-        # 2. The ConvNeXt Stages
         self.stages = nn.ModuleList()
         for i in range(4):
             stage = nn.Sequential(
