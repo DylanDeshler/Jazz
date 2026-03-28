@@ -338,8 +338,8 @@ class MultiTaskFAD(nn.Module):
         label = self.head_label(label)
         outputs['label'] = label
         
-        loss_bpm = F.kl_div(F.log_softmax(bpm, dim=-1), targets['bpm'])
-        loss_year = F.kl_div(F.log_softmax(year, dim=-1), targets['year'])
+        loss_bpm = F.kl_div(F.log_softmax(bpm, dim=-1), targets['bpm'], reduction='batchmean')
+        loss_year = F.kl_div(F.log_softmax(year, dim=-1), targets['year'], reduction='batchmean')
         loss_inst = F.binary_cross_entropy_with_logits(inst, targets['inst'])
         loss_label = F.cross_entropy(label, targets['label'])
 

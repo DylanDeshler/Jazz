@@ -26,7 +26,7 @@ eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
 save_interval = 5000
-eval_iters = 600
+eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
@@ -238,7 +238,6 @@ def get_batch(split='train', batch_size=batch_size):
     year = torch.from_numpy(np.asarray(year).astype(np.float32)).pin_memory().to(device, non_blocking=True)
     year = create_gaussian_soft_labels(year, year_bins, year_sigma)
     inst = torch.from_numpy(np.asarray(inst).astype(np.float32)).pin_memory().to(device, non_blocking=True)
-    print(x.shape)
     
     targets = {
         'bpm': bpm,
@@ -246,8 +245,6 @@ def get_batch(split='train', batch_size=batch_size):
         'label': label,
         'inst': inst
     }
-    for k, v in targets.items():
-        print(k, v.shape)
     return x, targets
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
@@ -464,25 +461,3 @@ while True:
 
 if ddp:
     destroy_process_group()
-
-# --- Dummy Training Loop ---
-for epoch in range(5):
-    optimizer.zero_grad()
-    
-    # Simulate a batch of Mel-Spectrograms: (Batch, Channels, Time)
-    mels = torch.randn(batch_size, 128, seq_len)
-    
-    timestamps = read_beat_timestamps(beat)
-    target_bpm = calculate_subset_bpm(timestamps, 1, 6)
-    target_year = torch.rand(batch_size) * 10 + 1920
-    target_inst = torch.empty(batch_size, num_instruments).random_(2)
-    target_label = torch.randint(0, num_labels, (batch_size,))
-    
-    preds = model(mels, ema_tracker, task_weights)
-    
-    # 2. Calculate Individual Losses
-    
-    total_loss.backward()
-    optimizer.step()
-    
-    print(f"Epoch {epoch+1} | Total Unscaled Loss: {total_loss.item():.4f}")
