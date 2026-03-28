@@ -76,7 +76,7 @@ config_keys = [k for k,v in globals().items() if not k.startswith('_') and isins
 config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # -----------------------------------------------------------------------------
 
-bpm_bins = torch.arange(40, 260, 10, dtype=torch.float32)
+bpm_bins = torch.arange(40, 300, 10, dtype=torch.float32)
 year_bins = torch.arange(1900, 1980, 10, dtype=torch.float32)
 bpm_sigma, year_sigma = 5, 2.5
 
@@ -164,6 +164,52 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 # note: float16 data type will automatically use a GradScaler
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
+
+def create_gaussian_soft_labels(targets, bins, sigma):
+    targets = targets.unsqueeze(1)
+    bins = bins.unsqueeze(0).to(targets.device)
+    squared_distances = (bins - targets) ** 2
+    gaussian_weights = torch.exp(-squared_distances / (2 * sigma ** 2))
+    soft_labels = gaussian_weights / gaussian_weights.sum(dim=1, keepdim=True)
+    return soft_labels
+
+def read_beat_timestamps(tsv_path):
+    """Reads the beat_this TSV file and extracts a list of timestamps."""
+    timestamps = []
+    try:
+        with open(tsv_path, 'r') as tsv_file:
+            reader = csv.reader(tsv_file, delimiter='\t')
+            for row in reader:
+                if row: # Skip empty rows
+                    try:
+                        # Assuming the first column is the timestamp in seconds
+                        timestamps.append(float(row[0]))
+                    except ValueError:
+                        # Skip header rows if they exist
+                        continue
+        return timestamps
+    except Exception as e:
+        print(f"Error reading TSV file: {e}")
+        return []
+
+def calculate_subset_bpm(timestamps, start_time, end_time):
+    """Calculates the BPM for a specific time window given a list of beat timestamps."""
+    # Filter beats that fall within our window
+    subset_beats = [t for t in timestamps if start_time <= t <= end_time]
+    
+    # We need at least 2 beats to calculate an interval
+    if len(subset_beats) < 2:
+        return 0.0
+    
+    # BPM calculation: (number of intervals) / (duration of intervals) * 60 seconds
+    num_intervals = len(subset_beats) - 1
+    duration_of_intervals = subset_beats[-1] - subset_beats[0]
+    
+    if duration_of_intervals == 0:
+        return 0.0
+        
+    bpm = (num_intervals / duration_of_intervals) * 60.0
+    return bpm
 
 import glob
 import librosa
@@ -279,52 +325,6 @@ if compile and 'cuda' in device:
 # wrap model into DDP container
 if ddp:
     model = DDP(model, device_ids=[ddp_local_rank])
-
-def create_gaussian_soft_labels(targets, bins, sigma):
-    targets = targets.unsqueeze(1)
-    bins = bins.unsqueeze(0).to(targets.device)
-    squared_distances = (bins - targets) ** 2
-    gaussian_weights = torch.exp(-squared_distances / (2 * sigma ** 2))
-    soft_labels = gaussian_weights / gaussian_weights.sum(dim=1, keepdim=True)
-    return soft_labels
-
-def read_beat_timestamps(tsv_path):
-    """Reads the beat_this TSV file and extracts a list of timestamps."""
-    timestamps = []
-    try:
-        with open(tsv_path, 'r') as tsv_file:
-            reader = csv.reader(tsv_file, delimiter='\t')
-            for row in reader:
-                if row: # Skip empty rows
-                    try:
-                        # Assuming the first column is the timestamp in seconds
-                        timestamps.append(float(row[0]))
-                    except ValueError:
-                        # Skip header rows if they exist
-                        continue
-        return timestamps
-    except Exception as e:
-        print(f"Error reading TSV file: {e}")
-        return []
-
-def calculate_subset_bpm(timestamps, start_time, end_time):
-    """Calculates the BPM for a specific time window given a list of beat timestamps."""
-    # Filter beats that fall within our window
-    subset_beats = [t for t in timestamps if start_time <= t <= end_time]
-    
-    # We need at least 2 beats to calculate an interval
-    if len(subset_beats) < 2:
-        return 0.0
-    
-    # BPM calculation: (number of intervals) / (duration of intervals) * 60 seconds
-    num_intervals = len(subset_beats) - 1
-    duration_of_intervals = subset_beats[-1] - subset_beats[0]
-    
-    if duration_of_intervals == 0:
-        return 0.0
-        
-    bpm = (num_intervals / duration_of_intervals) * 60.0
-    return bpm
 
 @torch.no_grad()
 def estimate_loss():
