@@ -76,8 +76,8 @@ config_keys = [k for k,v in globals().items() if not k.startswith('_') and isins
 config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # -----------------------------------------------------------------------------
 
-bpm_bins = torch.arange(40, 300, 10, dtype=torch.float32)
-year_bins = torch.arange(1900, 1980, 10, dtype=torch.float32)
+bpm_bins = torch.arange(40, 300, 5, dtype=torch.float32)
+year_bins = torch.arange(1900, 1980, 5, dtype=torch.float32)
 bpm_sigma, year_sigma = 5, 2.5
 
 cards = pickle.load(open('/home/dylan.d/research/music/Jazz/JazzSet.0.9.pkl', "rb"))
@@ -333,9 +333,9 @@ def estimate_loss():
     for i, split in enumerate(['train', 'val']):
         losses = torch.zeros(eval_iters)
         for k in tqdm(range(eval_iters)):
-            X = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
+            X, targets = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
-                loss = model(X)['loss']
+                loss = model(X, targets, task_weights)['loss']
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -372,7 +372,7 @@ if wandb_log and master_process:
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
-X = get_batch('train') # fetch the very first batch
+X, targets = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
@@ -435,10 +435,10 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            loss = model(X)['loss']
+            loss = model(X, targets, task_weights)['loss']
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
-        X = get_batch('train')
+        X, targets = get_batch('train')
         # backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
     # clip the gradient
