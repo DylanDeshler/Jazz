@@ -233,9 +233,9 @@ def get_batch(split='train', batch_size=batch_size):
         
         start = np.random.randint(len(wav) - n_samples)
         timestamps = read_beat_timestamps(beat_path)
-        label.append(labels[url_map[url]])
+        label.append(record_labels[url_map[url]])
         year.append(years[url_map[url]])
-        inst.append(instruments[url_map[url]])
+        inst.append(instrument_labels[url_map[url]])
         bpm.append(calculate_subset_bpm(timestamps, start / sample_rate, (start + n_samples) / sample_rate))
         x.append(wav[start:start+n_samples])
         
