@@ -183,7 +183,7 @@ def get_batch(split='train', batch_size=batch_size):
     for idx in idxs:
         wav, _ = librosa.load(idx, sr=sample_rate)
         beat_path = idx.replace('jazz_data_16000_full_clean', '').replace('.wav', '.beats')
-        url = idx.split('/')[-1].split('.')[0]
+        url = idx.split('/')[-2].split('.')[0]
         
         start = np.random.randint(len(wav) - n_samples)
         timestamps = read_beat_timestamps(beat_path)
