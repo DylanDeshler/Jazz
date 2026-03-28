@@ -1,285 +1,288 @@
 import torch
-import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
 
+import os
 import csv
+import time
 import numpy as np
 import soundfile as sf
 from torchinfo import summary
+from fad import MultiTaskFADResNet as net
 
-class EMATracker:
-    """Tracks the exponential moving average of gradient norms."""
-    def __init__(self, beta=0.99):
-        self.beta = beta
-        self.emas = {}
+import pickle
+import pandas as pd
+from tqdm import tqdm
+from contextlib import nullcontext
+from collections import defaultdict
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.distributed import init_process_group, destroy_process_group
 
-    def update(self, task_name, current_norm):
-        if task_name not in self.emas:
-            self.emas[task_name] = current_norm
+from sklearn.preprocessing import MultiLabelBinarizer
+# -----------------------------------------------------------------------------
+# default config values designed to train a gpt2 (124M) on OpenWebText
+# I/O
+out_dir = 'FAD'
+eval_interval = 5000
+sample_interval = 5000
+log_interval = 100
+save_interval = 5000
+eval_iters = 600
+eval_only = False # if True, script exits right after the first eval
+always_save_checkpoint = False # if True, always save a checkpoint after each eval
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+# wandb logging
+wandb_log = False # disabled by default
+wandb_project = out_dir
+wandb_run_name = str(time.time())
+# data
+dataset = ''
+gradient_accumulation_steps = 1
+batch_size = 1024
+# model
+n_samples = 16383 * 5
+depth = 12
+hidden_size = 768
+proj_size = 128
+num_heads = 12
+patch_size = 16
+sample_rate = 16000
+n_fft = 1024
+hop_length = 512
+n_mels = 192
+max_seq_len = 256
+time_length = 32
+frequency_length = 12
+# adamw optimizer
+learning_rate = 1e-4 # max learning rate
+max_iters = 1000000 # total number of training iterations
+weight_decay = 1e-2
+beta1 = 0.9
+beta2 = 0.95
+grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
+# learning rate decay settings
+decay_lr = False # whether to decay the learning rate
+warmup_iters = 5000 # how many steps to warm up for
+lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
+min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
+# DDP settings
+backend = 'nccl' # 'nccl', 'gloo', etc.
+# system
+device = 'cuda:0' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
+compile = True # use PyTorch 2.0 to compile the model to be faster
+# -----------------------------------------------------------------------------
+config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
+# exec(open('configurator.py').read()) # overrides from command line or config file
+config = {k: globals()[k] for k in config_keys} # will be useful for logging
+# -----------------------------------------------------------------------------
+
+bpm_bins = torch.arange(40, 260, 10, dtype=torch.float32)
+year_bins = torch.arange(1900, 1980, 10, dtype=torch.float32)
+bpm_sigma, year_sigma = 5, 2.5
+
+cards = pickle.load(open('JazzSet.0.9.pkl', "rb"))
+cards = [card for card in cards if card]
+
+years = []
+labels = []
+people = []
+instruments = []
+urls = []
+for card in cards:
+    urls.append(card['URLS'][0]['FILE'])
+    years.append(card['DATE']['YEAR'])
+    labels.append(card['RECORD']['LABEL'])
+    people.append(list(card['PERSONNEL']['PEOPLE'].keys()))
+    instruments.append(list(card['PERSONNEL']['INSTRUMENTS'].keys()))
+
+url_map = {url: i for i, url in enumerate(urls)}
+
+# Record labels
+record_labels = set(list(pd.DataFrame(labels, columns=['LABEL']).value_counts(normalize=True).reset_index()['LABEL'].iloc[:25]))
+record_labels = [label if label in record_labels else 'Other' for label in labels]
+mlb = MultiLabelBinarizer().fit(record_labels)
+record_labels = mlb.transform(record_labels)
+record_labels = torch.from_numpy(record_labels)
+
+# Instruments
+instrument_map_df = pd.read_csv('/content/instrument_mapping.csv')
+instrument_map_df = instrument_map_df.apply(lambda col: col.astype(str).str.lower())
+instrument_map = {row['Abbreviation']: row['Consolidated_Category'] for i, row in instrument_map_df.iterrows()}
+instrument_categories = set(list(instrument_map.values()))
+
+instrument_labels = defaultdict(list)
+for instrument_list in instruments:
+    categories = {instrument_map[l.lower()] for l in instrument_list if l in instrument_map}
+    for cat in instrument_categories:
+        if cat in categories:
+            instrument_labels[cat].append(True)
         else:
-            self.emas[task_name] = self.beta * self.emas[task_name] + (1 - self.beta) * current_norm
-        return self.emas[task_name]
+            instrument_labels[cat].append(False)
 
-class GradientBalancer(torch.autograd.Function):
-    """
-    Intercepts the backward pass to scale gradients based on their EMA norm.
-    """
-    @staticmethod
-    def forward(ctx, x, ema_tracker, task_name, task_weight):
-        # Store objects for the backward pass
-        ctx.ema_tracker = ema_tracker
-        ctx.task_name = task_name
-        ctx.task_weight = task_weight
-        
-        # The forward pass does absolutely nothing to the tensor
-        return x.view_as(x)
+props = pd.DataFrame(instrument_labels, columns=list(instrument_categories)).sum(0)
+instrument_categories = {cat for cat in instrument_categories if props[cat] >= 1000}
 
-    @staticmethod
-    def backward(ctx, grad_output):
-        # 1. Calculate the L2 norm of the incoming gradient from the head
-        norm = torch.linalg.norm(grad_output).item()
-        
-        # 2. Update the EMA for this specific task
-        ema_norm = ctx.ema_tracker.update(ctx.task_name, norm)
-        
-        # 3. Scale the gradient: (Weight / EMA) * Gradient
-        # We add 1e-8 to prevent division by zero
-        scale_factor = ctx.task_weight / (ema_norm + 1e-8)
-        scaled_grad = grad_output * scale_factor
-        
-        # Return scaled grad for 'x', and None for the other non-tensor arguments
-        return scaled_grad, None, None, None
+instrument_labels = []
+for instrument_list in instruments:
+    categories = {instrument_map[l.lower()] for l in instrument_list if l in instrument_map}
+    categories = categories.intersection(instrument_categories)
+    instrument_labels.append(list(filter(None, categories)))
 
-class DropPath(nn.Module):
-    """Stochastic Depth: Randomly drops paths (blocks) per sample during training."""
-    def __init__(self, drop_prob=0.0):
-        super().__init__()
-        self.drop_prob = drop_prob
+mlb = MultiLabelBinarizer().fit(instrument_labels)
+instrument_labels = mlb.transform(instrument_labels)
+instrument_labels = torch.from_numpy(instrument_labels)
 
-    def forward(self, x):
-        if self.drop_prob == 0. or not self.training:
-            return x
-        keep_prob = 1 - self.drop_prob
-        # Shape: (Batch, 1, 1) to broadcast across channels and time
-        shape = (x.shape[0],) + (1,) * (x.ndim - 1)
-        random_tensor = keep_prob + torch.rand(shape, dtype=x.dtype, device=x.device)
-        random_tensor.floor_()  # binarize
-        return x.div(keep_prob) * random_tensor
+# various inits, derived attributes, I/O setup
+ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
+if ddp:
+    init_process_group(backend=backend)
+    ddp_rank = int(os.environ['RANK'])
+    ddp_local_rank = int(os.environ['LOCAL_RANK'])
+    ddp_world_size = int(os.environ['WORLD_SIZE'])
+    device = f'cuda:{ddp_local_rank}'
+    torch.cuda.set_device(device)
+    master_process = ddp_rank == 0 # this process will do logging, checkpointing etc.
+    seed_offset = ddp_rank # each process gets a different seed
+    # world_size number of processes will be training simultaneously, so we can scale
+    # down the desired gradient accumulation iterations per process proportionally
+    assert gradient_accumulation_steps % ddp_world_size == 0
+    gradient_accumulation_steps //= ddp_world_size
+else:
+    # if not ddp, we are running on a single gpu, and one process
+    master_process = True
+    seed_offset = 0
+    ddp_world_size = 1
+tokens_per_iter = gradient_accumulation_steps * ddp_world_size * batch_size
+print(f"tokens per iteration will be: {tokens_per_iter:,}")
 
-class SEBlock1D(nn.Module):
-    """Squeeze-and-Excitation: Dynamically recalibrates channel weights."""
-    def __init__(self, channels, reduction=16):
-        super().__init__()
-        self.squeeze = nn.AdaptiveAvgPool1d(1)
-        self.excite = nn.Sequential(
-            nn.Linear(channels, channels // reduction, bias=False),
-            nn.GELU(),
-            nn.Linear(channels // reduction, channels, bias=False),
-            nn.Sigmoid()
-        )
+if master_process:
+    os.makedirs(out_dir, exist_ok=True)
+torch.manual_seed(1337 + seed_offset)
+torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
+torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
+device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
+# note: float16 data type will automatically use a GradScaler
+ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
+ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
-    def forward(self, x):
-        b, c, _ = x.shape
-        # Squeeze time down to a single vector per channel
-        y = self.squeeze(x).view(b, c)
-        # Calculate channel attention weights
-        y = self.excite(y).view(b, c, 1)
-        # Broadcast multiply
-        return x * y
+import glob
+import librosa
+paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
 
-class ModernResBlock1D(nn.Module):
-    def __init__(self, in_channels, out_channels, stride=1, drop_path=0.0):
-        super().__init__()
-        
-        self.norm1 = nn.GroupNorm(1, in_channels)
-        self.act1 = nn.GELU()
-        self.conv1 = nn.Conv1d(in_channels, out_channels, kernel_size=3, padding=1, bias=False)
-        
-        self.norm2 = nn.GroupNorm(1, out_channels)
-        self.act2 = nn.GELU()
-        self.conv2 = nn.Conv1d(out_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
-        
-        self.se = SEBlock1D(out_channels)
-        self.drop_path = DropPath(drop_path)
-
-        self.shortcut = nn.Identity()
-        if stride != 1 or in_channels != out_channels:
-            layers = []
-            if stride != 1:
-                layers.append(nn.AvgPool1d(kernel_size=2, stride=stride))
-            layers.append(nn.Conv1d(in_channels, out_channels, kernel_size=1, bias=False))
-            self.shortcut = nn.Sequential(*layers)
-
-    def forward(self, x):
-        shortcut = self.shortcut(x)
-        
-        out = self.norm1(x)
-        out = self.act1(out)
-        out = self.conv1(out)
-        
-        out = self.norm2(out)
-        out = self.act2(out)
-        out = self.conv2(out)
-        
-        out = self.se(out)
-        out = self.drop_path(out)
-        
-        return out + shortcut
-
-class MultiTaskFADResNet(nn.Module):
-    def __init__(self, num_instruments, num_labels, style_dim):
-        super().__init__()
-        
-        # 1. Stem (Initial projection from Mel-Spectrogram)
-        # Mels usually have 128 bins. We expand to 128 channels immediately.
-        self.stem = nn.Sequential(
-            nn.Conv1d(128, 128, kernel_size=7, stride=1, padding=3, bias=False),
-            nn.GroupNorm(1, 128),
-            nn.GELU()
-        )
-        
-        # 2. The ResNet Trunk
-        # Gradually increase channels while downsampling the temporal dimension.
-        # Assuming input is ~250 frames (4 secs): 
-        # Stage 1: 250 frames -> Stage 2: 125 frames -> Stage 3: 62 frames.
-        # 62 frames is great for the downbeat head (approx 60ms resolution).
-        
-        dp_rates = [0.0, 0.05, 0.1, 0.15] # Gradually increase stochastic depth
-        
-        self.stage1 = nn.Sequential(
-            ModernResBlock1D(128, 128, stride=1, drop_path=dp_rates[0]),
-            ModernResBlock1D(128, 128, stride=1, drop_path=dp_rates[0])
-        )
-        self.stage2 = nn.Sequential(
-            ModernResBlock1D(128, 256, stride=2, drop_path=dp_rates[1]),
-            ModernResBlock1D(256, 256, stride=1, drop_path=dp_rates[1])
-        )
-        self.stage3 = nn.Sequential(
-            ModernResBlock1D(256, 512, stride=2, drop_path=dp_rates[2]),
-            ModernResBlock1D(512, 512, stride=1, drop_path=dp_rates[2])
-        )
-        self.stage4 = nn.Sequential(
-            ModernResBlock1D(512, 512, stride=1, drop_path=dp_rates[3]),
-            ModernResBlock1D(512, 512, stride=1, drop_path=dp_rates[3]),
-            nn.GroupNorm(1, 512),
-            nn.GELU()
-        )
-        
-        # 3. The Temporal Head (Downbeats)
-        self.head_downbeats = nn.Conv1d(512, 1, kernel_size=3, padding=1)
-        
-        # 4. The Global Heads
-        self.global_pool = nn.AdaptiveAvgPool1d(1)
-        self.head_bpm = nn.Linear(512, 1)
-        self.head_year = nn.Linear(512, 1)
-        self.head_instruments = nn.Linear(512, num_instruments)
-        self.head_label = nn.Linear(512, num_labels)
-        self.head_style = nn.Linear(512, style_dim)
-
-    def forward(self, x, ema_tracker, task_weights):
-        out = self.stem(x)
-        out = self.stage1(out)
-        out = self.stage2(out)
-        out = self.stage3(out)
-        trunk_out = self.stage4(out)
-        
-        outputs = {}
-        
-        # --- Temporal Branch ---
-        t_downbeats = GradientBalancer.apply(trunk_out, ema_tracker, 'downbeats', task_weights['downbeats'])
-        outputs['downbeats'] = self.head_downbeats(t_downbeats).squeeze(1)
-        
-        # --- Global Branch ---
-        global_features = self.global_pool(trunk_out).squeeze(2) 
-        
-        t_bpm = GradientBalancer.apply(global_features, ema_tracker, 'bpm', task_weights['bpm'])
-        outputs['bpm'] = self.head_bpm(t_bpm).squeeze(1)
-        
-        t_year = GradientBalancer.apply(global_features, ema_tracker, 'year', task_weights['year'])
-        outputs['year'] = self.head_year(t_year).squeeze(1)
-        
-        t_inst = GradientBalancer.apply(global_features, ema_tracker, 'instruments', task_weights['instruments'])
-        outputs['instruments'] = self.head_instruments(t_inst)
-        
-        t_label = GradientBalancer.apply(global_features, ema_tracker, 'label', task_weights['label'])
-        outputs['label'] = self.head_label(t_label)
-        
-        t_style = GradientBalancer.apply(global_features, ema_tracker, 'style', task_weights['style'])
-        outputs['style'] = self.head_style(t_style)
-        
-        return outputs
-
-def train_fad_network():
-    batch_size = 8
-    seq_len = 250
-    num_instruments = 10
-    num_labels = 5
-    style_dim = 128
+def get_batch(split='train', batch_size=batch_size):
+    if split == 'train':
+        idxs = np.random.choice(paths[:int(0.98 * len(paths))], batch_size)
+    else:
+        idxs = np.random.choice(paths[int(0.98 * len(paths)):], batch_size)
     
-    model = MultiTaskFADResNet(num_instruments, num_labels, style_dim)
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
+    x = []
+    bpm = []
+    year = []
+    label = []
+    inst = []
+    for idx in idxs:
+        wav, _ = librosa.load(idx, sr=sample_rate)
+        beat_path = idx.replace('jazz_data_16000_full_clean', '').replace('.wav', '.beats')
+        url = idx.split('/')[-1].split('.')[0]
+        
+        start = np.random.randint(len(wav) - n_samples)
+        timestamps = read_beat_timestamps(beat_path)
+        label.append(labels[url_map[url]])
+        year.append(years[url_map[url]])
+        inst.append(instruments[url_map[url]])
+        bpm.append(calculate_subset_bpm(timestamps, start / sample_rate, (start + n_samples) / sample_rate))
+        x.append(wav[start:start+n_samples])
+        
+    x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+    bpm = torch.from_numpy(np.asarray(bpm).astype(np.float32)).pin_memory().to(device, non_blocking=True)
+    label = torch.from_numpy(np.asarray(label).astype(np.float32)).pin_memory().to(device, non_blocking=True)
+    year = torch.from_numpy(np.asarray(year).astype(np.float32)).pin_memory().to(device, non_blocking=True)
+    inst = torch.from_numpy(np.asarray(inst).astype(np.float32)).pin_memory().to(device, non_blocking=True)
+    print(x.shape, bpm.shape)
     
-    # Initialize the EMA Tracker for the gradients
-    ema_tracker = EMATracker(beta=0.99)
-    
-    # Define the weights (the "fractions" of the gradient you want each task to have)
-    task_weights = {
-        'downbeats': 1.0, 
-        'bpm': 1.0, 
-        'year': 0.5,         # Maybe year is less critical than rhythm
-        'instruments': 2.0,  # Timbre is highly critical for FAD
-        'label': 0.5, 
-        'style': 1.0
+    targets = {
+        'bpm': bpm,
+        'year': year,
+        'label': label,
+        'inst': inst
     }
-    
-    crit_bce = nn.BCEWithLogitsLoss()
-    crit_mse = nn.MSELoss()
-    crit_ce = nn.CrossEntropyLoss()
-    crit_cosine = nn.CosineEmbeddingLoss()
+    return x, targets
 
-    model.train()
-    
-    # --- Dummy Training Loop ---
-    for epoch in range(5):
-        optimizer.zero_grad()
-        
-        # Simulate a batch of Mel-Spectrograms: (Batch, Channels, Time)
-        mels = torch.randn(batch_size, 128, seq_len)
-        
-        # Simulate Ground Truth Targets
-        target_downbeats = torch.empty(batch_size, 63).random_(2) # 63 is the downsampled time dimension
-        target_bpm = torch.rand(batch_size) * 60 + 80 # BPMs between 80-140
-        target_year = torch.rand(batch_size) * 10 + 1920
-        target_inst = torch.empty(batch_size, num_instruments).random_(2) # Multi-label
-        target_label = torch.randint(0, num_labels, (batch_size,)) # Single label
-        target_style = torch.randn(batch_size, style_dim) # From your contrastive network
-        
-        # 1. Forward Pass (passes weights and tracker into the network)
-        preds = model(mels, ema_tracker, task_weights)
-        
-        # 2. Calculate Individual Losses
-        loss_db = crit_bce(preds['downbeats'], target_downbeats)
-        loss_bpm = crit_mse(preds['bpm'], target_bpm)
-        loss_year = crit_mse(preds['year'], target_year)
-        loss_inst = crit_bce(preds['instruments'], target_inst)
-        loss_label = crit_ce(preds['label'], target_label)
-        
-        # Cosine embedding loss needs a target vector of 1s (saying "make these align")
-        target_align = torch.ones(batch_size) 
-        loss_style = crit_cosine(preds['style'], target_style, target_align)
-        
-        # 3. Sum the losses directly!
-        # Do NOT multiply by weights here; the custom autograd function handles the math.
-        total_loss = loss_db + loss_bpm + loss_year + loss_inst + loss_label + loss_style
-        
-        # 4. Backward Pass & Optimize
-        # As gradients flow backward, they hit the GradientBalancer, get scaled by 
-        # the EMA norms, and sum together perfectly at the trunk bottleneck.
-        total_loss.backward()
-        optimizer.step()
-        
-        print(f"Epoch {epoch+1} | Total Unscaled Loss: {total_loss.item():.4f}")
+# init these up here, can override if init_from='resume' (i.e. from a checkpoint)
+iter_num = 0
+best_val_loss = 1e9
+
+num_instruments = instrument_labels.shape[1]
+num_labels = record_labels.shape[1]
+bpm_bins = len(bpm_bins)
+year_bins = len(year_bins)
+
+model_args = dict(
+    num_instruments=num_instruments,
+    num_labels=num_labels,
+    bpm_bins=bpm_bins,
+    year_bins=year_bins,
+    n_fft=n_fft,
+    hop_length=hop_length,
+    n_mels=n_mels,
+)
+
+if init_from == 'scratch':
+    # init a new model from scratch
+    print("Initializing a new model from scratch")
+    model = net(**model_args)
+    tokens_trained = 0
+elif init_from == 'resume':
+    print(f"Resuming training from {out_dir}")
+    # resume training from a checkpoint.
+    ckpt_path = os.path.join(out_dir, 'ckpt.pt')
+    checkpoint = torch.load(ckpt_path, map_location=device)
+    model_args = checkpoint['model_args']
+
+    model = net(**model_args)
+    state_dict = checkpoint['model']
+    # fix the keys of the state dictionary :(
+    # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+    unwanted_prefix = '_orig_mod.'
+    for k,v in list(state_dict.items()):
+        if k.startswith(unwanted_prefix):
+            state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+    model.load_state_dict(state_dict)
+    iter_num = checkpoint['iter_num']
+    tokens_trained = checkpoint['tokens']
+    best_val_loss = checkpoint['best_val_loss']
+elif init_from.startswith('gpt2'):
+    print(f"Initializing from OpenAI GPT-2 weights: {init_from}")
+    # initialize from OpenAI GPT-2 weights
+    override_args = dict(dropout=dropout)
+    model = net.from_pretrained(init_from, override_args)
+    # read off the created config params, so we can store them into checkpoint correctly
+    for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
+        model_args[k] = getattr(model.config, k)
+
+model.to(device)
+summary(model)
+
+# initialize a GradScaler. If enabled=False scaler is a no-op
+scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
+
+# compile the model
+if compile and 'cuda' in device:
+    print("compiling the model... (takes a ~minute)")
+    unoptimized_model = model
+    model = torch.compile(model)
+
+# wrap model into DDP container
+if ddp:
+    model = DDP(model, device_ids=[ddp_local_rank])
+
+def create_gaussian_soft_labels(targets, bins, sigma):
+    targets = targets.unsqueeze(1)
+    bins = bins.unsqueeze(0).to(targets.device)
+    squared_distances = (bins - targets) ** 2
+    gaussian_weights = torch.exp(-squared_distances / (2 * sigma ** 2))
+    soft_labels = gaussian_weights / gaussian_weights.sum(dim=1, keepdim=True)
+    return soft_labels
 
 def read_beat_timestamps(tsv_path):
     """Reads the beat_this TSV file and extracts a list of timestamps."""
@@ -319,79 +322,174 @@ def calculate_subset_bpm(timestamps, start_time, end_time):
     bpm = (num_intervals / duration_of_intervals) * 60.0
     return bpm
 
-if __name__ == "__main__":
-    # train_fad_network()
+@torch.no_grad()
+def estimate_loss():
+    out = {}
+    model.eval()
+    for i, split in enumerate(['train', 'val']):
+        losses = torch.zeros(eval_iters)
+        for k in tqdm(range(eval_iters)):
+            X = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
+            with ctx:
+                loss = model(X)['loss']
+            losses[k] = loss.item()
+        out[split] = losses.mean()
+    model.train()
+    return out
+
+def get_lr(it):
+    # 1) linear warmup for warmup_iters steps
+    if it < warmup_iters:
+        return learning_rate * (it + 1) / (warmup_iters + 1)
+    # 2) if it > lr_decay_iters, return min learning rate
+    if it > lr_decay_iters:
+        return min_lr
+    # 3) in between, use cosine decay down to min learning rate
+    decay_ratio = (it - warmup_iters) / (lr_decay_iters - warmup_iters)
+    assert 0 <= decay_ratio <= 1
+    coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
+    return min_lr + coeff * (learning_rate - min_lr)
+
+
+bpm_labels = create_gaussian_soft_labels(bpm_targets, bpm_bins, bpm_sigma)
+year_labels = create_gaussian_soft_labels(year_targets, year_bins, year_sigma)
+
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+
+task_weights = {
+    'bpm': 1.0, 
+    'year': 0.5,
+    'instruments': 2.0,
+    'label': 0.5, 
+    'style': 1.0
+}
+
+model.train()
+
+if wandb_log and master_process:
+    import wandb
+    wandb.init(project=wandb_project, name=wandb_run_name, config=config)
+
+# training loop
+X = get_batch('train') # fetch the very first batch
+t0 = time.time()
+local_iter_num = 0 # number of iterations in the lifetime of this process
+raw_model = model.module if ddp else model # unwrap DDP container if needed
+running_mfu = -1.0
+
+# optimizer
+optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, betas=(beta1, beta2))
+if init_from == 'resume':
+    optimizer.load_state_dict(checkpoint['optimizer'])
+checkpoint = None # free up memory
+
+while True:
+
+    # determine and set the learning rate for this iteration
+    lr = get_lr(iter_num) if decay_lr else learning_rate
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
     
-    import pickle
-    import pandas as pd
-    import numpy as np
-    import torch
+    tokens_trained += batch_size * gradient_accumulation_steps * max_seq_len
+
+    # evaluate the loss on train/val sets and write checkpoints
+    if iter_num % eval_interval == 0 and master_process:
+        losses = estimate_loss()
+        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        
+        if wandb_log:
+            wandb.log({
+                "iter": iter_num,
+                "train/loss": losses['train'],
+                "val/loss": losses['val'],
+                "lr": lr,
+                "mfu": running_mfu*100, # convert to percentage
+                "tokens": tokens_trained,
+            })
+        if losses['val'] < best_val_loss or always_save_checkpoint:
+            best_val_loss = losses['val']
+            if iter_num > 0:
+                checkpoint = {
+                    'model': raw_model.state_dict(),
+                    'optimizer': optimizer.state_dict(),
+                    'model_args': model_args,
+                    'iter_num': iter_num,
+                    'best_val_loss': best_val_loss,
+                    'config': config,
+                    'tokens': tokens_trained,
+                }
+                print(f"saving checkpoint to {out_dir}")
+                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
     
-    from sklearn.preprocessing import MultiLabelBinarizer
+    if eval_only:
+        break
+
+    # forward backward update, with optional gradient accumulation to simulate larger batch size
+    # and using the GradScaler if data type is float16
+    for micro_step in range(gradient_accumulation_steps):
+        if ddp:
+            # in DDP training we only need to sync gradients at the last micro step.
+            # the official way to do this is with model.no_sync() context manager, but
+            # I really dislike that this bloats the code and forces us to repeat code
+            # looking at the source of that context manager, it just toggles this variable
+            model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
+        with ctx:
+            loss = model(X)['loss']
+            loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
+        # immediately async prefetch next batch while model is doing the forward pass on the GPU
+        X = get_batch('train')
+        # backward pass, with gradient scaling if training in fp16
+        scaler.scale(loss).backward()
+    # clip the gradient
+    if grad_clip != 0.0:
+        scaler.unscale_(optimizer)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+    # step the optimizer and scaler if training in fp16
+    scaler.step(optimizer)
+    scaler.update()
+    # flush the gradients as soon as we can, no need for this memory anymore
+    optimizer.zero_grad(set_to_none=True)
+
+    # timing and logging
+    t1 = time.time()
+    dt = t1 - t0
+    t0 = t1
+    if iter_num % log_interval == 0 and master_process:
+        # get loss as float. note: this is a CPU-GPU sync point
+        # scale up to undo the division above, approximating the true total loss (exact would have been a sum)
+        lossf = loss.item() * gradient_accumulation_steps
+        if local_iter_num >= 5: # let the training loop settle a bit
+            mfu = 0#raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
+            running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
+        print(f"iter {iter_num}: loss {lossf:.6f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+    iter_num += 1
+    local_iter_num += 1
+
+    # termination conditions
+    if iter_num > max_iters:
+        break
+
+if ddp:
+    destroy_process_group()
+
+# --- Dummy Training Loop ---
+for epoch in range(5):
+    optimizer.zero_grad()
     
-    wav = '/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/JV-9999-1935-QmNmKtxL36DZskiHCYeGz7yRGF6UTxbeqfY6rLGsUiyt93.wav-DV519464.wav'
-    beat = '/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats/JV-9999-1935-QmNmKtxL36DZskiHCYeGz7yRGF6UTxbeqfY6rLGsUiyt93.beats-DV519464.beats'
+    # Simulate a batch of Mel-Spectrograms: (Batch, Channels, Time)
+    mels = torch.randn(batch_size, 128, seq_len)
     
-    data, rate = sf.read(wav)
     timestamps = read_beat_timestamps(beat)
-    print(calculate_subset_bpm(timestamps, 1, 6))
-    print(calculate_subset_bpm(timestamps, 4, 20))
-    print(calculate_subset_bpm(timestamps, 0, 180))
-
-    cards = pickle.load(open('JazzSet.0.9.pkl', "rb"))
-    cards = [card for card in cards if card]
-
-    years = []
-    labels = []
-    people = []
-    instruments = []
-    for card in cards:
-        years.append(card['DATE']['YEAR'])
-        labels.append(card['RECORD']['LABEL'])
-        people.append(list(card['PERSONNEL']['PEOPLE'].keys()))
-        instruments.append(list(card['PERSONNEL']['INSTRUMENTS'].keys()))
-
-    instrument_map_df = pd.read_csv('/content/instrument_mapping.csv')
-    instrument_map_df = instrument_map_df.apply(lambda col: col.astype(str).str.lower())
-    instrument_map = {row['Abbreviation']: row['Consolidated_Category'] for i, row in instrument_map_df.iterrows()}
-    instrument_categories = set(list(instrument_map.values()))
-
-    from collections import defaultdict
-    data = defaultdict(list)
-    for instrument_list in instruments:
-        categories = {instrument_map[l.lower()] for l in instrument_list if l in instrument_map}
-        for cat in instrument_categories:
-            if cat in categories:
-                data[cat].append(True)
-            else:
-                data[cat].append(False)
-
-    props = pd.DataFrame(data, columns=list(instrument_categories)).sum(0)
-    instrument_categories = {cat for cat in instrument_categories if props[cat] >= 1000}
-
-    data = []
-    for instrument_list in instruments:
-        categories = {instrument_map[l.lower()] for l in instrument_list if l in instrument_map}
-        categories = categories.intersection(instrument_categories)
-        data.append(list(filter(None, categories)))
-
-    mlb = MultiLabelBinarizer().fit(data)
-    data = mlb.transform(data)
-    data = torch.from_numpy(data).float()
+    target_bpm = calculate_subset_bpm(timestamps, 1, 6)
+    target_year = torch.rand(batch_size) * 10 + 1920
+    target_inst = torch.empty(batch_size, num_instruments).random_(2)
+    target_label = torch.randint(0, num_labels, (batch_size,))
     
-    def create_gaussian_soft_labels(targets, bins, sigma):
-        targets = targets.unsqueeze(1)
-        bins = bins.unsqueeze(0).to(targets.device)
-        squared_distances = (bins - targets) ** 2
-        gaussian_weights = torch.exp(-squared_distances / (2 * sigma ** 2))
-        soft_labels = gaussian_weights / gaussian_weights.sum(dim=1, keepdim=True)
-        return soft_labels
-
-    bpm_bins = torch.arange(40, 260, 10, dtype=torch.float32)
-    year_bins = torch.arange(1900, 1980, 10, dtype=torch.float32)
-    bpm_targets = torch.tensor([155])
-    year_targets = torch.tensor([1935])
-
-    bpm_sigma, year_sigma = 5, 2.5
-    bpm_labels = create_gaussian_soft_labels(bpm_targets, bpm_bins, bpm_sigma)
-    year_labels = create_gaussian_soft_labels(year_targets, year_bins, year_sigma)
+    preds = model(mels, ema_tracker, task_weights)
+    
+    # 2. Calculate Individual Losses
+    
+    total_loss.backward()
+    optimizer.step()
+    
+    print(f"Epoch {epoch+1} | Total Unscaled Loss: {total_loss.item():.4f}")
