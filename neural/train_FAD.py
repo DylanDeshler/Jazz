@@ -184,6 +184,7 @@ def get_batch(split='train', batch_size=batch_size):
         wav, _ = librosa.load(idx, sr=sample_rate)
         beat_path = idx.replace('jazz_data_16000_full_clean', '').replace('.wav', '.beats')
         url = idx.split('/')[-2].split('.')[0]
+        print(idx, url)
         
         start = np.random.randint(len(wav) - n_samples)
         timestamps = read_beat_timestamps(beat_path)
@@ -200,7 +201,7 @@ def get_batch(split='train', batch_size=batch_size):
     year = torch.from_numpy(np.asarray(year).astype(np.float32)).pin_memory().to(device, non_blocking=True)
     year = create_gaussian_soft_labels(year, year_bins, year_sigma)
     inst = torch.from_numpy(np.asarray(inst).astype(np.float32)).pin_memory().to(device, non_blocking=True)
-    print(x.shape, bpm.shape)
+    print(x.shape)
     
     targets = {
         'bpm': bpm,
@@ -208,6 +209,8 @@ def get_batch(split='train', batch_size=batch_size):
         'label': label,
         'inst': inst
     }
+    for k, v in targets.items():
+        print(k, v.shape)
     return x, targets
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
