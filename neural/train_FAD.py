@@ -195,8 +195,10 @@ def get_batch(split='train', batch_size=batch_size):
         
     x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
     bpm = torch.from_numpy(np.asarray(bpm).astype(np.float32)).pin_memory().to(device, non_blocking=True)
+    bpm = create_gaussian_soft_labels(bpm, bpm_bins, bpm_sigma)
     label = torch.from_numpy(np.asarray(label).astype(np.float32)).pin_memory().to(device, non_blocking=True)
     year = torch.from_numpy(np.asarray(year).astype(np.float32)).pin_memory().to(device, non_blocking=True)
+    year = create_gaussian_soft_labels(year, year_bins, year_sigma)
     inst = torch.from_numpy(np.asarray(inst).astype(np.float32)).pin_memory().to(device, non_blocking=True)
     print(x.shape, bpm.shape)
     
@@ -350,9 +352,6 @@ def get_lr(it):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
 
-
-bpm_labels = create_gaussian_soft_labels(bpm_targets, bpm_bins, bpm_sigma)
-year_labels = create_gaussian_soft_labels(year_targets, year_bins, year_sigma)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
