@@ -383,7 +383,7 @@ while True:
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
     
-    tokens_trained += batch_size * gradient_accumulation_steps * max_seq_len
+    tokens_trained += batch_size * gradient_accumulation_steps
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
