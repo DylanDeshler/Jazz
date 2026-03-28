@@ -7,7 +7,7 @@ import time
 import numpy as np
 import soundfile as sf
 from torchinfo import summary
-from fad import MultiTaskFADResNet as net
+from fad import MultiTaskFAD as net
 
 import pickle
 import pandas as pd

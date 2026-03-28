@@ -227,3 +227,124 @@ class MultiTaskFADResNet(nn.Module):
         outputs['loss_label'] = loss_label
         
         return outputs
+
+class ConvNeXtBlock(nn.Module):
+    """ConvNeXt Block adapted for 2D Audio Spectrograms"""
+    def __init__(self, dim):
+        super().__init__()
+        # 1. Depthwise Convolution (7x7) - Captures wide time-frequency context
+        self.dwconv = nn.Conv2d(dim, dim, kernel_size=7, padding=3, groups=dim)
+        
+        # 2. LayerNorm (requires channel-last format temporarily)
+        self.norm = nn.LayerNorm(dim, eps=1e-6)
+        
+        # 3. Inverted Bottleneck (Expand by 4x, then compress back)
+        self.pwconv1 = nn.Linear(dim, 4 * dim) 
+        self.act = nn.GELU()
+        self.pwconv2 = nn.Linear(4 * dim, dim)
+
+    def forward(self, x):
+        input = x
+        x = self.dwconv(x)
+        
+        # ConvNeXt applies LayerNorm and Pointwise convs on the channel dimension.
+        # So we permute: (Batch, Channels, Height, Width) -> (Batch, Height, Width, Channels)
+        x = x.permute(0, 2, 3, 1) 
+        x = self.norm(x)
+        x = self.pwconv1(x)
+        x = self.act(x)
+        x = self.pwconv2(x)
+        x = x.permute(0, 3, 1, 2) # Permute back
+        
+        return input + x
+
+class MultiTaskFAD(nn.Module):
+    def __init__(self, num_instruments, num_labels, bpm_bins, year_bins, n_fft=1024, hop_length=512, n_mels=192, in_chans=1, depths=[3, 3, 9, 3], dims=[96, 192, 384, 768]):
+        super().__init__()
+        
+        self.to_mel = ToMel(16000, n_fft, hop_length, n_mels)
+        self.ema_tracker = EMATracker(beta=0.99)
+        
+        # 1. The "Patchify" Stem
+        # Aggressively downsamples the Mel Spectrogram right at the start
+        self.downsample_layers = nn.ModuleList()
+        stem = nn.Sequential(
+            nn.Conv2d(in_chans, dims[0], kernel_size=4, stride=4),
+            nn.LayerNorm(dims[0], eps=1e-6) # Note: requires permute in forward pass or custom 2D LayerNorm
+        )
+        self.downsample_layers.append(stem)
+        
+        # Add intermediate downsampling between stages
+        for i in range(3):
+            downsample = nn.Sequential(
+                nn.LayerNorm(dims[i], eps=1e-6),
+                nn.Conv2d(dims[i], dims[i+1], kernel_size=2, stride=2)
+            )
+            self.downsample_layers.append(downsample)
+
+        # 2. The ConvNeXt Stages
+        self.stages = nn.ModuleList()
+        for i in range(4):
+            stage = nn.Sequential(
+                *[ConvNeXtBlock(dim=dims[i]) for _ in range(depths[i])]
+            )
+            self.stages.append(stage)
+            
+        self.norm = nn.LayerNorm(dims[-1], eps=1e-6)
+        
+        self.head_bpm = nn.Linear(dims[-1], bpm_bins)
+        self.head_year = nn.Linear(dims[-1], year_bins)
+        self.head_instruments = nn.Linear(dims[-1], num_instruments) 
+        self.head_label = nn.Linear(dims[-1], num_labels)
+
+    def forward_features(self, x):
+        x = self.to_mel(x)
+        for i in range(4):
+            if i == 0:
+                x = self.downsample_layers[i][0](x)
+                x = x.permute(0, 2, 3, 1)
+                x = self.downsample_layers[i][1](x)
+                x = x.permute(0, 3, 1, 2)
+            else:
+                x = x.permute(0, 2, 3, 1)
+                x = self.downsample_layers[i][0](x)
+                x = x.permute(0, 3, 1, 2)
+                x = self.downsample_layers[i][1](x)
+                
+            x = self.stages[i](x)
+            
+        x = x.mean([-2, -1])
+        x = self.norm(x)
+        
+        return x
+
+    def forward(self, x, targets, task_weights):
+        features = self.forward_features(x)
+        
+        outputs = {}
+        bpm = GradientBalancer.apply(features, self.ema_tracker, 'bpm', task_weights['bpm'])
+        outputs['bpm'] = self.head_bpm(bpm).squeeze(1)
+        
+        year = GradientBalancer.apply(features, self.ema_tracker, 'year', task_weights['year'])
+        outputs['year'] = self.head_year(year).squeeze(1)
+        
+        inst = GradientBalancer.apply(features, self.ema_tracker, 'instruments', task_weights['instruments'])
+        outputs['instruments'] = self.head_instruments(inst)
+        
+        label = GradientBalancer.apply(features, self.ema_tracker, 'label', task_weights['label'])
+        outputs['label'] = self.head_label(label)
+        
+        loss_bpm = F.kl_div(F.log_softmax(bpm, dim=-1), targets['bpm'])
+        loss_year = F.kl_div(F.log_softmax(year, dim=-1), targets['year'])
+        loss_inst = F.binary_cross_entropy_with_logits(inst, targets['inst'])
+        loss_label = F.cross_entropy(label, targets['label'])
+
+        total_loss = loss_bpm + loss_year + loss_inst + loss_label
+
+        outputs['loss'] = total_loss
+        outputs['loss_bpm'] = loss_bpm
+        outputs['loss_year'] = loss_year
+        outputs['loss_inst'] = loss_inst
+        outputs['loss_label'] = loss_label
+        
+        return outputs
