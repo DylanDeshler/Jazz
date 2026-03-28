@@ -80,7 +80,7 @@ bpm_bins = torch.arange(40, 260, 10, dtype=torch.float32)
 year_bins = torch.arange(1900, 1980, 10, dtype=torch.float32)
 bpm_sigma, year_sigma = 5, 2.5
 
-cards = pickle.load(open('JazzSet.0.9.pkl', "rb"))
+cards = pickle.load(open('/home/dylan.d/research/music/Jazz/JazzSet.0.9.pkl', "rb"))
 cards = [card for card in cards if card]
 
 years = []
