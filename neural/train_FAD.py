@@ -321,7 +321,7 @@ def estimate_loss():
     out = {}
     model.eval()
     for i, split in enumerate(['train', 'val']):
-        losses = defaultdict(torch.zeros(eval_iters))
+        losses = defaultdict(lambda x: torch.zeros(eval_iters))
         for k in tqdm(range(eval_iters)):
             X, targets = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
