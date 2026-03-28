@@ -89,7 +89,7 @@ people = []
 instruments = []
 urls = []
 for card in cards:
-    urls.append(card['URLS'][0]['FILE'])
+    urls.append(card['URLS'][0]['FILE'].split('/')[-2].split('.')[0])
     years.append(card['DATE']['YEAR'])
     labels.append(card['RECORD']['LABEL'])
     people.append(list(card['PERSONNEL']['PEOPLE'].keys()))
