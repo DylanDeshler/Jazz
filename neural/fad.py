@@ -171,7 +171,7 @@ class MultiTaskFAD(nn.Module):
         
         if self.training:
             x = self.augment(x)
-        
+        print(x.shape)
         for i in range(4):
             if i == 0:
                 x = self.downsample_layers[i][0](x)
@@ -185,6 +185,7 @@ class MultiTaskFAD(nn.Module):
                 x = self.downsample_layers[i][1](x)
                 
             x = self.stages[i](x)
+            print(x.shape)
             
         x = x.mean([-2, -1])
         x = self.norm(x)
