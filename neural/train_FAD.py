@@ -212,8 +212,11 @@ def calculate_subset_bpm(timestamps, start_time, end_time):
 import glob
 import librosa
 paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
-wavs = [librosa.load(path, sr=sample_rate)[0] for path in paths]
-
+# wavs = [librosa.load(path, sr=sample_rate)[0] for path in paths]
+wavs = []
+for path in tqdm(paths, desc='Loading wavfiles'):
+    wavs.append(librosa.load(path, sr=sample_rate)[0])
+    
 def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
         idxs = np.random.choice(paths[:int(0.98 * len(paths))], batch_size)
