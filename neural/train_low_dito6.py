@@ -216,6 +216,7 @@ def get_batch(split='train'):
     else:
         idxs = np.random.choice(test_idx, batch_size).tolist()
     
+    x = []
     for idx in idxs:
         wav = wavs[idx]
         
@@ -379,20 +380,29 @@ while True:
                 "mfu": running_mfu*100, # convert to percentage
                 "tokens": tokens_trained,
             })
-        if losses['val'] < best_val_loss or always_save_checkpoint:
-            best_val_loss = losses['val']
-            if iter_num > 0:
-                checkpoint = {
-                    'model': raw_model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'model_args': model_args,
-                    'iter_num': iter_num,
-                    'best_val_loss': best_val_loss,
-                    'config': config,
-                    'tokens': tokens_trained,
-                }
-                print(f"saving checkpoint to {out_dir}")
-                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+        if iter_num > 0 and losses['val']['total'] < best_val_loss:
+            best_val_loss = losses['val']['total']
+            checkpoint = {
+                'model': raw_model.state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'model_args': model_args,
+                'iter_num': iter_num,
+                'val_loss': best_val_loss,
+                'config': config,
+                'tokens': tokens_trained,
+            }
+            torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+        if iter_num > 0 and always_save_checkpoint:
+            checkpoint = {
+                'model': raw_model.state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'model_args': model_args,
+                'iter_num': iter_num,
+                'val_loss': losses['val']['total'],
+                'config': config,
+                'tokens': tokens_trained,
+            }
+            torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
 
     if iter_num == 0 and eval_only:
         break
