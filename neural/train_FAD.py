@@ -431,19 +431,28 @@ while True:
             log_dict = log_dict | {f'val/{k}': v for k, v in losses['val'].items()}
             wandb.log(log_dict)
             
-        best_val_loss = losses['val']['total']
-        checkpoint = {
-            'model': raw_model.state_dict(),
-            'optimizer': optimizer.state_dict(),
-            'model_args': model_args,
-            'iter_num': iter_num,
-            'best_val_loss': best_val_loss,
-            'config': config,
-            'tokens': tokens_trained,
-        }
         if iter_num > 0 and losses['val']['total'] < best_val_loss:
+            best_val_loss = losses['val']['total']
+            checkpoint = {
+                'model': raw_model.state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'model_args': model_args,
+                'iter_num': iter_num,
+                'val_loss': best_val_loss,
+                'config': config,
+                'tokens': tokens_trained,
+            }
             torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
         if iter_num > 0 and always_save_checkpoint:
+            checkpoint = {
+                'model': raw_model.state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'model_args': model_args,
+                'iter_num': iter_num,
+                'val_loss': losses['val']['total'],
+                'config': config,
+                'tokens': tokens_trained,
+            }
             torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
             
     if eval_only:
