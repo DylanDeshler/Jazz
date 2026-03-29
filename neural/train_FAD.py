@@ -229,7 +229,7 @@ def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
         idxs = np.random.randint(low=0, high=int(0.98 * len(paths)), size=batch_size)
     else:
-        idxs = np.random.choice(low=int(0.98 * len(paths)), high=len(paths), size=batch_size)
+        idxs = np.random.randint(low=int(0.98 * len(paths)), high=len(paths), size=batch_size)
     
     x = []
     bpm = []
