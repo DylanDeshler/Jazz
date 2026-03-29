@@ -90,7 +90,6 @@ class SpecAugment(nn.Module):
         x = self.time_mask(x)
         x = self.time_mask(x)
         x = self.freq_mask(x)
-        x = self.freq_mask(x)
         return x
 
 class ConvNeXtBlock(nn.Module):
@@ -226,7 +225,7 @@ class MultiTaskFAD(nn.Module):
         else:
             loss_year = torch.tensor(0.0, device=features.device, requires_grad=True)
         
-        alpha = 0.2
+        alpha = 0.4
         smooth_targets = targets['inst'] * (1.0 - alpha) + (alpha / 2.0)
         loss_inst = F.binary_cross_entropy_with_logits(inst, smooth_targets)
         

@@ -301,7 +301,8 @@ model_args = dict(
     n_fft=n_fft,
     hop_length=hop_length,
     n_mels=n_mels,
-    # dims=[64, 128, 256, 512],
+    depths=[3, 3, 27, 3],
+    dims=[96, 192, 384, 768],
     drop_path_rate=0.1,
 )
 
