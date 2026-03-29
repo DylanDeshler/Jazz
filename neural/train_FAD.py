@@ -301,6 +301,7 @@ model_args = dict(
     n_fft=n_fft,
     hop_length=hop_length,
     n_mels=n_mels,
+    drop_path_rate=0.2,
 )
 
 if init_from == 'scratch':

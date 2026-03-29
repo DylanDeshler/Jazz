@@ -47,10 +47,9 @@ class DropPath(nn.Module):
         if self.drop_prob == 0. or not self.training:
             return x
         keep_prob = 1 - self.drop_prob
-        # Shape: (Batch, 1, 1) to broadcast across channels and time
         shape = (x.shape[0],) + (1,) * (x.ndim - 1)
         random_tensor = keep_prob + torch.rand(shape, dtype=x.dtype, device=x.device)
-        random_tensor.floor_()  # binarize
+        random_tensor.floor_()
         return x.div(keep_prob) * random_tensor
 
 class ToMel(nn.Module):
@@ -96,8 +95,7 @@ class SpecAugment(nn.Module):
         return x
 
 class ConvNeXtBlock(nn.Module):
-    """ConvNeXt Block adapted for 2D Audio Spectrograms"""
-    def __init__(self, dim):
+    def __init__(self, dim, drop_path=0., layer_scale_init_value=1e-6):
         super().__init__()
         self.dwconv = nn.Conv2d(dim, dim, kernel_size=7, padding=3, groups=dim)
         self.norm = nn.LayerNorm(dim, eps=1e-6)
@@ -105,6 +103,8 @@ class ConvNeXtBlock(nn.Module):
         self.pwconv1 = nn.Linear(dim, 4 * dim) 
         self.act = nn.GELU()
         self.pwconv2 = nn.Linear(4 * dim, dim)
+        self.gamma = nn.Parameter(layer_scale_init_value * torch.ones((dim)), requires_grad=True) if layer_scale_init_value > 0 else None
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x):
         input = x
@@ -115,12 +115,14 @@ class ConvNeXtBlock(nn.Module):
         x = self.pwconv1(x)
         x = self.act(x)
         x = self.pwconv2(x)
+        if self.gamma is not None:
+            x = self.gamma * x
         x = x.permute(0, 3, 1, 2)
         
-        return input + x
+        return input + self.drop_path(x)
 
 class MultiTaskFAD(nn.Module):
-    def __init__(self, num_instruments, num_labels, bpm_bins, year_bins, n_fft=1024, hop_length=512, n_mels=192, in_chans=1, depths=[3, 3, 9, 3], dims=[96, 192, 384, 768]):
+    def __init__(self, num_instruments, num_labels, bpm_bins, year_bins, n_fft=1024, hop_length=512, n_mels=192, in_chans=1, depths=[3, 3, 9, 3], dims=[96, 192, 384, 768], drop_path_rate=0.):
         super().__init__()
         
         self.to_mel = ToMel(16000, n_fft, hop_length, n_mels)
@@ -143,11 +145,14 @@ class MultiTaskFAD(nn.Module):
             self.downsample_layers.append(downsample)
 
         self.stages = nn.ModuleList()
+        dp_rates=[x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))] 
+        cur = 0
         for i in range(4):
             stage = nn.Sequential(
-                *[ConvNeXtBlock(dim=dims[i]) for _ in range(depths[i])]
+                *[ConvNeXtBlock(dim=dims[i], drop_path=dp_rates[cur + j]) for j in range(depths[i])]
             )
             self.stages.append(stage)
+            cur += depths[i]
         
         self.norm = nn.LayerNorm(dims[-1], eps=1e-6)
         
@@ -155,6 +160,13 @@ class MultiTaskFAD(nn.Module):
         self.head_year = nn.Linear(dims[-1], year_bins)
         self.head_instruments = nn.Linear(dims[-1], num_instruments) 
         self.head_label = nn.Linear(dims[-1], num_labels)
+        
+        self.apply(self._init_weights)
+    
+    def _init_weights(self, m):
+        if isinstance(m, (nn.Conv2d, nn.Linear)):
+            nn.init.trunc_normal_(m.weight, std=.02)
+            nn.init.constant_(m.bias, 0)
 
     def forward_features(self, x):
         x = self.to_mel(x)
