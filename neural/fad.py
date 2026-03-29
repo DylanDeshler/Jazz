@@ -203,7 +203,5 @@ class MultiTaskFAD(nn.Module):
             'inst': loss_inst,
             'label': loss_label
         }
-        for k, v in outputs['loss'].items():
-            print(k, v)
         
         return outputs
