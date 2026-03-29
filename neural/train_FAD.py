@@ -240,11 +240,11 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as exec
         wav = future.result()
         wavs.append(wav)
 
-def get_batch(split='train', batch_size=batch_size):
+def get_batch(split='train'):
     if split == 'train':
-        idxs = np.random.choice(train_idx)
+        idxs = np.random.choice(train_idx).tolist()
     else:
-        idxs = np.random.choice(test_idx)
+        idxs = np.random.choice(test_idx).tolist()
     
     x = []
     bpm = []
@@ -359,7 +359,7 @@ def estimate_loss():
     for i, split in enumerate(['train', 'val']):
         losses = defaultdict(lambda: torch.zeros(eval_iters))
         for k in tqdm(range(eval_iters)):
-            X, targets, masks = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
+            X, targets, masks = get_batch(split)
             with ctx:
                 loss = model(X, targets, masks)['loss']
             for key, value in loss.items():
