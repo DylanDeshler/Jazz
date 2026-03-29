@@ -93,10 +93,10 @@ for card in cards:
 url_map = {url: i for i, url in enumerate(urls)}
 
 # Record labels
-record_labels = set(list(pd.DataFrame(labels, columns=['LABEL']).value_counts(normalize=True).reset_index()['LABEL'].iloc[:25]))
-record_labels = [label if label in record_labels else 'Other' for label in labels]
-mlb = MultiLabelBinarizer().fit(record_labels)
-record_labels = mlb.transform(record_labels)
+record_label_names = set(list(pd.DataFrame(labels, columns=['LABEL']).value_counts(normalize=True).reset_index()['LABEL'].iloc[:25]))
+record_label_names = [label if label in record_label_names else 'Other' for label in labels]
+mlb = MultiLabelBinarizer().fit(record_label_names)
+record_labels = mlb.transform(record_label_names)
 record_labels = torch.from_numpy(record_labels)
 
 # Instruments
@@ -215,7 +215,7 @@ from sklearn.model_selection import StratifiedGroupKFold
 kf = StratifiedGroupKFold(n_splits=20, shuffle=True, random_state=0)
 
 year_bins = [(year // 10) * 10 for year in years]
-strat_key = [f'{year}_{record}' for year, record in zip(years, record_labels)]
+strat_key = [f'{year}_{record}' for year, record in zip(years, record_label_names)]
 
 # Handle rare combinations (StratifiedGroupKFold requires at least 2 of each key)
 key_counts = pd.DataFrame(strat_key, columns=['key']).value_counts()
