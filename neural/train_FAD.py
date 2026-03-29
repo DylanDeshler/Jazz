@@ -217,12 +217,11 @@ kf = StratifiedGroupKFold(n_splits=20, shuffle=True, random_state=0)
 year_bins = [(year // 10) * 10 for year in years]
 strat_key = [f'{year}_{record}' for year, record in zip(years, record_label_names)]
 
-# Handle rare combinations (StratifiedGroupKFold requires at least 2 of each key)
-key_counts = pd.DataFrame(strat_key, columns=['key']).value_counts()
-print(key_counts.head())
+df = pd.DataFrame(strat_key, columns=['key'])
+key_counts = df.value_counts()
 rare_keys = key_counts[key_counts < 2].index
-key_counts.loc[key_counts['key'].isin(rare_keys), 'key'] = 'rare_combo'
-train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], key_counts['key'], artists))
+df.loc[df['key'].isin(rare_keys), 'key'] = 'rare_combo'
+train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], df['key'], artists))
 print(train_idx.shape, test_idx.shape)
 
 import concurrent.futures
