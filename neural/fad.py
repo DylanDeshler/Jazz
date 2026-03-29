@@ -33,7 +33,7 @@ class GradientBalancer(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         # 1. Calculate the L2 norm of the incoming gradient from the head
-        norm = torch.linalg.norm(grad_output).item()
+        norm = torch.linalg.norm(grad_output)
         
         # 2. Update the EMA for this specific task
         ema_norm = ctx.ema_tracker.update(ctx.task_name, norm)
