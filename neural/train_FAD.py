@@ -214,9 +214,19 @@ import librosa
 paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
 # wavs = [librosa.load(path, sr=sample_rate)[0] for path in paths]
 wavs = []
-for path in tqdm(paths, desc='Loading wavfiles'):
-    wavs.append(librosa.load(path, sr=sample_rate)[0])
+# for path in tqdm(paths, desc='Loading wavfiles'):
+    # wavs.append(librosa.load(path, sr=sample_rate)[0])
+
+import concurrent.futures
+with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
+    future_to_path = [
+        executor.submit(lambda x: librosa.load(x, sr=sample_rate)[0], path) for path in paths
+    ]
     
+    for future in concurrent.futures.as_completed(future_to_path):
+        wav = future.result()
+        wavs.append(wav)
+
 def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
         idxs = np.random.choice(paths[:int(0.98 * len(paths))], batch_size)
