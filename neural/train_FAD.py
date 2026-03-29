@@ -219,8 +219,8 @@ for path in paths:
     url = path.split('/')[-1].split('.')[0]
     valid_idxs.append(url_map[url])
 
-year_bins = [(year // 10) * 10 for year in years]
-strat_key = [f'{year}_{record}' for i, (year, record) in enumerate(zip(years, record_label_names)) if i in valid_idxs]
+year_keys = [(year // 10) * 10 for year in years]
+strat_key = [f'{year}_{record}' for i, (year, record) in enumerate(zip(year_keys, record_label_names)) if i in valid_idxs]
 artists = [artist for i, artist in enumerate(artists) if i in valid_idxs]
 
 df = pd.DataFrame(strat_key, columns=['key'])
