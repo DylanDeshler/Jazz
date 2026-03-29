@@ -40,40 +40,40 @@ import glob
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'tokenizer_low_large'
+out_dir = 'tokenizer_low_large_24576'
 eval_interval = 5000
 log_interval = 100
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = False # disabled by default
+wandb_log = True # disabled by default
 wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 2 # used to simulate larger batch sizes
-batch_size = 64 # if gradient_accumulation_steps > 1, this is the micro-batch size
+gradient_accumulation_steps = 1 # used to simulate larger batch sizes
+batch_size = 128 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
-n_samples = rate
+n_samples = 24576
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 250000 # total number of training iterations
+max_iters = 100000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.999
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
 decay_lr = True # whether to decay the learning rate
-warmup_iters = 230000 # how many steps to warm up for
+warmup_iters = 5000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
 backend = 'gloo' # 'nccl', 'gloo', etc.
 # system
-device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+device = 'cuda:0' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
@@ -116,36 +116,116 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
-# poor man's data loader
+import pandas as pd
+from collections import defaultdict
+from sklearn.preprocessing import MultiLabelBinarizer
+
+bpm_bins = torch.arange(40, 300, 5, dtype=torch.float32)
+year_bins = torch.arange(1900, 1980, 5, dtype=torch.float32)
+bpm_sigma, year_sigma = 5, 2.5
+
+cards = pickle.load(open('/home/dylan.d/research/music/Jazz/JazzSet.0.9.pkl', "rb"))
+cards = [card for card in cards if card]
+
+years = []
+labels = []
+people = []
+instruments = []
+artists = []
+urls = []
+for card in cards:
+    urls.append(card['URLS'][0]['FILE'].split('/')[-2].split('.')[0])
+    years.append(card['DATE']['YEAR'])
+    labels.append(card['RECORD']['LABEL'])
+    people.append(list(card['PERSONNEL']['PEOPLE'].keys()))
+    instruments.append(list(card['PERSONNEL']['INSTRUMENTS'].keys()))
+    artists.append(card['ARTIST'])
+
+url_map = {url: i for i, url in enumerate(urls)}
+
+# Record labels
+record_label_names = set(list(pd.DataFrame(labels, columns=['LABEL']).value_counts(normalize=True).reset_index()['LABEL'].iloc[:25]))
+record_label_names = [label if label in record_label_names else 'Other' for label in labels]
+mlb = MultiLabelBinarizer().fit(record_label_names)
+record_labels = mlb.transform(record_label_names)
+record_labels = torch.from_numpy(record_labels)
+
+# Instruments
+instrument_map_df = pd.read_csv('/home/dylan.d/research/music/Jazz/instrument_mapping.csv')
+instrument_map_df = instrument_map_df.apply(lambda col: col.astype(str).str.lower())
+instrument_map = {row['Abbreviation']: row['Consolidated_Category'] for i, row in instrument_map_df.iterrows()}
+instrument_categories = set(list(instrument_map.values()))
+
+instrument_labels = defaultdict(list)
+for instrument_list in instruments:
+    categories = {instrument_map[l.lower()] for l in instrument_list if l in instrument_map}
+    for cat in instrument_categories:
+        if cat in categories:
+            instrument_labels[cat].append(True)
+        else:
+            instrument_labels[cat].append(False)
+
+props = pd.DataFrame(instrument_labels, columns=list(instrument_categories)).sum(0)
+instrument_categories = {cat for cat in instrument_categories if props[cat] >= 1000}
+
+instrument_labels = []
+for instrument_list in instruments:
+    categories = {instrument_map[l.lower()] for l in instrument_list if l in instrument_map}
+    categories = categories.intersection(instrument_categories)
+    instrument_labels.append(list(filter(None, categories)))
+
+mlb = MultiLabelBinarizer().fit(instrument_labels)
+instrument_labels = mlb.transform(instrument_labels)
+instrument_labels = torch.from_numpy(instrument_labels)
+
+import glob
+import librosa
 paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
-print(len(paths))
+wavs = []
+
+from sklearn.model_selection import StratifiedGroupKFold
+kf = StratifiedGroupKFold(n_splits=20, shuffle=True, random_state=0)
+
+valid_idxs = []
+for path in paths:
+    url = path.split('/')[-1].split('.')[0]
+    valid_idxs.append(url_map[url])
+
+year_keys = [(year // 10) * 10 for year in years]
+strat_key = [f'{year}_{record}' for i, (year, record) in enumerate(zip(year_keys, record_label_names)) if i in valid_idxs]
+artists = [artist for i, artist in enumerate(artists) if i in valid_idxs]
+
+df = pd.DataFrame(strat_key, columns=['key'])
+key_counts = df.value_counts()
+rare_keys = key_counts[key_counts < 2].index
+df.loc[df['key'].isin(rare_keys), 'key'] = 'rare_combo'
+train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], df['key'], artists))
+
+import concurrent.futures
+from multiprocessing import cpu_count
+with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
+    future_to_path = [
+        executor.submit(lambda x: librosa.load(x, sr=rate)[0], path) for path in paths
+    ]
+    
+    for future in tqdm(concurrent.futures.as_completed(future_to_path), desc='Loading wav files', total=len(paths)):
+        wav = future.result()
+        wavs.append(wav)
 
 def get_batch(split='train'):
     if split == 'train':
-        idxs = torch.randint(int(len(paths) * 0.98), (batch_size,))
-        samples = [paths[idx] for idx in idxs]
-        batch = []
-        for sample in samples:
-            x, sr = librosa.load(sample, sr=None)
-            assert sr == rate
-
-            start = np.random.randint(len(x) - n_samples)
-            batch.append(x[start:start + n_samples])
-        batch = torch.from_numpy(np.stack(batch, axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-        return batch
-    
+        idxs = np.random.choice(train_idx, batch_size).tolist()
     else:
-        idxs = torch.randint(int(len(paths) * 0.98), len(paths), (batch_size,))
-        samples = [paths[idx] for idx in idxs]
-        batch = []
-        for sample in samples:
-            x, sr = librosa.load(sample, sr=None)
-            assert sr == rate
-
-            start = np.random.randint(len(x) - n_samples)
-            batch.append(x[start:start + n_samples])
-        batch = torch.from_numpy(np.stack(batch, axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-        return batch
+        idxs = np.random.choice(test_idx, batch_size).tolist()
+    
+    for idx in idxs:
+        wav = wavs[idx]
+        
+        start = np.random.randint(len(wav) - n_samples)
+        x.append(wav[start:start+n_samples])
+        
+    x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+    return x
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
