@@ -212,10 +212,7 @@ def calculate_subset_bpm(timestamps, start_time, end_time):
 import glob
 import librosa
 paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
-# wavs = [librosa.load(path, sr=sample_rate)[0] for path in paths]
 wavs = []
-# for path in tqdm(paths, desc='Loading wavfiles'):
-    # wavs.append(librosa.load(path, sr=sample_rate)[0])
 
 import concurrent.futures
 from multiprocessing import cpu_count
@@ -224,15 +221,15 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as exec
         executor.submit(lambda x: librosa.load(x, sr=sample_rate)[0], path) for path in paths
     ]
     
-    for future in tqdm(concurrent.futures.as_completed(future_to_path), total=len(paths)):
+    for future in tqdm(concurrent.futures.as_completed(future_to_path), desc='Loading wav files', total=len(paths)):
         wav = future.result()
         wavs.append(wav)
 
 def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
-        idxs = np.random.randint(int(0.98 * len(paths)), batch_size)
+        idxs = np.random.randint(low=0, high=int(0.98 * len(paths)), size=batch_size)
     else:
-        idxs = np.random.choice(int(0.98 * len(paths)), len(paths), batch_size)
+        idxs = np.random.choice(low=int(0.98 * len(paths)), high=len(paths), size=batch_size)
     
     x = []
     bpm = []
