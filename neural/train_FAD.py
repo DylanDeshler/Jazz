@@ -80,6 +80,7 @@ years = []
 labels = []
 people = []
 instruments = []
+artists = []
 urls = []
 for card in cards:
     urls.append(card['URLS'][0]['FILE'].split('/')[-2].split('.')[0])
@@ -87,6 +88,7 @@ for card in cards:
     labels.append(card['RECORD']['LABEL'])
     people.append(list(card['PERSONNEL']['PEOPLE'].keys()))
     instruments.append(list(card['PERSONNEL']['INSTRUMENTS'].keys()))
+    artists.append(card['ARTIST'])
 
 url_map = {url: i for i, url in enumerate(urls)}
 
@@ -178,12 +180,10 @@ def read_beat_timestamps(tsv_path):
         with open(tsv_path, 'r') as tsv_file:
             reader = csv.reader(tsv_file, delimiter='\t')
             for row in reader:
-                if row: # Skip empty rows
+                if row:
                     try:
-                        # Assuming the first column is the timestamp in seconds
                         timestamps.append(float(row[0]))
                     except ValueError:
-                        # Skip header rows if they exist
                         continue
         return timestamps
     except Exception as e:
@@ -192,14 +192,11 @@ def read_beat_timestamps(tsv_path):
 
 def calculate_subset_bpm(timestamps, start_time, end_time):
     """Calculates the BPM for a specific time window given a list of beat timestamps."""
-    # Filter beats that fall within our window
     subset_beats = [t for t in timestamps if start_time <= t <= end_time]
     
-    # We need at least 2 beats to calculate an interval
     if len(subset_beats) < 2:
         return 0.0
     
-    # BPM calculation: (number of intervals) / (duration of intervals) * 60 seconds
     num_intervals = len(subset_beats) - 1
     duration_of_intervals = subset_beats[-1] - subset_beats[0]
     
@@ -213,6 +210,20 @@ import glob
 import librosa
 paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
 wavs = []
+
+from sklearn.model_selection import StratifiedGroupKFold
+kf = StratifiedGroupKFold(n_splits=20, shuffle=True, random_state=0)
+
+year_bins = [(year // 10) * 10 for year in years]
+strat_key = [f'{year}_{record}' for year, record in zip(years, record_labels)]
+
+# Handle rare combinations (StratifiedGroupKFold requires at least 2 of each key)
+key_counts = pd.DataFrame(strat_key, columns=['key']).value_counts()
+print(key_counts.head())
+rare_keys = key_counts[key_counts < 2].index
+key_counts.loc[key_counts['key'].isin(rare_keys), 'key'] = 'rare_combo'
+train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], key_counts['key'], artists))
+print(train_idx.shape, test_idx.shape)
 
 import concurrent.futures
 from multiprocessing import cpu_count
