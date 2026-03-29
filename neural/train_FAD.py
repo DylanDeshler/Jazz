@@ -221,7 +221,7 @@ for path in paths:
 
 year_bins = [(year // 10) * 10 for year in years]
 strat_key = [f'{year}_{record}' for i, (year, record) in enumerate(zip(years, record_label_names)) if i in valid_idxs]
-artists = [artist for artist in enumerate(artists) if i in valid_idxs]
+artists = [artist for i, artist in enumerate(artists) if i in valid_idxs]
 
 df = pd.DataFrame(strat_key, columns=['key'])
 key_counts = df.value_counts()
