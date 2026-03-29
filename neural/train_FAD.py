@@ -242,9 +242,9 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as exec
 
 def get_batch(split='train'):
     if split == 'train':
-        idxs = np.random.choice(train_idx).tolist()
+        idxs = np.random.choice(train_idx, batch_size).tolist()
     else:
-        idxs = np.random.choice(test_idx).tolist()
+        idxs = np.random.choice(test_idx, batch_size).tolist()
     
     x = []
     bpm = []
