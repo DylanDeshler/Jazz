@@ -221,6 +221,7 @@ df = pd.DataFrame(strat_key, columns=['key'])
 key_counts = df.value_counts()
 rare_keys = key_counts[key_counts < 2].index
 df.loc[df['key'].isin(rare_keys), 'key'] = 'rare_combo'
+print(len(paths), df.shape, len(artists))
 train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], df['key'], artists))
 print(train_idx.shape, test_idx.shape)
 
