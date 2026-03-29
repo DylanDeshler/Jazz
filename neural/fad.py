@@ -155,9 +155,9 @@ class MultiTaskFAD(nn.Module):
         self.norm = nn.LayerNorm(dims[-1], eps=1e-6)
         
         self.head_bpm = nn.Linear(dims[-1], bpm_bins)
-        self.head_year = nn.Linear(dims[-1], year_bins)
-        self.head_instruments = nn.Linear(dims[-1], num_instruments) 
-        self.head_label = nn.Linear(dims[-1], num_labels)
+        # self.head_year = nn.Linear(dims[-1], year_bins)
+        # self.head_instruments = nn.Linear(dims[-1], num_instruments) 
+        # self.head_label = nn.Linear(dims[-1], num_labels)
         
         self.apply(self._init_weights)
     
@@ -199,17 +199,17 @@ class MultiTaskFAD(nn.Module):
         bpm = self.head_bpm(features)
         outputs['bpm'] = bpm
         
-        # year = GradientBalancer.apply(features, self.ema_tracker, 'year')
-        year = self.head_year(features)
-        outputs['year'] = year
+        # # year = GradientBalancer.apply(features, self.ema_tracker, 'year')
+        # year = self.head_year(features)
+        # outputs['year'] = year
         
-        # inst = GradientBalancer.apply(features, self.ema_tracker, 'instruments')
-        inst = self.head_instruments(features)
-        outputs['instruments'] = inst
+        # # inst = GradientBalancer.apply(features, self.ema_tracker, 'instruments')
+        # inst = self.head_instruments(features)
+        # outputs['instruments'] = inst
         
-        # label = GradientBalancer.apply(features, self.ema_tracker, 'label')
-        label = self.head_label(features)
-        outputs['label'] = label
+        # # label = GradientBalancer.apply(features, self.ema_tracker, 'label')
+        # label = self.head_label(features)
+        # outputs['label'] = label
         
         loss_bpm = F.kl_div(F.log_softmax(bpm, dim=-1), targets['bpm'], reduction='none')
         loss_bpm = loss_bpm.sum(dim=-1) * target_masks['bpm']
@@ -218,27 +218,28 @@ class MultiTaskFAD(nn.Module):
         else:
             loss_bpm = torch.tensor(0.0, device=features.device, requires_grad=True)
             
-        loss_year = F.kl_div(F.log_softmax(year, dim=-1), targets['year'], reduction='none')
-        loss_year = loss_year.sum(dim=-1) * target_masks['year']
-        if target_masks['year'].sum() > 0:
-            loss_year = loss_year.sum() / target_masks['year'].sum()
-        else:
-            loss_year = torch.tensor(0.0, device=features.device, requires_grad=True)
+        # loss_year = F.kl_div(F.log_softmax(year, dim=-1), targets['year'], reduction='none')
+        # loss_year = loss_year.sum(dim=-1) * target_masks['year']
+        # if target_masks['year'].sum() > 0:
+        #     loss_year = loss_year.sum() / target_masks['year'].sum()
+        # else:
+        #     loss_year = torch.tensor(0.0, device=features.device, requires_grad=True)
         
-        alpha = 0.4
-        smooth_targets = targets['inst'] * (1.0 - alpha) + (alpha / 2.0)
-        loss_inst = F.binary_cross_entropy_with_logits(inst, smooth_targets)
+        # alpha = 0.4
+        # smooth_targets = targets['inst'] * (1.0 - alpha) + (alpha / 2.0)
+        # loss_inst = F.binary_cross_entropy_with_logits(inst, smooth_targets)
         
-        loss_label = F.cross_entropy(label, targets['label'])
+        # loss_label = F.cross_entropy(label, targets['label'])
 
-        total_loss = loss_inst + loss_label + loss_bpm + loss_year
+        total_loss = loss_bpm
+        # total_loss = loss_inst + loss_label + loss_bpm + loss_year
 
         outputs['loss'] = {
             'total': total_loss,
             'bpm': loss_bpm,
-            'year': loss_year,
-            'inst': loss_inst,
-            'label': loss_label
+            # 'year': loss_year,
+            # 'inst': loss_inst,
+            # 'label': loss_label
         }
         
         return outputs
