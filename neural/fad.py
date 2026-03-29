@@ -91,7 +91,6 @@ class SpecAugment(nn.Module):
         x = self.time_mask(x)
         x = self.freq_mask(x)
         x = self.freq_mask(x)
-        x = self.freq_mask(x)
         return x
 
 class ConvNeXtBlock(nn.Module):
