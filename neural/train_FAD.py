@@ -224,15 +224,15 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as exec
         executor.submit(lambda x: librosa.load(x, sr=sample_rate)[0], path) for path in paths
     ]
     
-    for future in tqdm(concurrent.futures.as_completed(future_to_path)):
+    for future in tqdm(concurrent.futures.as_completed(future_to_path), total=len(paths)):
         wav = future.result()
         wavs.append(wav)
 
 def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
-        idxs = np.random.choice(paths[:int(0.98 * len(paths))], batch_size)
+        idxs = np.random.randint(int(0.98 * len(paths)), batch_size)
     else:
-        idxs = np.random.choice(paths[int(0.98 * len(paths)):], batch_size)
+        idxs = np.random.choice(int(0.98 * len(paths)), len(paths), batch_size)
     
     x = []
     bpm = []
@@ -240,10 +240,9 @@ def get_batch(split='train', batch_size=batch_size):
     label = []
     inst = []
     for idx in idxs:
-        # wav, _ = librosa.load(idx, sr=sample_rate)
         wav = wavs[idx]
-        beat_path = idx.replace('jazz_data_16000_full_clean', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats')
-        url = idx.split('/')[-1].split('.')[0]
+        beat_path = paths[idx].replace('jazz_data_16000_full_clean', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats')
+        url = paths[idx].split('/')[-1].split('.')[0]
         
         start = np.random.randint(len(wav) - n_samples)
         timestamps = read_beat_timestamps(beat_path)
