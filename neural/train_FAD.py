@@ -212,6 +212,7 @@ def calculate_subset_bpm(timestamps, start_time, end_time):
 import glob
 import librosa
 paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
+wavs = [librosa.load(path, sr=sample_rate)[0] for path in paths]
 
 def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
@@ -225,7 +226,8 @@ def get_batch(split='train', batch_size=batch_size):
     label = []
     inst = []
     for idx in idxs:
-        wav, _ = librosa.load(idx, sr=sample_rate)
+        # wav, _ = librosa.load(idx, sr=sample_rate)
+        wav = wavs[idx]
         beat_path = idx.replace('jazz_data_16000_full_clean', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats')
         url = idx.split('/')[-1].split('.')[0]
         
