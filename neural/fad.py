@@ -169,7 +169,7 @@ class MultiTaskFAD(nn.Module):
         
         return x
 
-    def forward(self, x, targets, task_weights):
+    def forward(self, x, targets, task_weights, target_masks):
         features = self.forward_features(x)
         
         outputs = {}
@@ -189,17 +189,30 @@ class MultiTaskFAD(nn.Module):
         label = self.head_label(label)
         outputs['label'] = label
         
-        # loss_bpm = F.kl_div(F.log_softmax(bpm, dim=-1), targets['bpm'], reduction='batchmean')
-        # loss_year = F.kl_div(F.log_softmax(year, dim=-1), targets['year'], reduction='batchmean')
+        loss_bpm = F.kl_div(F.log_softmax(bpm, dim=-1), targets['bpm'], reduction='none')
+        loss_bpm = loss_bpm.sum(dim=-1) * target_masks['bpm']
+        if target_masks['bpm'].sum() > 0:
+            loss_bpm = loss_bpm.sum() / target_masks['bpm'].sum()
+        else:
+            loss_bpm = torch.tensor(0.0, device=features.device, requires_grad=True)
+            
+        loss_year = F.kl_div(F.log_softmax(year, dim=-1), targets['year'], reduction='none')
+        loss_year = loss_year.sum(dim=-1) * target_masks['year']
+        if target_masks['year'].sum() > 0:
+            loss_year = loss_year.sum() / target_masks['year'].sum()
+        else:
+            loss_year = torch.tensor(0.0, device=features.device, requires_grad=True)
+        
         loss_inst = F.binary_cross_entropy_with_logits(inst, targets['inst'])
+        
         loss_label = F.cross_entropy(label, targets['label'])
 
-        total_loss = loss_inst + loss_label# + loss_bpm + loss_year
+        total_loss = loss_inst + loss_label + loss_bpm + loss_year
 
         outputs['loss'] = {
             'total': total_loss,
-            # 'bpm': loss_bpm,
-            # 'year': loss_year,
+            'bpm': loss_bpm,
+            'year': loss_year,
             'inst': loss_inst,
             'label': loss_label
         }

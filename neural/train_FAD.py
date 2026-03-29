@@ -159,12 +159,17 @@ ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torc
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 def create_gaussian_soft_labels(targets, bins, sigma):
+    valid_mask = (~torch.isnan(targets)) & (targets > 0)
+    targets = torch.where(valid_mask, targets, bins[0])
+    
     targets = targets.unsqueeze(1)
     bins = bins.unsqueeze(0).to(targets.device)
+    
     squared_distances = (bins - targets) ** 2
     gaussian_weights = torch.exp(-squared_distances / (2 * sigma ** 2))
-    soft_labels = gaussian_weights / gaussian_weights.sum(dim=1, keepdim=True)
-    return soft_labels
+    soft_labels = gaussian_weights / (gaussian_weights.sum(dim=1, keepdim=True) + 1e-8)
+    
+    return soft_labels, valid_mask
 
 def read_beat_timestamps(tsv_path):
     """Reads the beat_this TSV file and extracts a list of timestamps."""
@@ -234,10 +239,10 @@ def get_batch(split='train', batch_size=batch_size):
         
     x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
     bpm = torch.from_numpy(np.asarray(bpm).astype(np.float32)).pin_memory().to(device, non_blocking=True)
-    bpm = create_gaussian_soft_labels(bpm, bpm_bins, bpm_sigma)
+    bpm, bpm_mask = create_gaussian_soft_labels(bpm, bpm_bins, bpm_sigma)
     label = torch.from_numpy(np.asarray(label).astype(np.float32)).pin_memory().to(device, non_blocking=True)
     year = torch.from_numpy(np.asarray(year).astype(np.float32)).pin_memory().to(device, non_blocking=True)
-    year = create_gaussian_soft_labels(year, year_bins, year_sigma)
+    year, year_mask = create_gaussian_soft_labels(year, year_bins, year_sigma)
     inst = torch.from_numpy(np.asarray(inst).astype(np.float32)).pin_memory().to(device, non_blocking=True)
     
     targets = {
@@ -246,7 +251,11 @@ def get_batch(split='train', batch_size=batch_size):
         'label': label,
         'inst': inst
     }
-    return x, targets
+    masks = {
+        'bpm': bpm_mask,
+        'year': year_mask
+    }
+    return x, targets, masks
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
@@ -323,9 +332,9 @@ def estimate_loss():
     for i, split in enumerate(['train', 'val']):
         losses = defaultdict(lambda: torch.zeros(eval_iters))
         for k in tqdm(range(eval_iters)):
-            X, targets = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
+            X, targets, masks = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
-                loss = model(X, targets, task_weights)['loss']
+                loss = model(X, targets, task_weights, masks)['loss']
             for key, value in loss.items():
                 losses[key][k] = value.item()
         out[split] = {key: value.mean() for key, value in losses.items()}
@@ -363,7 +372,7 @@ if wandb_log and master_process:
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
-X, targets = get_batch('train') # fetch the very first batch
+X, targets, masks = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
@@ -428,10 +437,10 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            loss = model(X, targets, task_weights)['loss']['total']
+            loss = model(X, targets, task_weights, masks)['loss']['total']
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
-        X, targets = get_batch('train')
+        X, targets, masks = get_batch('train')
         # backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
     # clip the gradient
