@@ -27,12 +27,12 @@ eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
 save_interval = 5000
-eval_iters = 20
+eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = False # disabled by default
+wandb_log = True # disabled by default
 wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
@@ -346,7 +346,7 @@ def estimate_loss():
         for k in tqdm(range(eval_iters)):
             X, targets, masks = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
-                loss = model(X, targets, task_weights, masks)['loss']
+                loss = model(X, targets, masks)['loss']
             for key, value in loss.items():
                 losses[key][k] = value.item()
         out[split] = {key: value.mean() for key, value in losses.items()}
@@ -368,14 +368,6 @@ def get_lr(it):
 
 
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-
-task_weights = {
-    'bpm': 1.0, 
-    'year': 0.5,
-    'instruments': 2.0,
-    'label': 0.5, 
-    'style': 1.0
-}
 
 model.train()
 
@@ -449,7 +441,7 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            loss = model(X, targets, task_weights, masks)['loss']['total']
+            loss = model(X, targets, masks)['loss']['total']
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, targets, masks = get_batch('train')

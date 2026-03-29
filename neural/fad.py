@@ -21,29 +21,20 @@ class GradientBalancer(torch.autograd.Function):
     Intercepts the backward pass to scale gradients based on their EMA norm.
     """
     @staticmethod
-    def forward(ctx, x, ema_tracker, task_name, task_weight):
-        # Store objects for the backward pass
+    def forward(ctx, x, ema_tracker, task_name):
         ctx.ema_tracker = ema_tracker
         ctx.task_name = task_name
-        ctx.task_weight = task_weight
         
         # The forward pass does absolutely nothing to the tensor
         return x.view_as(x)
 
     @staticmethod
     def backward(ctx, grad_output):
-        # 1. Calculate the L2 norm of the incoming gradient from the head
         norm = torch.linalg.norm(grad_output)
         
-        # 2. Update the EMA for this specific task
         ema_norm = ctx.ema_tracker.update(ctx.task_name, norm)
+        scaled_grad = grad_output / (ema_norm + 1e-8)
         
-        # 3. Scale the gradient: (Weight / EMA) * Gradient
-        # We add 1e-8 to prevent division by zero
-        scale_factor = ctx.task_weight / (ema_norm + 1e-8)
-        scaled_grad = grad_output * scale_factor
-        
-        # Return scaled grad for 'x', and None for the other non-tensor arguments
         return scaled_grad, None, None, None
 
 class DropPath(nn.Module):
@@ -169,23 +160,23 @@ class MultiTaskFAD(nn.Module):
         
         return x
 
-    def forward(self, x, targets, task_weights, target_masks):
+    def forward(self, x, targets, target_masks):
         features = self.forward_features(x)
         
         outputs = {}
-        bpm = GradientBalancer.apply(features, self.ema_tracker, 'bpm', task_weights['bpm'])
+        bpm = GradientBalancer.apply(features, self.ema_tracker, 'bpm')
         bpm = self.head_bpm(bpm)
         outputs['bpm'] = bpm
         
-        year = GradientBalancer.apply(features, self.ema_tracker, 'year', task_weights['year'])
+        year = GradientBalancer.apply(features, self.ema_tracker, 'year')
         year = self.head_year(year)
         outputs['year'] = year
         
-        inst = GradientBalancer.apply(features, self.ema_tracker, 'instruments', task_weights['instruments'])
+        inst = GradientBalancer.apply(features, self.ema_tracker, 'instruments')
         inst = self.head_instruments(inst)
         outputs['instruments'] = inst
         
-        label = GradientBalancer.apply(features, self.ema_tracker, 'label', task_weights['label'])
+        label = GradientBalancer.apply(features, self.ema_tracker, 'label')
         label = self.head_label(label)
         outputs['label'] = label
         
@@ -203,7 +194,9 @@ class MultiTaskFAD(nn.Module):
         else:
             loss_year = torch.tensor(0.0, device=features.device, requires_grad=True)
         
-        loss_inst = F.binary_cross_entropy_with_logits(inst, targets['inst'])
+        alpha = 0.2
+        smooth_targets = targets['inst'] * (1.0 - alpha) + (alpha / 2.0)
+        loss_inst = F.binary_cross_entropy_with_logits(inst, smooth_targets)
         
         loss_label = F.cross_entropy(label, targets['label'])
 
