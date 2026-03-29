@@ -218,12 +218,13 @@ wavs = []
     # wavs.append(librosa.load(path, sr=sample_rate)[0])
 
 import concurrent.futures
-with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
+from multiprocessing import cpu_count
+with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
     future_to_path = [
         executor.submit(lambda x: librosa.load(x, sr=sample_rate)[0], path) for path in paths
     ]
     
-    for future in concurrent.futures.as_completed(future_to_path):
+    for future in tqdm(concurrent.futures.as_completed(future_to_path)):
         wav = future.result()
         wavs.append(wav)
 
