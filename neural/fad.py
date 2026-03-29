@@ -70,13 +70,17 @@ class ToMel(nn.Module):
             ),
             T.AmplitudeToDB(top_db=80.0)
         )
-        self.mu = -34.36543
-        self.std = 15.82586
+        # self.mu = -34.36543
+        # self.std = 15.82586
     
     @torch.compiler.disable
     def forward(self, x):
         x = self.transform(x)
-        x = (x - self.mu) / (self.std + 1e-6)
+        
+        mu = x.mean((-1, -2), keepdims=True)
+        std = x.std((-1, -2), keepdims=True)
+        x = (x - mu) / (std + 1e-6)
+        # x = (x - self.mu) / (self.std + 1e-6)
         return x
 
 class SpecAugment(nn.Module):
