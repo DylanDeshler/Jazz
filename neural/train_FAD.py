@@ -214,8 +214,14 @@ wavs = []
 from sklearn.model_selection import StratifiedGroupKFold
 kf = StratifiedGroupKFold(n_splits=20, shuffle=True, random_state=0)
 
+valid_idxs = []
+for path in paths:
+    url = path.split('/')[-1].split('.')[0]
+    valid_idxs.append(url_map[url])
+
 year_bins = [(year // 10) * 10 for year in years]
-strat_key = [f'{year}_{record}' for year, record in zip(years, record_label_names)]
+strat_key = [f'{year}_{record}' for i, (year, record) in enumerate(zip(years, record_label_names)) if i in valid_idxs]
+artists = [artist for artist in enumerate(artists) if i in valid_idxs]
 
 df = pd.DataFrame(strat_key, columns=['key'])
 key_counts = df.value_counts()
