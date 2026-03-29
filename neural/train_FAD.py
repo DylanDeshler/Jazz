@@ -227,9 +227,7 @@ df = pd.DataFrame(strat_key, columns=['key'])
 key_counts = df.value_counts()
 rare_keys = key_counts[key_counts < 2].index
 df.loc[df['key'].isin(rare_keys), 'key'] = 'rare_combo'
-print(len(paths), df.shape, len(artists))
 train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], df['key'], artists))
-print(train_idx.shape, test_idx.shape)
 
 import concurrent.futures
 from multiprocessing import cpu_count
@@ -244,9 +242,9 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as exec
 
 def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
-        idxs = np.random.randint(low=0, high=int(0.98 * len(paths)), size=batch_size)
+        idxs = np.random.choice(train_idx)
     else:
-        idxs = np.random.randint(low=int(0.98 * len(paths)), high=len(paths), size=batch_size)
+        idxs = np.random.choice(test_idx)
     
     x = []
     bpm = []
