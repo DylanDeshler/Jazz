@@ -171,7 +171,7 @@ class MultiTaskFAD(nn.Module):
         
         if self.training:
             x = self.augment(x)
-        print(x.shape)
+        
         for i in range(4):
             if i == 0:
                 x = self.downsample_layers[i][0](x)
@@ -185,7 +185,6 @@ class MultiTaskFAD(nn.Module):
                 x = self.downsample_layers[i][1](x)
                 
             x = self.stages[i](x)
-            print(x.shape)
             
         x = x.mean([-2, -1])
         x = self.norm(x)
@@ -196,20 +195,20 @@ class MultiTaskFAD(nn.Module):
         features = self.forward_features(x)
         
         outputs = {}
-        bpm = GradientBalancer.apply(features, self.ema_tracker, 'bpm')
-        bpm = self.head_bpm(bpm)
+        # bpm = GradientBalancer.apply(features, self.ema_tracker, 'bpm')
+        bpm = self.head_bpm(features)
         outputs['bpm'] = bpm
         
-        year = GradientBalancer.apply(features, self.ema_tracker, 'year')
-        year = self.head_year(year)
+        # year = GradientBalancer.apply(features, self.ema_tracker, 'year')
+        year = self.head_year(features)
         outputs['year'] = year
         
-        inst = GradientBalancer.apply(features, self.ema_tracker, 'instruments')
-        inst = self.head_instruments(inst)
+        # inst = GradientBalancer.apply(features, self.ema_tracker, 'instruments')
+        inst = self.head_instruments(features)
         outputs['instruments'] = inst
         
-        label = GradientBalancer.apply(features, self.ema_tracker, 'label')
-        label = self.head_label(label)
+        # label = GradientBalancer.apply(features, self.ema_tracker, 'label')
+        label = self.head_label(features)
         outputs['label'] = label
         
         loss_bpm = F.kl_div(F.log_softmax(bpm, dim=-1), targets['bpm'], reduction='none')
