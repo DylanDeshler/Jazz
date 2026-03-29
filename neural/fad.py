@@ -80,6 +80,21 @@ class ToMel(nn.Module):
         x = (x - self.mu) / (self.std + 1e-6)
         return x
 
+class SpecAugment(nn.Module):
+    def __init__(self, time_length=32, frequency_length=64):
+        super().__init__()
+        self.time_mask = T.TimeMasking(time_length)
+        self.freq_mask = T.FrequencyMasking(frequency_length)
+    
+    @torch.compiler.disable
+    def forward(self, x):
+        x = self.time_mask(x)
+        x = self.time_mask(x)
+        x = self.freq_mask(x)
+        x = self.freq_mask(x)
+        x = self.freq_mask(x)
+        return x
+
 class ConvNeXtBlock(nn.Module):
     """ConvNeXt Block adapted for 2D Audio Spectrograms"""
     def __init__(self, dim):
@@ -109,6 +124,8 @@ class MultiTaskFAD(nn.Module):
         super().__init__()
         
         self.to_mel = ToMel(16000, n_fft, hop_length, n_mels)
+        self.augment = SpecAugment()
+        
         self.ema_tracker = EMATracker(beta=0.99)
         
         self.downsample_layers = nn.ModuleList()
@@ -131,7 +148,7 @@ class MultiTaskFAD(nn.Module):
                 *[ConvNeXtBlock(dim=dims[i]) for _ in range(depths[i])]
             )
             self.stages.append(stage)
-            
+        
         self.norm = nn.LayerNorm(dims[-1], eps=1e-6)
         
         self.head_bpm = nn.Linear(dims[-1], bpm_bins)
@@ -141,6 +158,10 @@ class MultiTaskFAD(nn.Module):
 
     def forward_features(self, x):
         x = self.to_mel(x)
+        
+        if self.training:
+            x = self.augment(x)
+        
         for i in range(4):
             if i == 0:
                 x = self.downsample_layers[i][0](x)
