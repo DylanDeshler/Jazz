@@ -27,7 +27,7 @@ eval_interval = 2500
 sample_interval = 2500
 log_interval = 100
 save_interval = 2500
-eval_iters = 800
+eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
@@ -38,7 +38,7 @@ wandb_run_name = str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 1
-batch_size = 256
+batch_size = 512
 # model
 n_samples = 16383 * 10
 sample_rate = 16000
