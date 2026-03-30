@@ -58,7 +58,7 @@ rate = 16000
 n_samples = 24576
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 100000 # total number of training iterations
+max_iters = 200000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.999
@@ -201,20 +201,28 @@ train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], df['ke
 
 import concurrent.futures
 from multiprocessing import cpu_count
+wavs = [None] * len(paths)
+
 with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
-    future_to_path = [
-        executor.submit(lambda x: librosa.load(x, sr=rate)[0], path) for path in paths
-    ]
+    future_to_index = {
+        executor.submit(lambda x: librosa.load(x, sr=rate)[0], path): i 
+        for i, path in enumerate(paths)
+    }
     
-    for future in tqdm(concurrent.futures.as_completed(future_to_path), desc='Loading wav files', total=len(paths)):
+    for future in tqdm(concurrent.futures.as_completed(future_to_index), desc='Loading wav files', total=len(paths)):
+        original_index = future_to_index[future]
         wav = future.result()
-        wavs.append(wav)
+        wavs[original_index] = wav
+
+durations = np.asarray([len(wav) for wav in wavs])
+train_durations = durations[train_idx] / np.sum(durations[train_idx])
+test_durations = durations[test_idx] / np.sum(durations[test_idx])
 
 def get_batch(split='train'):
     if split == 'train':
-        idxs = np.random.choice(train_idx, batch_size).tolist()
+        idxs = np.random.choice(train_idx, batch_size, p=train_durations).tolist()
     else:
-        idxs = np.random.choice(test_idx, batch_size).tolist()
+        idxs = np.random.choice(test_idx, batch_size, p=test_durations).tolist()
     
     x = []
     for idx in idxs:
@@ -388,6 +396,7 @@ while True:
                 'model_args': model_args,
                 'iter_num': iter_num,
                 'val_loss': best_val_loss,
+                'best_val_loss': best_val_loss,
                 'config': config,
                 'tokens': tokens_trained,
             }
@@ -399,6 +408,7 @@ while True:
                 'model_args': model_args,
                 'iter_num': iter_num,
                 'val_loss': losses['val']['total'],
+                'best_val_loss': best_val_loss,
                 'config': config,
                 'tokens': tokens_trained,
             }
