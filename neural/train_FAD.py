@@ -38,7 +38,7 @@ wandb_run_name = str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 1
-batch_size = 128
+batch_size = 64
 # model
 n_samples = 16383 * 5
 sample_rate = 16000
@@ -310,7 +310,7 @@ model_args = dict(
     hop_length=hop_length,
     n_mels=n_mels,
     depths=[3, 3, 9, 3],
-    dims=[64, 128, 256, 512],
+    dims=[96, 192, 384, 768],
     drop_path_rate=0.1,
 )
 
