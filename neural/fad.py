@@ -3,39 +3,91 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchaudio.transforms as T
 
-class EMATracker:
-    """Tracks the exponential moving average of gradient norms."""
-    def __init__(self, beta=0.99):
-        self.beta = beta
-        self.emas = {}
+import torch
+import torch.nn as nn
 
-    def update(self, task_name, current_norm):
-        if task_name not in self.emas:
-            self.emas[task_name] = current_norm
-        else:
-            self.emas[task_name] = self.beta * self.emas[task_name] + (1 - self.beta) * current_norm
-        return self.emas[task_name]
-
-class GradientBalancer(torch.autograd.Function):
+class _GradientBalancerFunction(torch.autograd.Function):
     """
-    Intercepts the backward pass to scale gradients based on their EMA norm.
+    The hidden autograd engine that intercepts the gradient flowing from 
+    a specific head down into the shared trunk, scaling it on the fly.
     """
     @staticmethod
-    def forward(ctx, x, ema_tracker, task_name):
-        ctx.ema_tracker = ema_tracker
-        ctx.task_name = task_name
+    def forward(ctx, features, total_buffer, fix_buffer, task_weight, total_weight, ema_decay, total_norm, epsilon):
+        # Save variables for the backward pass
+        ctx.total_buffer = total_buffer
+        ctx.fix_buffer = fix_buffer
+        ctx.task_weight = task_weight
+        ctx.total_weight = total_weight
+        ctx.ema_decay = ema_decay
+        ctx.total_norm = total_norm
+        ctx.epsilon = epsilon
         
-        # The forward pass does absolutely nothing to the tensor
-        return x.view_as(x)
+        # Pass features through untouched during the forward pass
+        return features.clone()
 
     @staticmethod
     def backward(ctx, grad_output):
-        norm = torch.linalg.norm(grad_output)
+        # 1. Compute per-batch-item norm (EnCodec style)
+        dims = tuple(range(1, grad_output.dim()))
+        norm = grad_output.norm(dim=dims).mean()
+        batch_size = grad_output.shape[0]
         
-        ema_norm = ctx.ema_tracker.update(ctx.task_name, norm)
-        scaled_grad = grad_output / (ema_norm + 1e-8)
+        # 2. Update EMA buffers IN-PLACE 
+        # (Using pure tensor ops: no float(), no .item() -> zero graph breaks!)
+        ctx.total_buffer.mul_(ctx.ema_decay).add_(norm * batch_size)
+        ctx.fix_buffer.mul_(ctx.ema_decay).add_(batch_size)
         
-        return scaled_grad, None, None, None
+        # 3. Calculate the smoothed average norm
+        avg_norm = ctx.total_buffer / ctx.fix_buffer
+        
+        # 4. Calculate the EnCodec scaling factor
+        ratio = ctx.task_weight / ctx.total_weight
+        scale = ratio * ctx.total_norm / (ctx.epsilon + avg_norm)
+        
+        # 5. Scale the gradient before it passes down into the trunk
+        grad_input = grad_output * scale
+        
+        # Return gradients for the inputs (None for the hyperparameter arguments)
+        return grad_input, None, None, None, None, None, None, None
+
+
+class GradientBalancer(nn.Module):
+    """
+    A drop-in module that wraps the EnCodec balancing math into an automatic layer.
+    """
+    def __init__(self, weights: dict, ema_decay=0.999, total_norm=1.0, epsilon=1e-12):
+        super().__init__()
+        self.weights = weights
+        self.ema_decay = ema_decay
+        self.total_norm = total_norm
+        self.epsilon = epsilon
+        self.total_weight = sum(weights.values())
+        
+        # Register EMA trackers as PyTorch buffers so they live on the GPU 
+        # and are saved in your model's state_dict
+        for task in weights.keys():
+            self.register_buffer(f'total_{task}', torch.tensor(0.0))
+            self.register_buffer(f'fix_{task}', torch.tensor(0.0))
+
+    def forward(self, features, task_name):
+        """
+        Pass the trunk features through this function before sending them to a head.
+        """
+        # Fetch the specific EMA buffers for this task
+        total_buffer = getattr(self, f'total_{task_name}')
+        fix_buffer = getattr(self, f'fix_{task_name}')
+        task_weight = self.weights[task_name]
+        
+        return _GradientBalancerFunction.apply(
+            features, 
+            total_buffer, 
+            fix_buffer, 
+            task_weight, 
+            self.total_weight, 
+            self.ema_decay, 
+            self.total_norm, 
+            self.epsilon
+        )
 
 class DropPath(nn.Module):
     """Stochastic Depth: Randomly drops paths (blocks) per sample during training."""
@@ -130,7 +182,8 @@ class MultiTaskFAD(nn.Module):
         self.to_mel = ToMel(16000, n_fft, hop_length, n_mels)
         self.augment = SpecAugment()
         
-        self.ema_tracker = EMATracker(beta=0.99)
+        weights = {'bpm': 1, 'label': 1, 'year': 1, 'inst': 1}
+        self.balancer = GradientBalancer(weights=weights)
         
         self.downsample_layers = nn.ModuleList()
         stem = nn.Sequential(
@@ -159,9 +212,9 @@ class MultiTaskFAD(nn.Module):
         self.norm = nn.LayerNorm(dims[-1], eps=1e-6)
         
         self.head_bpm = nn.Linear(dims[-1], bpm_bins)
-        # self.head_year = nn.Linear(dims[-1], year_bins)
-        # self.head_instruments = nn.Linear(dims[-1], num_instruments) 
-        # self.head_label = nn.Linear(dims[-1], num_labels)
+        self.head_year = nn.Linear(dims[-1], year_bins)
+        self.head_instruments = nn.Linear(dims[-1], num_instruments) 
+        self.head_label = nn.Linear(dims[-1], num_labels)
         
         self.apply(self._init_weights)
     
@@ -199,21 +252,17 @@ class MultiTaskFAD(nn.Module):
         features = self.forward_features(x)
         
         outputs = {}
-        # bpm = GradientBalancer.apply(features, self.ema_tracker, 'bpm')
-        bpm = self.head_bpm(features)
+        bpm = self.head_bpm(self.balancer(features, 'bpm'))
         outputs['bpm'] = bpm
         
-        # # year = GradientBalancer.apply(features, self.ema_tracker, 'year')
-        # year = self.head_year(features)
-        # outputs['year'] = year
+        year = self.head_year(self.balancer(features, 'year'))
+        outputs['year'] = year
         
-        # # inst = GradientBalancer.apply(features, self.ema_tracker, 'instruments')
-        # inst = self.head_instruments(features)
-        # outputs['instruments'] = inst
+        inst = self.head_instruments(self.balancer(features, 'inst'))
+        outputs['instruments'] = inst
         
-        # # label = GradientBalancer.apply(features, self.ema_tracker, 'label')
-        # label = self.head_label(features)
-        # outputs['label'] = label
+        label = self.head_label(self.balancer(features, 'label'))
+        outputs['label'] = label
         
         loss_bpm = F.kl_div(F.log_softmax(bpm, dim=-1), targets['bpm'], reduction='none')
         loss_bpm = loss_bpm.sum(dim=-1) * target_masks['bpm']
@@ -222,28 +271,27 @@ class MultiTaskFAD(nn.Module):
         else:
             loss_bpm = torch.tensor(0.0, device=features.device, requires_grad=True)
             
-        # loss_year = F.kl_div(F.log_softmax(year, dim=-1), targets['year'], reduction='none')
-        # loss_year = loss_year.sum(dim=-1) * target_masks['year']
-        # if target_masks['year'].sum() > 0:
-        #     loss_year = loss_year.sum() / target_masks['year'].sum()
-        # else:
-        #     loss_year = torch.tensor(0.0, device=features.device, requires_grad=True)
+        loss_year = F.kl_div(F.log_softmax(year, dim=-1), targets['year'], reduction='none')
+        loss_year = loss_year.sum(dim=-1) * target_masks['year']
+        if target_masks['year'].sum() > 0:
+            loss_year = loss_year.sum() / target_masks['year'].sum()
+        else:
+            loss_year = torch.tensor(0.0, device=features.device, requires_grad=True)
         
-        # alpha = 0.4
-        # smooth_targets = targets['inst'] * (1.0 - alpha) + (alpha / 2.0)
-        # loss_inst = F.binary_cross_entropy_with_logits(inst, smooth_targets)
+        alpha = 0.4
+        smooth_targets = targets['inst'] * (1.0 - alpha) + (alpha / 2.0)
+        loss_inst = F.binary_cross_entropy_with_logits(inst, smooth_targets)
         
-        # loss_label = F.cross_entropy(label, targets['label'])
+        loss_label = F.cross_entropy(label, targets['label'])
 
-        total_loss = loss_bpm
-        # total_loss = loss_inst + loss_label + loss_bpm + loss_year
+        total_loss = loss_inst + loss_label + loss_bpm + loss_year
 
         outputs['loss'] = {
             'total': total_loss,
             'bpm': loss_bpm,
-            # 'year': loss_year,
-            # 'inst': loss_inst,
-            # 'label': loss_label
+            'year': loss_year,
+            'inst': loss_inst,
+            'label': loss_label
         }
         
         return outputs

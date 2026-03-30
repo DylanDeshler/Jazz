@@ -22,15 +22,15 @@ from sklearn.preprocessing import MultiLabelBinarizer
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'FAD_bpm'
+out_dir = 'FAD'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
 save_interval = 5000
-eval_iters = 600
+eval_iters = 800
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir
@@ -40,7 +40,7 @@ dataset = ''
 gradient_accumulation_steps = 1
 batch_size = 256
 # model
-n_samples = 16383 * 5
+n_samples = 16383 * 10
 sample_rate = 16000
 n_fft = 1024
 hop_length = 512
@@ -329,7 +329,7 @@ elif init_from == 'resume':
     model.load_state_dict(state_dict)
     iter_num = checkpoint['iter_num']
     tokens_trained = checkpoint['tokens']
-    # best_val_loss = checkpoint['best_val_loss']
+    best_val_loss = checkpoint['best_val_loss']
 elif init_from.startswith('gpt2'):
     print(f"Initializing from OpenAI GPT-2 weights: {init_from}")
     # initialize from OpenAI GPT-2 weights
