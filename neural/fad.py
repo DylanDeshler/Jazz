@@ -146,6 +146,7 @@ class SpecAugment(nn.Module):
         x = self.time_mask(x)
         x = self.time_mask(x)
         x = self.freq_mask(x)
+        x = self.freq_mask(x)
         return x
 
 class ConvNeXtBlock(nn.Module):
@@ -252,16 +253,20 @@ class MultiTaskFAD(nn.Module):
         features = self.forward_features(x)
         
         outputs = {}
-        bpm = self.head_bpm(self.balancer(features, 'bpm'))
+        # bpm = self.head_bpm(self.balancer(features, 'bpm'))
+        bpm = self.head_bpm(features)
         outputs['bpm'] = bpm
         
-        year = self.head_year(self.balancer(features, 'year'))
+        # year = self.head_year(self.balancer(features, 'year'))
+        year = self.head_year(features)
         outputs['year'] = year
         
-        inst = self.head_instruments(self.balancer(features, 'inst'))
+        # inst = self.head_instruments(self.balancer(features, 'inst'))
+        inst = self.head_instruments(features)
         outputs['instruments'] = inst
         
-        label = self.head_label(self.balancer(features, 'label'))
+        # label = self.head_label(self.balancer(features, 'label'))
+        label = self.head_label(features)
         outputs['label'] = label
         
         loss_bpm = F.kl_div(F.log_softmax(bpm, dim=-1), targets['bpm'], reduction='none')
@@ -270,6 +275,7 @@ class MultiTaskFAD(nn.Module):
             loss_bpm = loss_bpm.sum() / target_masks['bpm'].sum()
         else:
             loss_bpm = torch.tensor(0.0, device=features.device, requires_grad=True)
+        loss_bpm = loss_bpm / 2.4
             
         loss_year = F.kl_div(F.log_softmax(year, dim=-1), targets['year'], reduction='none')
         loss_year = loss_year.sum(dim=-1) * target_masks['year']
@@ -277,12 +283,13 @@ class MultiTaskFAD(nn.Module):
             loss_year = loss_year.sum() / target_masks['year'].sum()
         else:
             loss_year = torch.tensor(0.0, device=features.device, requires_grad=True)
+        loss_label = loss_year / 1.4
         
         alpha = 0.4
         smooth_targets = targets['inst'] * (1.0 - alpha) + (alpha / 2.0)
-        loss_inst = F.binary_cross_entropy_with_logits(inst, smooth_targets)
+        loss_inst = F.binary_cross_entropy_with_logits(inst, smooth_targets) / 0.65
         
-        loss_label = F.cross_entropy(label, targets['label'])
+        loss_label = F.cross_entropy(label, targets['label']) / 20
 
         total_loss = loss_inst + loss_label + loss_bpm + loss_year
 
