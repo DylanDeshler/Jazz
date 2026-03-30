@@ -51,7 +51,7 @@ wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 2 # used to simulate larger batch sizes
+gradient_accumulation_steps = 1 # used to simulate larger batch sizes
 batch_size = 64 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
@@ -388,7 +388,7 @@ while True:
                 "mfu": running_mfu*100, # convert to percentage
                 "tokens": tokens_trained,
             })
-        if iter_num >= 0 and losses['val'] < best_val_loss:
+        if iter_num > 0 and losses['val'] < best_val_loss:
             best_val_loss = losses['val']
             checkpoint = {
                 'model': raw_model.state_dict(),
@@ -401,7 +401,7 @@ while True:
                 'tokens': tokens_trained,
             }
             torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
-        if iter_num >= 0 and always_save_checkpoint:
+        if iter_num > 0 and always_save_checkpoint:
             checkpoint = {
                 'model': raw_model.state_dict(),
                 'optimizer': optimizer.state_dict(),
