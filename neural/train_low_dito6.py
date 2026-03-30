@@ -39,9 +39,9 @@ import glob
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
 out_dir = 'tokenizer_low_large_24576'
-eval_interval = 5000
+eval_interval = 2500
 log_interval = 100
-eval_iters = 400
+eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
@@ -51,7 +51,7 @@ wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 1 # used to simulate larger batch sizes
+gradient_accumulation_steps = 2 # used to simulate larger batch sizes
 batch_size = 64 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
@@ -388,8 +388,8 @@ while True:
                 "mfu": running_mfu*100, # convert to percentage
                 "tokens": tokens_trained,
             })
-        if iter_num > 0 and losses['val']['total'] < best_val_loss:
-            best_val_loss = losses['val']['total']
+        if iter_num >= 0 and losses['val'] < best_val_loss:
+            best_val_loss = losses['val']
             checkpoint = {
                 'model': raw_model.state_dict(),
                 'optimizer': optimizer.state_dict(),
@@ -401,13 +401,13 @@ while True:
                 'tokens': tokens_trained,
             }
             torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
-        if iter_num > 0 and always_save_checkpoint:
+        if iter_num >= 0 and always_save_checkpoint:
             checkpoint = {
                 'model': raw_model.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'model_args': model_args,
                 'iter_num': iter_num,
-                'val_loss': losses['val']['total'],
+                'val_loss': losses['val'],
                 'best_val_loss': best_val_loss,
                 'config': config,
                 'tokens': tokens_trained,
