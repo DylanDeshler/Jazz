@@ -245,13 +245,14 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as exec
         wavs[original_index] = wav
 
 durations = np.asarray([len(wav) for wav in wavs])
-durations = durations / np.sum(durations)
+train_durations = durations[train_idx] / np.sum(durations[train_idx])
+test_durations = durations[test_idx] / np.sum(durations[test_idx])
 
 def get_batch(split='train'):
     if split == 'train':
-        idxs = np.random.choice(train_idx, batch_size, p=durations[train_idx]).tolist()
+        idxs = np.random.choice(train_idx, batch_size, p=train_durations).tolist()
     else:
-        idxs = np.random.choice(test_idx, batch_size, p=durations[test_idx]).tolist()
+        idxs = np.random.choice(test_idx, batch_size, p=test_durations).tolist()
     
     x = []
     bpm = []
