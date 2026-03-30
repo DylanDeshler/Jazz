@@ -47,7 +47,7 @@ hop_length = 512
 n_mels = 192
 # adamw optimizer
 learning_rate = 4e-3 * math.sqrt(batch_size / 4096) # max learning rate
-max_iters = 100000 # total number of training iterations
+max_iters = 200000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.999
@@ -310,7 +310,7 @@ model_args = dict(
     hop_length=hop_length,
     n_mels=n_mels,
     depths=[3, 3, 9, 3],
-    dims=[96, 192, 384, 768],
+    dims=[64, 128, 256, 512],
     drop_path_rate=0.1,
 )
 
