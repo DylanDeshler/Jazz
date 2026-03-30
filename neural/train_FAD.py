@@ -231,20 +231,31 @@ train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], df['ke
 
 import concurrent.futures
 from multiprocessing import cpu_count
+wavs = [None] * len(paths)
+
 with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
-    future_to_path = [
-        executor.submit(lambda x: librosa.load(x, sr=sample_rate)[0], path) for path in paths
-    ]
+    # Map each future to its ORIGINAL index in the paths list
+    future_to_index = {
+        executor.submit(lambda x: librosa.load(x, sr=sample_rate)[0], path): i 
+        for i, path in enumerate(paths)
+    }
     
-    for future in tqdm(concurrent.futures.as_completed(future_to_path), desc='Loading wav files', total=len(paths)):
+    # as_completed allows the progress bar to update smoothly
+    for future in tqdm(concurrent.futures.as_completed(future_to_index), desc='Loading wav files', total=len(paths)):
+        original_index = future_to_index[future]
         wav = future.result()
-        wavs.append(wav)
+        
+        # Slot the loaded audio into its exact correct position
+        wavs[original_index] = wav
+
+durations = np.asarray([len(wav) for wav in wavs])
+durations = durations / np.max(durations)
 
 def get_batch(split='train'):
     if split == 'train':
-        idxs = np.random.choice(train_idx, batch_size).tolist()
+        idxs = np.random.choice(train_idx, batch_size, p=durations[train_idx]).tolist()
     else:
-        idxs = np.random.choice(test_idx, batch_size).tolist()
+        idxs = np.random.choice(test_idx, batch_size, p=durations[test_idx]).tolist()
     
     x = []
     bpm = []
