@@ -234,7 +234,7 @@ import librosa
 paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
 with open('/home/dylan.d/research/music/Jazz/valid_files_by_bpm.json', 'r') as f:
     beat_paths = json.load(f)
-beat_paths = ['/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats' + path for path in beat_paths]
+beat_paths = [os.path.join('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats', path) for path in beat_paths]
 print(len(paths), len(beat_paths))
 print(sorted(paths)[0])
 print(sorted(beat_paths)[0])
