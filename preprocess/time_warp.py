@@ -148,11 +148,7 @@ def generate_audio_measures(paths):
     """
     Clips full measures (Downbeat '1' to the next Downbeat '1').
     """
-    audio_path, beat_path = paths
-    
-    out_path = audio_path.replace('/wavs', '/wavs_measures').replace('.wav', '.npz')
-    if os.path.exists(out_path):
-        return
+    audio_path, beat_path, out_path = paths
     
     beat_data = parse_beat_file(beat_path)
     
@@ -190,22 +186,35 @@ def generate_audio_measures(paths):
         stretch_ratios.append(stretch_ratio)
         instant_bpms.append(instant_bpm)
     
+    # should apply some BPM smoothing and clamp to reasonable range
     if np.mean(instant_bpms) < 40 or np.mean(instant_bpms) > 330:
-        return
+        return None
     
-    np.savez_compressed(
-        out_path, 
-        audio=np.stack(audios, axis=0).astype(np.float16), 
-        ratio=np.array(stretch_ratios, dtype=np.float32), 
-        bpm=np.array(instant_bpms, dtype=np.float32)
+    print(np.stack(audios, axis=0).shape)
+    sf.write(
+        file=out_path, 
+        data=np.stack(audios, axis=0), 
+        samplerate=TARGET_SR,
+        subtype='PCM_16'
     )
+    # np.savez_compressed(
+    #     out_path, 
+    #     audio=np.stack(audios, axis=0).astype(np.float16), 
+    #     ratio=np.array(stretch_ratios, dtype=np.float32), 
+    #     bpm=np.array(instant_bpms, dtype=np.float32)
+    # )
 
 def time_warp_measures():
     print("Gathering files...")
-    # audio_paths = sorted(glob.glob('/home/ubuntu/base/Data/wavs/*.wav'))
-    beat_paths = sorted(glob.glob('/home/ubuntu/base/Data/beats/*.beats'))
-    audio_paths = [path.replace('/beats', '/wavs').replace('.beats', '.wav') for path in beat_paths]
-    print(len(beat_paths), len(audio_paths))
+    beat_paths = sorted(glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats/*.beats'))
+    # import json
+    # with open('/home/dylan.d/research/music/Jazz/valid_files_by_bpm.json', 'r') as f:
+    #     beat_paths = json.load(f)
+    
+    os.makedirs('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures', exist_ok=True)
+    audio_paths = [path.replace('jazz_data_16000_full_clean_beats', 'jazz_data_16000_full_clean').replace('.beats', '.wav') for path in beat_paths]
+    out_paths = [path.replace('jazz_data_16000_full_clean_beats', 'jazz_data_16000_full_clean_measures').replace('.beats', '.wav') for path in beat_paths]
+    print(len(beat_paths), len(audio_paths), len(out_paths))
 
     valid_audio, valid_beats = [], []
     for audio_p, beat_p in tqdm(zip(audio_paths, beat_paths), total=len(audio_paths), desc='Filtering for songs with Time Signature: 4/4 ...'):
@@ -225,8 +234,8 @@ def time_warp_measures():
     assert len(audio_paths) == len(beat_paths)
     
     tasks = []
-    for audio_path, beat_path in zip(audio_paths, beat_paths):
-        tasks.append((audio_path, beat_path))
+    for audio_path, beat_path, out_path in zip(audio_paths, beat_paths, out_paths):
+        tasks.append((audio_path, beat_path, out_path))
         
     print(f"Found {len(tasks)} files. Processing with {NUM_WORKERS} cores...")
     
