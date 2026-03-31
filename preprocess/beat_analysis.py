@@ -452,9 +452,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     if args.mode == 'stats':
-        # Check if user passed a folder
-        # beat_path = '/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats'
-        beat_path = '/home/ubuntu/base/Data/beats'
+        beat_path = '/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats'
         if os.path.isdir(beat_path):
             analyze_folder_stats(beat_path)
         else:
