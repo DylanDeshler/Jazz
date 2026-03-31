@@ -178,6 +178,8 @@ def analyze_folder_stats(folder_path):
     print(f"  Min:    {np.min(bpms):.2f}")
     print(f"  Max:    {np.max(bpms):.2f}")
     print(f"  StdDev: {np.std(bpms):.2f}")
+    valid_files = [s['filename'] for s in all_stats if s['measure_beats_mode'] == 4 and s['bpm_median'] > np.median(bpms) - 2 * np.std(bpms) and s['bpm_median'] < np.median(bpms) + 2 * np.std(bpms)]
+    print(f"  # Files within 2 stds of median BPM: {len(valid_files)}")
     print("-" * 30)
     print("Time Signatures (Detected Measures):")
     if time_sigs:
