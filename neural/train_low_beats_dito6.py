@@ -483,20 +483,31 @@ while True:
                 "mfu": running_mfu*100, # convert to percentage
                 "tokens": tokens_trained,
             })
-        if losses['val'] < best_val_loss or always_save_checkpoint:
+        if iter_num > 0 and losses['val'] < best_val_loss:
             best_val_loss = losses['val']
-            if iter_num > 0:
-                checkpoint = {
-                    'model': raw_model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'model_args': model_args,
-                    'iter_num': iter_num,
-                    'best_val_loss': best_val_loss,
-                    'config': config,
-                    'tokens': tokens_trained,
-                }
-                print(f"saving checkpoint to {out_dir}")
-                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+            checkpoint = {
+                'model': raw_model.state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'model_args': model_args,
+                'iter_num': iter_num,
+                'val_loss': best_val_loss,
+                'best_val_loss': best_val_loss,
+                'config': config,
+                'tokens': tokens_trained,
+            }
+            torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+        if iter_num > 0 and always_save_checkpoint:
+            checkpoint = {
+                'model': raw_model.state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'model_args': model_args,
+                'iter_num': iter_num,
+                'val_loss': losses['val'],
+                'best_val_loss': best_val_loss,
+                'config': config,
+                'tokens': tokens_trained,
+            }
+            torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
 
     if iter_num == 0 and eval_only:
         break
