@@ -192,7 +192,6 @@ def generate_audio_measures(paths):
     if np.mean(instant_bpms) < 40 or np.mean(instant_bpms) > 330:
         return None
     
-    print(np.concatenate(audios, axis=0).shape)
     sf.write(
         file=out_path, 
         data=np.concatenate(audios, axis=0), 
