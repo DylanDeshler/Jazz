@@ -13,7 +13,9 @@ from collections import defaultdict
 TARGET_SR = 16000
 TARGET_SAMPLES = 24576
 TARGET_SIG = 4
-NUM_WORKERS = 48
+
+from multiprocessing import cpu_count
+NUM_WORKERS = cpu_count() // 2
 
 def parse_beat_file(beat_path):
     """
