@@ -234,7 +234,11 @@ import librosa
 # paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
 with open('/home/dylan.d/research/music/Jazz/valid_files_by_bpm.json', 'r') as f:
     paths = json.load(f)
+print(len(paths))
 paths = [path.replace('jazz_data_16000_full_clean_beats', 'jazz_data_16000_full_clean_measures').replace('.beats', '.wav') for path in paths]
+print(len(paths))
+paths = [path for path in paths if os.path.exists(path)]
+print(len(paths))
 wavs = []
 
 from sklearn.model_selection import StratifiedGroupKFold
