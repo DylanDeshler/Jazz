@@ -55,26 +55,28 @@ wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 1 # used to simulate larger batch sizes
-batch_size = 128 # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 64 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
 n_samples = 24576
+TARGET_SIG = 4
+TARGET_BPM = TARGET_SIG / (n_samples / rate) # beats / (target samples / sample rate)
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 115000 # total number of training iterations
+max_iters = 100000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.999
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
 decay_lr = True # whether to decay the learning rate
-warmup_iters = 95000 # how many steps to warm up for
+warmup_iters = 5000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
-device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+device = 'cuda:0' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
@@ -117,28 +119,199 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
-# poor man's data loader
+import pandas as pd
+from collections import defaultdict
+from sklearn.preprocessing import MultiLabelBinarizer
+
+def parse_beat_file(beat_path):
+    """
+    Parses the beat_this output file.
+    Expected format per line: <timestamp> <beat_number>
+    
+    Returns a list of dictionaries: {'time': float, 'beat': int}
+    """
+    beat_data = []
+    with open(beat_path, 'r') as f:
+        for line in f:
+            parts = line.strip().split()
+            if len(parts) >= 1:
+                try:
+                    ts = float(parts[0])
+                    # specific beat number (1, 2, 3, 4)
+                    # Default to 0 if not present
+                    bn = 0 
+                    if len(parts) >= 2:
+                        try:
+                            bn = int(float(parts[1]))
+                        except ValueError:
+                            pass
+                    
+                    beat_data.append({'time': ts, 'beat': bn})
+                except ValueError:
+                    continue
+    
+    return beat_data
+
+def calculate_bpm(beat_path, index):
+    beat_data = parse_beat_file(beat_path)
+    
+    downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
+    
+    start_idx = downbeat_indices[index]
+    end_idx = downbeat_indices[index+1]
+    
+    t_start = beat_data[start_idx]['time']
+    t_end = beat_data[end_idx]['time']
+    
+    frame_start = int(t_start * rate)
+    frame_end = int(t_end * rate)
+    
+    duration_sec = (frame_end - frame_start) / rate
+    instant_bpm = (TARGET_SIG / duration_sec) * 60
+    
+    return instant_bpm
+
+bpm_bins = torch.arange(40, 300, 5, dtype=torch.float32)
+year_bins = torch.arange(1900, 1980, 5, dtype=torch.float32)
+bpm_sigma, year_sigma = 5, 2.5
+
+cards = pickle.load(open('/home/dylan.d/research/music/Jazz/JazzSet.0.9.pkl', "rb"))
+cards = [card for card in cards if card]
+
+years = []
+labels = []
+people = []
+instruments = []
+artists = []
+urls = []
+for card in cards:
+    urls.append(card['URLS'][0]['FILE'].split('/')[-2].split('.')[0])
+    years.append(card['DATE']['YEAR'])
+    labels.append(card['RECORD']['LABEL'])
+    people.append(list(card['PERSONNEL']['PEOPLE'].keys()))
+    instruments.append(list(card['PERSONNEL']['INSTRUMENTS'].keys()))
+    artists.append(card['ARTIST'])
+
+url_map = {url: i for i, url in enumerate(urls)}
+
+# Record labels
+record_label_names = set(list(pd.DataFrame(labels, columns=['LABEL']).value_counts(normalize=True).reset_index()['LABEL'].iloc[:25]))
+record_label_names = [label if label in record_label_names else 'Other' for label in labels]
+mlb = MultiLabelBinarizer().fit(record_label_names)
+record_labels = mlb.transform(record_label_names)
+record_labels = torch.from_numpy(record_labels)
+
+# Instruments
+instrument_map_df = pd.read_csv('/home/dylan.d/research/music/Jazz/instrument_mapping.csv')
+instrument_map_df = instrument_map_df.apply(lambda col: col.astype(str).str.lower())
+instrument_map = {row['Abbreviation']: row['Consolidated_Category'] for i, row in instrument_map_df.iterrows()}
+instrument_categories = set(list(instrument_map.values()))
+
+instrument_labels = defaultdict(list)
+for instrument_list in instruments:
+    categories = {instrument_map[l.lower()] for l in instrument_list if l in instrument_map}
+    for cat in instrument_categories:
+        if cat in categories:
+            instrument_labels[cat].append(True)
+        else:
+            instrument_labels[cat].append(False)
+
+props = pd.DataFrame(instrument_labels, columns=list(instrument_categories)).sum(0)
+instrument_categories = {cat for cat in instrument_categories if props[cat] >= 1000}
+
+instrument_labels = []
+for instrument_list in instruments:
+    categories = {instrument_map[l.lower()] for l in instrument_list if l in instrument_map}
+    categories = categories.intersection(instrument_categories)
+    instrument_labels.append(list(filter(None, categories)))
+
+mlb = MultiLabelBinarizer().fit(instrument_labels)
+instrument_labels = mlb.transform(instrument_labels)
+instrument_labels = torch.from_numpy(instrument_labels)
+
+import json
+import glob
+import librosa
+# paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
+with open('/home/dylan.d/research/music/Jazz/valid_files_by_bpm.json', 'r') as f:
+    paths = json.load(f)
+paths = [path.replace('jazz_data_16000_full_clean_beats', 'jazz_data_16000_full_clean_measures').replace('.beats', '.wav') for path in paths]
+wavs = []
+
+from sklearn.model_selection import StratifiedGroupKFold
+kf = StratifiedGroupKFold(n_splits=20, shuffle=True, random_state=0)
+
+valid_idxs = []
+for path in paths:
+    url = path.split('/')[-1].split('.')[0]
+    valid_idxs.append(url_map[url])
+
+year_keys = [(year // 10) * 10 for year in years]
+strat_key = [f'{year}_{record}' for i, (year, record) in enumerate(zip(year_keys, record_label_names)) if i in valid_idxs]
+artists = [artist for i, artist in enumerate(artists) if i in valid_idxs]
+
+df = pd.DataFrame(strat_key, columns=['key'])
+key_counts = df.value_counts()
+rare_keys = key_counts[key_counts < 2].index
+df.loc[df['key'].isin(rare_keys), 'key'] = 'rare_combo'
+train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], df['key'], artists))
+
+import concurrent.futures
+from multiprocessing import cpu_count
+wavs = [None] * len(paths)
+
+with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
+    future_to_index = {
+        executor.submit(lambda x: librosa.load(x, sr=rate)[0], path): i 
+        for i, path in enumerate(paths)
+    }
+    
+    for future in tqdm(concurrent.futures.as_completed(future_to_index), desc='Loading wav files', total=len(paths)):
+        original_index = future_to_index[future]
+        wav = future.result()
+        wavs[original_index] = wav
+
+durations = np.asarray([len(wav) for wav in wavs])
+train_durations = durations[train_idx] / np.sum(durations[train_idx])
+test_durations = durations[test_idx] / np.sum(durations[test_idx])
+
 def get_batch(split='train'):
-    data = np.memmap('/home/ubuntu/Data/measures_audio.bin', dtype=np.float16, mode='r', shape=(4403211, n_samples))
-    train_n = int(len(data) * 0.98)
     if split == 'train':
-        idxs = torch.randint(train_n, (batch_size,))
+        idxs = np.random.choice(train_idx, batch_size, p=train_durations).tolist()
     else:
-        idxs = torch.randint(train_n, len(data), (batch_size,))
-    batch = torch.from_numpy(np.stack([data[idx] for idx in idxs], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-    return batch
+        idxs = np.random.choice(test_idx, batch_size, p=test_durations).tolist()
+    
+    x = []
+    for idx in idxs:
+        wav = wavs[idx]
+        
+        start = np.random.randint((len(wav) // n_samples) - 1)
+        x.append(wav[start * n_samples:(start + 1) * n_samples])
+        
+    x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+    return x
 
 def get_meta_batch(split='train'):
-    data = np.memmap('/home/ubuntu/Data/measures_audio.bin', dtype=np.float16, mode='r', shape=(4403211, n_samples))
-    meta = np.memmap('/home/ubuntu/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(4403211, 2))
-    train_n = int(len(data) * 0.98)
     if split == 'train':
-        idxs = torch.randint(train_n, (batch_size,))
+        idxs = np.random.choice(train_idx, batch_size, p=train_durations).tolist()
     else:
-        idxs = torch.randint(train_n, len(data), (batch_size,))
-    batch = torch.from_numpy(np.stack([data[idx] for idx in idxs], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-    meta = torch.from_numpy(np.stack([meta[idx] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    return batch, meta
+        idxs = np.random.choice(test_idx, batch_size, p=test_durations).tolist()
+    
+    x = []
+    ratio = []
+    for idx in idxs:
+        wav = wavs[idx]
+        beat_path = paths[idx].replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats')
+        
+        start = np.random.randint((len(wav) // n_samples) - 1)
+        instant_bpm = calculate_bpm(beat_path, start)
+        
+        ratio.append(TARGET_BPM / instant_bpm)
+        x.append(wav[start * n_samples:(start + 1) * n_samples])
+        
+    x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+    ratio = torch.from_numpy(np.asarray(ratio).astype(np.float32)).pin_memory().to(device, non_blocking=True)
+    return x, ratio
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
@@ -259,7 +432,7 @@ def save_samples(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
     
-    X, meta = get_meta_batch('test')
+    X, ratios = get_meta_batch('test')
     model.eval()
     with ctx:
         Y = raw_model.reconstruct(X, n_steps=100)
@@ -267,10 +440,10 @@ def save_samples(step):
     
     X = X.cpu().detach().float().numpy()
     Y = Y.cpu().detach().float().numpy()
-    meta = meta.cpu().detach().numpy()
+    ratios = ratios.cpu().detach().numpy()
 
     for i in range(min(10, len(X))):
-        x, y, ratio = X[i].squeeze(), Y[i].squeeze(), meta[i, 0].item()
+        x, y, ratio = X[i].squeeze(), Y[i].squeeze(), ratios[i].item()
 
         # save .wavs
         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), restore_measure(x, ratio), rate)
