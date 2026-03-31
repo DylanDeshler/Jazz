@@ -183,7 +183,7 @@ def analyze_folder_stats(folder_path):
     valid_files = [s['filename'] for s in all_stats if s['measure_beats_mode'] == 4 and s['bpm_median'] > median_bpm - 2 * std_bpm and s['bpm_median'] < median_bpm + 2 * std_bpm]
     print(f"  # Files within 2 stds of median BPM: {len(valid_files)}")
     import json
-    with open('/home/dylan.d/research/music/Jazz/valid_files_by_bpm.json', 'wb') as f:
+    with open('/home/dylan.d/research/music/Jazz/valid_files_by_bpm.json', 'w') as f:
         json.dump(valid_files, f)
     print("-" * 30)
     print("Time Signatures (Detected Measures):")
