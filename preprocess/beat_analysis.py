@@ -171,6 +171,14 @@ def analyze_folder_stats(folder_path):
     print(f"  Max:    {np.max(bpms):.2f}")
     print(f"  StdDev: {np.std(bpms):.2f}")
     print("-" * 30)
+    print("4/4 BPM Distribution:")
+    bpms = [s['bpm_median'] for s in all_stats if s['measure_beats_mode'] == 4]
+    print(f"  Mean:   {np.mean(bpms):.2f}")
+    print(f"  Median: {np.median(bpms):.2f}")
+    print(f"  Min:    {np.min(bpms):.2f}")
+    print(f"  Max:    {np.max(bpms):.2f}")
+    print(f"  StdDev: {np.std(bpms):.2f}")
+    print("-" * 30)
     print("Time Signatures (Detected Measures):")
     if time_sigs:
         vals, counts = np.unique(time_sigs, return_counts=True)
