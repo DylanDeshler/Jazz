@@ -59,7 +59,7 @@ batch_size = 64 # if gradient_accumulation_steps > 1, this is the micro-batch si
 rate = 16000
 n_samples = 24576
 TARGET_SIG = 4
-TARGET_BPM = TARGET_SIG / (n_samples / rate) # beats / (target samples / sample rate)
+TARGET_BPM = 60 * TARGET_SIG / (n_samples / rate) # beats / (target samples / sample rate)
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 100000 # total number of training iterations
