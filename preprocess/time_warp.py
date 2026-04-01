@@ -246,7 +246,7 @@ def time_warp_measures():
         
     print(f"Found {len(tasks)} files. Processing with {NUM_WORKERS} cores...")
     
-    with ProcessPoolExecutor(max_workers=NUM_WORKERS) as executor:
+    with ProcessPoolExecutor(max_workers=1) as executor:
         list(tqdm(executor.map(generate_audio_measures, tasks), total=len(tasks)))
         
     print("Done!")
