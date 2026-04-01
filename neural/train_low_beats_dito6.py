@@ -155,7 +155,6 @@ def calculate_bpm(beat_path, index):
     beat_data = parse_beat_file(beat_path)
     
     downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
-    print(len(downbeat_indices))
     
     start_idx = downbeat_indices[index]
     end_idx = downbeat_indices[index+1]
@@ -303,17 +302,6 @@ def get_meta_batch(split='train'):
     for idx in idxs:
         wav = wavs[idx]
         beat_path = paths[idx].replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats')
-        
-        beat_data = parse_beat_file(beat_path)
-        downbeat_count = len([b for b in beat_data if b['beat'] == 1])
-        
-        expected_samples = (downbeat_count - 1) * 24576
-        if len(wav) != expected_samples:
-            print(f"\nFound the corrupted file: {paths[original_index]}")
-            print(f"True downbeats in file: {downbeat_count}")
-            print(f"Expected total samples: {expected_samples}")
-            print(f"Actual loaded samples:  {len(wav)}")
-            raise ValueError("Data generation mismatch detected.")
         
         start = np.random.randint((len(wav) // n_samples) - 1)
         print(start, len(wav), n_samples, len(wav) // n_samples)
