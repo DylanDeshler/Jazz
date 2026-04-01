@@ -199,6 +199,8 @@ def generate_audio_measures(paths):
         samplerate=TARGET_SR,
         subtype='PCM_16'
     )
+    y, sr = librosa.load(out_path, sr=None)
+    assert len(y) == len(np.concatenate(audio, axis=0)), f'{len(y)} != {len(np.concatenate(audios, axis=0))} != {(len(downbeat_indices) -1) * TARGET_SAMPLES}'
     # np.savez_compressed(
     #     out_path, 
     #     audio=np.stack(audios, axis=0).astype(np.float16), 
