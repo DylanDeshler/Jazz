@@ -213,7 +213,7 @@ def generate_audio_measures(paths):
 
 def time_warp_measures():
     print("Gathering files...")
-    beat_paths = sorted(glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats/*.beats'))[:64*10]
+    beat_paths = sorted(glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats/*.beats'))[:32]
     # import json
     # with open('/home/dylan.d/research/music/Jazz/valid_files_by_bpm.json', 'r') as f:
     #     beat_paths = json.load(f)
