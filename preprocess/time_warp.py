@@ -199,11 +199,6 @@ def generate_audio_measures(paths):
         samplerate=TARGET_SR,
         subtype='PCM_16'
     )
-    y, sr = librosa.load(out_path, sr=None)
-    print(audio_path)
-    print(beat_path)
-    print(out_path)
-    print('='*60)
     # np.savez_compressed(
     #     out_path, 
     #     audio=np.stack(audios, axis=0).astype(np.float16), 
@@ -223,20 +218,23 @@ def time_warp_measures():
     out_paths = [path.replace('jazz_data_16000_full_clean_beats', 'jazz_data_16000_full_clean_measures').replace('.beats', '.wav') for path in beat_paths]
     print(len(beat_paths), len(audio_paths), len(out_paths))
 
-    valid_audio, valid_beats = [], []
-    for audio_p, beat_p in tqdm(zip(audio_paths, beat_paths), total=len(audio_paths), desc='Filtering for songs with Time Signature: 4/4 ...'):
+    valid_audio, valid_beats, valid_outs = [], [], []
+    for audio_p, beat_p, out_p in tqdm(zip(audio_paths, beat_paths, out_paths), total=len(audio_paths), desc='Filtering for songs with Time Signature: 4/4 ...'):
         beat_data = parse_beat_file(beat_p)
         detected_sig = get_time_signature(beat_data)
         
         if detected_sig == TARGET_SIG:
             valid_audio.append(audio_p)
             valid_beats.append(beat_p)
+            valid_outs.append(out_p)
 
     print(f"Found {len(valid_beats)} matching songs (out of {len(audio_paths)} total).")
     audio_paths = valid_audio
     beat_paths = valid_beats
+    out_paths = valid_outs
     del valid_audio
     del valid_beats
+    del valid_outs
 
     assert len(audio_paths) == len(beat_paths)
     
@@ -246,7 +244,7 @@ def time_warp_measures():
         
     print(f"Found {len(tasks)} files. Processing with {NUM_WORKERS} cores...")
     
-    with ProcessPoolExecutor(max_workers=1) as executor:
+    with ProcessPoolExecutor(max_workers=NUM_WORKERS) as executor:
         list(tqdm(executor.map(generate_audio_measures, tasks), total=len(tasks)))
         
     print("Done!")
