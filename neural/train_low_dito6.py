@@ -38,13 +38,13 @@ import glob
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'tokenizer_low_large_24576'
+out_dir = 'tokenizer_low_large_24576_2std_subset'
 eval_interval = 2500
 log_interval = 100
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -178,7 +178,11 @@ instrument_labels = torch.from_numpy(instrument_labels)
 
 import glob
 import librosa
-paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
+# all data
+# paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
+# 2 std BPM data
+paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
+paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in paths]
 wavs = []
 
 from sklearn.model_selection import StratifiedGroupKFold
@@ -346,7 +350,7 @@ if wandb_log and master_process:
     if init_from == 'scratch':
         wandb.init(project=wandb_project, name=wandb_run_name, config=config)
     elif init_from == 'resume':
-        wandb.init(project=wandb_project, name=wandb_run_name, config=config, id='lyps4qwv', resume='must')
+        wandb.init(project=wandb_project, name=wandb_run_name, config=config, id='', resume='must')
 
 # training loop
 
