@@ -237,14 +237,9 @@ with open('/home/dylan.d/research/music/Jazz/valid_files_by_bpm.json', 'r') as f
     beat_paths = json.load(f)
 beat_paths = [os.path.join('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats', path) for path in beat_paths]
 print(len(paths), len(beat_paths))
-print(sorted(paths)[0])
-print(sorted(beat_paths)[0])
 # paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats') for path in paths if path in beat_paths]
-# print(len(paths))
-# paths = [path for path in paths if os.path.exists(path)]
-# print(len(paths))
 wavs = []
-
+#
 from sklearn.model_selection import StratifiedGroupKFold
 kf = StratifiedGroupKFold(n_splits=20, shuffle=True, random_state=0)
 
