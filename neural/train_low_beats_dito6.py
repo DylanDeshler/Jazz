@@ -40,7 +40,7 @@ import glob
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'tokenizer_low_measures_large_measure'
+out_dir = 'tokenizer_low_measures_2std_subset'
 eval_interval = 5000
 log_interval = 100
 eval_iters = 600
@@ -304,7 +304,6 @@ def get_meta_batch(split='train'):
         beat_path = paths[idx].replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats')
         
         start = np.random.randint((len(wav) // n_samples) - 1)
-        print(start, len(wav), n_samples, len(wav) // n_samples)
         instant_bpm = calculate_bpm(beat_path, start)
         
         ratio.append(TARGET_BPM / instant_bpm)
