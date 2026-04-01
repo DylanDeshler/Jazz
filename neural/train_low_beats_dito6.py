@@ -237,9 +237,8 @@ with open('/home/dylan.d/research/music/Jazz/valid_files_by_bpm.json', 'r') as f
     beat_paths = json.load(f)
 beat_paths = [os.path.join('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats', path) for path in beat_paths]
 print(len(paths), len(beat_paths))
-# paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats') for path in paths if path in beat_paths]
 wavs = []
-#
+
 from sklearn.model_selection import StratifiedGroupKFold
 kf = StratifiedGroupKFold(n_splits=20, shuffle=True, random_state=0)
 
@@ -304,6 +303,17 @@ def get_meta_batch(split='train'):
     for idx in idxs:
         wav = wavs[idx]
         beat_path = paths[idx].replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats')
+        
+        beat_data = parse_beat_file(beat_path)
+        downbeat_count = len([b for b in beat_data if b['beat'] == 1])
+        
+        expected_samples = (downbeat_count - 1) * 24576
+        if len(wav) != expected_samples:
+            print(f"\nFound the corrupted file: {paths[original_index]}")
+            print(f"True downbeats in file: {downbeat_count}")
+            print(f"Expected total samples: {expected_samples}")
+            print(f"Actual loaded samples:  {len(wav)}")
+            raise ValueError("Data generation mismatch detected.")
         
         start = np.random.randint((len(wav) // n_samples) - 1)
         print(start, len(wav), n_samples, len(wav) // n_samples)
