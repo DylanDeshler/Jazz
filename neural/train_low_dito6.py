@@ -183,6 +183,7 @@ import librosa
 # 2 std BPM data
 paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
 paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in paths]
+print(len(paths))
 wavs = []
 
 from sklearn.model_selection import StratifiedGroupKFold
