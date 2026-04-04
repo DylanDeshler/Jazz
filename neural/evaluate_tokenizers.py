@@ -30,6 +30,7 @@ ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torc
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 def load_model(ckpt_path, ModelType):
+    print(f'Loading model {ckpt_path} ...')
     checkpoint = torch.load(ckpt_path, map_location=device)
     tokenizer_args = checkpoint['model_args']
 
