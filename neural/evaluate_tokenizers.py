@@ -16,7 +16,7 @@ from fad import MultiTaskFAD as FAD
 from contrast import Transformer as Contrast
 
 torch.manual_seed(0)
-np.randon.seed(0)
+np.random.seed(0)
 
 rate = 16000
 n_samples = 24576
