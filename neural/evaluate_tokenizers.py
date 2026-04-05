@@ -23,7 +23,7 @@ n_samples = 24576
 TARGET_SIG = 4
 TARGET_BPM = 60 * TARGET_SIG / (n_samples / rate)
 
-device = 'cuda'
+device = 'cpu'
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16'
 device_type = 'cuda' if 'cuda' in device else 'cpu'
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
