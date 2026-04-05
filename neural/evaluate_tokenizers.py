@@ -100,7 +100,7 @@ def calculate_bpm(beat_path, index):
     beat_data = parse_beat_file(beat_path)
     
     downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
-    
+    print(index, len(downbeat_indices))
     start_idx = downbeat_indices[index]
     end_idx = downbeat_indices[index+1]
     
