@@ -121,11 +121,10 @@ measure1 = load_model(os.path.join('tokenizer_low_measures_2std_subset', 'ckpt.p
 fad = load_model(os.path.join('FAD', 'ckpt.pt'), FAD)
 contrast = load_model(os.path.join('contrast_learntmep_instance', 'ckpt.pt'), Contrast)
 
-paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
-paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
-paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in paths]
-
-paths = np.random.choice(paths, 32)
+measure_paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
+audio_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in measure_paths]
+beat_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats') for path in measure_paths]
+idxs = np.random.randint(len(measure_paths), 32)
 
 # wavs = [None] * len(paths)
 
@@ -140,21 +139,28 @@ paths = np.random.choice(paths, 32)
 #         wav = future.result()
 #         wavs[original_index] = wav
 
-for path in tqdm(paths):
-    wav, sr = librosa.load(path)
+for idx in tqdm(idxs):
+    measure_path, audio_path, beat_path = measure_paths[idx], audio_paths[idx], beat_paths[idx]
+    
+    wav, sr = librosa.load(audio_path)
     x = [wav[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(wav) // n_samples)]
     x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-    beat_path = path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats')
-        
-    start = np.random.randint((len(wav) // n_samples) - 1)
+    
+    wav, sr = librosa.load(measure_path)
+    m = [wav[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(wav) // n_samples)]
+    m = torch.from_numpy(np.asarray(m).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+    
     ratios = [TARGET_BPM / calculate_bpm(beat_path, start) for start in range(len(wav) // n_samples)]
     
     with ctx:
         y1 = base1.reconstruct(x, n_steps=100)
         y2 = base2.reconstruct(x, n_steps=100)
-        y3 = measure1.reconstruct(x, n_steps=100)
+        y3 = measure1.reconstruct(m, n_steps=100)
     
     print(y1.shape, y2.shape, y3.shape)
+    
+    fad.forward_features()
+    contrast(features_only=True)
     
     y1 = y1.cpu().detach().float().numpy()
     y2 = y2.cpu().detach().float().numpy()
