@@ -31,7 +31,7 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 def load_model(ckpt_path, ModelType):
     print(f'Loading model {ckpt_path} ...')
-    checkpoint = torch.load(ckpt_path, map_location='cuda')
+    checkpoint = torch.load(ckpt_path, map_location='cpu')
     tokenizer_args = checkpoint['model_args']
 
     model = ModelType(**tokenizer_args)
@@ -119,7 +119,7 @@ def calculate_bpm(beat_path, index):
 # base1 = load_model(os.path.join('tokenizer_low_large_24576', 'ckpt.pt'), Tokenizer)
 ckpt_path = os.path.join('tokenizer_low_large_24576', 'ckpt.pt')
 print(f'Loading model {ckpt_path} ...')
-checkpoint = torch.load(ckpt_path, map_location='cuda')
+checkpoint = torch.load(ckpt_path, map_location='cpu')
 tokenizer_args = checkpoint['model_args']
 
 model = Tokenizer(**tokenizer_args)
