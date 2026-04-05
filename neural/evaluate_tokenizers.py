@@ -154,12 +154,16 @@ for idx in tqdm(idxs):
     m = torch.from_numpy(np.asarray(m).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
     
     ratios = [TARGET_BPM / calculate_bpm(beat_path, start) for start in range((len(wav) // n_samples) - 1)]
+    print('Data loaded!')
     
     with torch.no_grad():
         with ctx:
             y1 = base1.reconstruct(x, n_steps=100)
+            print(y1.shape)
             y2 = base2.reconstruct(x, n_steps=100)
+            print(y2.shape)
             y3 = measure1.reconstruct(m, n_steps=100)
+            print(y3.shape)
     
     print(x.shape, y1.shape, y2.shape, y3.shape)
     
@@ -171,7 +175,6 @@ for idx in tqdm(idxs):
     y1 = y1.cpu().detach().float().numpy()
     y2 = y2.cpu().detach().float().numpy()
     y3 = y3.cpu().detach().float().numpy()
-    ratios = ratios.cpu().detach().numpy()
 
     name = measure_path.split('/')[-1]
     sf.write(
@@ -194,7 +197,7 @@ for idx in tqdm(idxs):
     )
     sf.write(
         file=os.path.join(out_dir, f'measures_{name}'), 
-        data=np.concatenate([restore_measure(y.squeeze(), ratio.item()) for y, ratio in zip(y3, ratios)], axis=0), 
+        data=np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3, ratios)], axis=0), 
         samplerate=rate,
         subtype='PCM_16'
     )
