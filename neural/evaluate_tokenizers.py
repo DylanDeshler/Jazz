@@ -150,7 +150,7 @@ for idx in tqdm(idxs):
     m = [wav[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(wav) // n_samples)]
     m = torch.from_numpy(np.asarray(m).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
     
-    ratios = [TARGET_BPM / calculate_bpm(beat_path, start) for start in range(len(wav) // n_samples)]
+    ratios = [TARGET_BPM / calculate_bpm(beat_path, start) for start in range((len(wav) // n_samples) - 1)]
     
     with ctx:
         y1 = base1.reconstruct(x, n_steps=100)
