@@ -116,23 +116,7 @@ def calculate_bpm(beat_path, index):
     
     return instant_bpm
 
-# base1 = load_model(os.path.join('tokenizer_low_large_24576', 'ckpt.pt'), Tokenizer)
-ckpt_path = os.path.join('tokenizer_low_large_24576', 'ckpt.pt')
-print(f'Loading model {ckpt_path} ...')
-checkpoint = torch.load(ckpt_path, map_location='cpu')
-tokenizer_args = checkpoint['model_args']
-
-model = Tokenizer(**tokenizer_args)
-state_dict = checkpoint['model']
-unwanted_prefix = '_orig_mod.'
-for k,v in list(state_dict.items()):
-    if k.startswith(unwanted_prefix):
-        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-model.load_state_dict(state_dict)
-model.eval()
-model.to(device)
-model = torch.compile(model)
-print('Loaded!')
+base1 = load_model(os.path.join('tokenizer_low_large_24576', 'ckpt.pt'), Tokenizer)
 base2 = load_model(os.path.join('tokenizer_low_large_24576_2std_subset', 'ckpt.pt'), Tokenizer)
 measure1 = load_model(os.path.join('tokenizer_low_measures_2std_subset', 'ckpt.pt'), Tokenizer)
 fad = load_model(os.path.join('FAD', 'ckpt.pt'), FAD)
@@ -171,13 +155,15 @@ for idx in tqdm(idxs):
     
     ratios = [TARGET_BPM / calculate_bpm(beat_path, start) for start in range((len(wav) // n_samples) - 1)]
     
-    with ctx:
-        y1 = base1.reconstruct(x, n_steps=100)
-        y2 = base2.reconstruct(x, n_steps=100)
-        y3 = measure1.reconstruct(m, n_steps=100)
+    with torch.no_grad():
+        with ctx:
+            y1 = base1.reconstruct(x, n_steps=100)
+            y2 = base2.reconstruct(x, n_steps=100)
+            y3 = measure1.reconstruct(m, n_steps=100)
     
     print(x.shape, y1.shape, y2.shape, y3.shape)
     
+    # FAD requires 16383 * 5 samples and contrast requires 16383 * 10 samples
     # fad.forward_features()
     # contrast(features_only=True)
     
