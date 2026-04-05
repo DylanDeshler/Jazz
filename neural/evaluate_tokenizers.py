@@ -142,11 +142,11 @@ idxs = np.random.randint(len(measure_paths), size=32)
 for idx in tqdm(idxs):
     measure_path, audio_path, beat_path = measure_paths[idx], audio_paths[idx], beat_paths[idx]
     
-    wav, sr = librosa.load(audio_path)
+    wav, _ = librosa.load(audio_path, sr=None)
     x = [wav[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(wav) // n_samples)]
     x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
     
-    wav, sr = librosa.load(measure_path)
+    wav, _ = librosa.load(measure_path, sr=None)
     m = [wav[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(wav) // n_samples)]
     m = torch.from_numpy(np.asarray(m).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
     
