@@ -116,7 +116,23 @@ def calculate_bpm(beat_path, index):
     
     return instant_bpm
 
-base1 = load_model(os.path.join('tokenizer_low_large_24576', 'ckpt.pt'), Tokenizer)
+# base1 = load_model(os.path.join('tokenizer_low_large_24576', 'ckpt.pt'), Tokenizer)
+ckpt_path = os.path.join('tokenizer_low_large_24576', 'ckpt.pt')
+print(f'Loading model {ckpt_path} ...')
+checkpoint = torch.load(ckpt_path, map_location='cuda')
+tokenizer_args = checkpoint['model_args']
+
+model = Tokenizer(**tokenizer_args)
+state_dict = checkpoint['model']
+unwanted_prefix = '_orig_mod.'
+for k,v in list(state_dict.items()):
+    if k.startswith(unwanted_prefix):
+        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+model.load_state_dict(state_dict)
+model.eval()
+model.to(device)
+model = torch.compile(model)
+print('Loaded!')
 base2 = load_model(os.path.join('tokenizer_low_large_24576_2std_subset', 'ckpt.pt'), Tokenizer)
 measure1 = load_model(os.path.join('tokenizer_low_measures_2std_subset', 'ckpt.pt'), Tokenizer)
 fad = load_model(os.path.join('FAD', 'ckpt.pt'), FAD)
