@@ -23,7 +23,7 @@ n_samples = 24576
 TARGET_SIG = 4
 TARGET_BPM = 60 * TARGET_SIG / (n_samples / rate)
 
-device = 'cpu'
+device = 'cuda'
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16'
 device_type = 'cuda' if 'cuda' in device else 'cpu'
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
@@ -31,7 +31,7 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 def load_model(ckpt_path, ModelType):
     print(f'Loading model {ckpt_path} ...')
-    checkpoint = torch.load(ckpt_path, map_location=device)
+    checkpoint = torch.load(ckpt_path, map_location='cpu')
     tokenizer_args = checkpoint['model_args']
 
     model = ModelType(**tokenizer_args).to(device)
@@ -100,7 +100,7 @@ def calculate_bpm(beat_path, index):
     beat_data = parse_beat_file(beat_path)
     
     downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
-    print(index, len(downbeat_indices))
+    
     start_idx = downbeat_indices[index]
     end_idx = downbeat_indices[index+1]
     
@@ -139,6 +139,8 @@ idxs = np.random.randint(len(measure_paths), size=32)
 #         wav = future.result()
 #         wavs[original_index] = wav
 
+out_dir = '/home/dylan.d/research/music/Jazz/jazz_data_16000_compare'
+os.makedirs(out_dir, exist_ok=True)
 for idx in tqdm(idxs):
     measure_path, audio_path, beat_path = measure_paths[idx], audio_paths[idx], beat_paths[idx]
     
@@ -157,21 +159,40 @@ for idx in tqdm(idxs):
         y2 = base2.reconstruct(x, n_steps=100)
         y3 = measure1.reconstruct(m, n_steps=100)
     
-    print(y1.shape, y2.shape, y3.shape)
+    print(x.shape, y1.shape, y2.shape, y3.shape)
     
-    fad.forward_features()
-    contrast(features_only=True)
+    # fad.forward_features()
+    # contrast(features_only=True)
     
+    x = x.cpu().detach().float().numpy()
     y1 = y1.cpu().detach().float().numpy()
     y2 = y2.cpu().detach().float().numpy()
     y3 = y3.cpu().detach().float().numpy()
     ratios = ratios.cpu().detach().numpy()
 
-    for y, ratio in zip(y3, ratios):
-        sf.write(
-            file=os.path.join(out_dir, ''), 
-            data=restore_measure(y.squeeze(), ratio.item()), 
-            samplerate=rate,
-            subtype='PCM_16'
-        )
+    name = measure_path.split('/')[-1]
+    sf.write(
+        file=os.path.join(out_dir, f'real_{name}'), 
+        data=x.squeeze(), 
+        samplerate=rate,
+        subtype='PCM_16'
+    )
+    sf.write(
+        file=os.path.join(out_dir, f'base1_{name}'), 
+        data=y1.squeeze(), 
+        samplerate=rate,
+        subtype='PCM_16'
+    )
+    sf.write(
+        file=os.path.join(out_dir, f'base2_{name}'), 
+        data=y2.squeeze(), 
+        samplerate=rate,
+        subtype='PCM_16'
+    )
+    sf.write(
+        file=os.path.join(out_dir, f'measures_{name}'), 
+        data=np.concatenate([restore_measure(y.squeeze(), ratio.item()) for y, ratio in zip(y3, ratios)], axis=0), 
+        samplerate=rate,
+        subtype='PCM_16'
+    )
 
