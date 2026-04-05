@@ -158,11 +158,11 @@ for idx in tqdm(idxs):
     
     with torch.no_grad():
         with ctx:
-            y1 = base1.reconstruct(x, n_steps=100)
+            y1 = base1.reconstruct(x, n_steps=1)
             print(y1.shape)
-            y2 = base2.reconstruct(x, n_steps=100)
+            y2 = base2.reconstruct(x, n_steps=1)
             print(y2.shape)
-            y3 = measure1.reconstruct(m, n_steps=100)
+            y3 = measure1.reconstruct(m, n_steps=1)
             print(y3.shape)
     
     print(x.shape, y1.shape, y2.shape, y3.shape)
