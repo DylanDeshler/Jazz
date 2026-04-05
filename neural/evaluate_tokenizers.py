@@ -158,11 +158,11 @@ for idx in tqdm(idxs):
     
     with torch.no_grad():
         with ctx:
-            y1 = base1.reconstruct(x, n_steps=1)
+            y1 = base1.reconstruct(x, n_steps=100)
             print(y1.shape)
-            y2 = base2.reconstruct(x, n_steps=1)
+            y2 = base2.reconstruct(x, n_steps=100)
             print(y2.shape)
-            y3 = measure1.reconstruct(m, n_steps=1)
+            y3 = measure1.reconstruct(m, n_steps=100)
             print(y3.shape)
     
     print(x.shape, y1.shape, y2.shape, y3.shape)
@@ -179,19 +179,19 @@ for idx in tqdm(idxs):
     name = measure_path.split('/')[-1]
     sf.write(
         file=os.path.join(out_dir, f'real_{name}'), 
-        data=x.squeeze(), 
+        data=x.flatten(), 
         samplerate=rate,
         subtype='PCM_16'
     )
     sf.write(
         file=os.path.join(out_dir, f'base1_{name}'), 
-        data=y1.squeeze(), 
+        data=y1.flatten(), 
         samplerate=rate,
         subtype='PCM_16'
     )
     sf.write(
         file=os.path.join(out_dir, f'base2_{name}'), 
-        data=y2.squeeze(), 
+        data=y2.flatten(), 
         samplerate=rate,
         subtype='PCM_16'
     )
