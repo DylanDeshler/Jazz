@@ -23,7 +23,7 @@ n_samples = 24576
 TARGET_SIG = 4
 TARGET_BPM = 60 * TARGET_SIG / (n_samples / rate)
 
-device = 'cpu'
+device = 'cuda'
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16'
 device_type = 'cuda' if 'cuda' in device else 'cpu'
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
@@ -31,10 +31,10 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 def load_model(ckpt_path, ModelType):
     print(f'Loading model {ckpt_path} ...')
-    checkpoint = torch.load(ckpt_path, map_location='cpu')
+    checkpoint = torch.load(ckpt_path, map_location='cuda')
     tokenizer_args = checkpoint['model_args']
 
-    model = ModelType(**tokenizer_args).to(device)
+    model = ModelType(**tokenizer_args)
     state_dict = checkpoint['model']
     unwanted_prefix = '_orig_mod.'
     for k,v in list(state_dict.items()):
@@ -42,6 +42,7 @@ def load_model(ckpt_path, ModelType):
             state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
     model.load_state_dict(state_dict)
     model.eval()
+    model.to(device)
     model = torch.compile(model)
     return model
 
