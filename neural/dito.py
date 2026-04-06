@@ -79,6 +79,10 @@ class DiToV5(nn.Module):
         x, z = self.encode(x)
         return self.decode(z, shape=x.shape, n_steps=n_steps, noise=noise)
     
+    def iterative_reconstruct(self, x, n_steps=50, noise=None):
+        x, z = self.encode(x)
+        return self.sampler.iterative_sample(self.unet, (z.shape[0], *x.shape[-2:]), n_steps, net_kwargs={'z_dec': z}, noise=noise)
+    
     def decode(self, z, shape=(1, 24576), n_steps=50, noise=None):
         x = self.sampler.sample(self.unet, (z.shape[0], *shape[-2:]), n_steps, net_kwargs={'z_dec': z}, noise=noise)
         return x
