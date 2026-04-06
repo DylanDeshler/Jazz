@@ -196,7 +196,7 @@ contrast = load_model(os.path.join('contrast_learntmep_instance', 'ckpt.pt'), Co
 measure_paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
 audio_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in measure_paths]
 beat_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats') for path in measure_paths]
-idxs = np.random.randint(len(measure_paths), size=32)
+idxs = np.random.randint(len(measure_paths), size=16)
 
 real_embs = []
 base1_embs = []
@@ -220,10 +220,11 @@ with torch.no_grad():
         # fad.forward_features()
         # contrast(features_only=True)
         
+        noise =torch.randn(x.shape, device=device)
         with ctx:
-            y1 = base1.reconstruct(x, n_steps=10) # noise=torch.randn(shape, device=device)
-            y2 = base2.reconstruct(x, n_steps=10)
-            y3 = measure1.reconstruct(m, n_steps=10)
+            y1 = base1.reconstruct(x, n_steps=10, noise=noise)
+            y2 = base2.reconstruct(x, n_steps=10, noise=noise)
+            y3 = measure1.reconstruct(m, n_steps=10, noise=noise)
         
         
         ratios = [TARGET_BPM / calculate_bpm(beat_path, start) for start in range(len(wav) // n_samples)]
