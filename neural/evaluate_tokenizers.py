@@ -120,7 +120,7 @@ def calculate_bpm(beat_path, index):
 def calculate_embd_statistics(embd_lst):
     if isinstance(embd_lst, list):
         embd_lst = np.array(embd_lst)
-    print(embd_lst.shape)
+    
     mu = np.mean(embd_lst, axis=0)
     sigma = np.cov(embd_lst, rowvar=False)
     return mu, sigma
@@ -221,7 +221,7 @@ with torch.no_grad():
         # contrast(features_only=True)
         
         with ctx:
-            y1 = base1.reconstruct(x, n_steps=10)
+            y1 = base1.reconstruct(x, n_steps=10) # noise=torch.randn(shape, device=device)
             y2 = base2.reconstruct(x, n_steps=10)
             y3 = measure1.reconstruct(m, n_steps=10)
         
@@ -275,3 +275,7 @@ measure1_mu, measure1_sigma = calculate_embd_statistics(np.concatenate(measure1_
 base1_fad = calculate_frechet_distance(base1_mu, base1_sigma, real_mu, real_sigma)
 base2_fad = calculate_frechet_distance(base2_mu, base2_sigma, real_mu, real_sigma)
 measure1_fad = calculate_frechet_distance(measure1_mu, measure1_sigma, real_mu, real_sigma)
+
+print('Base 1 FAD: ', base1_fad)
+print('Base 2 FAD: ', base2_fad)
+print('Measure 1 FAD: ', measure1_fad)
