@@ -184,9 +184,7 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
 def drop_to_multiple(a, multiple):
     B = a.shape[0]
     
-    print(a.shape)
     a = a[:(B // multiple) * multiple].view(B // multiple, 1, -1)
-    print(a.shape)
     return a
 
 base1 = load_model(os.path.join('tokenizer_low_large_24576', 'ckpt.pt'), Tokenizer)
@@ -198,7 +196,7 @@ contrast = load_model(os.path.join('contrast_learntmep_instance', 'ckpt.pt'), Co
 measure_paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
 audio_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in measure_paths]
 beat_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats') for path in measure_paths]
-idxs = np.random.randint(len(measure_paths), size=32)
+idxs = np.random.randint(len(measure_paths), size=8)
 
 # wavs = [None] * len(paths)
 
@@ -230,7 +228,6 @@ with torch.no_grad():
         wav, _ = librosa.load(measure_path, sr=None)
         m = [wav[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(wav) // n_samples)]
         m = torch.from_numpy(np.asarray(m).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-        print('Data loaded!')
         
         # FAD requires 16383 * 5 samples and contrast requires 16383 * 10 samples
         # fad.forward_features()
@@ -243,7 +240,13 @@ with torch.no_grad():
             print(y2.shape)
             y3 = measure1.reconstruct(m, n_steps=10)
             print(y3.shape)
-            
+        
+        ratios = [TARGET_BPM / calculate_bpm(beat_path, start) for start in range((len(wav) // n_samples) - 1)]
+        y3 = np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3.cpu().detach().numpy(), ratios)], axis=0)
+        y3 = torch.from_numpy(y3.astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+        print(y3.shape)
+        
+        with ctx:
             real_emb = fad.forward_features(drop_to_multiple(x, 5))
             base1_emb = fad.forward_features(drop_to_multiple(y1, 5))
             base2_emb = fad.forward_features(drop_to_multiple(y2, 5))
@@ -260,7 +263,6 @@ with torch.no_grad():
         # y2 = y2.cpu().detach().float().numpy()
         # y3 = y3.cpu().detach().float().numpy()
 
-        # ratios = [TARGET_BPM / calculate_bpm(beat_path, start) for start in range((len(wav) // n_samples) - 1)]
         # name = measure_path.split('/')[-1]
         # sf.write(
         #     file=os.path.join(out_dir, f'real_{name}'), 
