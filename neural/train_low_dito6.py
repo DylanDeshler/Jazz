@@ -30,7 +30,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from dito import DiToV4 as Transformer
+from dito import DiToV5 as Transformer
 import soundfile as sf
 import librosa
 import glob
@@ -38,13 +38,13 @@ import glob
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'tokenizer_low_large_24576_2std_subset'
+out_dir = 'tokenizer_low_large_24576'
 eval_interval = 2500
 log_interval = 100
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -58,7 +58,7 @@ rate = 16000
 n_samples = 24576
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 100000 # total number of training iterations
+max_iters = 50000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.999
@@ -179,9 +179,9 @@ instrument_labels = torch.from_numpy(instrument_labels)
 import glob
 import librosa
 # all data
-# paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
+paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
 # 2 std BPM data
-paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
+# paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
 paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in paths]
 print(len(paths))
 wavs = []
