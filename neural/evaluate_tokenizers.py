@@ -196,7 +196,7 @@ contrast = load_model(os.path.join('contrast_learntmep_instance', 'ckpt.pt'), Co
 measure_paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
 audio_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in measure_paths]
 beat_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats') for path in measure_paths]
-idxs = np.random.randint(len(measure_paths), size=4)
+idxs = np.random.randint(len(measure_paths), size=32)
 
 real_embs = []
 base1_embs = []
