@@ -196,7 +196,7 @@ contrast = load_model(os.path.join('contrast_learntmep_instance', 'ckpt.pt'), Co
 measure_paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
 audio_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in measure_paths]
 beat_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats') for path in measure_paths]
-idxs = np.random.randint(len(measure_paths), size=16)
+idxs = np.random.randint(len(measure_paths), size=128)
 
 real_embs = []
 base1_embs = []
@@ -215,19 +215,23 @@ with torch.no_grad():
         wav, _ = librosa.load(measure_path, sr=None)
         m = [wav[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(wav) // n_samples)]
         m = torch.from_numpy(np.asarray(m).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+        ratios = [TARGET_BPM / calculate_bpm(beat_path, start) for start in range(len(wav) // n_samples)]
+        
+        # clamp to max number of tokens
+        x = x[:192]
+        m = m[:192]
+        ratios = ratios[:192]
         
         # FAD requires 16383 * 5 samples and contrast requires 16383 * 10 samples
         # fad.forward_features()
         # contrast(features_only=True)
         
-        noise = None#torch.randn(x.shape, device=device)
+        noise = torch.randn((max(x.shape[0], m.shape[0]), 1, n_samples), device=device)
         with ctx:
-            y1 = base1.reconstruct(x, n_steps=10, noise=noise)
-            y2 = base2.reconstruct(x, n_steps=10, noise=noise)
-            y3 = measure1.reconstruct(m, n_steps=10, noise=noise)
+            y1 = base1.reconstruct(x, n_steps=10, noise=noise[:x.shape[0]])
+            y2 = base2.reconstruct(x, n_steps=10, noise=noise[:x.shape[0]])
+            y3 = measure1.reconstruct(m, n_steps=10, noise=noise[:m.shape[0]])
         
-        
-        ratios = [TARGET_BPM / calculate_bpm(beat_path, start) for start in range(len(wav) // n_samples)]
         y3 = np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3.cpu().detach().numpy(), ratios)], axis=0)
         y3 = torch.from_numpy(y3.astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
@@ -280,3 +284,7 @@ measure1_fad = calculate_frechet_distance(measure1_mu, measure1_sigma, real_mu, 
 print('Base 1 FAD: ', base1_fad)
 print('Base 2 FAD: ', base2_fad)
 print('Measure 1 FAD: ', measure1_fad)
+
+# Base 1 FAD:  46.068807655471866694
+# Base 2 FAD:  46.19946344047392614
+# Measure 1 FAD:  49.728033691220890164
