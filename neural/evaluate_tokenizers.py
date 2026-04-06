@@ -45,7 +45,7 @@ def load_model(ckpt_path, ModelType):
     model.load_state_dict(state_dict)
     model.eval()
     model.to(device)
-    model = torch.compile(model)
+    # model = torch.compile(model)
     return model
 
 def restore_measure(audio, stretch_ratio, sr=16000):
@@ -238,8 +238,11 @@ with torch.no_grad():
         
         with ctx:
             y1 = base1.reconstruct(x, n_steps=100)
+            print(y1.shape)
             y2 = base2.reconstruct(x, n_steps=100)
+            print(y2.shape)
             y3 = measure1.reconstruct(m, n_steps=100)
+            print(y3.shape)
             
             real_emb = fad.forward_features(drop_to_multiple(x, 5))
             base1_emb = fad.forward_features(drop_to_multiple(y1, 5))
