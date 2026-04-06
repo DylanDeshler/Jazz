@@ -25,7 +25,7 @@ n_samples = 24576
 TARGET_SIG = 4
 TARGET_BPM = 60 * TARGET_SIG / (n_samples / rate)
 
-device = 'cuda'
+device = 'cuda:0'
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16'
 device_type = 'cuda' if 'cuda' in device else 'cpu'
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
@@ -33,10 +33,10 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 def load_model(ckpt_path, ModelType):
     print(f'Loading model {ckpt_path} ...')
-    checkpoint = torch.load(ckpt_path, map_location='cpu')
+    checkpoint = torch.load(ckpt_path, map_location=device)
     tokenizer_args = checkpoint['model_args']
 
-    model = ModelType(**tokenizer_args)
+    model = ModelType(**tokenizer_args).to(device)
     state_dict = checkpoint['model']
     unwanted_prefix = '_orig_mod.'
     for k,v in list(state_dict.items()):
@@ -44,8 +44,7 @@ def load_model(ckpt_path, ModelType):
             state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
     model.load_state_dict(state_dict)
     model.eval()
-    model.to(device)
-    # model = torch.compile(model)
+    model = torch.compile(model)
     return model
 
 def restore_measure(audio, stretch_ratio, sr=16000):
@@ -182,9 +181,9 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
             + np.trace(sigma2) - 2 * tr_covmean)
 
 def drop_to_multiple(a, multiple):
-    B = a.shape[0]
-    
-    a = a[:(B // multiple) * multiple].view(B // multiple, 1, -1)
+    a = a.flatten()
+    a = a[:(a.shape[0] // (multiple)) * multiple]
+    a = a.view(-1, 1, multiple)
     return a
 
 base1 = load_model(os.path.join('tokenizer_low_large_24576', 'ckpt.pt'), Tokenizer)
@@ -247,10 +246,10 @@ with torch.no_grad():
         print(y3.shape)
         
         with ctx:
-            real_emb = fad.forward_features(drop_to_multiple(x, 5))
-            base1_emb = fad.forward_features(drop_to_multiple(y1, 5))
-            base2_emb = fad.forward_features(drop_to_multiple(y2, 5))
-            measure1_emb = fad.forward_features(drop_to_multiple(y3, 5))
+            real_emb = fad.forward_features(drop_to_multiple(x, 16383 * 5))
+            base1_emb = fad.forward_features(drop_to_multiple(y1, 16383 * 5))
+            base2_emb = fad.forward_features(drop_to_multiple(y2, 16383 * 5))
+            measure1_emb = fad.forward_features(drop_to_multiple(y3, 16383 * 5))
         
         print(x.shape, y1.shape, y2.shape, y3.shape)
         real_embs.append(real_emb.cpu().detach().numpy())
@@ -258,10 +257,6 @@ with torch.no_grad():
         base2_embs.append(base2_emb.cpu().detach().numpy())
         measure1_embs.append(measure1_emb.cpu().detach().numpy())
         
-        # x = x.cpu().detach().float().numpy()
-        # y1 = y1.cpu().detach().float().numpy()
-        # y2 = y2.cpu().detach().float().numpy()
-        # y3 = y3.cpu().detach().float().numpy()
 
         # name = measure_path.split('/')[-1]
         # sf.write(
