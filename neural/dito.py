@@ -75,9 +75,9 @@ class DiToV5(nn.Module):
         z = self.z_norm(z.transpose(1, 2)).transpose(1, 2)
         return x, z
 
-    def reconstruct(self, x, n_steps=50):
+    def reconstruct(self, x, n_steps=50, noise=None):
         x, z = self.encode(x)
-        return self.decode(z, shape=x.shape, n_steps=n_steps)
+        return self.decode(z, shape=x.shape, n_steps=n_steps, noise=noise)
     
     def decode(self, z, shape=(1, 24576), n_steps=50, noise=None):
         x = self.sampler.sample(self.unet, (z.shape[0], *shape[-2:]), n_steps, net_kwargs={'z_dec': z}, noise=noise)
