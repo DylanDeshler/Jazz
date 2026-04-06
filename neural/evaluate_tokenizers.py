@@ -222,27 +222,20 @@ with torch.no_grad():
         
         with ctx:
             y1 = base1.reconstruct(x, n_steps=10)
-            print(y1.shape)
             y2 = base2.reconstruct(x, n_steps=10)
-            print(y2.shape)
             y3 = measure1.reconstruct(m, n_steps=10)
-            print(y3.shape)
         
-        print(x.shape, y1.shape, y2.shape, y3.shape)
         
         ratios = [TARGET_BPM / calculate_bpm(beat_path, start) for start in range(len(wav) // n_samples)]
         y3 = np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3.cpu().detach().numpy(), ratios)], axis=0)
         y3 = torch.from_numpy(y3.astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-        print(len(ratios), y3.shape)
         
-        print(drop_to_multiple(x, 16383 * 5).shape, drop_to_multiple(y1, 16383 * 5).shape, drop_to_multiple(y3, 16383 * 5).shape)
         with ctx:
             real_emb = fad.forward_features(drop_to_multiple(x, 16383 * 5))
             base1_emb = fad.forward_features(drop_to_multiple(y1, 16383 * 5))
             base2_emb = fad.forward_features(drop_to_multiple(y2, 16383 * 5))
             measure1_emb = fad.forward_features(drop_to_multiple(y3, 16383 * 5))
         
-        print(real_emb.shape, base1_emb.shape, base2_emb.shape, measure1_emb.shape)
         real_embs.append(real_emb.cpu().detach().numpy())
         base1_embs.append(base1_emb.cpu().detach().numpy())
         base2_embs.append(base2_emb.cpu().detach().numpy())
@@ -274,10 +267,10 @@ with torch.no_grad():
         #     subtype='PCM_16'
         # )
 
-real_mu, real_sigma = calculate_embd_statistics(real_embs)
-base1_mu, base1_sigma = calculate_embd_statistics(base1_embs)
-base2_mu, base2_sigma = calculate_embd_statistics(base2_embs)
-measure1_mu, measure1_sigma = calculate_embd_statistics(measure1_embs)
+real_mu, real_sigma = calculate_embd_statistics(np.concatenate(real_embs, axis=0))
+base1_mu, base1_sigma = calculate_embd_statistics(np.concatenate(base1_embs, axis=0))
+base2_mu, base2_sigma = calculate_embd_statistics(np.concatenate(base2_embs, axis=0))
+measure1_mu, measure1_sigma = calculate_embd_statistics(np.concatenate(measure1_embs, axis=0))
 
 base1_fad = calculate_frechet_distance(base1_mu, base1_sigma, real_mu, real_sigma)
 base2_fad = calculate_frechet_distance(base2_mu, base2_sigma, real_mu, real_sigma)
