@@ -196,7 +196,7 @@ contrast = load_model(os.path.join('contrast_learntmep_instance', 'ckpt.pt'), Co
 measure_paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
 audio_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in measure_paths]
 beat_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats') for path in measure_paths]
-idxs = np.random.randint(len(measure_paths), size=8)
+idxs = np.random.randint(len(measure_paths), size=4)
 
 real_embs = []
 base1_embs = []
@@ -221,11 +221,11 @@ with torch.no_grad():
         # contrast(features_only=True)
         
         with ctx:
-            y1 = base1.reconstruct(x, n_steps=50)
+            y1 = base1.reconstruct(x, n_steps=10)
             print(y1.shape)
-            y2 = base2.reconstruct(x, n_steps=50)
+            y2 = base2.reconstruct(x, n_steps=10)
             print(y2.shape)
-            y3 = measure1.reconstruct(m, n_steps=50)
+            y3 = measure1.reconstruct(m, n_steps=10)
             print(y3.shape)
         
         print(x.shape, y1.shape, y2.shape, y3.shape)
@@ -235,6 +235,7 @@ with torch.no_grad():
         y3 = torch.from_numpy(y3.astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         print(len(ratios), y3.shape)
         
+        print(drop_to_multiple(x, 16383 * 5).shape, drop_to_multiple(y1, 16383 * 5).shape, drop_to_multiple(y3, 16383 * 5).shape)
         with ctx:
             real_emb = fad.forward_features(drop_to_multiple(x, 16383 * 5))
             base1_emb = fad.forward_features(drop_to_multiple(y1, 16383 * 5))
