@@ -10,7 +10,9 @@ from multiprocessing import cpu_count
 
 import torch
 import numpy as np
+from scipy import linalg
 from contextlib import nullcontext
+
 from dito import DiToV4 as Tokenizer
 from fad import MultiTaskFAD as FAD
 from contrast import Transformer as Contrast
@@ -116,6 +118,77 @@ def calculate_bpm(beat_path, index):
     
     return instant_bpm
 
+def calculate_embd_statistics(embd_lst):
+    if isinstance(embd_lst, list):
+        embd_lst = np.array(embd_lst)
+    mu = np.mean(embd_lst, axis=0)
+    sigma = np.cov(embd_lst, rowvar=False)
+    return mu, sigma
+
+def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
+    """
+    Adapted from: https://github.com/mseitzer/pytorch-fid/blob/master/src/pytorch_fid/fid_score.py
+
+    Numpy implementation of the Frechet Distance.
+    The Frechet distance between two multivariate Gaussians X_1 ~ N(mu_1, C_1)
+    and X_2 ~ N(mu_2, C_2) is
+            d^2 = ||mu_1 - mu_2||^2 + Tr(C_1 + C_2 - 2*sqrt(C_1*C_2)).
+    Stable version by Dougal J. Sutherland.
+    Params:
+    -- mu1   : Numpy array containing the activations of a layer of the
+            inception net (like returned by the function 'get_predictions')
+            for generated samples.
+    -- mu2   : The sample mean over activations, precalculated on an
+            representative data set.
+    -- sigma1: The covariance matrix over activations for generated samples.
+    -- sigma2: The covariance matrix over activations, precalculated on an
+            representative data set.
+    Returns:
+    --   : The Frechet Distance.
+    """
+
+    mu1 = np.atleast_1d(mu1)
+    mu2 = np.atleast_1d(mu2)
+
+    sigma1 = np.atleast_2d(sigma1)
+    sigma2 = np.atleast_2d(sigma2)
+
+    assert mu1.shape == mu2.shape, \
+        'Training and test mean vectors have different lengths'
+    assert sigma1.shape == sigma2.shape, \
+        'Training and test covariances have different dimensions'
+
+    diff = mu1 - mu2
+
+    # Product might be almost singular
+    covmean, _ = linalg.sqrtm(sigma1.dot(sigma2).astype(complex), disp=False)
+    if not np.isfinite(covmean).all():
+        msg = ('fid calculation produces singular product; '
+                'adding %s to diagonal of cov estimates') % eps
+        print(msg)
+        offset = np.eye(sigma1.shape[0]) * eps
+        covmean = linalg.sqrtm((sigma1 + offset).dot(sigma2 + offset).astype(complex))
+
+    # Numerical error might give slight imaginary component
+    if np.iscomplexobj(covmean):
+        if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
+            m = np.max(np.abs(covmean.imag))
+            raise ValueError('Imaginary component {}'.format(m))
+        covmean = covmean.real
+
+    tr_covmean = np.trace(covmean)
+
+    return (diff.dot(diff) + np.trace(sigma1)
+            + np.trace(sigma2) - 2 * tr_covmean)
+
+def drop_to_multiple(a, multiple):
+    B = a.shape[0]
+    
+    print(a.shape)
+    a = a[:(B // multiple) * multiple].view(B // multiple, multiple, -1)
+    print(a.shape)
+    return a
+
 base1 = load_model(os.path.join('tokenizer_low_large_24576', 'ckpt.pt'), Tokenizer)
 base2 = load_model(os.path.join('tokenizer_low_large_24576_2std_subset', 'ckpt.pt'), Tokenizer)
 measure1 = load_model(os.path.join('tokenizer_low_measures_2std_subset', 'ckpt.pt'), Tokenizer)
@@ -140,65 +213,82 @@ idxs = np.random.randint(len(measure_paths), size=32)
 #         wav = future.result()
 #         wavs[original_index] = wav
 
+real_embs = []
+base1_embs = []
+base2_embs = []
+measure1_embs = []
 out_dir = '/home/dylan.d/research/music/Jazz/jazz_data_16000_compare'
 os.makedirs(out_dir, exist_ok=True)
-for idx in tqdm(idxs):
-    measure_path, audio_path, beat_path = measure_paths[idx], audio_paths[idx], beat_paths[idx]
-    
-    wav, _ = librosa.load(audio_path, sr=None)
-    x = [wav[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(wav) // n_samples)]
-    x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-    
-    wav, _ = librosa.load(measure_path, sr=None)
-    m = [wav[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(wav) // n_samples)]
-    m = torch.from_numpy(np.asarray(m).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-    
-    ratios = [TARGET_BPM / calculate_bpm(beat_path, start) for start in range((len(wav) // n_samples) - 1)]
-    print('Data loaded!')
-    
-    with torch.no_grad():
+with torch.no_grad():
+    for idx in tqdm(idxs):
+        measure_path, audio_path, beat_path = measure_paths[idx], audio_paths[idx], beat_paths[idx]
+        
+        wav, _ = librosa.load(audio_path, sr=None)
+        x = [wav[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(wav) // n_samples)]
+        x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+        
+        wav, _ = librosa.load(measure_path, sr=None)
+        m = [wav[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(wav) // n_samples)]
+        m = torch.from_numpy(np.asarray(m).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+        print('Data loaded!')
+        
+        # FAD requires 16383 * 5 samples and contrast requires 16383 * 10 samples
+        # fad.forward_features()
+        # contrast(features_only=True)
+        
         with ctx:
             y1 = base1.reconstruct(x, n_steps=100)
-            print(y1.shape)
             y2 = base2.reconstruct(x, n_steps=100)
-            print(y2.shape)
             y3 = measure1.reconstruct(m, n_steps=100)
-            print(y3.shape)
-    
-    print(x.shape, y1.shape, y2.shape, y3.shape)
-    
-    # FAD requires 16383 * 5 samples and contrast requires 16383 * 10 samples
-    # fad.forward_features()
-    # contrast(features_only=True)
-    
-    x = x.cpu().detach().float().numpy()
-    y1 = y1.cpu().detach().float().numpy()
-    y2 = y2.cpu().detach().float().numpy()
-    y3 = y3.cpu().detach().float().numpy()
+            
+            real_emb = fad.forward_features(drop_to_multiple(x, 5))
+            base1_emb = fad.forward_features(drop_to_multiple(y1, 5))
+            base2_emb = fad.forward_features(drop_to_multiple(y2, 5))
+            measure1_emb = fad.forward_features(drop_to_multiple(y3, 5))
+        
+        print(x.shape, y1.shape, y2.shape, y3.shape)
+        real_embs.append(real_emb.cpu().detach().numpy())
+        base1_embs.append(base1_emb.cpu().detach().numpy())
+        base2_embs.append(base2_emb.cpu().detach().numpy())
+        measure1_embs.append(measure1_emb.cpu().detach().numpy())
+        
+        # x = x.cpu().detach().float().numpy()
+        # y1 = y1.cpu().detach().float().numpy()
+        # y2 = y2.cpu().detach().float().numpy()
+        # y3 = y3.cpu().detach().float().numpy()
 
-    name = measure_path.split('/')[-1]
-    sf.write(
-        file=os.path.join(out_dir, f'real_{name}'), 
-        data=x.flatten(), 
-        samplerate=rate,
-        subtype='PCM_16'
-    )
-    sf.write(
-        file=os.path.join(out_dir, f'base1_{name}'), 
-        data=y1.flatten(), 
-        samplerate=rate,
-        subtype='PCM_16'
-    )
-    sf.write(
-        file=os.path.join(out_dir, f'base2_{name}'), 
-        data=y2.flatten(), 
-        samplerate=rate,
-        subtype='PCM_16'
-    )
-    sf.write(
-        file=os.path.join(out_dir, f'measures_{name}'), 
-        data=np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3, ratios)], axis=0), 
-        samplerate=rate,
-        subtype='PCM_16'
-    )
+        # ratios = [TARGET_BPM / calculate_bpm(beat_path, start) for start in range((len(wav) // n_samples) - 1)]
+        # name = measure_path.split('/')[-1]
+        # sf.write(
+        #     file=os.path.join(out_dir, f'real_{name}'), 
+        #     data=x.flatten(), 
+        #     samplerate=rate,
+        #     subtype='PCM_16'
+        # )
+        # sf.write(
+        #     file=os.path.join(out_dir, f'base1_{name}'), 
+        #     data=y1.flatten(), 
+        #     samplerate=rate,
+        #     subtype='PCM_16'
+        # )
+        # sf.write(
+        #     file=os.path.join(out_dir, f'base2_{name}'), 
+        #     data=y2.flatten(), 
+        #     samplerate=rate,
+        #     subtype='PCM_16'
+        # )
+        # sf.write(
+        #     file=os.path.join(out_dir, f'measures_{name}'), 
+        #     data=np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3, ratios)], axis=0), 
+        #     samplerate=rate,
+        #     subtype='PCM_16'
+        # )
 
+real_mu, real_sigma = calculate_embd_statistics(real_embs)
+base1_mu, base1_sigma = calculate_embd_statistics(base1_embs)
+base2_mu, base2_sigma = calculate_embd_statistics(base2_embs)
+measure1_mu, measure1_sigma = calculate_embd_statistics(measure1_embs)
+
+base1_fad = calculate_frechet_distance(base1_mu, base1_sigma, real_mu, real_sigma)
+base2_fad = calculate_frechet_distance(base2_mu, base2_sigma, real_mu, real_sigma)
+measure1_fad = calculate_frechet_distance(measure1_mu, measure1_sigma, real_mu, real_sigma)
