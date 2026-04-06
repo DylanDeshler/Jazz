@@ -220,7 +220,7 @@ with torch.no_grad():
         # fad.forward_features()
         # contrast(features_only=True)
         
-        noise =torch.randn(x.shape, device=device)
+        noise = None#torch.randn(x.shape, device=device)
         with ctx:
             y1 = base1.reconstruct(x, n_steps=10, noise=noise)
             y2 = base2.reconstruct(x, n_steps=10, noise=noise)
