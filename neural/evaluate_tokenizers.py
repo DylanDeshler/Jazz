@@ -233,7 +233,7 @@ with torch.no_grad():
         ratios = [TARGET_BPM / calculate_bpm(beat_path, start) for start in range(len(wav) // n_samples)]
         y3 = np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3.cpu().detach().numpy(), ratios)], axis=0)
         y3 = torch.from_numpy(y3.astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-        print(y3.shape)
+        print(len(ratios), y3.shape)
         
         with ctx:
             real_emb = fad.forward_features(drop_to_multiple(x, 16383 * 5))
