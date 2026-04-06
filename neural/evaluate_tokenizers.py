@@ -120,6 +120,7 @@ def calculate_bpm(beat_path, index):
 def calculate_embd_statistics(embd_lst):
     if isinstance(embd_lst, list):
         embd_lst = np.array(embd_lst)
+    print(embd_lst.shape)
     mu = np.mean(embd_lst, axis=0)
     sigma = np.cov(embd_lst, rowvar=False)
     return mu, sigma
@@ -197,19 +198,6 @@ audio_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16
 beat_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats') for path in measure_paths]
 idxs = np.random.randint(len(measure_paths), size=8)
 
-# wavs = [None] * len(paths)
-
-# with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
-#     future_to_index = {
-#         executor.submit(lambda x: librosa.load(x, sr=rate)[0], path): i 
-#         for i, path in enumerate(paths)
-#     }
-    
-#     for future in tqdm(concurrent.futures.as_completed(future_to_index), desc='Loading wav files', total=len(paths)):
-#         original_index = future_to_index[future]
-#         wav = future.result()
-#         wavs[original_index] = wav
-
 real_embs = []
 base1_embs = []
 base2_embs = []
@@ -233,12 +221,14 @@ with torch.no_grad():
         # contrast(features_only=True)
         
         with ctx:
-            y1 = base1.reconstruct(x, n_steps=10)
+            y1 = base1.reconstruct(x, n_steps=50)
             print(y1.shape)
-            y2 = base2.reconstruct(x, n_steps=10)
+            y2 = base2.reconstruct(x, n_steps=50)
             print(y2.shape)
-            y3 = measure1.reconstruct(m, n_steps=10)
+            y3 = measure1.reconstruct(m, n_steps=50)
             print(y3.shape)
+        
+        print(x.shape, y1.shape, y2.shape, y3.shape)
         
         ratios = [TARGET_BPM / calculate_bpm(beat_path, start) for start in range((len(wav) // n_samples) - 1)]
         y3 = np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3.cpu().detach().numpy(), ratios)], axis=0)
@@ -251,12 +241,11 @@ with torch.no_grad():
             base2_emb = fad.forward_features(drop_to_multiple(y2, 16383 * 5))
             measure1_emb = fad.forward_features(drop_to_multiple(y3, 16383 * 5))
         
-        print(x.shape, y1.shape, y2.shape, y3.shape)
+        print(real_emb.shape, base1_emb.shape, base2_emb.shape, measure1_emb.shape)
         real_embs.append(real_emb.cpu().detach().numpy())
         base1_embs.append(base1_emb.cpu().detach().numpy())
         base2_embs.append(base2_emb.cpu().detach().numpy())
         measure1_embs.append(measure1_emb.cpu().detach().numpy())
-        
 
         # name = measure_path.split('/')[-1]
         # sf.write(
