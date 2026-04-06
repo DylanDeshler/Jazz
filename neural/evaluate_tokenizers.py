@@ -13,7 +13,7 @@ import numpy as np
 from scipy import linalg
 from contextlib import nullcontext
 
-from dito import DiToV4 as Tokenizer
+from dito import DiToV5 as Tokenizer
 from fad import MultiTaskFAD as FAD
 from contrast import Transformer as Contrast
 
@@ -185,7 +185,7 @@ def drop_to_multiple(a, multiple):
     B = a.shape[0]
     
     print(a.shape)
-    a = a[:(B // multiple) * multiple].view(B // multiple, multiple, -1)
+    a = a[:(B // multiple) * multiple].view(B // multiple, 1, -1)
     print(a.shape)
     return a
 
@@ -237,11 +237,11 @@ with torch.no_grad():
         # contrast(features_only=True)
         
         with ctx:
-            y1 = base1.reconstruct(x, n_steps=100)
+            y1 = base1.reconstruct(x, n_steps=10)
             print(y1.shape)
-            y2 = base2.reconstruct(x, n_steps=100)
+            y2 = base2.reconstruct(x, n_steps=10)
             print(y2.shape)
-            y3 = measure1.reconstruct(m, n_steps=100)
+            y3 = measure1.reconstruct(m, n_steps=10)
             print(y3.shape)
             
             real_emb = fad.forward_features(drop_to_multiple(x, 5))
