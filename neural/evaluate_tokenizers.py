@@ -1,8 +1,10 @@
 import os
 import glob
+import math
 import librosa
 import soundfile as sf
 from tqdm import tqdm
+from collections import defaultdict
 
 import concurrent.futures
 import pyrubberband as pyrb
@@ -120,7 +122,7 @@ def calculate_bpm(beat_path, index):
 def calculate_embd_statistics(embd_lst):
     if isinstance(embd_lst, list):
         embd_lst = np.array(embd_lst)
-    
+    print(embd_lst.shape)
     mu = np.mean(embd_lst, axis=0)
     sigma = np.cov(embd_lst, rowvar=False)
     return mu, sigma
@@ -196,7 +198,8 @@ contrast = load_model(os.path.join('contrast_learntmep_instance', 'ckpt.pt'), Co
 measure_paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
 audio_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in measure_paths]
 beat_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats') for path in measure_paths]
-idxs = np.random.randint(len(measure_paths), size=128)
+idxs = np.random.randint(len(measure_paths), size=4)
+n_steps = 16
 
 real_embs = []
 base1_embs = []
@@ -228,23 +231,33 @@ with torch.no_grad():
         
         noise = torch.randn((max(x.shape[0], m.shape[0]), 1, n_samples), device=device)
         with ctx:
-            y1 = base1.reconstruct(x, n_steps=10, noise=noise[:x.shape[0]])
-            y2 = base2.reconstruct(x, n_steps=10, noise=noise[:x.shape[0]])
-            y3 = measure1.reconstruct(m, n_steps=10, noise=noise[:m.shape[0]])
-        
-        y3 = np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3.cpu().detach().numpy(), ratios)], axis=0)
-        y3 = torch.from_numpy(y3.astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-        
-        with ctx:
+            y1 = base1.iterative_reconstruct(x, n_steps=n_steps, noise=noise[:x.shape[0]])
+            y2 = base2.iterative_reconstruct(x, n_steps=n_steps, noise=noise[:x.shape[0]])
+            y3 = measure1.iterative_reconstruct(m, n_steps=n_steps, noise=noise[:m.shape[0]])
+            
             real_emb = fad.forward_features(drop_to_multiple(x, 16383 * 5))
-            base1_emb = fad.forward_features(drop_to_multiple(y1, 16383 * 5))
-            base2_emb = fad.forward_features(drop_to_multiple(y2, 16383 * 5))
-            measure1_emb = fad.forward_features(drop_to_multiple(y3, 16383 * 5))
+        
+        y3 = [np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3_element.cpu().detach().numpy(), ratios)], axis=0) for y3_element in y3]
+        y3 = [torch.from_numpy(y3_element.astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True) for y3_element in y3]
+        
+        base1_emb, base2_emb, measure1_emb = [], [], []
+        for exponent in range(math.floor(math.log2(n_steps)) + 1):
+            step = 2 ** exponent - 1
+            if step >= len(y1):
+                break
+            
+            with ctx:
+                base1_emb.append(fad.forward_features(drop_to_multiple(y1[step], 16383 * 5)))
+                base2_emb.append(fad.forward_features(drop_to_multiple(y2[step], 16383 * 5)))
+                measure1_emb.append(fad.forward_features(drop_to_multiple(y3[step], 16383 * 5)))
+        
+        # y3 = np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3.cpu().detach().numpy(), ratios)], axis=0)
+        # y3 = torch.from_numpy(y3.astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
         real_embs.append(real_emb.cpu().detach().numpy())
-        base1_embs.append(base1_emb.cpu().detach().numpy())
-        base2_embs.append(base2_emb.cpu().detach().numpy())
-        measure1_embs.append(measure1_emb.cpu().detach().numpy())
+        base1_embs.append(torch.stack(base1_emb, dim=1).cpu().detach().numpy())
+        base2_embs.append(torch.stack(base2_emb, dim=1).cpu().detach().numpy())
+        measure1_embs.append(torch.stack(measure1_emb, dim=1).cpu().detach().numpy())
 
         # name = measure_path.split('/')[-1]
         # sf.write(
@@ -272,18 +285,29 @@ with torch.no_grad():
         #     subtype='PCM_16'
         # )
 
+fads = defaultdict(list)
+
 real_mu, real_sigma = calculate_embd_statistics(np.concatenate(real_embs, axis=0))
-base1_mu, base1_sigma = calculate_embd_statistics(np.concatenate(base1_embs, axis=0))
-base2_mu, base2_sigma = calculate_embd_statistics(np.concatenate(base2_embs, axis=0))
-measure1_mu, measure1_sigma = calculate_embd_statistics(np.concatenate(measure1_embs, axis=0))
 
-base1_fad = calculate_frechet_distance(base1_mu, base1_sigma, real_mu, real_sigma)
-base2_fad = calculate_frechet_distance(base2_mu, base2_sigma, real_mu, real_sigma)
-measure1_fad = calculate_frechet_distance(measure1_mu, measure1_sigma, real_mu, real_sigma)
+for exponent in range(math.floor(math.log2(n_steps)) + 1):
+    base1_mu, base1_sigma = calculate_embd_statistics(np.concatenate(base1_embs, axis=0)[:, exponent])
+    base2_mu, base2_sigma = calculate_embd_statistics(np.concatenate(base2_embs, axis=0)[:, exponent])
+    measure1_mu, measure1_sigma = calculate_embd_statistics(np.concatenate(measure1_embs, axis=0)[:, exponent])
 
-print('Base 1 FAD: ', base1_fad)
-print('Base 2 FAD: ', base2_fad)
-print('Measure 1 FAD: ', measure1_fad)
+    base1_fad = calculate_frechet_distance(base1_mu, base1_sigma, real_mu, real_sigma)
+    base2_fad = calculate_frechet_distance(base2_mu, base2_sigma, real_mu, real_sigma)
+    measure1_fad = calculate_frechet_distance(measure1_mu, measure1_sigma, real_mu, real_sigma)
+    
+    fads['base1'].append(base1_fad)
+    fads['base2'].append(base2_fad)
+    fads['measure1'].append(measure1_fad)
+
+    print('='*60)
+    print(f'Step {2 ** exponent}')
+    print('='*60)
+    print('Base 1 FAD: ', base1_fad)
+    print('Base 2 FAD: ', base2_fad)
+    print('Measure 1 FAD: ', measure1_fad)
 
 # Base 1 FAD:  46.068807655471866694
 # Base 2 FAD:  46.19946344047392614
