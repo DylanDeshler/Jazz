@@ -258,6 +258,7 @@ with torch.no_grad():
             else:
                 real_inputs = librosa.resample(drop_to_multiple(x, rate * 10).squeeze().cpu().detach().numpy(), orig_sr=rate, target_sr=48000)
                 real_inputs = [a for a in real_inputs]
+                print(real_inputs[0].shape)
                 real_emb = clap_model.get_audio_features(**clap_processor(audios=real_inputs, sampling_rate=48000, return_tensors="pt").to(device))
                 
                 base1_inputs = librosa.resample(drop_to_multiple(y1, rate * 10).squeeze().cpu().detach().numpy(), orig_sr=rate, target_sr=48000)
