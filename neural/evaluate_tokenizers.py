@@ -124,7 +124,7 @@ def calculate_bpm(beat_path, index):
 def calculate_embd_statistics(embd_lst):
     if isinstance(embd_lst, list):
         embd_lst = np.array(embd_lst)
-    print(embd_lst.shape)
+    
     mu = np.mean(embd_lst, axis=0)
     sigma = np.cov(embd_lst, rowvar=False)
     return mu, sigma
@@ -202,7 +202,7 @@ clap_processor = ClapProcessor.from_pretrained("laion/larger_clap_music")
 measure_paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
 audio_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in measure_paths]
 beat_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats') for path in measure_paths]
-idxs = np.random.randint(len(measure_paths), size=4)
+idxs = np.random.randint(len(measure_paths), size=128)
 n_steps = 32
 EVAL_ITERATIVE = False
 USE_CLAP = False
