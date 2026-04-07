@@ -205,6 +205,7 @@ audio_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16
 beat_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats') for path in measure_paths]
 idxs = np.random.randint(len(measure_paths), size=128)
 n_steps = 32
+batch_size = 32
 EVAL_ITERATIVE = False
 USE_CLAP = True
 
@@ -232,9 +233,9 @@ with torch.no_grad():
         ratios = [TARGET_BPM / calculate_bpm(beat_path, start) for start in range(len(wav) // n_samples)]
         
         # clamp to max number of tokens
-        x = x[:192]
-        m = m[:192]
-        ratios = ratios[:192]
+        x = x[:batch_size]
+        m = m[:batch_size]
+        ratios = ratios[:batch_size]
         
         ## Standard approach
         if not EVAL_ITERATIVE:
