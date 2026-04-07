@@ -48,7 +48,8 @@ def load_model(ckpt_path, ModelType):
             state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
     model.load_state_dict(state_dict)
     model.eval()
-    model = torch.compile(model)
+    if 'cuda' in device:
+        model = torch.compile(model)
     return model
 
 def restore_measure(audio, stretch_ratio, sr=16000):
