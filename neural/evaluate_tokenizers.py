@@ -205,7 +205,7 @@ beat_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_160
 idxs = np.random.randint(len(measure_paths), size=4)
 n_steps = 32
 EVAL_ITERATIVE = False
-USE_CLAP = True
+USE_CLAP = False
 
 # FAD requires 16383 * 5 samples and contrast requires 16383 * 10 samples
 # fad.forward_features()
@@ -270,7 +270,6 @@ with torch.no_grad():
                 measure1_inputs = librosa.resample(drop_to_multiple(y3, rate * 10).squeeze().cpu().detach().numpy(), orig_sr=rate, target_sr=48000)
                 measure1_emb = clap_model.get_audio_features(**clap_processor(audios=measure1_inputs, sampling_rate=48000, return_tensors="pt").to(device))
             
-            print(real_emb.shape, base1_emb.shape, base2_emb.shape, measure1_emb.shape)
             real_embs.append(real_emb.cpu().detach().numpy())
             base1_embs.append(base1_emb.cpu().detach().numpy())
             base2_embs.append(base2_emb.cpu().detach().numpy())
