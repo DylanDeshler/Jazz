@@ -257,18 +257,18 @@ with torch.no_grad():
             # Laion-CLAP embs
             else:
                 real_inputs = librosa.resample(drop_to_multiple(x, rate * 10).squeeze().cpu().detach().numpy(), orig_sr=rate, target_sr=48000)
-                real_emb = [clap_model.get_audio_features(**clap_processor(audios=inputs, sampling_rate=48000, return_tensors="np").to(device)) for inputs in real_inputs]
+                real_emb = [clap_model.get_audio_features(**clap_processor(audios=inputs, sampling_rate=48000, return_tensors="pt").to(device)) for inputs in real_inputs]
                 
                 base1_inputs = librosa.resample(drop_to_multiple(y1, rate * 10).squeeze().cpu().detach().numpy(), orig_sr=rate, target_sr=48000)
-                base1_emb = [clap_model.get_audio_features(**clap_processor(audios=inputs, sampling_rate=48000, return_tensors="np").to(device)) for inputs in base1_inputs]
+                base1_emb = [clap_model.get_audio_features(**clap_processor(audios=inputs, sampling_rate=48000, return_tensors="pt").to(device)) for inputs in base1_inputs]
                 
                 base2_inputs = librosa.resample(drop_to_multiple(y2, rate * 10).squeeze().cpu().detach().numpy(), orig_sr=rate, target_sr=48000)
-                base2_emb = [clap_model.get_audio_features(**clap_processor(audios=inputs, sampling_rate=48000, return_tensors="np").to(device)) for inputs in base2_inputs]
+                base2_emb = [clap_model.get_audio_features(**clap_processor(audios=inputs, sampling_rate=48000, return_tensors="pt").to(device)) for inputs in base2_inputs]
                 
                 measure1_inputs = librosa.resample(drop_to_multiple(y3, rate * 10).squeeze().cpu().detach().numpy(), orig_sr=rate, target_sr=48000)
-                measure1_emb = [clap_model.get_audio_features(**clap_processor(audios=inputs, sampling_rate=48000, return_tensors="np").to(device)) for inputs in measure1_inputs]
+                measure1_emb = [clap_model.get_audio_features(**clap_processor(audios=inputs, sampling_rate=48000, return_tensors="pt").to(device)) for inputs in measure1_inputs]
                 
-                print(np.concatenate(real_emb, axis=0).shape)
+                print(torch.cat(real_emb, axis=0).shape)
             
             real_embs.append(real_emb.cpu().detach().numpy())
             base1_embs.append(base1_emb.cpu().detach().numpy())
