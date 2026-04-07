@@ -29,7 +29,7 @@ n_samples = 24576
 TARGET_SIG = 4
 TARGET_BPM = 60 * TARGET_SIG / (n_samples / rate)
 
-device = 'cuda:0'
+device = 'cpu'
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16'
 device_type = 'cuda' if 'cuda' in device else 'cpu'
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
@@ -203,7 +203,7 @@ measure_paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_ful
 audio_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in measure_paths]
 beat_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats') for path in measure_paths]
 idxs = np.random.randint(len(measure_paths), size=128)
-n_steps = 32
+n_steps = 1
 EVAL_ITERATIVE = False
 USE_CLAP = False
 
@@ -257,18 +257,18 @@ with torch.no_grad():
             # Laion-CLAP embs
             else:
                 real_inputs = librosa.resample(drop_to_multiple(x, rate * 10).squeeze().cpu().detach().numpy(), orig_sr=rate, target_sr=48000)
-                real_inputs = [a for a in real_inputs]
-                print(real_inputs[0].shape)
-                real_emb = clap_model.get_audio_features(**clap_processor(audios=real_inputs, sampling_rate=48000, return_tensors="pt").to(device))
+                real_emb = [clap_model.get_audio_features(**clap_processor(audios=inputs, sampling_rate=48000, return_tensors="np").to(device)) for inputs in real_inputs]
                 
                 base1_inputs = librosa.resample(drop_to_multiple(y1, rate * 10).squeeze().cpu().detach().numpy(), orig_sr=rate, target_sr=48000)
-                base1_emb = clap_model.get_audio_features(**clap_processor(audios=base1_inputs, sampling_rate=48000, return_tensors="pt").to(device))
+                base1_emb = [clap_model.get_audio_features(**clap_processor(audios=inputs, sampling_rate=48000, return_tensors="np").to(device)) for inputs in base1_inputs]
                 
                 base2_inputs = librosa.resample(drop_to_multiple(y2, rate * 10).squeeze().cpu().detach().numpy(), orig_sr=rate, target_sr=48000)
-                base2_emb = clap_model.get_audio_features(**clap_processor(audios=base2_inputs, sampling_rate=48000, return_tensors="pt").to(device))
+                base2_emb = [clap_model.get_audio_features(**clap_processor(audios=inputs, sampling_rate=48000, return_tensors="np").to(device)) for inputs in base2_inputs]
                 
                 measure1_inputs = librosa.resample(drop_to_multiple(y3, rate * 10).squeeze().cpu().detach().numpy(), orig_sr=rate, target_sr=48000)
-                measure1_emb = clap_model.get_audio_features(**clap_processor(audios=measure1_inputs, sampling_rate=48000, return_tensors="pt").to(device))
+                measure1_emb = [clap_model.get_audio_features(**clap_processor(audios=inputs, sampling_rate=48000, return_tensors="np").to(device)) for inputs in measure1_inputs]
+                
+                print(np.concatenate(real_emb, axis=0).shape)
             
             real_embs.append(real_emb.cpu().detach().numpy())
             base1_embs.append(base1_emb.cpu().detach().numpy())
