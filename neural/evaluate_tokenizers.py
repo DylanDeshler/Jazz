@@ -205,7 +205,7 @@ beat_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_160
 idxs = np.random.randint(len(measure_paths), size=128)
 n_steps = 1
 EVAL_ITERATIVE = False
-USE_CLAP = False
+USE_CLAP = True
 
 # FAD requires 16383 * 5 samples and contrast requires 16383 * 10 samples
 # fad.forward_features()
