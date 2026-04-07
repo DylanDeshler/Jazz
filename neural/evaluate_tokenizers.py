@@ -258,16 +258,16 @@ with torch.no_grad():
             else:
                 real_inputs = librosa.resample(drop_to_multiple(x, rate * 10).squeeze().cpu().detach().numpy(), orig_sr=rate, target_sr=48000)
                 print(x.shape, real_inputs.shape)
-                real_emb = clap_model.get_audio_features(**clap_processor(audios=real_inputs, return_tensors="pt").to(device))
+                real_emb = clap_model.get_audio_features(**clap_processor(audios=real_inputs, sampling_rate=48000, return_tensors="pt").to(device))
                 
                 base1_inputs = librosa.resample(drop_to_multiple(y1, rate * 10).squeeze().cpu().detach().numpy(), orig_sr=rate, target_sr=48000)
-                base1_emb = clap_model.get_audio_features(**clap_processor(audios=base1_inputs, return_tensors="pt").to(device))
+                base1_emb = clap_model.get_audio_features(**clap_processor(audios=base1_inputs, sampling_rate=48000, return_tensors="pt").to(device))
                 
                 base2_inputs = librosa.resample(drop_to_multiple(y2, rate * 10).squeeze().cpu().detach().numpy(), orig_sr=rate, target_sr=48000)
-                base2_emb = clap_model.get_audio_features(**clap_processor(audios=base2_inputs, return_tensors="pt").to(device))
+                base2_emb = clap_model.get_audio_features(**clap_processor(audios=base2_inputs, sampling_rate=48000, return_tensors="pt").to(device))
                 
                 measure1_inputs = librosa.resample(drop_to_multiple(y3, rate * 10).squeeze().cpu().detach().numpy(), orig_sr=rate, target_sr=48000)
-                measure1_emb = clap_model.get_audio_features(**clap_processor(audios=measure1_inputs, return_tensors="pt").to(device))
+                measure1_emb = clap_model.get_audio_features(**clap_processor(audios=measure1_inputs, sampling_rate=48000, return_tensors="pt").to(device))
             
             print(real_emb.shape, base1_emb.shape, base2_emb.shape, measure1_emb.shape)
             real_embs.append(real_emb.cpu().detach().numpy())
