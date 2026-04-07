@@ -204,7 +204,7 @@ measure_paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_ful
 audio_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in measure_paths]
 beat_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats') for path in measure_paths]
 idxs = np.random.randint(len(measure_paths), size=128)
-n_steps = 1
+n_steps = 32
 EVAL_ITERATIVE = False
 USE_CLAP = True
 
@@ -259,17 +259,19 @@ with torch.no_grad():
             else:
                 real_inputs = librosa.resample(drop_to_multiple(x, rate * 10).squeeze().cpu().detach().numpy(), orig_sr=rate, target_sr=48000)
                 real_emb = [clap_model.get_audio_features(**clap_processor(audios=inputs, sampling_rate=48000, return_tensors="pt").to(device)) for inputs in real_inputs]
+                real_emb = torch.cat(real_emb, dim=0)
                 
                 base1_inputs = librosa.resample(drop_to_multiple(y1, rate * 10).squeeze().cpu().detach().numpy(), orig_sr=rate, target_sr=48000)
                 base1_emb = [clap_model.get_audio_features(**clap_processor(audios=inputs, sampling_rate=48000, return_tensors="pt").to(device)) for inputs in base1_inputs]
+                base1_emb = torch.cat(base1_emb, dim=0)
                 
                 base2_inputs = librosa.resample(drop_to_multiple(y2, rate * 10).squeeze().cpu().detach().numpy(), orig_sr=rate, target_sr=48000)
                 base2_emb = [clap_model.get_audio_features(**clap_processor(audios=inputs, sampling_rate=48000, return_tensors="pt").to(device)) for inputs in base2_inputs]
+                base2_emb = torch.cat(base2_emb, dim=0)
                 
                 measure1_inputs = librosa.resample(drop_to_multiple(y3, rate * 10).squeeze().cpu().detach().numpy(), orig_sr=rate, target_sr=48000)
                 measure1_emb = [clap_model.get_audio_features(**clap_processor(audios=inputs, sampling_rate=48000, return_tensors="pt").to(device)) for inputs in measure1_inputs]
-                
-                print(torch.cat(real_emb, axis=0).shape)
+                measure1_emb = torch.cat(measure1_emb, dim=0)
             
             real_embs.append(real_emb.cpu().detach().numpy())
             base1_embs.append(base1_emb.cpu().detach().numpy())
