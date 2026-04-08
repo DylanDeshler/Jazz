@@ -43,7 +43,7 @@ if __name__ == '__main__':
     
     paths = glob.glob('/home/ubuntu/Data/wavs/*')
     os.makedirs(out_dir, exist_ok=True)
-    NUM_WORKERS = 20
+    NUM_WORKERS = 40
     
     print(f"Processing {len(paths)} files with {NUM_WORKERS} parallel workers...")
     
