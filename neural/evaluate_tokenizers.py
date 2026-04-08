@@ -207,7 +207,7 @@ idxs = np.random.randint(len(measure_paths), size=128)
 n_steps = 32
 batch_size = 64
 EVAL_ITERATIVE = False
-USE_CLAP = True
+USE_CLAP = False
 
 # FAD requires 16383 * 5 samples and contrast requires 16383 * 10 samples
 # fad.forward_features()
@@ -217,12 +217,10 @@ real_embs = []
 base1_embs = []
 base2_embs = []
 measure1_embs = []
-out_dir = '/home/dylan.d/research/music/Jazz/jazz_data_16000_embs3'
+out_dir = '/home/dylan.d/research/music/Jazz/jazz_data_16000_FAD_embs'
 os.makedirs(out_dir, exist_ok=True)
 with torch.no_grad():
     for k, idx in enumerate(tqdm(idxs)):
-        if k < 30:
-            continue
         measure_path, audio_path, beat_path = measure_paths[idx], audio_paths[idx], beat_paths[idx]
         
         wav, _ = librosa.load(audio_path, sr=None)
