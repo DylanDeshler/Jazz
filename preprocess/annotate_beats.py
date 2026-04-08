@@ -48,7 +48,6 @@ if __name__ == '__main__':
     print(f"Processing {len(paths)} files with {NUM_WORKERS} parallel workers...")
     
     with mp.Pool(processes=NUM_WORKERS, initializer=init_worker) as pool:
-        # imap_unordered is highly efficient and updates the tqdm bar as soon as any worker finishes a file
         results = list(tqdm(pool.imap_unordered(process_audio, paths), total=len(paths)))
         
     errors = [r for r in results if isinstance(r, str)]

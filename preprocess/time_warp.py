@@ -218,7 +218,7 @@ def time_warp_measures():
     # audio_paths = [path.replace('jazz_data_16000_full_clean_beats', 'jazz_data_16000_full_clean').replace('.beats', '.wav') for path in beat_paths]
     # out_paths = [path.replace('jazz_data_16000_full_clean_beats', 'jazz_data_16000_full_clean_measures').replace('.beats', '.wav') for path in beat_paths]
     os.makedirs('/home/ubuntu/Data/measures', exist_ok=True)
-    names = [path.split('/')[-1] for path in beat_paths]
+    names = [os.path.basename(path) for path in beat_paths]
     audio_paths = [os.path.join('/home/ubuntu/Data/wavs', name) for name in names]
     out_paths = [os.path.join('/home/ubuntu/Data/measures', name) for name in names]
     print(len(beat_paths), len(audio_paths), len(out_paths))
