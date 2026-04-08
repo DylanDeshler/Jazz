@@ -208,14 +208,19 @@ def generate_audio_measures(paths):
 
 def time_warp_measures():
     print("Gathering files...")
-    beat_paths = sorted(glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats/*.beats'))
+    # beat_paths = sorted(glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats/*.beats'))
+    beat_paths = sorted(glob.glob('/home/ubuntu/Data/beats/*'))
     # import json
     # with open('/home/dylan.d/research/music/Jazz/valid_files_by_bpm.json', 'r') as f:
     #     beat_paths = json.load(f)
     
-    os.makedirs('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures', exist_ok=True)
-    audio_paths = [path.replace('jazz_data_16000_full_clean_beats', 'jazz_data_16000_full_clean').replace('.beats', '.wav') for path in beat_paths]
-    out_paths = [path.replace('jazz_data_16000_full_clean_beats', 'jazz_data_16000_full_clean_measures').replace('.beats', '.wav') for path in beat_paths]
+    # os.makedirs('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures', exist_ok=True)
+    # audio_paths = [path.replace('jazz_data_16000_full_clean_beats', 'jazz_data_16000_full_clean').replace('.beats', '.wav') for path in beat_paths]
+    # out_paths = [path.replace('jazz_data_16000_full_clean_beats', 'jazz_data_16000_full_clean_measures').replace('.beats', '.wav') for path in beat_paths]
+    os.makedirs('/home/ubuntu/Data/measures', exist_ok=True)
+    names = [path.split('/')[-1] for path in beat_paths]
+    audio_paths = [os.path.join('/home/ubuntu/Data/wavs', name) for name in names]
+    out_paths = [os.path.join('/home/ubuntu/Data/measures', name) for name in names]
     print(len(beat_paths), len(audio_paths), len(out_paths))
 
     valid_audio, valid_beats, valid_outs = [], [], []
