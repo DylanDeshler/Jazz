@@ -205,7 +205,7 @@ audio_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16
 beat_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats') for path in measure_paths]
 idxs = np.random.randint(len(measure_paths), size=128)
 n_steps = 32
-batch_size = 32
+batch_size = 64
 EVAL_ITERATIVE = False
 USE_CLAP = True
 
@@ -217,7 +217,7 @@ real_embs = []
 base1_embs = []
 base2_embs = []
 measure1_embs = []
-out_dir = '/home/dylan.d/research/music/Jazz/jazz_data_16000_compare'
+out_dir = '/home/dylan.d/research/music/Jazz/jazz_data_16000_embs'
 os.makedirs(out_dir, exist_ok=True)
 with torch.no_grad():
     for idx in tqdm(idxs):
@@ -310,6 +310,11 @@ with torch.no_grad():
             base1_embs.append(torch.stack(base1_emb, dim=1).cpu().detach().numpy())
             base2_embs.append(torch.stack(base2_emb, dim=1).cpu().detach().numpy())
             measure1_embs.append(torch.stack(measure1_emb, dim=1).cpu().detach().numpy())
+        
+        np.save(os.path.join(out_dir, 'real.npy'), np.concatenate(real_embs, axis=0))
+        np.save(os.path.join(out_dir, 'base1.npy'), np.concatenate(base1_embs, axis=0))
+        np.save(os.path.join(out_dir, 'base2.npy'), np.concatenate(base2_embs, axis=0))
+        np.save(os.path.join(out_dir, 'measure1.npy'), np.concatenate(measure1_embs, axis=0))
 
         # name = measure_path.split('/')[-1]
         # sf.write(
