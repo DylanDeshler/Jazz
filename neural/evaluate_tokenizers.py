@@ -220,8 +220,8 @@ measure1_embs = []
 out_dir = '/home/dylan.d/research/music/Jazz/jazz_data_16000_embs2'
 os.makedirs(out_dir, exist_ok=True)
 with torch.no_grad():
-    for idx in tqdm(idxs):
-        if idx < 18:
+    for k, idx in enumerate(tqdm(idxs)):
+        if k < 18:
             continue
         measure_path, audio_path, beat_path = measure_paths[idx], audio_paths[idx], beat_paths[idx]
         
