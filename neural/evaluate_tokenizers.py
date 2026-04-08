@@ -217,7 +217,7 @@ real_embs = []
 base1_embs = []
 base2_embs = []
 measure1_embs = []
-out_dir = '/home/dylan.d/research/music/Jazz/jazz_data_16000_embs2'
+out_dir = '/home/dylan.d/research/music/Jazz/jazz_data_16000_embs3'
 os.makedirs(out_dir, exist_ok=True)
 with torch.no_grad():
     for k, idx in enumerate(tqdm(idxs)):
