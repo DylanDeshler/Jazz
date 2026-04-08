@@ -151,6 +151,7 @@ record_labels = torch.from_numpy(record_labels)
 
 # Instruments
 instrument_map_df = pd.read_csv('/home/dylan.d/research/music/Jazz/instrument_mapping.csv')
+instrument_map_df = pd.read_csv('/home/ubuntu/base/Data/instrument_mapping.csv')
 instrument_map_df = instrument_map_df.apply(lambda col: col.astype(str).str.lower())
 instrument_map = {row['Abbreviation']: row['Consolidated_Category'] for i, row in instrument_map_df.iterrows()}
 instrument_categories = set(list(instrument_map.values()))
@@ -181,7 +182,7 @@ import glob
 import librosa
 # all data
 # paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
-paths = glob.glob('/home/ubuntu/Data/wavs/*.wavs')
+paths = glob.glob('/home/ubuntu/Data/wavs/*')
 # 2 std BPM data
 # paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
 # paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in paths]
