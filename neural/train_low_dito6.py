@@ -71,7 +71,7 @@ min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/
 # DDP settings
 backend = 'gloo' # 'nccl', 'gloo', etc.
 # system
-device = 'cuda:1' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
@@ -122,7 +122,8 @@ bpm_bins = torch.arange(40, 300, 5, dtype=torch.float32)
 year_bins = torch.arange(1900, 1980, 5, dtype=torch.float32)
 bpm_sigma, year_sigma = 5, 2.5
 
-cards = pickle.load(open('/home/dylan.d/research/music/Jazz/JazzSet.0.9.pkl', "rb"))
+# cards = pickle.load(open('/home/dylan.d/research/music/Jazz/JazzSet.0.9.pkl', "rb"))
+cards = pickle.load(open('/home/ubuntu/base/Data/JazzSet.0.9.pkl', "rb"))
 cards = [card for card in cards if card]
 
 years = []
@@ -179,10 +180,11 @@ instrument_labels = torch.from_numpy(instrument_labels)
 import glob
 import librosa
 # all data
-paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
+# paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
+paths = glob.glob('/home/ubuntu/Data/wavs/*.wavs')
 # 2 std BPM data
 # paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
-paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in paths]
+# paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in paths]
 print(len(paths))
 wavs = []
 
