@@ -230,6 +230,9 @@ names = [name.replace('.beats', '.wav') for name in names]
 measure_paths = [os.path.join('/home/ubuntu/Data/measures', name) for name in names]
 audio_paths = [os.path.join('/home/ubuntu/Data/wavs', name) for name in names]
 beat_paths = [os.path.join('/home/ubuntu/Data/beats', name) for name in names]
+measure_paths = [path for path in measure_paths if os.path.exists(path)]
+audio_paths = [path for path in audio_paths if os.path.exists(path)]
+beat_paths = [path for path in beat_paths if os.path.exists(path)]
 
 idxs = np.random.choice(np.arange(len(measure_paths)), size=128, replace=False)
 n_steps = 32
