@@ -310,7 +310,7 @@ with torch.no_grad():
         max_len = max([len(raw) for raw in m_raw])
         max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
         m_padded = torch.from_numpy(np.stack([np.pad(raw, (0, max_len - len(raw))) for raw in m_raw], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-        print(max_len, m_padded.shape, x.shape)
+        print(max_len, m_padded.shape, m.shape, x.shape)
         
         ## Standard approach
         if not EVAL_ITERATIVE:
@@ -322,8 +322,10 @@ with torch.no_grad():
                 y4, y4z = base1.encode(m_padded)
                 T = y4z.shape[-1]
                 print(y3.shape, y4.shape, y4z.shape, T)
+                print(base1.encode(x)[1].shape)
                 y4z = F.interpolate(y4z, size=48, mode='linear', align_corners=False)
                 y4z = F.interpolate(y4z, size=T, mode='linear', align_corners=False)
+                print(m_padded.shape, y4.shape, y4z.shape)
                 y4 = base1.decode(y4z, shape=y4.shape, n_steps=n_steps, noise=noise)
             
             x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
