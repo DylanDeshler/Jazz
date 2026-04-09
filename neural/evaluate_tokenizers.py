@@ -251,8 +251,8 @@ real_embs = []
 base1_embs = []
 base2_embs = []
 measure1_embs = []
-# out_dir = '/home/dylan.d/research/music/Jazz/jazz_data_16000_FAD_embs2'
-# os.makedirs(out_dir, exist_ok=True)
+out_dir = '/home/ubuntu/Data/FAD'
+os.makedirs(out_dir, exist_ok=True)
 with torch.no_grad():
     for idx in tqdm(idxs):
         measure_path, audio_path, beat_path = measure_paths[idx], audio_paths[idx], beat_paths[idx]
@@ -322,12 +322,15 @@ with torch.no_grad():
             
             # Custom embs
             if not USE_CLAP:
+                x = drop_to_multiple(x, 16383 * 5)
+                y1 = drop_to_multiple(y1, 16383 * 5)
+                y3 = drop_to_multiple(y3, 16383 * 5)
                 with ctx:
                     try:
-                        real_emb = fad.forward_features(drop_to_multiple(x, 16383 * 5))
-                        base1_emb = fad.forward_features(drop_to_multiple(y1, 16383 * 5))
+                        real_emb = fad.forward_features(x)
+                        base1_emb = fad.forward_features(y1)
                         # base2_emb = fad.forward_features(drop_to_multiple(y2, 16383 * 5))
-                        measure1_emb = fad.forward_features(drop_to_multiple(y3, 16383 * 5))
+                        measure1_emb = fad.forward_features(y3)
                     except Exception as e:
                         print(e)
                         continue
@@ -392,31 +395,36 @@ with torch.no_grad():
         # np.save(os.path.join(out_dir, 'base2.npy'), np.concatenate(base2_embs, axis=0))
         # np.save(os.path.join(out_dir, 'measure1.npy'), np.concatenate(measure1_embs, axis=0))
 
-        # name = measure_path.split('/')[-1]
+        print(real_emb.shape, base1_emb.shape, measure1_emb.shape)
+        real_emb = fad.forward_features(drop_to_multiple(x, 16383 * 5))
+        base1_emb = fad.forward_features(drop_to_multiple(y1, 16383 * 5))
+        # base2_emb = fad.forward_features(drop_to_multiple(y2, 16383 * 5))
+        measure1_emb = fad.forward_features(drop_to_multiple(y3, 16383 * 5))
+        name = os.path.basename(measure_path)
+        sf.write(
+            file=os.path.join(out_dir, f'{idx}_real_{name}'), 
+            data=x[8].flatten().cpu().detach().numpy(), 
+            samplerate=rate,
+            subtype='PCM_16'
+        )
+        sf.write(
+            file=os.path.join(out_dir, f'{idx}_base1_{name}'), 
+            data=y1[8].flatten().cpu().detach().numpy(), 
+            samplerate=rate,
+            subtype='PCM_16'
+        )
         # sf.write(
-        #     file=os.path.join(out_dir, f'real_{name}'), 
-        #     data=x.flatten(), 
-        #     samplerate=rate,
-        #     subtype='PCM_16'
-        # )
-        # sf.write(
-        #     file=os.path.join(out_dir, f'base1_{name}'), 
-        #     data=y1.flatten(), 
-        #     samplerate=rate,
-        #     subtype='PCM_16'
-        # )
-        # sf.write(
-        #     file=os.path.join(out_dir, f'base2_{name}'), 
+        #     file=os.path.join(out_dir, f'{idx}_base2_{name}'), 
         #     data=y2.flatten(), 
         #     samplerate=rate,
         #     subtype='PCM_16'
         # )
-        # sf.write(
-        #     file=os.path.join(out_dir, f'measures_{name}'), 
-        #     data=np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3, ratios)], axis=0), 
-        #     samplerate=rate,
-        #     subtype='PCM_16'
-        # )
+        sf.write(
+            file=os.path.join(out_dir, f'{idx}_measures_{name}'), 
+            data=y3[8].flatten().cpu().detach().numpy(), 
+            samplerate=rate,
+            subtype='PCM_16'
+        )
 
 if not EVAL_ITERATIVE:
     real_mu, real_sigma = calculate_embd_statistics(np.concatenate(real_embs, axis=0))
