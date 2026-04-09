@@ -285,6 +285,7 @@ with torch.no_grad():
                 
             y3 = np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3.cpu().detach().numpy(), ratios)], axis=0)
             y3 = torch.from_numpy(y3.astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+            print(x.shape, y1.shape, y3.shape)
             
             # Custom embs
             if not USE_CLAP:
