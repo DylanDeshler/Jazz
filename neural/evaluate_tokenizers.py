@@ -207,7 +207,7 @@ measure_paths = glob.glob('/home/ubuntu/Data/measures/*')
 audio_paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in measure_paths]
 beat_paths = [os.path.join('/home/ubuntu/Data/beats', os.path.basename(path)) for path in measure_paths]
 idxs = np.random.randint(len(measure_paths), size=128)
-n_steps = 32
+n_steps = 100
 batch_size = 64
 EVAL_ITERATIVE = False
 USE_CLAP = False
