@@ -247,8 +247,8 @@ with torch.no_grad():
         wav, _ = librosa.load(audio_path, sr=None)
         wav = wav[:batch_size * rate]
         print(wav.shape)
-        x = [wav[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(wav) // n_samples)]
-        x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+        # x = [wav[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(wav) // n_samples)]
+        # x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
         beat_data = parse_beat_file(beat_path)
         downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
