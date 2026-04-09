@@ -322,7 +322,7 @@ with torch.no_grad():
             y3 = torch.from_numpy(y3.astype(np.float32)).to(device, non_blocking=True)
             
             # Now x, y1, and y3 are 1D continuous tensors perfectly aligned down to the sample!
-            print(x.shape, y1.shape, y3.shape)
+            print(x.shape, y1.shape, y3.shape, drop_to_multiple(x, 16383 * 5).shape)
             print('='*60)
             
             # # 1. Restore measures and flatten into continuous array
