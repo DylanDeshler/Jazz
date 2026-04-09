@@ -239,7 +239,7 @@ audio_paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) fo
 audio_paths = [path for path in audio_paths if os.path.basename(path) in beat_paths]
 beat_paths = [os.path.join('/home/ubuntu/Data/beats', path) for path in beat_paths]
 
-idxs = np.random.choice(np.arange(len(measure_paths)), size=4, replace=False)
+idxs = np.random.choice(np.arange(len(measure_paths)), size=128, replace=False)
 n_steps = 100
 batch_size = 32
 EVAL_ITERATIVE = False
@@ -310,7 +310,6 @@ with torch.no_grad():
         max_len = max([len(raw) for raw in m_raw])
         max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
         m_padded = torch.from_numpy(np.stack([np.pad(raw, (0, max_len - len(raw))) for raw in m_raw], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-        print(max_len, m_padded.shape, m.shape, x.shape)
         
         ## Standard approach
         if not EVAL_ITERATIVE:
@@ -340,7 +339,6 @@ with torch.no_grad():
             m = torch.from_numpy(m.astype(np.float32)).to(device, non_blocking=True)
             y3 = np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3.cpu().detach().numpy(), ratios)], axis=0)
             y3 = torch.from_numpy(y3.astype(np.float32)).to(device, non_blocking=True)
-            print(y3.shape, y4.shape)
             
             # Custom embs
             if not USE_CLAP:
