@@ -38,7 +38,7 @@ import glob
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'tokenizer_low_large_24576'
+out_dir = 'tokenizer_low_large_24576_subset'
 eval_interval = 2500
 log_interval = 100
 eval_iters = 600
@@ -178,14 +178,20 @@ mlb = MultiLabelBinarizer().fit(instrument_labels)
 instrument_labels = mlb.transform(instrument_labels)
 instrument_labels = torch.from_numpy(instrument_labels)
 
+import json
 import glob
 import librosa
 # all data
 # paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
-paths = glob.glob('/home/ubuntu/Data/wavs/*')
+# paths = glob.glob('/home/ubuntu/Data/wavs/*')
 # 2 std BPM data
 # paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
 # paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in paths]
+
+paths = glob.glob('/home/ubuntu/Data/measures/*')
+with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
+    beat_paths = json.load(f)
+paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
 print(len(paths))
 wavs = []
 
