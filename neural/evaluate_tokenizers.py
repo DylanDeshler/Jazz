@@ -95,6 +95,10 @@ def parse_beat_file(beat_path):
                     if len(parts) >= 2:
                         try:
                             bn = int(float(parts[1]))
+                            
+                            # found an issue where 4/4 is frequently being annotated as 8/4 this fixes it and safe because were only annotating 4/4 songs
+                            if bn > 0:
+                                bn = ((bn - 1) % 4) + 1
                         except ValueError:
                             pass
                     
@@ -210,7 +214,7 @@ def drop_to_multiple(a, multiple):
 
 base1 = load_model(os.path.join('tokenizer_low_large_24576', 'ckpt.pt'), Tokenizer)
 # base2 = load_model(os.path.join('tokenizer_low_large_24576_2std_subset', 'ckpt.pt'), Tokenizer)
-measure1 = load_model(os.path.join('tokenizer_low_measures_2std_subset', 'ckpt.pt'), Tokenizer)
+measure1 = load_model(os.path.join('tokenizer_low_measures_fix_subset', 'ckpt.pt'), Tokenizer)
 fad = load_model(os.path.join('FAD', 'ckpt.pt'), FAD)
 # contrast = load_model(os.path.join('contrast_learntmep_instance', 'ckpt.pt'), Contrast)
 # clap_model = ClapModel.from_pretrained("laion/larger_clap_music").to(device)
@@ -224,15 +228,13 @@ fad = load_model(os.path.join('FAD', 'ckpt.pt'), FAD)
 # audio_paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in measure_paths]
 # beat_paths = [os.path.join('/home/ubuntu/Data/beats', os.path.basename(path)) for path in measure_paths]
 
+# With BPM within reasonable range
+measure_paths = glob.glob('/home/ubuntu/Data/measures/*')
 with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
-    names = json.load(f)
-names = [name.replace('.beats', '.wav') for name in names]
-measure_paths = [os.path.join('/home/ubuntu/Data/measures', name) for name in names]
-audio_paths = [os.path.join('/home/ubuntu/Data/wavs', name) for name in names]
-beat_paths = [os.path.join('/home/ubuntu/Data/beats', name) for name in names]
-measure_paths = [path for path in measure_paths if os.path.exists(path)]
-audio_paths = [path for path in audio_paths if os.path.exists(path)]
-beat_paths = [path for path in beat_paths if os.path.exists(path)]
+    beat_paths = json.load(f)
+measure_paths = [path for path in measure_paths if os.path.basename(path) in beat_paths]
+audio_paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in measure_paths]
+audio_paths = [path for path in audio_paths if os.path.basename(path) in beat_paths]
 
 idxs = np.random.choice(np.arange(len(measure_paths)), size=128, replace=False)
 n_steps = 32
