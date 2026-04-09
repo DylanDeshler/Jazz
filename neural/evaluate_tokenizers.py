@@ -323,8 +323,11 @@ with torch.no_grad():
                 T = y4z.shape[-1]
                 print(y3.shape, y4.shape, y4z.shape, T)
                 print(base1.encode(x)[1].shape)
+                print('before interp ', y4z.shape)
                 y4z = F.interpolate(y4z, size=48, mode='linear', align_corners=False)
+                print('after interp: ', y4z.shape)
                 y4z = F.interpolate(y4z, size=T, mode='linear', align_corners=False)
+                print('inverted interp: ', y4z.shape)
                 print(m_padded.shape, y4.shape, y4z.shape)
                 y4 = base1.decode(y4z, shape=y4.shape, n_steps=n_steps, noise=noise)
             
