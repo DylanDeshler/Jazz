@@ -237,7 +237,7 @@ audio_paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) fo
 audio_paths = [path for path in audio_paths if os.path.basename(path) in beat_paths]
 beat_paths = [os.path.join('/home/ubuntu/Data/beats', path) for path in beat_paths]
 
-idxs = np.random.choice(np.arange(len(measure_paths)), size=128, replace=False)
+idxs = np.random.choice(np.arange(len(measure_paths)), size=4, replace=False)
 n_steps = 100
 batch_size = 32
 EVAL_ITERATIVE = False
@@ -248,6 +248,7 @@ USE_CLAP = False
 # contrast(features_only=True)
 
 real_embs = []
+real_measure_embs = []
 base1_embs = []
 base2_embs = []
 measure1_embs = []
@@ -318,7 +319,7 @@ with torch.no_grad():
             y1 = torch.from_numpy(y1.astype(np.float32)).to(device, non_blocking=True)
             
             m = np.concatenate([restore_measure(m_.squeeze(), ratio) for m_, ratio in zip(m.cpu().detach().numpy(), ratios)], axis=0)
-            m = torch.from_numpy(m.astype(np.float32))
+            m = torch.from_numpy(m.astype(np.float32)).to(device, non_blocking=True)
             y3 = np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3.cpu().detach().numpy(), ratios)], axis=0)
             y3 = torch.from_numpy(y3.astype(np.float32)).to(device, non_blocking=True)
             
@@ -331,6 +332,7 @@ with torch.no_grad():
                 with ctx:
                     try:
                         real_emb = fad.forward_features(x)
+                        real_measure_emb = fad.forward_features(m)
                         base1_emb = fad.forward_features(y1)
                         # base2_emb = fad.forward_features(drop_to_multiple(y2, 16383 * 5))
                         measure1_emb = fad.forward_features(y3)
@@ -357,6 +359,7 @@ with torch.no_grad():
                 measure1_emb = torch.cat(measure1_emb, dim=0)
             
             real_embs.append(real_emb.cpu().detach().numpy())
+            real_measure_embs.append(real_measure_emb.cpu().detach().numpy())
             base1_embs.append(base1_emb.cpu().detach().numpy())
             # base2_embs.append(base2_emb.cpu().detach().numpy())
             measure1_embs.append(measure1_emb.cpu().detach().numpy())
@@ -433,17 +436,22 @@ with torch.no_grad():
 
 if not EVAL_ITERATIVE:
     real_mu, real_sigma = calculate_embd_statistics(np.concatenate(real_embs, axis=0))
+    real_m_mu, real_m_sigma = calculate_embd_statistics(np.concatenatereal_measure_embs, axis=0)
     base1_mu, base1_sigma = calculate_embd_statistics(np.concatenate(base1_embs, axis=0))
     # base2_mu, base2_sigma = calculate_embd_statistics(np.concatenate(base2_embs, axis=0))
     measure1_mu, measure1_sigma = calculate_embd_statistics(np.concatenate(measure1_embs, axis=0))
 
+    m_fad = calculate_frechet_distance(real_m_mu, real_m_sigma, real_mu, real_sigma)
     base1_fad = calculate_frechet_distance(base1_mu, base1_sigma, real_mu, real_sigma)
     # base2_fad = calculate_frechet_distance(base2_mu, base2_sigma, real_mu, real_sigma)
     measure1_fad = calculate_frechet_distance(measure1_mu, measure1_sigma, real_mu, real_sigma)
+    measure1_m_fad = calculate_frechet_distance(measure1_mu, measure1_sigma, real_m_mu, real_m_sigma)
 
-    print('Base 1 FAD: ', base1_fad)
+    print('Real Measures -> Real Samples FAD: ', m_fad)
+    print('Base1 -> Real Samples FAD: ', base1_fad)
     # print('Base 2 FAD: ', base2_fad)
-    print('Measure 1 FAD: ', measure1_fad)
+    print('Measure1 -> Real Samples FAD: ', measure1_fad)
+    print('Measure1 -> Real Measures FAD:', measure1_m_fad)
     # Base 1 FAD:  46.068807655471866694
     # Base 2 FAD:  46.19946344047392614
     # Measure 1 FAD:  49.728033691220890164
