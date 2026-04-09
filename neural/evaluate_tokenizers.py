@@ -436,7 +436,7 @@ with torch.no_grad():
 
 if not EVAL_ITERATIVE:
     real_mu, real_sigma = calculate_embd_statistics(np.concatenate(real_embs, axis=0))
-    real_m_mu, real_m_sigma = calculate_embd_statistics(np.concatenatereal_measure_embs, axis=0)
+    real_m_mu, real_m_sigma = calculate_embd_statistics(np.concatenate(real_measure_embs, axis=0))
     base1_mu, base1_sigma = calculate_embd_statistics(np.concatenate(base1_embs, axis=0))
     # base2_mu, base2_sigma = calculate_embd_statistics(np.concatenate(base2_embs, axis=0))
     measure1_mu, measure1_sigma = calculate_embd_statistics(np.concatenate(measure1_embs, axis=0))
