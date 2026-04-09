@@ -196,7 +196,7 @@ base1 = load_model(os.path.join('tokenizer_low_large_24576', 'ckpt.pt'), Tokeniz
 # base2 = load_model(os.path.join('tokenizer_low_large_24576_2std_subset', 'ckpt.pt'), Tokenizer)
 measure1 = load_model(os.path.join('tokenizer_low_measures_2std_subset', 'ckpt.pt'), Tokenizer)
 fad = load_model(os.path.join('FAD', 'ckpt.pt'), FAD)
-contrast = load_model(os.path.join('contrast_learntmep_instance', 'ckpt.pt'), Contrast)
+# contrast = load_model(os.path.join('contrast_learntmep_instance', 'ckpt.pt'), Contrast)
 # clap_model = ClapModel.from_pretrained("laion/larger_clap_music").to(device)
 # clap_processor = ClapProcessor.from_pretrained("laion/larger_clap_music")
 
