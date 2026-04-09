@@ -239,7 +239,7 @@ paths = glob.glob('/home/ubuntu/Data/measures/*')
 print(len(paths))
 with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
     beat_paths = json.load(f)
-paths = [path for path in paths if path in beat_paths]
+paths = [path for path in paths if os.path.basename(path) in beat_paths]
 print(len(paths), len(beat_paths))
 wavs = []
 
