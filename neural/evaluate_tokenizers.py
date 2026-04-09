@@ -320,8 +320,8 @@ with torch.no_grad():
                 y3 = measure1.reconstruct(m, n_steps=n_steps, noise=noise[:m.shape[0]])
                 y4, y4z = base1.encode(m_padded)
                 T = y4z.shape[-1]
-                y4z = F.interpolate(y4z, size=n_samples // encoder_ratios, mode='linear', align_corners=False)
-                y4z = F.interpolate(y4z, size=T, mode='linear', align_corners=False)
+                y4z = F.interpolate(y4z, size=n_samples // encoder_ratios, mode='nearest', align_corners=False)
+                y4z = F.interpolate(y4z, size=T, mode='nearest', align_corners=False)
                 y4 = base1.decode(y4z, shape=y4.shape, n_steps=n_steps)
             
             x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
@@ -480,6 +480,12 @@ if not EVAL_ITERATIVE:
     # Base1 -> Real Samples FAD:  23.673057913395297
     # Measure1 -> Real Samples FAD:  29.42552948571202
     # Measure1 -> Real Measures FAD: 25.327910744233137
+    
+    # Real Measures -> Real Samples FAD:  2.6932771422591486
+    # Base1 -> Real Samples FAD:  22.930749938432
+    # Measure1 -> Real Samples FAD:  28.18418238234827
+    # Measure1 -> Real Measures FAD: 24.24471873383287
+    # LERP -> Real Samples FAD:  27.16132208609011
 else:
     fads = defaultdict(list)
     for exponent in range(math.floor(math.log2(n_steps)) + 1):
