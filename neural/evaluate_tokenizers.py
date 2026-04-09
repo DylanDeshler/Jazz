@@ -122,6 +122,21 @@ def calculate_bpm(beat_path, index):
     
     return instant_bpm
 
+def process_measure(y):
+    current_samples = len(y)
+    stretch_factor = current_samples / n_samples
+    duration_sec = current_samples / rate
+    instant_bpm = (TARGET_SIG / duration_sec) * 60
+    
+    y_warped = pyrb.time_stretch(y, rate, stretch_factor)
+
+    if len(y_warped) > n_samples:
+        y_warped = y_warped[:n_samples]
+    elif len(y_warped) < n_samples:
+        y_warped = np.pad(y_warped, (0, n_samples - len(y_warped)))
+        
+    return y_warped, stretch_factor, instant_bpm
+
 def calculate_embd_statistics(embd_lst):
     if isinstance(embd_lst, list):
         embd_lst = np.array(embd_lst)
@@ -200,6 +215,7 @@ fad = load_model(os.path.join('FAD', 'ckpt.pt'), FAD)
 # clap_model = ClapModel.from_pretrained("laion/larger_clap_music").to(device)
 # clap_processor = ClapProcessor.from_pretrained("laion/larger_clap_music")
 
+## Only use 4/4 songs
 # measure_paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
 # audio_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in measure_paths]
 # beat_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats') for path in measure_paths]
@@ -207,7 +223,7 @@ measure_paths = glob.glob('/home/ubuntu/Data/measures/*')
 audio_paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in measure_paths]
 beat_paths = [os.path.join('/home/ubuntu/Data/beats', os.path.basename(path)) for path in measure_paths]
 idxs = np.random.randint(len(measure_paths), size=128)
-n_steps = 100
+n_steps = 32
 batch_size = 64
 EVAL_ITERATIVE = False
 USE_CLAP = False
@@ -227,18 +243,35 @@ with torch.no_grad():
         measure_path, audio_path, beat_path = measure_paths[idx], audio_paths[idx], beat_paths[idx]
         
         wav, _ = librosa.load(audio_path, sr=None)
+        wav = wav[:batch_size * rate]
         x = [wav[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(wav) // n_samples)]
         x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
-        wav, _ = librosa.load(measure_path, sr=None)
-        m = [wav[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(wav) // n_samples)]
-        m = torch.from_numpy(np.asarray(m).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-        ratios = [TARGET_BPM / calculate_bpm(beat_path, start) for start in range(len(wav) // n_samples)]
+        beat_data = parse_beat_file(beat_path)
+        downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
         
-        # clamp to max number of tokens
-        x = x[:batch_size]
-        m = m[:batch_size]
-        ratios = ratios[:batch_size]
+        m, ratios = [], []
+        for i in range(len(downbeat_indices) - 1):
+            start_idx = downbeat_indices[i]
+            end_idx = downbeat_indices[i+1]
+            
+            t_start = beat_data[start_idx]['time']
+            t_end = beat_data[end_idx]['time']
+            
+            frame_start = int(t_start * rate)
+            frame_end = int(t_end * rate)
+            
+            measure, stretch_ratio, instant_bpm = process_measure(wav[frame_start:frame_end])
+            m.append(measure)
+            ratios.append(stretch_ratio)
+        
+        m = np.concatenate(m, axis=0)
+        m = torch.from_numpy(np.asarray(m).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+        
+        # wav, _ = librosa.load(measure_path, sr=None)
+        # m = [wav[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(wav) // n_samples)]
+        # m = torch.from_numpy(np.asarray(m).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+        # ratios = [TARGET_BPM / calculate_bpm(beat_path, start) for start in range(len(wav) // n_samples)]
         
         ## Standard approach
         if not EVAL_ITERATIVE:
