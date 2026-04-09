@@ -396,15 +396,16 @@ with torch.no_grad():
         # np.save(os.path.join(out_dir, 'measure1.npy'), np.concatenate(measure1_embs, axis=0))
 
         name = os.path.basename(measure_path)
+        to_sample = np.random.randint(len(x))
         sf.write(
             file=os.path.join(out_dir, f'{idx}_real_{name}'), 
-            data=x[8].flatten().cpu().detach().numpy(), 
+            data=x[to_sample].flatten().cpu().detach().numpy(), 
             samplerate=rate,
             subtype='PCM_16'
         )
         sf.write(
             file=os.path.join(out_dir, f'{idx}_base1_{name}'), 
-            data=y1[8].flatten().cpu().detach().numpy(), 
+            data=y1[to_sample].flatten().cpu().detach().numpy(), 
             samplerate=rate,
             subtype='PCM_16'
         )
@@ -416,7 +417,7 @@ with torch.no_grad():
         # )
         sf.write(
             file=os.path.join(out_dir, f'{idx}_measures_{name}'), 
-            data=y3[8].flatten().cpu().detach().numpy(), 
+            data=y3[to_sample].flatten().cpu().detach().numpy(), 
             samplerate=rate,
             subtype='PCM_16'
         )
