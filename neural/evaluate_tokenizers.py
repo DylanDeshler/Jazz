@@ -269,6 +269,7 @@ with torch.no_grad():
             ratios.append(stretch_ratio)
         
         m = torch.from_numpy(np.asarray(m).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+        print(x.shape, m.shape)
         
         # wav, _ = librosa.load(measure_path, sr=None)
         # m = [wav[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(wav) // n_samples)]
@@ -283,10 +284,11 @@ with torch.no_grad():
                 # y2 = base2.reconstruct(x, n_steps=n_steps, noise=noise[:x.shape[0]])
                 y3 = measure1.reconstruct(m, n_steps=n_steps, noise=noise[:m.shape[0]])
             
-            print(y3.shape)
-            y3 = np.stack([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3.cpu().detach().numpy(), ratios)], axis=0)
+            print(x.shape, y1.shape)
+            y3 = np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3.cpu().detach().numpy(), ratios)], axis=0)
             y3 = torch.from_numpy(y3.astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
             print(x.shape, y1.shape, y3.shape)
+            print('='*60)
             
             # Custom embs
             if not USE_CLAP:
