@@ -46,7 +46,7 @@ log_interval = 100
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scrach' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -75,7 +75,7 @@ min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
-device = 'cuda:0' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
@@ -142,6 +142,10 @@ def parse_beat_file(beat_path):
                     if len(parts) >= 2:
                         try:
                             bn = int(float(parts[1]))
+                            
+                            # found an issue where 4/4 is frequently being annotated as 8/4 this fixes it and safe because were only annotating 4/4 songs
+                            if bn > 0:
+                                bn = ((bn - 1) % 4) + 1
                         except ValueError:
                             pass
                     
@@ -174,7 +178,7 @@ bpm_bins = torch.arange(40, 300, 5, dtype=torch.float32)
 year_bins = torch.arange(1900, 1980, 5, dtype=torch.float32)
 bpm_sigma, year_sigma = 5, 2.5
 
-cards = pickle.load(open('/home/dylan.d/research/music/Jazz/JazzSet.0.9.pkl', "rb"))
+cards = pickle.load(open('/home/ubuntu/Data/JazzSet.0.9.pkl', "rb"))
 cards = [card for card in cards if card]
 
 years = []
@@ -201,7 +205,7 @@ record_labels = mlb.transform(record_label_names)
 record_labels = torch.from_numpy(record_labels)
 
 # Instruments
-instrument_map_df = pd.read_csv('/home/dylan.d/research/music/Jazz/instrument_mapping.csv')
+instrument_map_df = pd.read_csv('/home/ubuntu/Data/instrument_mapping.csv')
 instrument_map_df = instrument_map_df.apply(lambda col: col.astype(str).str.lower())
 instrument_map = {row['Abbreviation']: row['Consolidated_Category'] for i, row in instrument_map_df.iterrows()}
 instrument_categories = set(list(instrument_map.values()))
@@ -231,10 +235,11 @@ instrument_labels = torch.from_numpy(instrument_labels)
 import json
 import glob
 import librosa
-paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
-with open('/home/dylan.d/research/music/Jazz/valid_files_by_bpm.json', 'r') as f:
+paths = glob.glob('/home/ubuntu/Data/measures/*')
+print(len(paths))
+with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
     beat_paths = json.load(f)
-beat_paths = [os.path.join('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats', path) for path in beat_paths]
+paths = [path for path in paths if path in beat_paths]
 print(len(paths), len(beat_paths))
 wavs = []
 
@@ -301,7 +306,8 @@ def get_meta_batch(split='train'):
     ratio = []
     for idx in idxs:
         wav = wavs[idx]
-        beat_path = paths[idx].replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats')
+        beat_path = os.path.join('/home/ubuntu/Data/beats', os.path.basename(paths[idx]))
+        # beat_path = paths[idx].replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats')
         
         start = np.random.randint((len(wav) // n_samples) - 1)
         instant_bpm = calculate_bpm(beat_path, start)
