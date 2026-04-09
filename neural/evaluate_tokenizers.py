@@ -243,6 +243,7 @@ with torch.no_grad():
         asdafsfasfasf, audio_path, beat_path = measure_paths[idx], audio_paths[idx], beat_paths[idx]
         
         wav, _ = librosa.load(audio_path, sr=None)
+        print(wav.shape)
         wav = wav[:batch_size * rate]
         x = [wav[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(wav) // n_samples)]
         x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
@@ -263,7 +264,7 @@ with torch.no_grad():
             
             if frame_end > len(wav):
                 break
-            print(i, t_start, t_end, frame_start, frame_end)
+            
             measure, stretch_ratio, instant_bpm = process_measure(wav[frame_start:frame_end])
             m.append(measure)
             ratios.append(stretch_ratio)
