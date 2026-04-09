@@ -46,6 +46,21 @@ def parse_beat_file(beat_path):
     
     return beat_data
 
+def parse_beat_pack_file(beat_path):
+    """Parses the beat tracking file."""
+    beat_data = []
+    with open(beat_path, 'r') as f:
+        for line in f:
+            parts = line.strip().split()
+            if len(parts) >= 1:
+                try:
+                    ts = float(parts[0])
+                    bn = int(float(parts[1])) if len(parts) >= 2 else 0
+                    beat_data.append({'time': ts, 'beat': bn})
+                except ValueError:
+                    continue
+    return beat_data
+
 def get_time_signature(beat_data):
     """
     Estimates the numerator of the time signature (e.g., 4 for 4/4) 
@@ -222,7 +237,7 @@ def generate_packed_audio(paths):
     """
     audio_path, beat_path, out_path = paths
     
-    beat_data = parse_beat_file(beat_path)
+    beat_data = parse_beat_pack_file(beat_path)
     
     try:
         y, sr = librosa.load(audio_path, sr=None)
@@ -307,7 +322,7 @@ def generate_packed_audio(paths):
         subtype='PCM_16'
     )
     
-    with open(os.path.splitext(out_path) + '.json', 'w') as f:
+    with open(os.path.splitext(out_path)[0] + '.json', 'w') as f:
         json.dump(metadata, f, indent=4)
 
 def time_warp_measures():
