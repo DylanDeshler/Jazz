@@ -240,10 +240,13 @@ measure1_embs = []
 # os.makedirs(out_dir, exist_ok=True)
 with torch.no_grad():
     for k, idx in enumerate(tqdm(idxs)):
-        asdafsfasfasf, audio_path, beat_path = measure_paths[idx], audio_paths[idx], beat_paths[idx]
+        measure_path, audio_path, beat_path = measure_paths[idx], audio_paths[idx], beat_paths[idx]
+        print(measure_path)
+        print(audio_path)
         
         wav, _ = librosa.load(audio_path, sr=None)
         wav = wav[:batch_size * rate]
+        print(wav.shape)
         x = [wav[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(wav) // n_samples)]
         x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
