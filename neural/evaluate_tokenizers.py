@@ -214,6 +214,7 @@ def drop_to_multiple(a, multiple):
     return a
 
 base1 = load_model(os.path.join('tokenizer_low_large_24576', 'ckpt.pt'), Tokenizer)
+encoder_ratios = math.prod(base1.encoder.ratios)
 # base2 = load_model(os.path.join('tokenizer_low_large_24576_2std_subset', 'ckpt.pt'), Tokenizer)
 measure1 = load_model(os.path.join('tokenizer_low_measures_fix_subset', 'ckpt.pt'), Tokenizer)
 fad = load_model(os.path.join('FAD', 'ckpt.pt'), FAD)
@@ -307,9 +308,9 @@ with torch.no_grad():
         x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
         max_len = max([len(raw) for raw in m_raw])
-        max_len = (2 ** 5) * (max_len // (2 ** 5))
+        max_len = encoder_ratios * (max_len // encoder_ratios)
         m_padded = torch.from_numpy(np.stack([np.pad(raw, (0, max_len - len(raw))) for raw in m_raw], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-        print(max_len, m_padded.shape)
+        print(max_len, m_padded.shape, x.shape)
         
         ## Standard approach
         if not EVAL_ITERATIVE:
