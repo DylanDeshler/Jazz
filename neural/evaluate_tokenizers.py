@@ -278,17 +278,19 @@ with torch.no_grad():
         
         m = torch.from_numpy(np.asarray(m).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
-        aligned_wav = wav[first_frame:last_frame]
+        # 1. Grab the exact contiguous audio used by 'm' (this is our true ground truth)
+        x_raw = wav[first_frame:last_frame]
         
-        # 2. Pad aligned_wav so it divides perfectly by 24576 (so we don't drop the tail end of the last measure)
-        remainder = len(aligned_wav) % n_samples
+        # 2. Pad temporarily just for the base1 model forward pass
+        remainder = len(x_raw) % n_samples
         pad_length = (n_samples - remainder) if remainder != 0 else 0
         
+        x_padded = x_raw
         if pad_length > 0:
-            aligned_wav = np.pad(aligned_wav, (0, pad_length))
+            x_padded = np.pad(x_raw, (0, pad_length))
             
-        # 3. Chunk aligned_wav into x
-        x = [aligned_wav[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(aligned_wav) // n_samples)]
+        # 3. Chunk x into the shape base1 expects
+        x = [x_padded[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(x_padded) // n_samples)]
         x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
         print(x.shape, m.shape)
@@ -306,19 +308,36 @@ with torch.no_grad():
                 # y2 = base2.reconstruct(x, n_steps=n_steps, noise=noise[:x.shape[0]])
                 y3 = measure1.reconstruct(m, n_steps=n_steps, noise=noise[:m.shape[0]])
             
-            # 1. Restore measures and flatten into continuous array
-            y3_flat = np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3.cpu().detach().numpy(), ratios)], axis=0)
+            # Overwrite x: Revert to the exact unpadded continuous audio
+            x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
             
-            # 2. Add the exact same padding we added to x
+            # Overwrite y1: Flatten the chunks and strip the exact padding added earlier
+            y1 = y1.cpu().detach().numpy().flatten()
             if pad_length > 0:
-                y3_flat = np.pad(y3_flat, (0, pad_length))
-                
-            # 3. Chunk it identically to x
-            y3_chunks = [y3_flat[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(y3_flat) // n_samples)]
-            y3 = torch.from_numpy(np.asarray(y3_chunks).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+                y1 = y1[:-pad_length]
+            y1 = torch.from_numpy(y1.astype(np.float32)).to(device, non_blocking=True)
             
+            # Overwrite y3: Restore measures and concatenate (naturally matches x_raw length!)
+            y3 = np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3.cpu().detach().numpy(), ratios)], axis=0)
+            y3 = torch.from_numpy(y3.astype(np.float32)).to(device, non_blocking=True)
+            
+            # Now x, y1, and y3 are 1D continuous tensors perfectly aligned down to the sample!
             print(x.shape, y1.shape, y3.shape)
             print('='*60)
+            
+            # # 1. Restore measures and flatten into continuous array
+            # y3_flat = np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3.cpu().detach().numpy(), ratios)], axis=0)
+            
+            # # 2. Add the exact same padding we added to x
+            # if pad_length > 0:
+            #     y3_flat = np.pad(y3_flat, (0, pad_length))
+                
+            # # 3. Chunk it identically to x
+            # y3_chunks = [y3_flat[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(y3_flat) // n_samples)]
+            # y3 = torch.from_numpy(np.asarray(y3_chunks).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+            
+            # print(x.shape, y1.shape, y3.shape)
+            # print('='*60)
             
             # Custom embs
             if not USE_CLAP:
