@@ -556,6 +556,7 @@ if __name__ == "__main__":
     parser.add_argument("--crunch", action='store_true', default=False, help="Squash npzs into a single memmap")
     parser.add_argument("--length", type=int, default=None, help="The number of samples to convert to memmap array")
     parser.add_argument("--time-warp", action='store_true', default=False, help='Generate time warped npz 4/4 measures')
+    parser.add_argument("--beat-pack", action='store_true', default=False, help='Generate time warped npz 4/4 measures')
     parser.add_argument("--measure", action='store_true', default=False, help="Generate 4/4 measure")
     parser.add_argument("--max-samples", type=int, default=None, help="The maximum number of sample to allow for a measure")
     
@@ -567,5 +568,7 @@ if __name__ == "__main__":
         crunch(args.length)
     elif args.time_warp:
         time_warp_measures()
+    elif args.beat_pack:
+        time_warp_beatpack()
     elif args.measure:
         measures(args.length, args.max_samples)
