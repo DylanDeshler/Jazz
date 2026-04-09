@@ -317,12 +317,11 @@ with torch.no_grad():
                 y1 = y1[:-pad_length]
             y1 = torch.from_numpy(y1.astype(np.float32)).to(device, non_blocking=True)
             
-            print(m.shape, y3.shape)
             m = np.concatenate([restore_measure(m_.squeeze(), ratio) for m_, ratio in zip(m.cpu().detach().numpy(), ratios)], axis=0)
             m = torch.from_numpy(m.astype(np.float32))
             y3 = np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3.cpu().detach().numpy(), ratios)], axis=0)
             y3 = torch.from_numpy(y3.astype(np.float32)).to(device, non_blocking=True)
-            print(m.shape, y3.shape)
+            
             # Custom embs
             if not USE_CLAP:
                 x = drop_to_multiple(x, 16383 * 5)
