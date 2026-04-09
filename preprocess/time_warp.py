@@ -74,6 +74,15 @@ def get_time_signature(beat_data):
     mode_time_sig = vals[np.argmax(counts)]
     return mode_time_sig
 
+def get_grid_safe_steps(current_beat):
+    """Returns allowed beat sizes based on measure position to lock the 4/4 grid."""
+    if current_beat == 1:
+        return [1, 2, 4, 8]
+    elif current_beat == 3:
+        return [1, 2]
+    else:
+        return [1]
+
 def process_measure(y):
     current_samples = len(y)
     stretch_factor = current_samples / TARGET_SAMPLES
@@ -206,6 +215,94 @@ def generate_audio_measures(paths):
     #     bpm=np.array(instant_bpms, dtype=np.float32)
     # )
 
+def generate_packed_audio(paths):
+    """
+    The main offline data prep function. 
+    Replaces your old `generate_audio_measures`.
+    """
+    audio_path, beat_path, out_path = paths
+    
+    beat_data = parse_beat_file(beat_path)
+    
+    try:
+        y, sr = librosa.load(audio_path, sr=None)
+        assert sr == TARGET_SR
+    except Exception as e:
+        return
+        
+    if len(y) < 1000:
+        return
+    
+    if np.max(np.abs(y)) < 0.001:
+        return
+        
+    audios = []
+    instant_bpms = []
+    
+    i = 0
+    while i < len(beat_data) - 1:
+        current_beat = beat_data[i]['beat']
+        
+        # Skip if beat tracker lost the grid
+        if current_beat not in [1, 2, 3, 4]:
+            if i > 0:
+                print(f'Ah bad beat at {i} this shouldnt happen!')
+            i += 1
+            continue
+            
+        valid_steps = get_grid_safe_steps(current_beat)
+        
+        best_step = 1
+        best_error = float('inf')
+        
+        # Greedy search for the step size that requires the least Rubber Band stretching
+        for step in valid_steps:
+            if i + step >= len(beat_data):
+                continue
+                
+            dur_sec = beat_data[i + step]['time'] - beat_data[i]['time']
+            if dur_sec <= 0: 
+                continue
+            
+            # Log ratio handles stretching/compressing symmetrically
+            stretch_ratio = dur_sec / (TARGET_SAMPLES / TARGET_SR)
+            error = abs(np.log(stretch_ratio))
+            
+            if error < best_error:
+                best_error = error
+                best_step = step
+                
+        end_idx = i + best_step
+        if end_idx >= len(beat_data):
+            break
+            
+        t_start = beat_data[i]['time']
+        t_end = beat_data[end_idx]['time']
+        
+        frame_start = int(t_start * sr)
+        frame_end = int(t_end * sr)
+        y_chunk = y[frame_start:frame_end]
+        
+        y_warped, stretch_ratio, instant_bpm = process_measure(y_chunk)
+        
+        audios.append(y_warped)
+        instant_bpms.append(instant_bpm)
+        
+        i += best_step
+        
+    if not audios:
+        return
+    
+    if np.mean(instant_bpms) < 40 or np.mean(instant_bpms) > 330:
+        return
+        
+    sf.write(
+        file=out_path, 
+        data=np.concatenate(audios, axis=0), 
+        samplerate=TARGET_SR,
+        subtype='PCM_16'
+    )
+
 def time_warp_measures():
     print("Gathering files...")
     # beat_paths = sorted(glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats/*.beats'))
@@ -221,6 +318,54 @@ def time_warp_measures():
     names = [os.path.basename(path) for path in beat_paths]
     audio_paths = [os.path.join('/home/ubuntu/Data/wavs', name) for name in names]
     out_paths = [os.path.join('/home/ubuntu/Data/measures', name) for name in names]
+    print(len(beat_paths), len(audio_paths), len(out_paths))
+
+    valid_audio, valid_beats, valid_outs = [], [], []
+    for audio_p, beat_p, out_p in tqdm(zip(audio_paths, beat_paths, out_paths), total=len(audio_paths), desc='Filtering for songs with Time Signature: 4/4 ...'):
+        beat_data = parse_beat_file(beat_p)
+        detected_sig = get_time_signature(beat_data)
+        
+        if detected_sig == TARGET_SIG:
+            valid_audio.append(audio_p)
+            valid_beats.append(beat_p)
+            valid_outs.append(out_p)
+
+    print(f"Found {len(valid_beats)} matching songs (out of {len(audio_paths)} total).")
+    audio_paths = valid_audio
+    beat_paths = valid_beats
+    out_paths = valid_outs
+    del valid_audio
+    del valid_beats
+    del valid_outs
+
+    assert len(audio_paths) == len(beat_paths)
+    
+    tasks = []
+    for audio_path, beat_path, out_path in zip(audio_paths, beat_paths, out_paths):
+        tasks.append((audio_path, beat_path, out_path))
+        
+    print(f"Found {len(tasks)} files. Processing with {NUM_WORKERS} cores...")
+    
+    with ProcessPoolExecutor(max_workers=NUM_WORKERS) as executor:
+        list(tqdm(executor.map(generate_audio_measures, tasks), total=len(tasks)))
+        
+    print("Done!")
+
+def time_warp_beatpack():
+    print("Gathering files...")
+    # beat_paths = sorted(glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats/*.beats'))
+    beat_paths = sorted(glob.glob('/home/ubuntu/Data/beats/*'))
+    # import json
+    # with open('/home/dylan.d/research/music/Jazz/valid_files_by_bpm.json', 'r') as f:
+    #     beat_paths = json.load(f)
+    
+    # os.makedirs('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures', exist_ok=True)
+    # audio_paths = [path.replace('jazz_data_16000_full_clean_beats', 'jazz_data_16000_full_clean').replace('.beats', '.wav') for path in beat_paths]
+    # out_paths = [path.replace('jazz_data_16000_full_clean_beats', 'jazz_data_16000_full_clean_measures').replace('.beats', '.wav') for path in beat_paths]
+    os.makedirs('/home/ubuntu/Data/beatpacks', exist_ok=True)
+    names = [os.path.basename(path) for path in beat_paths]
+    audio_paths = [os.path.join('/home/ubuntu/Data/wavs', name) for name in names]
+    out_paths = [os.path.join('/home/ubuntu/Data/beatpacks', name) for name in names]
     print(len(beat_paths), len(audio_paths), len(out_paths))
 
     valid_audio, valid_beats, valid_outs = [], [], []
