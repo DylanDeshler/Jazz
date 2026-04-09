@@ -200,9 +200,12 @@ contrast = load_model(os.path.join('contrast_learntmep_instance', 'ckpt.pt'), Co
 clap_model = ClapModel.from_pretrained("laion/larger_clap_music").to(device)
 clap_processor = ClapProcessor.from_pretrained("laion/larger_clap_music")
 
-measure_paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
-audio_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in measure_paths]
-beat_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats') for path in measure_paths]
+# measure_paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
+# audio_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in measure_paths]
+# beat_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats') for path in measure_paths]
+measure_paths = glob.glob('/home/ubuntu/Data/measures/*')
+audio_paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in measure_paths]
+beat_paths = [os.path.join('/home/ubuntu/Data/beats', os.path.basename(path)) for path in measure_paths]
 idxs = np.random.randint(len(measure_paths), size=128)
 n_steps = 32
 batch_size = 64
@@ -217,8 +220,8 @@ real_embs = []
 base1_embs = []
 base2_embs = []
 measure1_embs = []
-out_dir = '/home/dylan.d/research/music/Jazz/jazz_data_16000_FAD_embs2'
-os.makedirs(out_dir, exist_ok=True)
+# out_dir = '/home/dylan.d/research/music/Jazz/jazz_data_16000_FAD_embs2'
+# os.makedirs(out_dir, exist_ok=True)
 with torch.no_grad():
     for k, idx in enumerate(tqdm(idxs)):
         if k < 19:
@@ -313,10 +316,10 @@ with torch.no_grad():
             base2_embs.append(torch.stack(base2_emb, dim=1).cpu().detach().numpy())
             measure1_embs.append(torch.stack(measure1_emb, dim=1).cpu().detach().numpy())
         
-        np.save(os.path.join(out_dir, 'real.npy'), np.concatenate(real_embs, axis=0))
-        np.save(os.path.join(out_dir, 'base1.npy'), np.concatenate(base1_embs, axis=0))
-        np.save(os.path.join(out_dir, 'base2.npy'), np.concatenate(base2_embs, axis=0))
-        np.save(os.path.join(out_dir, 'measure1.npy'), np.concatenate(measure1_embs, axis=0))
+        # np.save(os.path.join(out_dir, 'real.npy'), np.concatenate(real_embs, axis=0))
+        # np.save(os.path.join(out_dir, 'base1.npy'), np.concatenate(base1_embs, axis=0))
+        # np.save(os.path.join(out_dir, 'base2.npy'), np.concatenate(base2_embs, axis=0))
+        # np.save(os.path.join(out_dir, 'measure1.npy'), np.concatenate(measure1_embs, axis=0))
 
         # name = measure_path.split('/')[-1]
         # sf.write(
