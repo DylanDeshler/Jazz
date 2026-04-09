@@ -329,7 +329,7 @@ with torch.no_grad():
                 y4z = F.interpolate(y4z, size=T, mode='linear', align_corners=False)
                 print('inverted interp: ', y4z.shape)
                 print(m_padded.shape, y4.shape, y4z.shape)
-                y4 = base1.decode(y4z, shape=y4.shape, n_steps=n_steps, noise=noise)
+                y4 = base1.decode(y4z, shape=y4.shape, n_steps=n_steps, noise=noise[:y4.shape[0]])
             
             x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
             
