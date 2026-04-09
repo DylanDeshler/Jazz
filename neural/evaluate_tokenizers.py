@@ -239,7 +239,7 @@ audio_paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) fo
 audio_paths = [path for path in audio_paths if os.path.basename(path) in beat_paths]
 beat_paths = [os.path.join('/home/ubuntu/Data/beats', path) for path in beat_paths]
 
-idxs = np.random.choice(np.arange(len(measure_paths)), size=128, replace=False)
+idxs = np.random.choice(np.arange(len(measure_paths)), size=4, replace=False)
 n_steps = 100
 batch_size = 32
 EVAL_ITERATIVE = False
@@ -321,14 +321,8 @@ with torch.no_grad():
                 y3 = measure1.reconstruct(m, n_steps=n_steps, noise=noise[:m.shape[0]])
                 y4, y4z = base1.encode(m_padded)
                 T = y4z.shape[-1]
-                print(y3.shape, y4.shape, y4z.shape, T)
-                print(base1.encode(x)[1].shape)
-                print('before interp ', y4z.shape)
-                y4z = F.interpolate(y4z, size=48, mode='linear', align_corners=False)
-                print('after interp: ', y4z.shape)
+                y4z = F.interpolate(y4z, size=n_samples // encoder_ratios, mode='linear', align_corners=False)
                 y4z = F.interpolate(y4z, size=T, mode='linear', align_corners=False)
-                print('inverted interp: ', y4z.shape)
-                print(m_padded.shape, y4.shape, y4z.shape)
                 y4 = base1.decode(y4z, shape=y4.shape, n_steps=n_steps)
             
             x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
