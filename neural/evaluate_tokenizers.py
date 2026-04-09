@@ -271,6 +271,9 @@ with torch.no_grad():
             m.append(measure)
             ratios.append(stretch_ratio)
         
+        if last_frame - first_frame < 16383 * 5:
+            continue
+        
         m = torch.from_numpy(np.asarray(m).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         x_raw = wav[first_frame:last_frame]
         
@@ -305,10 +308,14 @@ with torch.no_grad():
             # Custom embs
             if not USE_CLAP:
                 with ctx:
-                    real_emb = fad.forward_features(drop_to_multiple(x, 16383 * 5))
-                    base1_emb = fad.forward_features(drop_to_multiple(y1, 16383 * 5))
-                    # base2_emb = fad.forward_features(drop_to_multiple(y2, 16383 * 5))
-                    measure1_emb = fad.forward_features(drop_to_multiple(y3, 16383 * 5))
+                    try:
+                        real_emb = fad.forward_features(drop_to_multiple(x, 16383 * 5))
+                        base1_emb = fad.forward_features(drop_to_multiple(y1, 16383 * 5))
+                        # base2_emb = fad.forward_features(drop_to_multiple(y2, 16383 * 5))
+                        measure1_emb = fad.forward_features(drop_to_multiple(y3, 16383 * 5))
+                    except Exception as e:
+                        print(e)
+                        continue
             
             # Laion-CLAP embs
             else:
