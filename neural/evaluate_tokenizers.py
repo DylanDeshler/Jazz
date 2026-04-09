@@ -239,7 +239,7 @@ measure1_embs = []
 # out_dir = '/home/dylan.d/research/music/Jazz/jazz_data_16000_FAD_embs2'
 # os.makedirs(out_dir, exist_ok=True)
 with torch.no_grad():
-    for k, idx in enumerate(tqdm(idxs)):
+    for idx in tqdm(idxs):
         measure_path, audio_path, beat_path = measure_paths[idx], audio_paths[idx], beat_paths[idx]
         print(measure_path)
         print(audio_path)
@@ -254,6 +254,7 @@ with torch.no_grad():
         downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
         
         m, ratios = [], []
+        first_frame, last_frame = None, None
         for i in range(len(downbeat_indices) - 1):
             start_idx = downbeat_indices[i]
             end_idx = downbeat_indices[i+1]
@@ -267,11 +268,29 @@ with torch.no_grad():
             if frame_end > len(wav):
                 break
             
+            if first_frame is None:
+                first_frame = frame_start
+            last_frame = frame_end
+            
             measure, stretch_ratio, instant_bpm = process_measure(wav[frame_start:frame_end])
             m.append(measure)
             ratios.append(stretch_ratio)
         
         m = torch.from_numpy(np.asarray(m).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+        
+        aligned_wav = wav[first_frame:last_frame]
+        
+        # 2. Pad aligned_wav so it divides perfectly by 24576 (so we don't drop the tail end of the last measure)
+        remainder = len(aligned_wav) % n_samples
+        pad_length = (n_samples - remainder) if remainder != 0 else 0
+        
+        if pad_length > 0:
+            aligned_wav = np.pad(aligned_wav, (0, pad_length))
+            
+        # 3. Chunk aligned_wav into x
+        x = [aligned_wav[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(aligned_wav) // n_samples)]
+        x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+        
         print(x.shape, m.shape)
         
         # wav, _ = librosa.load(measure_path, sr=None)
@@ -287,9 +306,17 @@ with torch.no_grad():
                 # y2 = base2.reconstruct(x, n_steps=n_steps, noise=noise[:x.shape[0]])
                 y3 = measure1.reconstruct(m, n_steps=n_steps, noise=noise[:m.shape[0]])
             
-            print(x.shape, y1.shape)
-            y3 = np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3.cpu().detach().numpy(), ratios)], axis=0)
-            y3 = torch.from_numpy(y3.astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+            # 1. Restore measures and flatten into continuous array
+            y3_flat = np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3.cpu().detach().numpy(), ratios)], axis=0)
+            
+            # 2. Add the exact same padding we added to x
+            if pad_length > 0:
+                y3_flat = np.pad(y3_flat, (0, pad_length))
+                
+            # 3. Chunk it identically to x
+            y3_chunks = [y3_flat[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(y3_flat) // n_samples)]
+            y3 = torch.from_numpy(np.asarray(y3_chunks).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+            
             print(x.shape, y1.shape, y3.shape)
             print('='*60)
             
