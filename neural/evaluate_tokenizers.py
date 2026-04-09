@@ -239,7 +239,7 @@ beat_paths = [os.path.join('/home/ubuntu/Data/beats', path) for path in beat_pat
 
 idxs = np.random.choice(np.arange(len(measure_paths)), size=128, replace=False)
 n_steps = 100
-batch_size = 64
+batch_size = 32
 EVAL_ITERATIVE = False
 USE_CLAP = False
 
@@ -325,6 +325,7 @@ with torch.no_grad():
                 x = drop_to_multiple(x, 16383 * 5)
                 y1 = drop_to_multiple(y1, 16383 * 5)
                 y3 = drop_to_multiple(y3, 16383 * 5)
+                m = drop_to_multiple(m, 16383 * 5)
                 with ctx:
                     try:
                         real_emb = fad.forward_features(x)
@@ -416,7 +417,13 @@ with torch.no_grad():
         #     subtype='PCM_16'
         # )
         sf.write(
-            file=os.path.join(out_dir, f'{idx}_measures_{name}'), 
+            file=os.path.join(out_dir, f'{idx}_measure_real_{name}'), 
+            data=m[to_sample].flatten().cpu().detach().numpy(), 
+            samplerate=rate,
+            subtype='PCM_16'
+        )
+        sf.write(
+            file=os.path.join(out_dir, f'{idx}_measure_recon_{name}'), 
             data=y3[to_sample].flatten().cpu().detach().numpy(), 
             samplerate=rate,
             subtype='PCM_16'
