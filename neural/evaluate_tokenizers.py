@@ -193,7 +193,7 @@ def drop_to_multiple(a, multiple):
     return a
 
 base1 = load_model(os.path.join('tokenizer_low_large_24576', 'ckpt.pt'), Tokenizer)
-base2 = load_model(os.path.join('tokenizer_low_large_24576_2std_subset', 'ckpt.pt'), Tokenizer)
+# base2 = load_model(os.path.join('tokenizer_low_large_24576_2std_subset', 'ckpt.pt'), Tokenizer)
 measure1 = load_model(os.path.join('tokenizer_low_measures_2std_subset', 'ckpt.pt'), Tokenizer)
 fad = load_model(os.path.join('FAD', 'ckpt.pt'), FAD)
 contrast = load_model(os.path.join('contrast_learntmep_instance', 'ckpt.pt'), Contrast)
@@ -247,7 +247,7 @@ with torch.no_grad():
             noise = torch.randn((max(x.shape[0], m.shape[0]), 1, n_samples), device=device)
             with ctx:
                 y1 = base1.reconstruct(x, n_steps=n_steps, noise=noise[:x.shape[0]])
-                y2 = base2.reconstruct(x, n_steps=n_steps, noise=noise[:x.shape[0]])
+                # y2 = base2.reconstruct(x, n_steps=n_steps, noise=noise[:x.shape[0]])
                 y3 = measure1.reconstruct(m, n_steps=n_steps, noise=noise[:m.shape[0]])
                 
             y3 = np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3.cpu().detach().numpy(), ratios)], axis=0)
@@ -258,7 +258,7 @@ with torch.no_grad():
                 with ctx:
                     real_emb = fad.forward_features(drop_to_multiple(x, 16383 * 5))
                     base1_emb = fad.forward_features(drop_to_multiple(y1, 16383 * 5))
-                    base2_emb = fad.forward_features(drop_to_multiple(y2, 16383 * 5))
+                    # base2_emb = fad.forward_features(drop_to_multiple(y2, 16383 * 5))
                     measure1_emb = fad.forward_features(drop_to_multiple(y3, 16383 * 5))
             
             # Laion-CLAP embs
@@ -313,7 +313,7 @@ with torch.no_grad():
             
             real_embs.append(real_emb.cpu().detach().numpy())
             base1_embs.append(torch.stack(base1_emb, dim=1).cpu().detach().numpy())
-            base2_embs.append(torch.stack(base2_emb, dim=1).cpu().detach().numpy())
+            # base2_embs.append(torch.stack(base2_emb, dim=1).cpu().detach().numpy())
             measure1_embs.append(torch.stack(measure1_emb, dim=1).cpu().detach().numpy())
         
         # np.save(os.path.join(out_dir, 'real.npy'), np.concatenate(real_embs, axis=0))
@@ -350,15 +350,15 @@ with torch.no_grad():
 if not EVAL_ITERATIVE:
     real_mu, real_sigma = calculate_embd_statistics(np.concatenate(real_embs, axis=0))
     base1_mu, base1_sigma = calculate_embd_statistics(np.concatenate(base1_embs, axis=0))
-    base2_mu, base2_sigma = calculate_embd_statistics(np.concatenate(base2_embs, axis=0))
+    # base2_mu, base2_sigma = calculate_embd_statistics(np.concatenate(base2_embs, axis=0))
     measure1_mu, measure1_sigma = calculate_embd_statistics(np.concatenate(measure1_embs, axis=0))
 
     base1_fad = calculate_frechet_distance(base1_mu, base1_sigma, real_mu, real_sigma)
-    base2_fad = calculate_frechet_distance(base2_mu, base2_sigma, real_mu, real_sigma)
+    # base2_fad = calculate_frechet_distance(base2_mu, base2_sigma, real_mu, real_sigma)
     measure1_fad = calculate_frechet_distance(measure1_mu, measure1_sigma, real_mu, real_sigma)
 
     print('Base 1 FAD: ', base1_fad)
-    print('Base 2 FAD: ', base2_fad)
+    # print('Base 2 FAD: ', base2_fad)
     print('Measure 1 FAD: ', measure1_fad)
     # Base 1 FAD:  46.068807655471866694
     # Base 2 FAD:  46.19946344047392614
