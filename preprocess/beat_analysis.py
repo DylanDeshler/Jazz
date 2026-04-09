@@ -181,7 +181,7 @@ def analyze_folder_stats(folder_path):
     print(f"  StdDev: {np.std(bpms):.2f}")
     median_bpm = np.median(bpms)
     std_bpm = np.std(bpms)
-    valid_files = [s['filename'] for s in all_stats if s['measure_beats_mode'] == 4 and s['bpm_median'] > median_bpm - 2 * std_bpm and s['bpm_median'] < median_bpm + 2 * std_bpm]
+    valid_files = [s['filename'] for s in all_stats if s['measure_beats_mode'] == 4 and s['bpm_median'] > median_bpm / 2 and s['bpm_median'] < median_bpm * 2]
     print(f"  # Files within 2 stds of median BPM: {len(valid_files)}")
     import json
     with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'w') as f:
