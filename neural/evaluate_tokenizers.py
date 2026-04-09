@@ -240,7 +240,7 @@ measure1_embs = []
 # os.makedirs(out_dir, exist_ok=True)
 with torch.no_grad():
     for k, idx in enumerate(tqdm(idxs)):
-        measure_path, audio_path, beat_path = measure_paths[idx], audio_paths[idx], beat_paths[idx]
+        asdafsfasfasf, audio_path, beat_path = measure_paths[idx], audio_paths[idx], beat_paths[idx]
         
         wav, _ = librosa.load(audio_path, sr=None)
         wav = wav[:batch_size * rate]
@@ -261,6 +261,9 @@ with torch.no_grad():
             frame_start = int(t_start * rate)
             frame_end = int(t_end * rate)
             
+            if frame_end > len(wav):
+                break
+            print(i, t_start, t_end, frame_start, frame_end)
             measure, stretch_ratio, instant_bpm = process_measure(wav[frame_start:frame_end])
             m.append(measure)
             ratios.append(stretch_ratio)
