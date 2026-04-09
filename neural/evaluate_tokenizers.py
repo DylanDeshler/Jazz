@@ -395,7 +395,6 @@ with torch.no_grad():
         # np.save(os.path.join(out_dir, 'base2.npy'), np.concatenate(base2_embs, axis=0))
         # np.save(os.path.join(out_dir, 'measure1.npy'), np.concatenate(measure1_embs, axis=0))
 
-        print(x.shape, y1.shape, y3.shape)
         name = os.path.basename(measure_path)
         sf.write(
             file=os.path.join(out_dir, f'{idx}_real_{name}'), 
