@@ -396,10 +396,6 @@ with torch.no_grad():
         # np.save(os.path.join(out_dir, 'measure1.npy'), np.concatenate(measure1_embs, axis=0))
 
         print(real_emb.shape, base1_emb.shape, measure1_emb.shape)
-        real_emb = fad.forward_features(drop_to_multiple(x, 16383 * 5))
-        base1_emb = fad.forward_features(drop_to_multiple(y1, 16383 * 5))
-        # base2_emb = fad.forward_features(drop_to_multiple(y2, 16383 * 5))
-        measure1_emb = fad.forward_features(drop_to_multiple(y3, 16383 * 5))
         name = os.path.basename(measure_path)
         sf.write(
             file=os.path.join(out_dir, f'{idx}_real_{name}'), 
