@@ -270,7 +270,7 @@ with torch.no_grad():
             m.append(measure)
             ratios.append(stretch_ratio)
         
-        m = np.concatenate(m, axis=0)
+        m = np.stack(m, axis=0)
         m = torch.from_numpy(np.asarray(m).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
         # wav, _ = librosa.load(measure_path, sr=None)
