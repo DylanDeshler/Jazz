@@ -278,7 +278,7 @@ with torch.no_grad():
         
         ## Standard approach
         if not EVAL_ITERATIVE:
-            noise = torch.randn((1, 1, n_samples), device=device).repeat(max(x.shape[0], m.shape[0]))
+            noise = torch.randn((1, 1, n_samples), device=device).repeat(max(x.shape[0], m.shape[0]), 1, 1)
             with ctx:
                 y1 = base1.reconstruct(x, n_steps=n_steps, noise=noise[:x.shape[0]])
                 # y2 = base2.reconstruct(x, n_steps=n_steps, noise=noise[:x.shape[0]])
