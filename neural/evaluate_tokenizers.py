@@ -19,7 +19,7 @@ from dito import DiToV5 as Tokenizer
 from fad import MultiTaskFAD as FAD
 from contrast import Transformer as Contrast
 
-from transformers import ClapModel, ClapProcessor
+# from transformers import ClapModel, ClapProcessor
 
 torch.manual_seed(0)
 np.random.seed(0)
@@ -197,8 +197,8 @@ base2 = load_model(os.path.join('tokenizer_low_large_24576_2std_subset', 'ckpt.p
 measure1 = load_model(os.path.join('tokenizer_low_measures_2std_subset', 'ckpt.pt'), Tokenizer)
 fad = load_model(os.path.join('FAD', 'ckpt.pt'), FAD)
 contrast = load_model(os.path.join('contrast_learntmep_instance', 'ckpt.pt'), Contrast)
-clap_model = ClapModel.from_pretrained("laion/larger_clap_music").to(device)
-clap_processor = ClapProcessor.from_pretrained("laion/larger_clap_music")
+# clap_model = ClapModel.from_pretrained("laion/larger_clap_music").to(device)
+# clap_processor = ClapProcessor.from_pretrained("laion/larger_clap_music")
 
 # measure_paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
 # audio_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in measure_paths]
