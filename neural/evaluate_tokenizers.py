@@ -15,6 +15,7 @@ import torch
 import numpy as np
 from scipy import linalg
 from contextlib import nullcontext
+import torch.nn.functional as F
 
 from dito import DiToV5 as Tokenizer
 from fad import MultiTaskFAD as FAD
@@ -252,6 +253,7 @@ real_measure_embs = []
 base1_embs = []
 base2_embs = []
 measure1_embs = []
+lerp_embs = []
 out_dir = '/home/ubuntu/Data/FAD_samples'
 os.makedirs(out_dir, exist_ok=True)
 with torch.no_grad():
@@ -264,7 +266,7 @@ with torch.no_grad():
         beat_data = parse_beat_file(beat_path)
         downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
         
-        m, ratios = [], []
+        m, m_raw, ratios = [], [], []
         first_frame, last_frame = None, None
         for i in range(len(downbeat_indices) - 1):
             start_idx = downbeat_indices[i]
@@ -285,6 +287,7 @@ with torch.no_grad():
             
             measure, stretch_ratio, instant_bpm = process_measure(wav[frame_start:frame_end])
             m.append(measure)
+            m_raw.append(wav[frame_start:frame_end])
             ratios.append(stretch_ratio)
         
         if last_frame - first_frame < 16383 * 5:
@@ -303,6 +306,9 @@ with torch.no_grad():
         x = [x_padded[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(x_padded) // n_samples)]
         x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
+        max_len = max([len(raw) for raw in m_raw])
+        m_padded = torch.from_numpy(np.stack([np.pad(raw, (0, max_len - len(raw))) for raw in m_raw], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+        
         ## Standard approach
         if not EVAL_ITERATIVE:
             noise = torch.randn((1, 1, n_samples), device=device).repeat(max(x.shape[0], m.shape[0]), 1, 1)
@@ -310,6 +316,12 @@ with torch.no_grad():
                 y1 = base1.reconstruct(x, n_steps=n_steps, noise=noise[:x.shape[0]])
                 # y2 = base2.reconstruct(x, n_steps=n_steps, noise=noise[:x.shape[0]])
                 y3 = measure1.reconstruct(m, n_steps=n_steps, noise=noise[:m.shape[0]])
+                y4, y4z = base1.encode(m_padded)
+                T = y4z.shape[-1]
+                print(y3.shape, y4.shape, y4z.shape, T)
+                y4z = F.interpolate(y4z, size=48, mode='linear', align_corners=False)
+                y4z = F.interpolate(y4z, size=T, mode='linear', align_corners=False)
+                y4 = base1.decode(y4z, shape=y4.shape, n_steps=n_steps, noise=noise)
             
             x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
             
@@ -318,16 +330,22 @@ with torch.no_grad():
                 y1 = y1[:-pad_length]
             y1 = torch.from_numpy(y1.astype(np.float32)).to(device, non_blocking=True)
             
+            y4 = y4.squeeze().cpu().detach().numpy()
+            y4 = np.concatenate([y[:-(max_len - len(pad))] for y, pad in zip(y4, m_raw)], axis=0)
+            y4 = torch.from_numpy(y4.astype(np.float32)).to(device, non_blocking=True)
+            
             m = np.concatenate([restore_measure(m_.squeeze(), ratio) for m_, ratio in zip(m.cpu().detach().numpy(), ratios)], axis=0)
             m = torch.from_numpy(m.astype(np.float32)).to(device, non_blocking=True)
             y3 = np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3.cpu().detach().numpy(), ratios)], axis=0)
             y3 = torch.from_numpy(y3.astype(np.float32)).to(device, non_blocking=True)
+            print(y3.shape, y4.shape)
             
             # Custom embs
             if not USE_CLAP:
                 x = drop_to_multiple(x, 16383 * 5)
                 y1 = drop_to_multiple(y1, 16383 * 5)
                 y3 = drop_to_multiple(y3, 16383 * 5)
+                y4 = drop_to_multiple(y4, 16383 * 5)
                 m = drop_to_multiple(m, 16383 * 5)
                 with ctx:
                     try:
@@ -336,6 +354,7 @@ with torch.no_grad():
                         base1_emb = fad.forward_features(y1)
                         # base2_emb = fad.forward_features(drop_to_multiple(y2, 16383 * 5))
                         measure1_emb = fad.forward_features(y3)
+                        lerp_emb = fad.forward_features(y4)
                     except Exception as e:
                         print(e)
                         continue
@@ -363,6 +382,7 @@ with torch.no_grad():
             base1_embs.append(base1_emb.cpu().detach().numpy())
             # base2_embs.append(base2_emb.cpu().detach().numpy())
             measure1_embs.append(measure1_emb.cpu().detach().numpy())
+            lerp_embs.append(lerp_emb.cpu().detach().numpy())
         
         ## Iterative for measuring impact of n_steps
         else:
@@ -440,21 +460,26 @@ if not EVAL_ITERATIVE:
     base1_mu, base1_sigma = calculate_embd_statistics(np.concatenate(base1_embs, axis=0))
     # base2_mu, base2_sigma = calculate_embd_statistics(np.concatenate(base2_embs, axis=0))
     measure1_mu, measure1_sigma = calculate_embd_statistics(np.concatenate(measure1_embs, axis=0))
+    lerp_mu, lerp_sigma = calculate_embd_statistics(np.concatenate(lerp_embs, axis=0))
 
     m_fad = calculate_frechet_distance(real_m_mu, real_m_sigma, real_mu, real_sigma)
     base1_fad = calculate_frechet_distance(base1_mu, base1_sigma, real_mu, real_sigma)
     # base2_fad = calculate_frechet_distance(base2_mu, base2_sigma, real_mu, real_sigma)
     measure1_fad = calculate_frechet_distance(measure1_mu, measure1_sigma, real_mu, real_sigma)
     measure1_m_fad = calculate_frechet_distance(measure1_mu, measure1_sigma, real_m_mu, real_m_sigma)
+    lerp_fad = calculate_frechet_distance(lerp_mu, lerp_sigma, real_mu, real_sigma)
 
     print('Real Measures -> Real Samples FAD: ', m_fad)
     print('Base1 -> Real Samples FAD: ', base1_fad)
     # print('Base 2 FAD: ', base2_fad)
     print('Measure1 -> Real Samples FAD: ', measure1_fad)
     print('Measure1 -> Real Measures FAD:', measure1_m_fad)
-    # Base 1 FAD:  46.068807655471866694
-    # Base 2 FAD:  46.19946344047392614
-    # Measure 1 FAD:  49.728033691220890164
+    print('LERP -> Real Samples FAD: ', lerp_fad)
+    
+    # Real Measures -> Real Samples FAD:  2.6932771422591486
+    # Base1 -> Real Samples FAD:  23.673057913395297
+    # Measure1 -> Real Samples FAD:  29.42552948571202
+    # Measure1 -> Real Measures FAD: 25.327910744233137
 else:
     fads = defaultdict(list)
     for exponent in range(math.floor(math.log2(n_steps)) + 1):
