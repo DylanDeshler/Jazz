@@ -237,7 +237,7 @@ def generate_packed_audio(paths):
         return
         
     audios = []
-    instant_bpms = []
+    metadata = []
     
     i = 0
     while i < len(beat_data) - 1:
@@ -286,15 +286,19 @@ def generate_packed_audio(paths):
         y_warped, stretch_ratio, instant_bpm = process_measure(y_chunk)
         
         audios.append(y_warped)
-        instant_bpms.append(instant_bpm)
+        metadata.append({
+            'chunk_index': len(audios) - 1,
+            'beats': best_step,
+            'original_bpm': instant_bpm
+        })
         
         i += best_step
         
     if not audios:
         return
     
-    if np.mean(instant_bpms) < 40 or np.mean(instant_bpms) > 330:
-        return
+    # if np.mean(instant_bpms) < 40 or np.mean(instant_bpms) > 330:
+    #     return
         
     sf.write(
         file=out_path, 
@@ -302,6 +306,9 @@ def generate_packed_audio(paths):
         samplerate=TARGET_SR,
         subtype='PCM_16'
     )
+    
+    with open(os.path.splitext(out_path) + '.json', 'w') as f:
+        json.dump(metadata, f, indent=4)
 
 def time_warp_measures():
     print("Gathering files...")
@@ -395,7 +402,7 @@ def time_warp_beatpack():
     print(f"Found {len(tasks)} files. Processing with {NUM_WORKERS} cores...")
     
     with ProcessPoolExecutor(max_workers=NUM_WORKERS) as executor:
-        list(tqdm(executor.map(generate_audio_measures, tasks), total=len(tasks)))
+        list(tqdm(executor.map(generate_packed_audio, tasks), total=len(tasks)))
         
     print("Done!")
 
