@@ -261,7 +261,7 @@ def generate_packed_audio(paths):
         # Skip if beat tracker lost the grid
         if current_beat not in [1, 2, 3, 4]:
             if i > 0:
-                print(f'Ah bad beat at {i} this shouldnt happen!')
+                print(f'Ah bad beat at {i}. Value: {current_beat} | Time: {beat_data[i]["time"]}')
             i += 1
             continue
             
