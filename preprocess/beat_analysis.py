@@ -117,9 +117,10 @@ def analyze_folder_stats(folder_path):
     Scans a folder for .beats files and prints aggregate statistics.
     """
     # Look for .beats and .txt files
-    files = glob.glob(os.path.join(folder_path, "*.beats"))
-    if not files:
-        files = glob.glob(os.path.join(folder_path, "*.txt"))
+    # files = glob.glob(os.path.join(folder_path, "*.beats"))
+    # if not files:
+    #     files = glob.glob(os.path.join(folder_path, "*.txt"))
+    files = glob.glob(os.path.join(folder_path, "*"))
     
     if not files:
         print(f"No .beats or .txt files found in: {folder_path}")
@@ -467,7 +468,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     if args.mode == 'stats':
-        beat_path = '/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats'
+        beat_path = '/home/ubuntu/Data/beats'
         if os.path.isdir(beat_path):
             analyze_folder_stats(beat_path)
         else:
