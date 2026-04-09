@@ -15,28 +15,28 @@ def parse_beat_file(beat_path):
     Returns a list of dictionaries: {'time': float, 'beat': int}
     """
     beat_data = []
-    try:
-        with open(beat_path, 'r') as f:
-            for line in f:
-                parts = line.strip().split()
-                if len(parts) >= 1:
-                    try:
-                        ts = float(parts[0])
-                        # specific beat number (1, 2, 3, 4)
-                        # Default to 0 if not present
-                        bn = 0 
-                        if len(parts) >= 2:
-                            try:
-                                bn = int(float(parts[1]))
-                            except ValueError:
-                                pass
-                        
-                        beat_data.append({'time': ts, 'beat': bn})
-                    except ValueError:
-                        continue
-    except FileNotFoundError:
-        print(f"Error: Beat file not found at {beat_path}")
-        sys.exit(1)
+    with open(beat_path, 'r') as f:
+        for line in f:
+            parts = line.strip().split()
+            if len(parts) >= 1:
+                try:
+                    ts = float(parts[0])
+                    # specific beat number (1, 2, 3, 4)
+                    # Default to 0 if not present
+                    bn = 0 
+                    if len(parts) >= 2:
+                        try:
+                            bn = int(float(parts[1]))
+                            
+                            # found an issue where 4/4 is frequently being annotated as 8/4 this fixes it and safe because were only annotating 4/4 songs
+                            if bn > 0:
+                                bn = ((bn - 1) % 4) + 1
+                        except ValueError:
+                            pass
+                    
+                    beat_data.append({'time': ts, 'beat': bn})
+                except ValueError:
+                    continue
     
     return beat_data
 

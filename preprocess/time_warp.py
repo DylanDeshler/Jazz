@@ -38,6 +38,7 @@ def parse_beat_file(beat_path):
                         try:
                             bn = int(float(parts[1]))
                             
+                            # found an issue where 4/4 is frequently being annotated as 8/4 this fixes it and safe because were only annotating 4/4 songs
                             if bn > 0:
                                 bn = ((bn - 1) % 4) + 1
                         except ValueError:
