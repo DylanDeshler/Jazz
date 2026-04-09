@@ -1,6 +1,7 @@
 import os
 import glob
 import math
+import json
 import librosa
 import soundfile as sf
 from tqdm import tqdm
@@ -222,6 +223,12 @@ fad = load_model(os.path.join('FAD', 'ckpt.pt'), FAD)
 measure_paths = glob.glob('/home/ubuntu/Data/measures/*')
 audio_paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in measure_paths]
 beat_paths = [os.path.join('/home/ubuntu/Data/beats', os.path.basename(path)) for path in measure_paths]
+
+with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
+    beat_paths = json.load(f)
+# beat_paths = [os.path.join('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats', path) for path in beat_paths]
+print(beat_paths[0])
+
 idxs = np.random.choice(np.arange(len(measure_paths)), size=128, replace=False)
 n_steps = 32
 batch_size = 64
