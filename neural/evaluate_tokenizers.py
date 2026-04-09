@@ -224,8 +224,6 @@ measure1_embs = []
 # os.makedirs(out_dir, exist_ok=True)
 with torch.no_grad():
     for k, idx in enumerate(tqdm(idxs)):
-        if k < 19:
-            continue
         measure_path, audio_path, beat_path = measure_paths[idx], audio_paths[idx], beat_paths[idx]
         
         wav, _ = librosa.load(audio_path, sr=None)
@@ -281,7 +279,7 @@ with torch.no_grad():
             
             real_embs.append(real_emb.cpu().detach().numpy())
             base1_embs.append(base1_emb.cpu().detach().numpy())
-            base2_embs.append(base2_emb.cpu().detach().numpy())
+            # base2_embs.append(base2_emb.cpu().detach().numpy())
             measure1_embs.append(measure1_emb.cpu().detach().numpy())
         
         ## Iterative for measuring impact of n_steps
@@ -313,7 +311,7 @@ with torch.no_grad():
             
             real_embs.append(real_emb.cpu().detach().numpy())
             base1_embs.append(torch.stack(base1_emb, dim=1).cpu().detach().numpy())
-            # base2_embs.append(torch.stack(base2_emb, dim=1).cpu().detach().numpy())
+            base2_embs.append(torch.stack(base2_emb, dim=1).cpu().detach().numpy())
             measure1_embs.append(torch.stack(measure1_emb, dim=1).cpu().detach().numpy())
         
         # np.save(os.path.join(out_dir, 'real.npy'), np.concatenate(real_embs, axis=0))
