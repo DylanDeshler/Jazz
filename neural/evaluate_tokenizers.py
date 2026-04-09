@@ -220,14 +220,16 @@ fad = load_model(os.path.join('FAD', 'ckpt.pt'), FAD)
 # measure_paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
 # audio_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in measure_paths]
 # beat_paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats') for path in measure_paths]
-measure_paths = glob.glob('/home/ubuntu/Data/measures/*')
-audio_paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in measure_paths]
-beat_paths = [os.path.join('/home/ubuntu/Data/beats', os.path.basename(path)) for path in measure_paths]
+# measure_paths = glob.glob('/home/ubuntu/Data/measures/*')
+# audio_paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in measure_paths]
+# beat_paths = [os.path.join('/home/ubuntu/Data/beats', os.path.basename(path)) for path in measure_paths]
 
 with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
-    beat_paths = json.load(f)
-# beat_paths = [os.path.join('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_beats', path) for path in beat_paths]
-print(beat_paths[0])
+    names = json.load(f)
+names = [name.replace('.beats', '.wav') for name in names]
+measure_paths = [os.path.join('/home/ubuntu/Data/measures', name) for name in names]
+audio_paths = [os.path.join('/home/ubuntu/Data/wavs', name) for name in names]
+beat_paths = [os.path.join('/home/ubuntu/Data/beats', name) for name in names]
 
 idxs = np.random.choice(np.arange(len(measure_paths)), size=128, replace=False)
 n_steps = 32
