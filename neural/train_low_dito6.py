@@ -39,7 +39,7 @@ import glob
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
 out_dir = 'tokenizer_low_large_24576_subset'
-eval_interval = 2500
+eval_interval = 5000
 log_interval = 100
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
