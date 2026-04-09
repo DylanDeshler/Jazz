@@ -238,7 +238,7 @@ audio_paths = [path for path in audio_paths if os.path.basename(path) in beat_pa
 beat_paths = [os.path.join('/home/ubuntu/Data/beats', path) for path in beat_paths]
 
 idxs = np.random.choice(np.arange(len(measure_paths)), size=128, replace=False)
-n_steps = 32
+n_steps = 100
 batch_size = 64
 EVAL_ITERATIVE = False
 USE_CLAP = False
@@ -251,7 +251,7 @@ real_embs = []
 base1_embs = []
 base2_embs = []
 measure1_embs = []
-out_dir = '/home/ubuntu/Data/FAD'
+out_dir = '/home/ubuntu/Data/FAD_samples'
 os.makedirs(out_dir, exist_ok=True)
 with torch.no_grad():
     for idx in tqdm(idxs):
