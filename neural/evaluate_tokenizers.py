@@ -241,14 +241,9 @@ measure1_embs = []
 with torch.no_grad():
     for idx in tqdm(idxs):
         measure_path, audio_path, beat_path = measure_paths[idx], audio_paths[idx], beat_paths[idx]
-        print(measure_path)
-        print(audio_path)
         
         wav, _ = librosa.load(audio_path, sr=None)
         wav = wav[:batch_size * rate]
-        print(wav.shape)
-        # x = [wav[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(wav) // n_samples)]
-        # x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
         beat_data = parse_beat_file(beat_path)
         downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
@@ -277,28 +272,17 @@ with torch.no_grad():
             ratios.append(stretch_ratio)
         
         m = torch.from_numpy(np.asarray(m).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-        
-        # 1. Grab the exact contiguous audio used by 'm' (this is our true ground truth)
         x_raw = wav[first_frame:last_frame]
         
-        # 2. Pad temporarily just for the base1 model forward pass
         remainder = len(x_raw) % n_samples
         pad_length = (n_samples - remainder) if remainder != 0 else 0
         
         x_padded = x_raw
         if pad_length > 0:
             x_padded = np.pad(x_raw, (0, pad_length))
-            
-        # 3. Chunk x into the shape base1 expects
+        
         x = [x_padded[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(x_padded) // n_samples)]
         x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-        
-        print(x.shape, m.shape)
-        
-        # wav, _ = librosa.load(measure_path, sr=None)
-        # m = [wav[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(wav) // n_samples)]
-        # m = torch.from_numpy(np.asarray(m).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-        # ratios = [TARGET_BPM / calculate_bpm(beat_path, start) for start in range(len(wav) // n_samples)]
         
         ## Standard approach
         if not EVAL_ITERATIVE:
@@ -308,36 +292,15 @@ with torch.no_grad():
                 # y2 = base2.reconstruct(x, n_steps=n_steps, noise=noise[:x.shape[0]])
                 y3 = measure1.reconstruct(m, n_steps=n_steps, noise=noise[:m.shape[0]])
             
-            # Overwrite x: Revert to the exact unpadded continuous audio
             x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
             
-            # Overwrite y1: Flatten the chunks and strip the exact padding added earlier
             y1 = y1.cpu().detach().numpy().flatten()
             if pad_length > 0:
                 y1 = y1[:-pad_length]
             y1 = torch.from_numpy(y1.astype(np.float32)).to(device, non_blocking=True)
             
-            # Overwrite y3: Restore measures and concatenate (naturally matches x_raw length!)
             y3 = np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3.cpu().detach().numpy(), ratios)], axis=0)
             y3 = torch.from_numpy(y3.astype(np.float32)).to(device, non_blocking=True)
-            
-            # Now x, y1, and y3 are 1D continuous tensors perfectly aligned down to the sample!
-            print(x.shape, y1.shape, y3.shape, drop_to_multiple(x, 16383 * 5).shape)
-            print('='*60)
-            
-            # # 1. Restore measures and flatten into continuous array
-            # y3_flat = np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3.cpu().detach().numpy(), ratios)], axis=0)
-            
-            # # 2. Add the exact same padding we added to x
-            # if pad_length > 0:
-            #     y3_flat = np.pad(y3_flat, (0, pad_length))
-                
-            # # 3. Chunk it identically to x
-            # y3_chunks = [y3_flat[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(y3_flat) // n_samples)]
-            # y3 = torch.from_numpy(np.asarray(y3_chunks).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-            
-            # print(x.shape, y1.shape, y3.shape)
-            # print('='*60)
             
             # Custom embs
             if not USE_CLAP:
