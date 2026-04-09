@@ -317,6 +317,7 @@ with torch.no_grad():
                 y1 = y1[:-pad_length]
             y1 = torch.from_numpy(y1.astype(np.float32)).to(device, non_blocking=True)
             
+            m = np.concatenate([restore_measure(m_.squeeze(), ratio) for m_, ratio in zip(m.cpu().detach().numpy(), ratios)], axis=0)
             y3 = np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3.cpu().detach().numpy(), ratios)], axis=0)
             y3 = torch.from_numpy(y3.astype(np.float32)).to(device, non_blocking=True)
             
