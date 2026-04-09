@@ -307,6 +307,7 @@ with torch.no_grad():
         x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
         max_len = max([len(raw) for raw in m_raw])
+        max_len = (2 ** 5) * (max_len // (2 ** 5))
         m_padded = torch.from_numpy(np.stack([np.pad(raw, (0, max_len - len(raw))) for raw in m_raw], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         print(max_len, m_padded.shape)
         
