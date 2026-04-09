@@ -235,6 +235,7 @@ with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
 measure_paths = [path for path in measure_paths if os.path.basename(path) in beat_paths]
 audio_paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in measure_paths]
 audio_paths = [path for path in audio_paths if os.path.basename(path) in beat_paths]
+beat_paths = [os.path.join('/home/ubuntu/Data/beats', path) for path in beat_paths]
 
 idxs = np.random.choice(np.arange(len(measure_paths)), size=128, replace=False)
 n_steps = 32
