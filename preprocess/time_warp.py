@@ -37,6 +37,9 @@ def parse_beat_file(beat_path):
                     if len(parts) >= 2:
                         try:
                             bn = int(float(parts[1]))
+                            
+                            if bn > 0:
+                                bn = ((bn - 1) % 4) + 1
                         except ValueError:
                             pass
                     
@@ -237,7 +240,7 @@ def generate_packed_audio(paths):
     """
     audio_path, beat_path, out_path = paths
     
-    beat_data = parse_beat_pack_file(beat_path)
+    beat_data = parse_beat_file(beat_path)
     
     try:
         y, sr = librosa.load(audio_path, sr=None)
