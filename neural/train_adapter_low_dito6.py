@@ -291,6 +291,7 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as exec
 durations = np.asarray([len(wav) for wav in wavs])
 train_durations = durations[train_idx] / np.sum(durations[train_idx])
 test_durations = durations[test_idx] / np.sum(durations[test_idx])
+del wavs
 
 def slice_random_measure(beat_path):
     beat_data = parse_beat_file(beat_path)
@@ -317,7 +318,8 @@ def get_batch(split='train'):
     
     x = []
     for idx in idxs:
-        wav = wavs[idx]
+        # wav = wavs[idx]
+        wav = librosa.load(paths[idx], sr=rate)[0]
         beat_path = os.path.join('/home/ubuntu/Data/beats', os.path.basename(paths[idx]))
         
         tries = 0
