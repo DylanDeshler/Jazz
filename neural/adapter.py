@@ -234,13 +234,15 @@ class CrossAttentionBlock(nn.Module):
     def __init__(self, dim, num_heads, mlp_ratio=4, qkv_bias=False, proj_bias=False):
         super().__init__()
         self.norm1 = RMSNorm(dim)
-        self.attn = CrossAttention(dim, num_heads, qkv_bias=qkv_bias, proj_bias=proj_bias)
         self.norm2 = RMSNorm(dim)
+        self.attn = CrossAttention(dim, num_heads, qkv_bias=qkv_bias, proj_bias=proj_bias)
+        self.norm3 = RMSNorm(dim)
         self.mlp = SwiGLUMlp(dim, int(2 / 3 * mlp_ratio * dim), bias=proj_bias)
     
     def forward(self, x, context, mask=None):
-        x = x + self.attn(self.norm1(x), context, attn_mask=mask)
-        x = x + self.mlp(self.norm2(x))
+        x = x + self.attn(self.norm1(x), self.norm2(context), attn_mask=mask)
+        x = x + self.mlp(self.norm3(x))
+        return x
 
 class SequenceEncoder(nn.Module):
     def __init__(self, in_dim, n_queries, max_seq_len, hidden_dim, num_heads, depth, mlp_ratio=4., qkv_bias=False, proj_bias=False):
@@ -288,11 +290,9 @@ class SequenceEncoder(nn.Module):
         x = x.transpose(1, 2)
         
         queries = self.queries.repeat(B, 1, 1)
-        print(queries.shape)
         x = x + self.pos_embed.repeat(B, 1, 1)[:, :T]
         for block in self.blocks:
             queries = block(queries, x, mask=mask)
-            print(queries.shape)
         
         queries = self.out_norm(queries)
         queries = self.out_proj(queries)
