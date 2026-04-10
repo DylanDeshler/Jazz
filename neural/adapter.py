@@ -282,7 +282,8 @@ class SequenceDecoder(nn.Module):
         # zero out c_proj weights in all blocks
         for block in self.blocks:
             nn.init.zeros_(block.mlp.w3.weight)
-            nn.init.zeros_(block.attn.proj.weight)
+            nn.init.zeros_(block.sa.proj.weight)
+            nn.init.zeros_(block.ca.proj.weight)
     
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
