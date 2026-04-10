@@ -246,14 +246,14 @@ class SequenceEncoder(nn.Module):
     def __init__(self, in_dim, n_queries, max_seq_len, hidden_dim, num_heads, depth, mlp_ratio=4., qkv_bias=False, proj_bias=False):
         super().__init__()
         self.in_norm = nn.LayerNorm(in_dim)
-        self.proj = nn.Conv1d(in_dim, hidden_dim, kernel_size=3, padding=1)
+        self.in_proj = nn.Conv1d(in_dim, hidden_dim, kernel_size=3, padding=1)
         
         self.pos_embed = nn.Parameter(torch.randn(1, max_seq_len, hidden_dim) * 0.02)
         self.queries = nn.Parameter(torch.randn(1, n_queries, hidden_dim) * 0.02)
         self.blocks = nn.ModuleList([CrossAttentionBlock(hidden_dim, num_heads, mlp_ratio, qkv_bias, proj_bias) for _ in range(depth)])
         
-        self.norm = nn.LayerNorm(hidden_dim)
-        self.proj = nn.Linear(hidden_dim, in_dim, bias=True)
+        self.out_norm = nn.LayerNorm(hidden_dim)
+        self.out_proj = nn.Linear(hidden_dim, in_dim, bias=True)
     
     def forward(self, x):
         B, _, T = x.shape
@@ -261,7 +261,7 @@ class SequenceEncoder(nn.Module):
         x = x.transpose(1, 2)
         x = self.in_norm(x)
         x = x.transpose(1, 2)
-        x = self.proj(x)
+        x = self.in_proj(x)
         x = x.transpose(1, 2)
         
         queries = self.queries.repeat(B, -1, -1)
@@ -269,8 +269,8 @@ class SequenceEncoder(nn.Module):
         for block in self.blocks:
             queries = block(queries, x)
         
-        queries = self.norm(queries)
-        queries = self.proj(queries)
+        queries = self.out_norm(queries)
+        queries = self.out_proj(queries)
         queries = queries.transpose(1, 2)
         
         return queries
@@ -279,13 +279,13 @@ class SequenceDecoder(nn.Module):
     def __init__(self, in_dim, max_seq_len, hidden_dim, num_heads, depth, mlp_ratio=4., qkv_bias=False, proj_bias=False):
         super().__init__()
         self.in_norm = nn.LayerNorm(in_dim)
-        self.proj = nn.Conv1d(in_dim, hidden_dim, kernel_size=7, padding=3)
+        self.in_proj = nn.Conv1d(in_dim, hidden_dim, kernel_size=7, padding=3)
         
         self.pos_embed = nn.Parameter(torch.randn(1, max_seq_len, hidden_dim) * 0.02)
         self.blocks = nn.ModuleList([CrossAttentionBlock(hidden_dim, num_heads, mlp_ratio, qkv_bias, proj_bias) for _ in range(depth)])
         
-        self.norm = nn.LayerNorm(hidden_dim)
-        self.proj = nn.Linear(hidden_dim, in_dim, bias=True)
+        self.out_norm = nn.LayerNorm(hidden_dim)
+        self.out_proj = nn.Linear(hidden_dim, in_dim, bias=True)
     
     def forward(self, x):
         B, _, T = x.shape
@@ -293,15 +293,15 @@ class SequenceDecoder(nn.Module):
         x = x.transpose(1, 2)
         x = self.in_norm(x)
         x = x.transpose(1, 2)
-        x = self.proj(x)
+        x = self.in_proj(x)
         x = x.transpose(1, 2)
         
         queries = self.pos_embed.repeat(B, -1, -1)[:, :T]
         for block in self.blocks:
             queries = block(queries, x)
         
-        queries = self.norm(queries)
-        queries = self.proj(queries)
+        queries = self.out_norm(queries)
+        queries = self.out_proj(queries)
         queries = queries.transpose(1, 2)
         
         return queries
