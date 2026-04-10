@@ -47,7 +47,7 @@ eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = False # disabled by default
+wandb_log = True # disabled by default
 wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
@@ -308,7 +308,7 @@ def slice_random_measure(beat_path):
     
     return frame_start, frame_end
 
-def get_batch(split='train'):
+def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
         idxs = np.random.choice(train_idx, batch_size, p=train_durations).tolist()
     else:
@@ -404,9 +404,9 @@ def estimate_loss():
     out = {}
     model.eval()
     for split in ['train', 'val']:
-        losses = torch.zeros(eval_iters * gradient_accumulation_steps)
-        for k in tqdm(range(eval_iters * gradient_accumulation_steps)):
-            X = get_batch(split)
+        losses = torch.zeros(eval_iters)
+        for k in tqdm(range(eval_iters)):
+            X = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
                 _, z = tokenizer.encode(X)
                 t = torch.rand(z.shape[0], device=z.device)
