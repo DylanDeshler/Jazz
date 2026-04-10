@@ -279,14 +279,8 @@ class SequenceDecoder(nn.Module):
         elif isinstance(module, nn.Embedding):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
-    def forward(self, x, mask=None):
-        B, _, T = x.shape
-        
-        x = x.transpose(1, 2)
-        x = self.in_norm(x)
-        x = x.transpose(1, 2)
-        x = self.in_proj(x)
-        x = x.transpose(1, 2)
+    def forward(self, x, shape, mask=None):
+        B, _, T = shape
         
         queries = self.pos_embed.repeat(B, 1, 1)[:, :T]
         for block in self.blocks:
@@ -311,14 +305,14 @@ class InvertibleAdapter(nn.Module):
         )
     
     def encode(self, x, mask=None):
-        return self.encoder(x, mask=mask)
+        return self.encoder(x, mask=mask), x.shape
     
-    def decode(self, x, mask=None):
-        return self.decoder(x, mask=mask)
+    def decode(self, x, shape, mask=None):
+        return self.decoder(x, shape, mask=mask)
     
     def forward(self, x, mask=None):
-        x = self.encode(x, mask=mask)
-        return self.decode(x, mask=mask)
+        x, shape = self.encode(x, mask=mask)
+        return self.decode(x, shape, mask=mask)
 
 if __name__ == '__main__':
     in_dim = 16
