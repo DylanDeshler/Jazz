@@ -188,6 +188,23 @@ class CrossAttentionBlock(nn.Module):
         x = x + self.mlp(self.norm3(x))
         return x
 
+class Block(nn.Module):
+    def __init__(self, dim, num_heads, mlp_ratio=4, qkv_bias=False, proj_bias=False):
+        super().__init__()
+        self.norm1 = RMSNorm(dim)
+        self.sa = Attention(dim, num_heads, qkv_bias=qkv_bias, proj_bias=proj_bias)
+        self.norm2 = RMSNorm(dim)
+        self.norm3 = RMSNorm(dim)
+        self.ca = CrossAttention(dim, num_heads, qkv_bias=qkv_bias, proj_bias=proj_bias)
+        self.norm4 = RMSNorm(dim)
+        self.mlp = SwiGLUMlp(dim, int(2 / 3 * mlp_ratio * dim), bias=proj_bias)
+    
+    def forward(self, x, context, q_mask=None, kv_mask=None):
+        x = x + self.sa(self.norm1(x))
+        x = x + self.ca(self.norm2(x), self.norm3(context), q_mask=q_mask, kv_mask=kv_mask)
+        x = x + self.mlp(self.norm4(x))
+        return x
+
 class SequenceEncoder(nn.Module):
     def __init__(self, in_dim, n_queries, max_seq_len, hidden_dim, num_heads, depth, mlp_ratio=4., qkv_bias=False, proj_bias=False):
         super().__init__()
@@ -196,7 +213,7 @@ class SequenceEncoder(nn.Module):
         
         self.pos_embed = nn.Parameter(torch.randn(1, max_seq_len, hidden_dim) * 0.02)
         self.queries = nn.Parameter(torch.randn(1, n_queries, hidden_dim) * 0.02)
-        self.blocks = nn.ModuleList([CrossAttentionBlock(hidden_dim, num_heads, mlp_ratio, qkv_bias, proj_bias) for _ in range(depth)])
+        self.blocks = nn.ModuleList([Block(hidden_dim, num_heads, mlp_ratio, qkv_bias, proj_bias) for _ in range(depth)])
         
         self.out_norm = nn.LayerNorm(hidden_dim)
         self.out_proj = nn.Linear(hidden_dim, in_dim, bias=True)
@@ -251,7 +268,7 @@ class SequenceDecoder(nn.Module):
         self.in_proj = nn.Conv1d(in_dim, hidden_dim, kernel_size=7, padding=3)
         
         self.pos_embed = nn.Parameter(torch.randn(1, max_seq_len, hidden_dim) * 0.02)
-        self.blocks = nn.ModuleList([CrossAttentionBlock(hidden_dim, num_heads, mlp_ratio, qkv_bias, proj_bias) for _ in range(depth)])
+        self.blocks = nn.ModuleList([Block(hidden_dim, num_heads, mlp_ratio, qkv_bias, proj_bias) for _ in range(depth)])
         
         self.out_norm = nn.LayerNorm(hidden_dim)
         self.out_proj = nn.Linear(hidden_dim, in_dim, bias=True)
@@ -289,6 +306,7 @@ class SequenceDecoder(nn.Module):
         x = x.transpose(1, 2)
         
         queries = self.pos_embed.repeat(B, 1, 1)[:, :T]
+        x = x + self.pos_embed.repeat(B, 1, 1)[:, :T]
         for block in self.blocks:
             queries = block(queries, x, q_mask=mask)
         
