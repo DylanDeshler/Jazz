@@ -330,7 +330,7 @@ def get_batch(split='train'):
 iter_num = 0
 best_val_loss = 1e9
 
-model_args = dict(in_dim, n_queries, max_seq_len, hidden_dim, num_heads, enocder_depth, decoder_depth)
+model_args = dict(in_dim=in_dim, n_queries=n_queries, max_seq_len=max_seq_len, hidden_dim=hidden_dim, num_heads=num_heads, enocder_depth=enocder_depth, decoder_depth=decoder_depth)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
