@@ -366,9 +366,6 @@ elif init_from.startswith('gpt2'):
 
 model.to(device)
 summary(model)
-print('Encoder # params: ', sum(param.numel() for param in model.encoder.parameters()))
-print('Decoder # params: ', sum(param.numel() for param in model.unet.parameters()))
-
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
