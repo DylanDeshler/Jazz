@@ -62,8 +62,8 @@ n_queries = 48
 max_seq_len = 128
 hidden_dim = 512
 num_heads = 8
-enocder_depth = 1
-decoder_depth = 2
+enocder_depth = 2
+decoder_depth = 1
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 50000 # total number of training iterations
@@ -549,7 +549,7 @@ while True:
             _, z = tokenizer.encode(X)
             t = torch.rand(z.shape[0], device=z.device)
             z = model(z, latent_mask)
-            loss = tokenizer.diffusion.loss(tokenizer.unet, X, t, net_kwargs={'z_dec': z}, mask=~sample_mask)
+            loss = tokenizer.diffusion.loss(tokenizer.unet, X, t, net_kwargs={'z_dec': z})#, mask=~sample_mask)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, latent_mask, sample_mask = get_batch('train')
