@@ -492,8 +492,8 @@ while True:
         with ctx:
             _, z = tokenizer.encode(X)
             t = torch.rand(z.shape[0], device=z.device)
-            z = model(z, mask)
-            logits = tokenizer.decode(z, shape=X.shape, n_steps=100)
+            z = model(z, latent_mask)
+            logits = tokenizer.decode(z, shape=X.shape, n_steps=100) * sample_mask
         model.train()
         save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
         losses = estimate_loss()
