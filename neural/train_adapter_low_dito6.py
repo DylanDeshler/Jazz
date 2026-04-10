@@ -421,7 +421,7 @@ def estimate_loss():
                 _, z = tokenizer.encode(X)
                 t = torch.rand(z.shape[0], device=z.device)
                 z = model(z, latent_mask)
-                loss = tokenizer.diffusion.loss(tokenizer.unet, X, t, net_kwargs={'z_dec': z}, mask=sample_mask)
+                loss = tokenizer.diffusion.loss(tokenizer.unet, X, t, net_kwargs={'z_dec': z}, mask=~sample_mask)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -549,7 +549,7 @@ while True:
             _, z = tokenizer.encode(X)
             t = torch.rand(z.shape[0], device=z.device)
             z = model(z, latent_mask)
-            loss = tokenizer.diffusion.loss(tokenizer.unet, X, t, net_kwargs={'z_dec': z}, mask=sample_mask)
+            loss = tokenizer.diffusion.loss(tokenizer.unet, X, t, net_kwargs={'z_dec': z}, mask=~sample_mask)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, latent_mask, sample_mask = get_batch('train')
