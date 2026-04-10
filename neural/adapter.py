@@ -308,7 +308,7 @@ class SequenceDecoder(nn.Module):
         x = x.transpose(1, 2)
         
         queries = self.pos_embed.repeat(B, 1, 1)[:, :T]
-        x = x + self.pos_embed.repeat(B, 1, 1)[:, :T]
+        x = x + self.pos_embed.repeat(B, 1, 1)[:, :x.shape[1]]
         for block in self.blocks:
             queries = block(queries, x, q_mask=mask)
         
