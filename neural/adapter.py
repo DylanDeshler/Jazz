@@ -183,8 +183,8 @@ class CrossAttentionBlock(nn.Module):
         self.norm3 = RMSNorm(dim)
         self.mlp = SwiGLUMlp(dim, int(2 / 3 * mlp_ratio * dim), bias=proj_bias)
     
-    def forward(self, x, context, mask=None):
-        x = x + self.attn(self.norm1(x), self.norm2(context), attn_mask=mask)
+    def forward(self, x, context, q_mask=None, kv_mask=None):
+        x = x + self.attn(self.norm1(x), self.norm2(context), q_mask=q_mask, kv_mask=kv_mask)
         x = x + self.mlp(self.norm3(x))
         return x
 
