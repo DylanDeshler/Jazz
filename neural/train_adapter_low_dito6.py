@@ -337,11 +337,11 @@ def get_batch(split='train', batch_size=batch_size):
 
     indices = torch.arange(max_len).unsqueeze(0)
     lengths = torch.from_numpy(np.asarray(lengths)).unsqueeze(1)
-    sample_mask = (indices >= lengths).to(device)
+    sample_mask = (indices < lengths).to(device)
 
     indices = torch.arange(max_len // encoder_ratios).unsqueeze(0)
     lengths = (lengths + encoder_ratios - 1) // encoder_ratios
-    latent_mask = (indices >= lengths).to(device)
+    latent_mask = (indices < lengths).to(device)
     
     x = torch.from_numpy(np.stack([np.pad(x_[:max_len], (0, max_len - len(x_[:max_len]))) for x_ in x], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
     

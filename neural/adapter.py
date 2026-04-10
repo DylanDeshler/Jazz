@@ -50,10 +50,6 @@ class Attention(nn.Module):
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0)
-        # RoPE
-        if freqs_cis is not None:
-            q = apply_rotary_emb(q.transpose(1, 2), freqs_cis).transpose(1, 2)
-            k = apply_rotary_emb(k.transpose(1, 2), freqs_cis).transpose(1, 2)
 
         if self.fused_attn:
             x = F.scaled_dot_product_attention(
@@ -148,7 +144,7 @@ class CrossAttention(nn.Module):
         x = self.proj(x)
         x = self.proj_drop(x)
         if q_mask is not None:
-            x = x * ~q_mask.unsqueeze(-1).repeat(1, 1, C)
+            x = x * q_mask.unsqueeze(-1).repeat(1, 1, C)
         return x
 
 class SwiGLUMlp(nn.Module):
