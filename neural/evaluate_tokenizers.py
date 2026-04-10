@@ -438,7 +438,7 @@ with torch.no_grad():
             )
             sf.write(
                 file=os.path.join(out_dir, f'{idx}_base2_{name}'), 
-                data=y2.flatten(), 
+                data=y2[to_sample].flatten().cpu().detach().numpy(), 
                 samplerate=rate,
                 subtype='PCM_16'
             )
