@@ -330,12 +330,19 @@ def get_batch(split='train', batch_size=batch_size):
                 break
         
         x.append(wav[frame_start:frame_end])
-        
-    max_len = min(max([len(x_) for x_ in x]), encoder_ratios * (max_seq_len - 1))
+    
+    lengths = [len(x_) for x_ in x]
+    max_len = min(max(lengths), encoder_ratios * (max_seq_len - 1))
     max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
+    
+    indices = torch.arange(max_seq_len, device=x.device).unsqueeze(0)
+    lengths = (torch.from_numpy(np.asarray(lengths)).unsqueeze(1) + encoder_ratios - 1) // encoder_ratios
+    mask = indices >= lengths
+    
+    
     x = torch.from_numpy(np.stack([np.pad(x_[:max_len], (0, max_len - len(x_[:max_len]))) for x_ in x], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
     
-    return x
+    return x, mask
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
@@ -406,12 +413,12 @@ def estimate_loss():
     for split in ['train', 'val']:
         losses = torch.zeros(eval_iters)
         for k in tqdm(range(eval_iters)):
-            X = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
+            X, mask = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
                 _, z = tokenizer.encode(X)
                 t = torch.rand(z.shape[0], device=z.device)
-                z = model(z)
-                loss = tokenizer.diffusion.loss(tokenizer.unet, X, t, net_kwargs={'z_dec': z})
+                z = model(z, mask)
+                loss = tokenizer.diffusion.loss(tokenizer.unet, X, t, net_kwargs={'z_dec': z}, mask=mask)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -461,7 +468,7 @@ if eval_only:
     import sys
     sys.exit()
 
-X = get_batch('train') # fetch the very first batch
+X, mask = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
@@ -477,12 +484,12 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        X = get_batch('test')
+        X, mask = get_batch('test')
         model.eval()
         with ctx:
             _, z = tokenizer.encode(X)
             t = torch.rand(z.shape[0], device=z.device)
-            z = model(z)
+            z = model(z, mask)
             logits = tokenizer.decode(z, shape=X.shape, n_steps=100)
         model.train()
         save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
@@ -538,11 +545,11 @@ while True:
         with ctx:
             _, z = tokenizer.encode(X)
             t = torch.rand(z.shape[0], device=z.device)
-            z = model(z)
-            loss = tokenizer.diffusion.loss(tokenizer.unet, X, t, net_kwargs={'z_dec': z})
+            z = model(z, mask)
+            loss = tokenizer.diffusion.loss(tokenizer.unet, X, t, net_kwargs={'z_dec': z}, mask=mask)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
-        X = get_batch('train')
+        X, mask = get_batch('train')
         # backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
     # clip the gradient
