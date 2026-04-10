@@ -269,6 +269,7 @@ class SequenceEncoder(nn.Module):
         for block in self.blocks:
             queries = block(queries, x, mask=mask)
         
+        print(queries.shape)
         queries = self.out_norm(queries)
         queries = self.out_proj(queries)
         queries = queries.transpose(1, 2)
