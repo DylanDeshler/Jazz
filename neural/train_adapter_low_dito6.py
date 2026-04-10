@@ -335,12 +335,11 @@ def get_batch(split='train', batch_size=batch_size):
     max_len = min(max(lengths), encoder_ratios * (max_seq_len - 1))
     max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
     
+    x = torch.from_numpy(np.stack([np.pad(x_[:max_len], (0, max_len - len(x_[:max_len]))) for x_ in x], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+    
     indices = torch.arange(max_seq_len, device=x.device).unsqueeze(0)
     lengths = (torch.from_numpy(np.asarray(lengths)).unsqueeze(1) + encoder_ratios - 1) // encoder_ratios
     mask = indices >= lengths
-    
-    
-    x = torch.from_numpy(np.stack([np.pad(x_[:max_len], (0, max_len - len(x_[:max_len]))) for x_ in x], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
     
     return x, mask
 
