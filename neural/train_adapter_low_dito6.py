@@ -322,8 +322,7 @@ def get_batch(split='train'):
     max_len = max([len(x_) for x_ in x])
     max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
     x = torch.from_numpy(np.stack([np.pad(x_, (0, max_len - len(x_))) for x_ in x], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-        
-    x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+    
     return x
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
