@@ -215,7 +215,7 @@ def drop_to_multiple(a, multiple):
 
 base1 = load_model(os.path.join('tokenizer_low_large_24576', 'ckpt.pt'), Tokenizer)
 encoder_ratios = math.prod(base1.encoder.ratios)
-# base2 = load_model(os.path.join('tokenizer_low_large_24576_2std_subset', 'ckpt.pt'), Tokenizer)
+base2 = load_model(os.path.join('tokenizer_low_large_24576_subset', 'ckpt.pt'), Tokenizer)
 measure1 = load_model(os.path.join('tokenizer_low_measures_fix_subset', 'ckpt.pt'), Tokenizer)
 fad = load_model(os.path.join('FAD', 'ckpt.pt'), FAD)
 # contrast = load_model(os.path.join('contrast_learntmep_instance', 'ckpt.pt'), Contrast)
@@ -230,7 +230,7 @@ fad = load_model(os.path.join('FAD', 'ckpt.pt'), FAD)
 # audio_paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in measure_paths]
 # beat_paths = [os.path.join('/home/ubuntu/Data/beats', os.path.basename(path)) for path in measure_paths]
 
-# With BPM within reasonable range
+# 4/4 with BPM in reasonable range
 measure_paths = glob.glob('/home/ubuntu/Data/measures/*')
 with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
     beat_paths = json.load(f)
@@ -240,8 +240,8 @@ audio_paths = [path for path in audio_paths if os.path.basename(path) in beat_pa
 beat_paths = [os.path.join('/home/ubuntu/Data/beats', path) for path in beat_paths]
 
 idxs = np.random.choice(np.arange(len(measure_paths)), size=128, replace=False)
-n_steps = 100
-batch_size = 32
+n_steps = 32
+batch_size = 64
 EVAL_ITERATIVE = False
 USE_CLAP = False
 
@@ -316,12 +316,12 @@ with torch.no_grad():
             noise = torch.randn((1, 1, n_samples), device=device).repeat(max(x.shape[0], m.shape[0]), 1, 1)
             with ctx:
                 y1 = base1.reconstruct(x, n_steps=n_steps, noise=noise[:x.shape[0]])
-                # y2 = base2.reconstruct(x, n_steps=n_steps, noise=noise[:x.shape[0]])
+                y2 = base2.reconstruct(x, n_steps=n_steps, noise=noise[:x.shape[0]])
                 y3 = measure1.reconstruct(m, n_steps=n_steps, noise=noise[:m.shape[0]])
                 y4, y4z = base1.encode(m_padded)
                 T = y4z.shape[-1]
-                y4z = F.interpolate(y4z, size=n_samples // encoder_ratios, mode='nearest')#, align_corners=False)
-                y4z = F.interpolate(y4z, size=T, mode='nearest')#, align_corners=False)
+                y4z = F.interpolate(y4z, size=n_samples // encoder_ratios, mode='linear', align_corners=False)
+                y4z = F.interpolate(y4z, size=T, mode='linear', align_corners=False)
                 y4 = base1.decode(y4z, shape=y4.shape, n_steps=n_steps)
             
             x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
@@ -352,7 +352,7 @@ with torch.no_grad():
                         real_emb = fad.forward_features(x)
                         real_measure_emb = fad.forward_features(m)
                         base1_emb = fad.forward_features(y1)
-                        # base2_emb = fad.forward_features(drop_to_multiple(y2, 16383 * 5))
+                        base2_emb = fad.forward_features(drop_to_multiple(y2, 16383 * 5))
                         measure1_emb = fad.forward_features(y3)
                         lerp_emb = fad.forward_features(y4)
                     except Exception as e:
@@ -380,7 +380,7 @@ with torch.no_grad():
             real_embs.append(real_emb.cpu().detach().numpy())
             real_measure_embs.append(real_measure_emb.cpu().detach().numpy())
             base1_embs.append(base1_emb.cpu().detach().numpy())
-            # base2_embs.append(base2_emb.cpu().detach().numpy())
+            base2_embs.append(base2_emb.cpu().detach().numpy())
             measure1_embs.append(measure1_emb.cpu().detach().numpy())
             lerp_embs.append(lerp_emb.cpu().detach().numpy())
         
@@ -421,57 +421,58 @@ with torch.no_grad():
         # np.save(os.path.join(out_dir, 'base2.npy'), np.concatenate(base2_embs, axis=0))
         # np.save(os.path.join(out_dir, 'measure1.npy'), np.concatenate(measure1_embs, axis=0))
 
-        name = os.path.basename(measure_path)
-        to_sample = np.random.randint(len(x))
-        sf.write(
-            file=os.path.join(out_dir, f'{idx}_real_{name}'), 
-            data=x[to_sample].flatten().cpu().detach().numpy(), 
-            samplerate=rate,
-            subtype='PCM_16'
-        )
-        sf.write(
-            file=os.path.join(out_dir, f'{idx}_base1_{name}'), 
-            data=y1[to_sample].flatten().cpu().detach().numpy(), 
-            samplerate=rate,
-            subtype='PCM_16'
-        )
-        # sf.write(
-        #     file=os.path.join(out_dir, f'{idx}_base2_{name}'), 
-        #     data=y2.flatten(), 
-        #     samplerate=rate,
-        #     subtype='PCM_16'
-        # )
-        sf.write(
-            file=os.path.join(out_dir, f'{idx}_measure_real_{name}'), 
-            data=m[to_sample].flatten().cpu().detach().numpy(), 
-            samplerate=rate,
-            subtype='PCM_16'
-        )
-        sf.write(
-            file=os.path.join(out_dir, f'{idx}_measure_recon_{name}'), 
-            data=y3[to_sample].flatten().cpu().detach().numpy(), 
-            samplerate=rate,
-            subtype='PCM_16'
-        )
+        if idx % 4 == 0:
+            name = os.path.basename(measure_path)
+            to_sample = np.random.randint(len(x))
+            sf.write(
+                file=os.path.join(out_dir, f'{idx}_real_{name}'), 
+                data=x[to_sample].flatten().cpu().detach().numpy(), 
+                samplerate=rate,
+                subtype='PCM_16'
+            )
+            sf.write(
+                file=os.path.join(out_dir, f'{idx}_base1_{name}'), 
+                data=y1[to_sample].flatten().cpu().detach().numpy(), 
+                samplerate=rate,
+                subtype='PCM_16'
+            )
+            sf.write(
+                file=os.path.join(out_dir, f'{idx}_base2_{name}'), 
+                data=y2.flatten(), 
+                samplerate=rate,
+                subtype='PCM_16'
+            )
+            sf.write(
+                file=os.path.join(out_dir, f'{idx}_measure_real_{name}'), 
+                data=m[to_sample].flatten().cpu().detach().numpy(), 
+                samplerate=rate,
+                subtype='PCM_16'
+            )
+            sf.write(
+                file=os.path.join(out_dir, f'{idx}_measure_recon_{name}'), 
+                data=y3[to_sample].flatten().cpu().detach().numpy(), 
+                samplerate=rate,
+                subtype='PCM_16'
+            )
 
 if not EVAL_ITERATIVE:
     real_mu, real_sigma = calculate_embd_statistics(np.concatenate(real_embs, axis=0))
     real_m_mu, real_m_sigma = calculate_embd_statistics(np.concatenate(real_measure_embs, axis=0))
     base1_mu, base1_sigma = calculate_embd_statistics(np.concatenate(base1_embs, axis=0))
-    # base2_mu, base2_sigma = calculate_embd_statistics(np.concatenate(base2_embs, axis=0))
+    base2_mu, base2_sigma = calculate_embd_statistics(np.concatenate(base2_embs, axis=0))
     measure1_mu, measure1_sigma = calculate_embd_statistics(np.concatenate(measure1_embs, axis=0))
     lerp_mu, lerp_sigma = calculate_embd_statistics(np.concatenate(lerp_embs, axis=0))
 
     m_fad = calculate_frechet_distance(real_m_mu, real_m_sigma, real_mu, real_sigma)
     base1_fad = calculate_frechet_distance(base1_mu, base1_sigma, real_mu, real_sigma)
-    # base2_fad = calculate_frechet_distance(base2_mu, base2_sigma, real_mu, real_sigma)
+    base2_fad = calculate_frechet_distance(base2_mu, base2_sigma, real_mu, real_sigma)
     measure1_fad = calculate_frechet_distance(measure1_mu, measure1_sigma, real_mu, real_sigma)
     measure1_m_fad = calculate_frechet_distance(measure1_mu, measure1_sigma, real_m_mu, real_m_sigma)
     lerp_fad = calculate_frechet_distance(lerp_mu, lerp_sigma, real_mu, real_sigma)
 
     print('Real Measures -> Real Samples FAD: ', m_fad)
     print('Base1 -> Real Samples FAD: ', base1_fad)
-    # print('Base 2 FAD: ', base2_fad)
+    print('Base1 -> Real Samples FAD: ', base2_fad)
     print('Measure1 -> Real Samples FAD: ', measure1_fad)
     print('Measure1 -> Real Measures FAD:', measure1_m_fad)
     print('LERP -> Real Samples FAD: ', lerp_fad)
@@ -485,7 +486,13 @@ if not EVAL_ITERATIVE:
     # Base1 -> Real Samples FAD:  22.930749938432
     # Measure1 -> Real Samples FAD:  28.18418238234827
     # Measure1 -> Real Measures FAD: 24.24471873383287
-    # LERP -> Real Samples FAD:  27.16132208609011
+    # LERP (Linear) -> Real Samples FAD:  27.16132208609011
+    
+    # Real Measures -> Real Samples FAD:  2.6932771422591486
+    # Base1 -> Real Samples FAD:  22.930749938432
+    # Measure1 -> Real Samples FAD:  28.18418238234827
+    # Measure1 -> Real Measures FAD: 24.24471873383287
+    # LERP (Nearest) -> Real Samples FAD:  27.66163151650572
 else:
     fads = defaultdict(list)
     for exponent in range(math.floor(math.log2(n_steps)) + 1):
