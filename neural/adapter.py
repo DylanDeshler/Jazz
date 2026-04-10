@@ -292,6 +292,7 @@ class SequenceEncoder(nn.Module):
         x = x + self.pos_embed.repeat(B, 1, 1)[:, :T]
         for block in self.blocks:
             queries = block(queries, x, mask=mask)
+            print(queries.shape)
         
         queries = self.out_norm(queries)
         queries = self.out_proj(queries)
