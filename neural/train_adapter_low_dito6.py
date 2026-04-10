@@ -52,14 +52,14 @@ wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 1 # used to simulate larger batch sizes
-batch_size = 64 # if gradient_accumulation_steps > 1, this is the micro-batch size
+gradient_accumulation_steps = 4 # used to simulate larger batch sizes
+batch_size = 16 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
 n_samples = 24576
 in_dim = 16
 n_queries = 48
-max_seq_len = 256
+max_seq_len = 128
 hidden_dim = 512
 num_heads = 8
 enocder_depth = 1
@@ -253,7 +253,6 @@ with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
     beat_paths = json.load(f)
 paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
 print(len(paths))
-wavs = []
 
 from sklearn.model_selection import StratifiedGroupKFold
 kf = StratifiedGroupKFold(n_splits=20, shuffle=True, random_state=0)
@@ -291,7 +290,6 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as exec
 durations = np.asarray([len(wav) for wav in wavs])
 train_durations = durations[train_idx] / np.sum(durations[train_idx])
 test_durations = durations[test_idx] / np.sum(durations[test_idx])
-del wavs
 
 def slice_random_measure(beat_path):
     beat_data = parse_beat_file(beat_path)
@@ -318,8 +316,7 @@ def get_batch(split='train'):
     
     x = []
     for idx in idxs:
-        # wav = wavs[idx]
-        wav = librosa.load(paths[idx], sr=rate)[0]
+        wav = wavs[idx]
         beat_path = os.path.join('/home/ubuntu/Data/beats', os.path.basename(paths[idx]))
         
         tries = 0
