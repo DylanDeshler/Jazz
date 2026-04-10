@@ -290,9 +290,6 @@ class SequenceDecoder(nn.Module):
         
         queries = self.pos_embed.repeat(B, 1, 1)[:, :T]
         for block in self.blocks:
-            print(queries.shape, x.shape, shape)
-            if mask is not None:
-                print(mask.shape)
             queries = block(queries, x, q_mask=mask)
         
         queries = self.out_norm(queries)
