@@ -42,7 +42,7 @@ import glob
 out_dir = 'tokenizer_adapter_low_large_24576_subset'
 eval_interval = 1000
 log_interval = 100
-eval_iters = 600
+eval_iters = 300
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
@@ -292,6 +292,23 @@ durations = np.asarray([len(wav) for wav in wavs])
 train_durations = durations[train_idx] / np.sum(durations[train_idx])
 test_durations = durations[test_idx] / np.sum(durations[test_idx])
 
+def slice_random_measure(beat_path):
+    beat_data = parse_beat_file(beat_path)
+    downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
+    
+    start = np.random.randint(len(downbeat_indices) - 1)
+    
+    start_idx = downbeat_indices[start]
+    end_idx = downbeat_indices[start+1]
+    
+    t_start = beat_data[start_idx]['time']
+    t_end = beat_data[end_idx]['time']
+    
+    frame_start = int(t_start * rate)
+    frame_end = int(t_end * rate)
+    
+    return frame_start, frame_end
+
 def get_batch(split='train'):
     if split == 'train':
         idxs = np.random.choice(train_idx, batch_size, p=train_durations).tolist()
@@ -303,19 +320,15 @@ def get_batch(split='train'):
         wav = wavs[idx]
         beat_path = os.path.join('/home/ubuntu/Data/beats', os.path.basename(paths[idx]))
         
-        beat_data = parse_beat_file(beat_path)
-        downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
-        
-        start = np.random.randint(len(downbeat_indices) - 1)
-        
-        start_idx = downbeat_indices[start]
-        end_idx = downbeat_indices[start+1]
-        
-        t_start = beat_data[start_idx]['time']
-        t_end = beat_data[end_idx]['time']
-        
-        frame_start = int(t_start * rate)
-        frame_end = int(t_end * rate)
+        tries = 0
+        frame_start, frame_end = slice_random_measure(beat_path)
+        while math.ceil((frame_end - frame_end) / encoder_ratios) >= max_seq_len:
+            frame_start, frame_end = slice_random_measure(beat_path)
+            tries += 1
+            
+            if tries > 5:
+                frame_end = frame_start + math.floor(encoder_ratios * max_seq_len)
+                break
         
         x.append(wav[frame_start:frame_end])
         
