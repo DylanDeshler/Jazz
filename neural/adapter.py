@@ -264,8 +264,8 @@ class SequenceEncoder(nn.Module):
         x = self.in_proj(x)
         x = x.transpose(1, 2)
         
-        queries = self.queries.repeat(B, -1, -1)
-        x = x + self.pos_embed.repeat(B, -1, -1)[:, :T]
+        queries = self.queries.repeat(B, 1, 1)
+        x = x + self.pos_embed.repeat(B, 1, 1)[:, :T]
         for block in self.blocks:
             queries = block(queries, x)
         
@@ -296,7 +296,7 @@ class SequenceDecoder(nn.Module):
         x = self.in_proj(x)
         x = x.transpose(1, 2)
         
-        queries = self.pos_embed.repeat(B, -1, -1)[:, :T]
+        queries = self.pos_embed.repeat(B, 1, 1)[:, :T]
         for block in self.blocks:
             queries = block(queries, x)
         
