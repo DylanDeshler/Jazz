@@ -364,15 +364,15 @@ class InvertibleAdapter(nn.Module):
             in_dim, max_seq_len, hidden_dim, num_heads, decoder_depth, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, proj_bias=proj_bias
         )
     
-    def encode(self, x):
-        return self.encoder(x)
+    def encode(self, x, mask=None):
+        return self.encoder(x, mask=mask)
     
-    def decode(self, x):
-        return self.decoder(x)
+    def decode(self, x, mask=None):
+        return self.decoder(x, mask=mask)
     
-    def forward(self, x):
-        x = self.encode(x)
-        return self.decode(x)
+    def forward(self, x, mask=None):
+        x = self.encode(x, mask=mask)
+        return self.decode(x, mask=mask)
 
 if __name__ == '__main__':
     in_dim = 16
