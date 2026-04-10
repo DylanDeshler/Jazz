@@ -47,7 +47,7 @@ eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = True # disabled by default
+wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
@@ -59,7 +59,7 @@ rate = 16000
 n_samples = 24576
 in_dim = 16
 n_queries = 48
-max_seq_len = 512
+max_seq_len = 256
 hidden_dim = 512
 num_heads = 8
 enocder_depth = 1
@@ -322,17 +322,17 @@ def get_batch(split='train'):
         
         tries = 0
         frame_start, frame_end = slice_random_measure(beat_path)
-        while math.ceil((frame_end - frame_end) / encoder_ratios) >= max_seq_len:
+        while frame_end - frame_end >= max_seq_len * encoder_ratios:
             frame_start, frame_end = slice_random_measure(beat_path)
             tries += 1
             
             if tries > 5:
-                frame_end = frame_start + math.floor(encoder_ratios * max_seq_len)
+                frame_end = frame_start + math.floor(encoder_ratios * max_seq_len) - 100
                 break
         
         x.append(wav[frame_start:frame_end])
         
-    max_len = max([len(x_) for x_ in x])
+    max_len = min(max([len(x_) for x_ in x]), encoder_ratios // max_seq_len)
     max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
     x = torch.from_numpy(np.stack([np.pad(x_, (0, max_len - len(x_))) for x_ in x], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
     
