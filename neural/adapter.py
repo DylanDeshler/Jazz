@@ -238,7 +238,7 @@ class CrossAttentionBlock(nn.Module):
         self.norm2 = RMSNorm(dim)
         self.mlp = SwiGLUMlp(dim, int(2 / 3 * mlp_ratio * dim), bias=proj_bias)
     
-    def forward(self, x, context, mask):
+    def forward(self, x, context, mask=None):
         x = x + self.attn(self.norm1(x), context, attn_mask=mask)
         x = x + self.mlp(self.norm2(x))
 
@@ -255,7 +255,7 @@ class SequenceEncoder(nn.Module):
         self.out_norm = nn.LayerNorm(hidden_dim)
         self.out_proj = nn.Linear(hidden_dim, in_dim, bias=True)
     
-    def forward(self, x):
+    def forward(self, x, mask=None):
         B, _, T = x.shape
         
         x = x.transpose(1, 2)
@@ -267,7 +267,7 @@ class SequenceEncoder(nn.Module):
         queries = self.queries.repeat(B, 1, 1)
         x = x + self.pos_embed.repeat(B, 1, 1)[:, :T]
         for block in self.blocks:
-            queries = block(queries, x)
+            queries = block(queries, x, mask=mask)
         
         queries = self.out_norm(queries)
         queries = self.out_proj(queries)
@@ -287,7 +287,7 @@ class SequenceDecoder(nn.Module):
         self.out_norm = nn.LayerNorm(hidden_dim)
         self.out_proj = nn.Linear(hidden_dim, in_dim, bias=True)
     
-    def forward(self, x):
+    def forward(self, x, mask=None):
         B, _, T = x.shape
         
         x = x.transpose(1, 2)
@@ -298,7 +298,7 @@ class SequenceDecoder(nn.Module):
         
         queries = self.pos_embed.repeat(B, 1, 1)[:, :T]
         for block in self.blocks:
-            queries = block(queries, x)
+            queries = block(queries, x, mask=mask)
         
         queries = self.out_norm(queries)
         queries = self.out_proj(queries)
@@ -343,5 +343,8 @@ if __name__ == '__main__':
     print(x.shape, y.shape)
     
     x = torch.randn(32, 16, 97).to(device)
-    y = model(x)
+    mask = torch.zeros((32, 97))
+    mask[:59] = 1
+    mask = mask.bool().to('cuda')
+    y = model(x, mask)
     print(x.shape, y.shape)
