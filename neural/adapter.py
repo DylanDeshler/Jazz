@@ -343,3 +343,4 @@ if __name__ == '__main__':
     mask = mask.bool().to('cuda')
     y = model(x, mask)
     print(x.shape, y.shape)
+    print(y[:, :, 90].mean())
