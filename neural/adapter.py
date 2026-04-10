@@ -282,9 +282,15 @@ class SequenceDecoder(nn.Module):
     def forward(self, x, shape, mask=None):
         B, _, T = shape
         
+        x = x.transpose(1, 2)
+        x = self.in_norm(x)
+        x = x.transpose(1, 2)
+        x = self.in_proj(x)
+        x = x.transpose(1, 2)
+        
         queries = self.pos_embed.repeat(B, 1, 1)[:, :T]
         for block in self.blocks:
-            print(queries.shape, x.shape)
+            print(queries.shape, x.shape, shape)
             if mask is not None:
                 print(mask.shape)
             queries = block(queries, x, q_mask=mask)
