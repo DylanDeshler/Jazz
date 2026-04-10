@@ -254,6 +254,29 @@ class SequenceEncoder(nn.Module):
         
         self.out_norm = nn.LayerNorm(hidden_dim)
         self.out_proj = nn.Linear(hidden_dim, in_dim, bias=True)
+
+        self.initialize_weights()
+    
+    def initialize_weights(self):
+        self.apply(self._init_weights)
+        # zero out classifier weights
+        nn.init.zeros_(self.out_proj.weight)
+        # zero out c_proj weights in all blocks
+        for block in self.blocks:
+            nn.init.zeros_(block.mlp.w3.weight)
+            nn.init.zeros_(block.attn.proj.weight)
+    
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            # https://arxiv.org/pdf/2310.17813
+            fan_out = module.weight.size(0)
+            fan_in = module.weight.size(1)
+            std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
+            nn.init.normal_(module.weight, mean=0.0, std=std)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
     def forward(self, x, mask=None):
         B, _, T = x.shape
@@ -265,11 +288,11 @@ class SequenceEncoder(nn.Module):
         x = x.transpose(1, 2)
         
         queries = self.queries.repeat(B, 1, 1)
+        print(queries.shape)
         x = x + self.pos_embed.repeat(B, 1, 1)[:, :T]
         for block in self.blocks:
             queries = block(queries, x, mask=mask)
         
-        print(queries.shape)
         queries = self.out_norm(queries)
         queries = self.out_proj(queries)
         queries = queries.transpose(1, 2)
@@ -287,6 +310,29 @@ class SequenceDecoder(nn.Module):
         
         self.out_norm = nn.LayerNorm(hidden_dim)
         self.out_proj = nn.Linear(hidden_dim, in_dim, bias=True)
+                
+        self.initialize_weights()
+    
+    def initialize_weights(self):
+        self.apply(self._init_weights)
+        # zero out classifier weights
+        nn.init.zeros_(self.out_proj.weight)
+        # zero out c_proj weights in all blocks
+        for block in self.blocks:
+            nn.init.zeros_(block.mlp.w3.weight)
+            nn.init.zeros_(block.attn.proj.weight)
+    
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            # https://arxiv.org/pdf/2310.17813
+            fan_out = module.weight.size(0)
+            fan_in = module.weight.size(1)
+            std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
+            nn.init.normal_(module.weight, mean=0.0, std=std)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
     def forward(self, x, mask=None):
         B, _, T = x.shape
