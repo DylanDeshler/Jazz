@@ -52,8 +52,8 @@ wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 4 # used to simulate larger batch sizes
-batch_size = 16 # if gradient_accumulation_steps > 1, this is the micro-batch size
+gradient_accumulation_steps = 16 # used to simulate larger batch sizes
+batch_size = 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
 n_samples = 24576
@@ -62,8 +62,8 @@ n_queries = 48
 max_seq_len = 128
 hidden_dim = 512
 num_heads = 8
-enocder_depth = 2
-decoder_depth = 1
+enocder_depth = 4
+decoder_depth = 2
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 50000 # total number of training iterations
