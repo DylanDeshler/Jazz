@@ -12,7 +12,6 @@ import torch
 
 from dito import DiToV5 as Tokenizer
 
-import matplotlib.pyplot as plt
 import soundfile as sf
 import librosa
 import glob
