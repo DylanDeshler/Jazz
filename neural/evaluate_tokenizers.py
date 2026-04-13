@@ -316,6 +316,8 @@ with torch.no_grad():
         m_padded = torch.from_numpy(np.stack([np.pad(raw, (0, max_len - len(raw))) for raw in m_raw], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
         indices = torch.arange(max_len // encoder_ratios).unsqueeze(0)
+        lengths = [len(raw) for raw in m_raw]
+        lengths = torch.from_numpy(np.asarray(lengths)).unsqueeze(1)
         lengths = (lengths + encoder_ratios - 1) // encoder_ratios
         latent_mask = (indices < lengths).to(device, non_blocking=True)
         
