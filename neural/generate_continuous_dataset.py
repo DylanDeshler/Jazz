@@ -10,7 +10,7 @@ from torchinfo import summary
 import numpy as np
 import torch
 
-from dito import DiToV4 as Tokenizer
+from dito import DiToV5 as Tokenizer
 
 import matplotlib.pyplot as plt
 import soundfile as sf
@@ -21,10 +21,10 @@ device = torch.device('cuda')
 
 batch_size = 128
 rate = 16000
-n_samples = rate
+n_samples = 24576
 
-out_prefix = 'low_large'
-ckpt_path = os.path.join('tokenizer_low_large', 'ckpt.pt')
+out_prefix = 'low_large_24576_subset'
+ckpt_path = os.path.join('tokenizer_low_large_24576_subset', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 tokenizer_args = checkpoint['model_args']
 vae_embed_dim = tokenizer_args['dimension']
@@ -40,11 +40,29 @@ for k,v in list(state_dict.items()):
 model.load_state_dict(state_dict)
 model.eval()
 
-paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
+paths = glob.glob('/home/ubuntu/Data/measures/*')
+with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
+    beat_paths = json.load(f)
+paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
 print(len(paths))
 
-with open('/home/dylan.d/research/music/Jazz/song_instruments.json', 'r') as f:
-    song_instruments = json.load(f)
+import concurrent.futures
+from multiprocessing import cpu_count
+wavs = [None] * len(paths)
+
+with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
+    future_to_index = {
+        executor.submit(lambda x: librosa.load(x, sr=rate)[0], path): i 
+        for i, path in enumerate(paths)
+    }
+    
+    for future in tqdm(concurrent.futures.as_completed(future_to_index), desc='Loading wav files', total=len(paths)):
+        original_index = future_to_index[future]
+        wav = future.result()
+        wavs[original_index] = wav
+
+# with open('/home/dylan.d/research/music/Jazz/song_instruments.json', 'r') as f:
+#     song_instruments = json.load(f)
 
 if True:
 
@@ -57,12 +75,11 @@ if True:
     all_codes = []
     all_instruments = []
     with torch.no_grad():
-        for idx, path in enumerate(tqdm(paths)):
-            instruments = song_instruments[path.split('/')[-1]]
+        for idx, x in enumerate(tqdm(wavs)):
+            # instruments = song_instruments[path.split('/')[-1]]
             this_codes = []
             if test:
                 this_samples = []
-            x, sr = librosa.load(path, sr=None)
 
             n_cuts = len(x) // n_samples
             for i in range(n_cuts // batch_size):
@@ -105,12 +122,12 @@ if True:
                 this_codes.append(codes)
 
             this_codes = np.concatenate(this_codes, axis=0)
-            binary_instruments = np.zeros(26, dtype=np.uint8)
-            binary_instruments[instruments] = 1
-            binary_instruments = np.tile(binary_instruments, (this_codes.shape[0], this_codes.shape[1], 1))
+            # binary_instruments = np.zeros(26, dtype=np.uint8)
+            # binary_instruments[instruments] = 1
+            # binary_instruments = np.tile(binary_instruments, (this_codes.shape[0], this_codes.shape[1], 1))
 
             all_codes.append(this_codes)
-            all_instruments.append(binary_instruments)
+            # all_instruments.append(binary_instruments)
 
             # for testing
             if test:
@@ -137,31 +154,31 @@ if True:
                 arr[:] = all_codes
                 arr.flush()
 
-                all_instruments = np.concatenate(all_instruments, axis=0)
-                print(all_instruments.shape)
-                all_instruments = all_instruments.reshape(all_instruments.shape[0] * all_instruments.shape[1], all_instruments.shape[2])
-                print(all_instruments.shape)
+                # all_instruments = np.concatenate(all_instruments, axis=0)
+                # print(all_instruments.shape)
+                # all_instruments = all_instruments.reshape(all_instruments.shape[0] * all_instruments.shape[1], all_instruments.shape[2])
+                # print(all_instruments.shape)
 
-                filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_instruments_{str(write_idx).zfill(2)}.bin')
-                dtype = np.uint8
-                arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_instruments.shape)
-                arr[:] = all_instruments
-                arr.flush()
+                # filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_instruments_{str(write_idx).zfill(2)}.bin')
+                # dtype = np.uint8
+                # arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_instruments.shape)
+                # arr[:] = all_instruments
+                # arr.flush()
 
                 write_idx += 1
                 write_paths.append((filename, len(all_codes)))
                 all_codes = []
-                all_instruments = []
+                # all_instruments = []
 
     # write the remaining batch
     print(f'Writing batch {write_idx}...')
     all_codes = np.concatenate(all_codes, axis=0)
-    all_instruments = np.concatenate(all_instruments, axis=0)
-    print(all_codes.shape, all_instruments.shape)
+    # all_instruments = np.concatenate(all_instruments, axis=0)
+    # print(all_codes.shape, all_instruments.shape)
 
     all_codes = all_codes.reshape(all_codes.shape[0] * all_codes.shape[1], all_codes.shape[2])
-    all_instruments = all_instruments.reshape(all_instruments.shape[0] * all_instruments.shape[1], all_instruments.shape[2])
-    print(all_codes.shape, all_instruments.shape)
+    # all_instruments = all_instruments.reshape(all_instruments.shape[0] * all_instruments.shape[1], all_instruments.shape[2])
+    # print(all_codes.shape, all_instruments.shape)
 
     filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_{str(write_idx).zfill(2)}.bin')
     dtype = np.float32
@@ -169,16 +186,16 @@ if True:
     arr[:] = all_codes
     arr.flush()
 
-    filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_instruments_{str(write_idx).zfill(2)}.bin')
-    dtype = np.uint8
-    arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_instruments.shape)
-    arr[:] = all_instruments
-    arr.flush()
+    # filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_instruments_{str(write_idx).zfill(2)}.bin')
+    # dtype = np.uint8
+    # arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_instruments.shape)
+    # arr[:] = all_instruments
+    # arr.flush()
 
     write_idx += 1
     write_paths.append((filename, len(all_codes)))
     all_codes = []
-    all_instruments = []
+    # all_instruments = []
 
 ## get token write paths
 dtype = np.float32
@@ -219,41 +236,41 @@ for path, length in write_paths[-2:]:
 
     cur_idx += length
 
-## get instrument write paths
-dtype = np.uint8
-write_paths = []
-paths = [f'{out_prefix}_instruments_{str(i).zfill(2)}.bin' for i in range(total_write_batches + 1)]
-for path in paths:
-    data = np.memmap(path, dtype=dtype, mode='r')
-    data = data.reshape((-1, 26))
-    write_paths.append((path, len(data)))
+# ## get instrument write paths
+# dtype = np.uint8
+# write_paths = []
+# paths = [f'{out_prefix}_instruments_{str(i).zfill(2)}.bin' for i in range(total_write_batches + 1)]
+# for path in paths:
+#     data = np.memmap(path, dtype=dtype, mode='r')
+#     data = data.reshape((-1, 26))
+#     write_paths.append((path, len(data)))
 
-# write instruments to instruments_train.bin
-cur_idx = 0
-filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_instruments_train.bin')
-train_length = np.sum([length for path, length in write_paths[:-2]])
-arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, 26))
-print(arr.shape)
+# # write instruments to instruments_train.bin
+# cur_idx = 0
+# filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_instruments_train.bin')
+# train_length = np.sum([length for path, length in write_paths[:-2]])
+# arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, 26))
+# print(arr.shape)
 
-for path, length in write_paths[:-2]:
-    data = np.memmap(path, dtype=dtype, mode='r', shape=(length, 26))
+# for path, length in write_paths[:-2]:
+#     data = np.memmap(path, dtype=dtype, mode='r', shape=(length, 26))
 
-    arr[cur_idx:cur_idx+length] = data
-    arr.flush()
+#     arr[cur_idx:cur_idx+length] = data
+#     arr.flush()
 
-    cur_idx += length
+#     cur_idx += length
 
-# write instruments to instruments_val.bin
-cur_idx = 0
-filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_instruments_val.bin')
-val_length = np.sum([length for path, length in write_paths[-2:]])
-arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length, 26))
-print(arr.shape)
+# # write instruments to instruments_val.bin
+# cur_idx = 0
+# filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_instruments_val.bin')
+# val_length = np.sum([length for path, length in write_paths[-2:]])
+# arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length, 26))
+# print(arr.shape)
 
-for path, length in write_paths[-2:]:
-    data = np.memmap(path, dtype=dtype, mode='r', shape=(length, 26))
+# for path, length in write_paths[-2:]:
+#     data = np.memmap(path, dtype=dtype, mode='r', shape=(length, 26))
 
-    arr[cur_idx:cur_idx+length] = data
-    arr.flush()
+#     arr[cur_idx:cur_idx+length] = data
+#     arr.flush()
 
-    cur_idx += length
+#     cur_idx += length
