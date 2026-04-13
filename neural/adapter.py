@@ -308,7 +308,7 @@ class SequenceEncoder(nn.Module):
         queries = self.queries.repeat(B, 1, 1)
         # x = x + self.pos_embed.repeat(B, 1, 1)[:, :T]
         for block in self.blocks:
-            queries = block(queries, x, kv_mask=mask, freqs_cis=self.freqs_cis[:T])
+            queries = block(queries, x, kv_mask=mask, freqs_cis=self.freqs_cis[:queries.shape[1]])
         
         queries = self.out_norm(queries)
         queries = self.out_proj(queries)
@@ -365,7 +365,7 @@ class SequenceDecoder(nn.Module):
         queries = self.pos_embed.repeat(B, 1, 1)[:, :T]
         # x = x + self.pos_embed.repeat(B, 1, 1)[:, :x.shape[1]]
         for block in self.blocks:
-            queries = block(queries, x, q_mask=mask, freqs_cis=self.freqs_cis[:T])
+            queries = block(queries, x, q_mask=mask, freqs_cis=self.freqs_cis[:queries.shape[1]])
         
         queries = self.out_norm(queries)
         queries = self.out_proj(queries)
