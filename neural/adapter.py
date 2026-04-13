@@ -272,7 +272,7 @@ class SequenceEncoder(nn.Module):
         self.out_proj = nn.Linear(hidden_dim, in_dim, bias=True)
 
         self.initialize_weights()
-        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_dim // num_heads, max_seq_len))
+        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_dim // num_heads, max_seq_len, theta=1000))
     
     def initialize_weights(self):
         self.apply(self._init_weights)
@@ -329,7 +329,7 @@ class SequenceDecoder(nn.Module):
         self.out_proj = nn.Linear(hidden_dim, in_dim, bias=True)
                 
         self.initialize_weights()
-        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_dim // num_heads, max_seq_len))
+        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_dim // num_heads, max_seq_len, theta=1000))
     
     def initialize_weights(self):
         self.apply(self._init_weights)
