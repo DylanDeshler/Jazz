@@ -332,9 +332,6 @@ class InvertibleAdapter(nn.Module):
         return self.decoder(x, shape, mask=mask)
     
     def forward(self, x, mask=None):
-        x = x[:, :, :self.max_seq_len]
-        if mask is not None:
-            mask = mask[:, :self.max_seq_len]
         x, shape = self.encode(x, mask=mask)
         return self.decode(x, shape, mask=mask)
 

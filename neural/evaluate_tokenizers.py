@@ -315,11 +315,16 @@ with torch.no_grad():
         max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
         m_padded = torch.from_numpy(np.stack([np.pad(raw, (0, max_len - len(raw))) for raw in m_raw], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
-        indices = torch.arange(max_len // encoder_ratios).unsqueeze(0)
-        lengths = [len(raw) for raw in m_raw]
+        lengths = [len(x_) for x_ in x]
+        max_len_trunc = min(max(lengths), encoder_ratios * (max_seq_len - 1))
+        max_len_trunc = encoder_ratios * math.ceil(max_len_trunc / encoder_ratios)
+
+        indices = torch.arange(max_len_trunc // encoder_ratios).unsqueeze(0)
         lengths = torch.from_numpy(np.asarray(lengths)).unsqueeze(1)
         lengths = (lengths + encoder_ratios - 1) // encoder_ratios
-        latent_mask = (indices < lengths).to(device, non_blocking=True)
+        latent_mask = (indices < lengths).to(device)
+        
+        m_padded_trunc = torch.from_numpy(np.stack([np.pad(raw[:max_len_trunc], (0, max_len_trunc - len(raw[:max_len_trunc]))) for raw in m_raw], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
         ## Standard approach
         if not EVAL_ITERATIVE:
@@ -335,7 +340,7 @@ with torch.no_grad():
                 y4z = F.interpolate(y4z, size=T, mode='linear', align_corners=False)
                 y4 = base1.decode(y4z, shape=y4.shape, n_steps=n_steps)
                 
-                y5, y5z = base2.encode(m_padded)
+                y5, y5z = base2.encode(m_padded_trunc)
                 y5z = adapter(y5z, latent_mask)
                 y5 = base2.decode(y5z, shape=y5.shape, n_steps=n_steps)
             
@@ -351,7 +356,7 @@ with torch.no_grad():
             y4 = torch.from_numpy(y4.astype(np.float32)).to(device, non_blocking=True)
             
             y5 = y5.squeeze().cpu().detach().numpy()
-            y5 = np.concatenate([y[:-(max_len - len(pad))] for y, pad in zip(y5, m_raw)], axis=0)
+            y5 = np.concatenate([y[:-(max_len_trunc - len(pad[:max_len_trunc]))] for y, pad in zip(y5, m_raw)], axis=0)
             y5 = torch.from_numpy(y5.astype(np.float32)).to(device, non_blocking=True)
             
             m = np.concatenate([restore_measure(m_.squeeze(), ratio) for m_, ratio in zip(m.cpu().detach().numpy(), ratios)], axis=0)
