@@ -19,6 +19,7 @@ import torch.nn.functional as F
 
 from dito import DiToV5 as Tokenizer
 from fad import MultiTaskFAD as FAD
+from adapter import InvertibleAdapter as Adapter
 from contrast import Transformer as Contrast
 
 # from transformers import ClapModel, ClapProcessor
@@ -217,6 +218,8 @@ base1 = load_model(os.path.join('tokenizer_low_large_24576', 'ckpt.pt'), Tokeniz
 encoder_ratios = math.prod(base1.encoder.ratios)
 base2 = load_model(os.path.join('tokenizer_low_large_24576_subset', 'ckpt.pt'), Tokenizer)
 measure1 = load_model(os.path.join('tokenizer_low_measures_fix_subset', 'ckpt.pt'), Tokenizer)
+adapter = load_model(os.paht.join('tokenizer_adapter_low_large_24576_subset', 'ckpt.pt'), Adapter)
+max_seq_len = adapter.max_seq_len
 fad = load_model(os.path.join('FAD', 'ckpt.pt'), FAD)
 # contrast = load_model(os.path.join('contrast_learntmep_instance', 'ckpt.pt'), Contrast)
 # clap_model = ClapModel.from_pretrained("laion/larger_clap_music").to(device)
@@ -255,6 +258,7 @@ base1_embs = []
 base2_embs = []
 measure1_embs = []
 lerp_embs = []
+adapter_embs = []
 out_dir = '/home/ubuntu/Data/FAD_samples'
 os.makedirs(out_dir, exist_ok=True)
 with torch.no_grad():
@@ -311,6 +315,10 @@ with torch.no_grad():
         max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
         m_padded = torch.from_numpy(np.stack([np.pad(raw, (0, max_len - len(raw))) for raw in m_raw], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
+        indices = torch.arange(max_len // encoder_ratios).unsqueeze(0)
+        lengths = (lengths + encoder_ratios - 1) // encoder_ratios
+        latent_mask = (indices < lengths).to(device, non_blocking=True)
+        
         ## Standard approach
         if not EVAL_ITERATIVE:
             noise = torch.randn((1, 1, n_samples), device=device).repeat(max(x.shape[0], m.shape[0]), 1, 1)
@@ -318,11 +326,16 @@ with torch.no_grad():
                 y1 = base1.reconstruct(x, n_steps=n_steps, noise=noise[:x.shape[0]])
                 y2 = base2.reconstruct(x, n_steps=n_steps, noise=noise[:x.shape[0]])
                 y3 = measure1.reconstruct(m, n_steps=n_steps, noise=noise[:m.shape[0]])
+                
                 y4, y4z = base1.encode(m_padded)
                 T = y4z.shape[-1]
                 y4z = F.interpolate(y4z, size=n_samples // encoder_ratios, mode='linear', align_corners=False)
                 y4z = F.interpolate(y4z, size=T, mode='linear', align_corners=False)
                 y4 = base1.decode(y4z, shape=y4.shape, n_steps=n_steps)
+                
+                y5, y5z = base2.encode(m_padded)
+                y5z = adapter(y5z, latent_mask)
+                y5 = base2.decode(y5z, shape=y5.shape, n_steps=n_steps)
             
             x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
             
@@ -334,6 +347,10 @@ with torch.no_grad():
             y4 = y4.squeeze().cpu().detach().numpy()
             y4 = np.concatenate([y[:-(max_len - len(pad))] for y, pad in zip(y4, m_raw)], axis=0)
             y4 = torch.from_numpy(y4.astype(np.float32)).to(device, non_blocking=True)
+            
+            y5 = y5.squeeze().cpu().detach().numpy()
+            y5 = np.concatenate([y[:-(max_len - len(pad))] for y, pad in zip(y5, m_raw)], axis=0)
+            y5 = torch.from_numpy(y5.astype(np.float32)).to(device, non_blocking=True)
             
             m = np.concatenate([restore_measure(m_.squeeze(), ratio) for m_, ratio in zip(m.cpu().detach().numpy(), ratios)], axis=0)
             m = torch.from_numpy(m.astype(np.float32)).to(device, non_blocking=True)
@@ -347,6 +364,7 @@ with torch.no_grad():
                 y3 = drop_to_multiple(y3, 16383 * 5)
                 y4 = drop_to_multiple(y4, 16383 * 5)
                 m = drop_to_multiple(m, 16383 * 5)
+                y5 = drop_to_multiple(y5, 16383 * 5)
                 with ctx:
                     try:
                         real_emb = fad.forward_features(x)
@@ -355,6 +373,7 @@ with torch.no_grad():
                         base2_emb = fad.forward_features(drop_to_multiple(y2, 16383 * 5))
                         measure1_emb = fad.forward_features(y3)
                         lerp_emb = fad.forward_features(y4)
+                        adapter_emb = fad.forward_features(y5)
                     except Exception as e:
                         print(e)
                         continue
@@ -383,6 +402,7 @@ with torch.no_grad():
             base2_embs.append(base2_emb.cpu().detach().numpy())
             measure1_embs.append(measure1_emb.cpu().detach().numpy())
             lerp_embs.append(lerp_emb.cpu().detach().numpy())
+            adapter_embs.append(adapter_emb.cpu().detach().numpy())
         
         ## Iterative for measuring impact of n_steps
         else:
@@ -462,6 +482,7 @@ if not EVAL_ITERATIVE:
     base2_mu, base2_sigma = calculate_embd_statistics(np.concatenate(base2_embs, axis=0))
     measure1_mu, measure1_sigma = calculate_embd_statistics(np.concatenate(measure1_embs, axis=0))
     lerp_mu, lerp_sigma = calculate_embd_statistics(np.concatenate(lerp_embs, axis=0))
+    adapter_mu, adapter_sigma = calculate_embd_statistics(np.concatenate(adapter_embs, axis=0))
 
     m_fad = calculate_frechet_distance(real_m_mu, real_m_sigma, real_mu, real_sigma)
     base1_fad = calculate_frechet_distance(base1_mu, base1_sigma, real_mu, real_sigma)
@@ -469,13 +490,15 @@ if not EVAL_ITERATIVE:
     measure1_fad = calculate_frechet_distance(measure1_mu, measure1_sigma, real_mu, real_sigma)
     measure1_m_fad = calculate_frechet_distance(measure1_mu, measure1_sigma, real_m_mu, real_m_sigma)
     lerp_fad = calculate_frechet_distance(lerp_mu, lerp_sigma, real_mu, real_sigma)
+    adapter_fad = calculate_frechet_distance(adapter_mu, adapter_sigma, real_mu, real_sigma)
 
     print('Real Measures -> Real Samples FAD: ', m_fad)
     print('Base1 -> Real Samples FAD: ', base1_fad)
-    print('Base1 -> Real Samples FAD: ', base2_fad)
+    print('Base2 -> Real Samples FAD: ', base2_fad)
     print('Measure1 -> Real Samples FAD: ', measure1_fad)
     print('Measure1 -> Real Measures FAD:', measure1_m_fad)
     print('LERP -> Real Samples FAD: ', lerp_fad)
+    print('Adapter -> Real Samples FAD: ', adapter_fad)
     
     # Real Measures -> Real Samples FAD:  2.6932771422591486
     # Base1 -> Real Samples FAD:  23.673057913395297
@@ -493,6 +516,13 @@ if not EVAL_ITERATIVE:
     # Measure1 -> Real Samples FAD:  28.18418238234827
     # Measure1 -> Real Measures FAD: 24.24471873383287
     # LERP (Nearest) -> Real Samples FAD:  27.66163151650572
+    
+    # Real Measures -> Real Samples FAD:  2.4744563798846855
+    # Base1 -> Real Samples FAD:  25.17505440421708
+    # Base2 -> Real Samples FAD:  25.847873829072455
+    # Measure1 -> Real Samples FAD:  31.01590162889434
+    # Measure1 -> Real Measures FAD: 26.6242118915944
+    # LERP (Linear) -> Real Samples FAD:  29.91905552959824
 else:
     fads = defaultdict(list)
     for exponent in range(math.floor(math.log2(n_steps)) + 1):

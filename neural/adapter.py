@@ -317,6 +317,7 @@ class SequenceDecoder(nn.Module):
 class InvertibleAdapter(nn.Module):
     def __init__(self, in_dim, n_queries, max_seq_len, hidden_dim, num_heads, enocder_depth, decoder_depth, mlp_ratio=4., qkv_bias=False, proj_bias=False):
         super().__init__()
+        self.max_seq_len = max_seq_len
         self.encoder = SequenceEncoder(
             in_dim, n_queries, max_seq_len, hidden_dim, num_heads, enocder_depth, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, proj_bias=proj_bias
         )
@@ -331,6 +332,7 @@ class InvertibleAdapter(nn.Module):
         return self.decoder(x, shape, mask=mask)
     
     def forward(self, x, mask=None):
+        x = x[:, :, :self.max_seq_len]
         x, shape = self.encode(x, mask=mask)
         return self.decode(x, shape, mask=mask)
 
