@@ -530,6 +530,14 @@ if not EVAL_ITERATIVE:
     # Measure1 -> Real Samples FAD:  31.01590162889434
     # Measure1 -> Real Measures FAD: 26.6242118915944
     # LERP (Linear) -> Real Samples FAD:  29.91905552959824
+    
+    # Real Measures -> Real Samples FAD:  2.4744563798846855
+    # Base1 -> Real Samples FAD:  24.44563479249905
+    # Base2 -> Real Samples FAD:  25.62259848113618
+    # Measure1 -> Real Samples FAD:  30.412681148653803
+    # Measure1 -> Real Measures FAD: 26.11099070251423
+    # LERP -> Real Samples FAD:  29.668960644794282
+    # Adapter -> Real Samples FAD:  27.0858946623744
 else:
     fads = defaultdict(list)
     for exponent in range(math.floor(math.log2(n_steps)) + 1):
