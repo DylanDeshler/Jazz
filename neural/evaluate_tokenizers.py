@@ -311,11 +311,11 @@ with torch.no_grad():
         x = [x_padded[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(x_padded) // n_samples)]
         x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
-        max_len = max([len(raw) for raw in m_raw])
+        lengths = [len(raw) for raw in m_raw]
+        max_len = max(lengths)
         max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
         m_padded = torch.from_numpy(np.stack([np.pad(raw, (0, max_len - len(raw))) for raw in m_raw], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
-        lengths = [len(x_) for x_ in x]
         max_len_trunc = min(max(lengths), encoder_ratios * (max_seq_len - 1))
         max_len_trunc = encoder_ratios * math.ceil(max_len_trunc / encoder_ratios)
 
