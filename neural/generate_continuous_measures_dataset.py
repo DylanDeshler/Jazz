@@ -19,7 +19,7 @@ import glob
 
 device = torch.device('cuda')
 
-batch_size = 2048
+batch_size = 128
 rate = 16000
 n_samples = 24576
 
