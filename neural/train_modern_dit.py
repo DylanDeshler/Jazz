@@ -152,8 +152,6 @@ def get_batch(split='train', batch_size=batch_size):
     idxs = torch.randint(len(data) - n_chunks * spatial_window, (batch_size,))    
     x = torch.from_numpy(np.stack([data[idx:idx+n_chunks * spatial_window] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     x = x.view(batch_size, n_chunks, spatial_window, vae_embed_dim)
-    
-    print(x.mean(), x.std())
 
     return x
 
