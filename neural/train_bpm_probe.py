@@ -133,6 +133,7 @@ iter_num = 0
 best_val_loss = 1e9
 
 model_args = dict(
+    in_chans=16,
     depths=[3, 3, 9, 3],
     dims=[64, 128, 256, 512],
     drop_path_rate=0.1,
