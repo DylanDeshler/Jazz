@@ -127,10 +127,10 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
-        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_train.bin', dtype=np.float32, mode='r', shape=(0, spatial_window, vae_embed_dim))
+        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_train.bin', dtype=np.float32, mode='r', shape=(3941406, spatial_window, vae_embed_dim))
         meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_bpm_train.bin', dtype=np.float32, mode='r')
     else:
-        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_val.bin', dtype=np.float32, mode='r', shape=(0, spatial_window, vae_embed_dim))
+        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_val.bin', dtype=np.float32, mode='r', shape=(88303, spatial_window, vae_embed_dim))
         meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_bpm_val.bin', dtype=np.float32, mode='r')
     
     idxs = torch.randint(len(data) - n_chunks, (batch_size,))    
