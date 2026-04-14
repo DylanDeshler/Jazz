@@ -22,6 +22,8 @@ device = torch.device('cuda')
 batch_size = 128
 rate = 16000
 n_samples = 24576
+TARGET_SIG = 4
+total_write_batches = 48
 
 out_prefix = 'low_large_24576_subset_adapter'
 
@@ -112,15 +114,12 @@ def parse_beat_file(beat_path):
     
     return beat_data
 
-TARGET_SIG = 4
-
-if True:
+if False:
 
     test = False
 
     write_idx = 0
     write_paths = []
-    total_write_batches = 48
 
     all_codes = []
     all_bpms = []
@@ -226,7 +225,7 @@ for path in paths:
 # write tokens to train.bin
 cur_idx = 0
 filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_train.bin')
-train_length = np.sum([shape[0] for path, shape[0] in write_paths[:-2]])
+train_length = np.sum([shape[0] for path, shape in write_paths[:-2]])
 arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, n_samples // encoder_ratios, vae_embed_dim))
 print(arr.shape)
 
@@ -264,7 +263,7 @@ for path in paths:
 # write BPM to train.bin
 cur_idx = 0
 filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_bpm_train.bin')
-train_length = np.sum([shape[0] for path, shape[0] in write_paths[:-2]])
+train_length = np.sum([shape[0] for path, shape in write_paths[:-2]])
 arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length,))
 print(arr.shape)
 
