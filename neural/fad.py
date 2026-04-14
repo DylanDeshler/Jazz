@@ -360,8 +360,7 @@ class BPMProbe(nn.Module):
             x = self.stages[i](x)
             print(x.shape)
             
-        x = x.mean(-2)
-        print(x.shape)
+        x = x.mean(-2).transpose(1, 2)
         x = self.norm(x)
         x = self.proj(x)
         print(x.shape, labels.shape)
