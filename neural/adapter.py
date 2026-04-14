@@ -272,7 +272,6 @@ class SequenceEncoder(nn.Module):
         self.out_proj = nn.Linear(hidden_dim, in_dim, bias=True)
 
         self.initialize_weights()
-        # self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_dim // num_heads, max_seq_len, theta=1000))
     
     def initialize_weights(self):
         self.apply(self._init_weights)
@@ -308,7 +307,7 @@ class SequenceEncoder(nn.Module):
         queries = self.queries.repeat(B, 1, 1)
         x = x + self.pos_embed.repeat(B, 1, 1)[:, :T]
         for block in self.blocks:
-            queries = block(queries, x, kv_mask=mask)#, freqs_cis=self.freqs_cis[:queries.shape[1]])
+            queries = block(queries, x, kv_mask=mask)
         
         queries = self.out_norm(queries)
         queries = self.out_proj(queries)
@@ -329,7 +328,6 @@ class SequenceDecoder(nn.Module):
         self.out_proj = nn.Linear(hidden_dim, in_dim, bias=True)
                 
         self.initialize_weights()
-        # self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_dim // num_heads, max_seq_len, theta=1000))
     
     def initialize_weights(self):
         self.apply(self._init_weights)
@@ -365,7 +363,7 @@ class SequenceDecoder(nn.Module):
         queries = self.pos_embed.repeat(B, 1, 1)[:, :T]
         x = x + self.pos_embed.repeat(B, 1, 1)[:, :x.shape[1]]
         for block in self.blocks:
-            queries = block(queries, x, q_mask=mask)#, freqs_cis=self.freqs_cis[:queries.shape[1]])
+            queries = block(queries, x, q_mask=mask)
         
         queries = self.out_norm(queries)
         queries = self.out_proj(queries)
@@ -376,6 +374,7 @@ class SequenceDecoder(nn.Module):
 class InvertibleAdapter(nn.Module):
     def __init__(self, in_dim, n_queries, max_seq_len, hidden_dim, num_heads, enocder_depth, decoder_depth, mlp_ratio=4., qkv_bias=False, proj_bias=False):
         super().__init__()
+        self.max_seq_len = max_seq_len
         self.encoder = SequenceEncoder(
             in_dim, n_queries, max_seq_len, hidden_dim, num_heads, enocder_depth, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, proj_bias=proj_bias
         )
