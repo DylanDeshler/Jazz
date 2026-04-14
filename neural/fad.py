@@ -344,7 +344,6 @@ class BPMProbe(nn.Module):
 
     def forward(self, x, labels=None):
         x = x.permute(0, 3, 2, 1)
-        print(x.shape)
         for i in range(4):
             if i == 0:
                 x = self.downsample_layers[i][0](x)
@@ -358,16 +357,15 @@ class BPMProbe(nn.Module):
                 x = self.downsample_layers[i][1](x)
                 
             x = self.stages[i](x)
-            print(x.shape)
             
         x = x.mean(-2).transpose(1, 2)
         x = self.norm(x)
         x = self.proj(x).squeeze(-1)
-        print(x.shape, labels.shape)
         
-        if labels is None:
-            return x
+        if labels is not None:
+            labels = (labels - 207.94054) / 141.08382
+            loss = F.mse_loss(x, labels)
+            return loss
         
-        loss = F.mse_loss(x, labels)
-        
-        return loss
+        x = x * 141.08382 + 207.94054
+        return x
