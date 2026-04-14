@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from diffusion_forcing import ModernDiT_large as net
+from diffusion_forcing import UnconditionalModernDiT_small as net
 from dito import DiToV5 as Tokenizer
 import soundfile as sf
 
@@ -40,7 +40,7 @@ import pyrubberband as pyrb
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'ModernDiT_measures_bpm_large_256_uncond'
+out_dir = 'UnconditionalModernDiT_small_measures'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -48,15 +48,15 @@ save_interval = 5000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 2
-batch_size = 80#384
+gradient_accumulation_steps = 1
+batch_size = 192
 # model
 spatial_window = 48
 n_chunks = 15
@@ -68,14 +68,14 @@ use_null_token = True
 cut_seconds = 1
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 175000 # total number of training iterations
+max_iters = 100000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
 decay_lr = True # whether to decay the learning rate
-warmup_iters = 155000 # how many steps to warm up for
+warmup_iters = 5000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
@@ -124,29 +124,41 @@ ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torc
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 # poor man's data loader
+# def get_batch(split='train', batch_size=batch_size):
+#     # TODO: sample within songs (this can go over boundaries)
+#     data = np.memmap('/home/ubuntu/Data/low_large_24576_subset.bin', dtype=np.float16, mode='r', shape=(4403211, spatial_window, vae_embed_dim))
+#     meta = np.memmap('/home/ubuntu/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(4403211, 2))
+#     actions = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}.bin', dtype=np.float16, mode='r', shape=(4403211, style_dim))
+#     # actions = np.memmap('/home/ubuntu/Data/low_measures_large_actions_256top5_64_redo.bin', dtype=np.float16, mode='r', shape=(4403211, style_dim))
+#     if split == 'train':
+#         idxs = torch.randint(int(len(data) * 0.98) - n_chunks, (batch_size,))
+#     else:
+#         idxs = torch.randint(int(len(data) * 0.98), len(data) - n_chunks, (batch_size,))
+        
+#     x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+#     ratio = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 0] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+#     bpm = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+#     actions = torch.from_numpy(np.stack([actions[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    
+#     return x, ratio, bpm, actions
+
 def get_batch(split='train', batch_size=batch_size):
     # TODO: sample within songs (this can go over boundaries)
-    data = np.memmap('/home/ubuntu/Data/low_measures_large.bin', dtype=np.float16, mode='r', shape=(4403211, spatial_window, vae_embed_dim))
-    meta = np.memmap('/home/ubuntu/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(4403211, 2))
-    actions = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}.bin', dtype=np.float16, mode='r', shape=(4403211, style_dim))
-    # actions = np.memmap('/home/ubuntu/Data/low_measures_large_actions_256top5_64_redo.bin', dtype=np.float16, mode='r', shape=(4403211, style_dim))
+    data = np.memmap('/home/ubuntu/Data/low_large_24576_subset.bin', dtype=np.float16, mode='r', shape=(4403211, spatial_window, vae_embed_dim))
     if split == 'train':
         idxs = torch.randint(int(len(data) * 0.98) - n_chunks, (batch_size,))
     else:
         idxs = torch.randint(int(len(data) * 0.98), len(data) - n_chunks, (batch_size,))
         
     x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    ratio = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 0] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    bpm = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    actions = torch.from_numpy(np.stack([actions[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     
-    return x, ratio, bpm, actions
+    return x
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
 best_val_loss = 1e9
 
-ckpt_path = os.path.join('tokenizer_low_measures_large', 'ckpt.pt')
+ckpt_path = os.path.join('tokenizer_low_large_24576_subset', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 tokenizer_args = checkpoint['model_args']
 
@@ -222,9 +234,9 @@ def estimate_loss():
     for i, split in enumerate(['train', 'val']):
         losses = torch.zeros(eval_iters)
         for k in tqdm(range(eval_iters)):
-            X, ratio, bpm, actions = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
+            X = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
-                loss = model(X, bpm, actions)
+                loss = model(X)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -266,6 +278,40 @@ def restore_measure(audio, stretch_ratio, sr=16000):
     y_restored = pyrb.time_stretch(audio, sr, restore_rate)
     return y_restored
 
+# @torch.no_grad()
+# def save_samples(step):
+#     """
+#     Generates samples with the same actions as the input audio
+#     """
+#     batch_dir = os.path.join(out_dir, str(step))
+#     os.makedirs(batch_dir, exist_ok=True)
+    
+#     n_samples = 20
+#     x, ratio, bpm, actions = get_batch('val')
+#     x, ratio, bpm, actions = x[:n_samples], ratio[:n_samples], bpm[:n_samples], actions[:n_samples]
+
+#     B, T, N, D = x.shape
+    
+#     with ctx:
+#         recon = raw_model.generate(x.clone(), bpm, actions, n_steps=50)
+#         x = tokenizer.decode(x.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
+#         recon = tokenizer.decode(recon.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
+    
+#     x = x.cpu().detach().float().numpy().squeeze(-2)
+#     recon = recon.cpu().detach().float().numpy().squeeze(-2)
+
+#     for i in range(n_samples):
+#         og, y, r = x[i], recon[i], ratio[i].cpu().detach().numpy()
+
+#         og_ms, y_ms = [], []
+#         for og_m, y_m, r_m in zip(og, y, r):
+#             og_ms.append(restore_measure(og_m, r_m.item()))
+#             y_ms.append(restore_measure(y_m, r_m.item()))
+        
+#         # save .wavs
+#         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), np.concatenate(og_ms), 16000)
+#         sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), np.concatenate(y_ms), 16000)
+
 @torch.no_grad()
 def save_samples(step):
     """
@@ -275,13 +321,12 @@ def save_samples(step):
     os.makedirs(batch_dir, exist_ok=True)
     
     n_samples = 20
-    x, ratio, bpm, actions = get_batch('val')
-    x, ratio, bpm, actions = x[:n_samples], ratio[:n_samples], bpm[:n_samples], actions[:n_samples]
+    x = get_batch('val')[:n_samples]
 
     B, T, N, D = x.shape
     
     with ctx:
-        recon = raw_model.generate(x.clone(), bpm, actions, n_steps=50)
+        recon = raw_model.generate(x.clone(), n_steps=50)
         x = tokenizer.decode(x.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
         recon = tokenizer.decode(recon.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
     
@@ -289,16 +334,12 @@ def save_samples(step):
     recon = recon.cpu().detach().float().numpy().squeeze(-2)
 
     for i in range(n_samples):
-        og, y, r = x[i], recon[i], ratio[i].cpu().detach().numpy()
+        og, y = x[i], recon[i]
+        print(og.shape, y.shape)
 
-        og_ms, y_ms = [], []
-        for og_m, y_m, r_m in zip(og, y, r):
-            og_ms.append(restore_measure(og_m, r_m.item()))
-            y_ms.append(restore_measure(y_m, r_m.item()))
-        
         # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), np.concatenate(og_ms), 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), np.concatenate(y_ms), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), og, 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, 16000)
 
 # logging
 if wandb_log and master_process:
@@ -306,7 +347,7 @@ if wandb_log and master_process:
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
-X, ratio, bpm, actions = get_batch('train') # fetch the very first batch
+X = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
@@ -374,10 +415,10 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            loss = model(X, bpm, actions)
+            loss = model(X)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
-        X, ratio, bpm, actions = get_batch('train')
+        X = get_batch('train')
         # backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
     # clip the gradient
