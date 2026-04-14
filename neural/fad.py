@@ -342,6 +342,7 @@ class BPMProbe(nn.Module):
             nn.init.constant_(m.bias, 0)
 
     def forward(self, x, labels=None):
+        print(x.shape)
         for i in range(4):
             if i == 0:
                 x = self.downsample_layers[i][0](x)
