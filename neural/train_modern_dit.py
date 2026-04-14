@@ -328,18 +328,12 @@ def save_samples(step):
     
     with ctx:
         recon = raw_model.generate(x.clone(), n_steps=50)
-        x = tokenizer.decode(x.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
         recon = tokenizer.decode(recon.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
     
-    x = x.cpu().detach().float().numpy().squeeze(-2)
     recon = recon.cpu().detach().float().numpy().squeeze(-2)
 
     for i in range(n_samples):
-        og, y = x[i], recon[i]
-
-        # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), og.flatten(), 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y.flatten(), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}.wav'), recon[i].flatten(), 16000)
 
 # logging
 if wandb_log and master_process:
