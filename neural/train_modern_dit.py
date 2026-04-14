@@ -40,7 +40,7 @@ import pyrubberband as pyrb
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'UnconditionalModernDiT_small_measures'
+out_dir = 'UnconditionalModernDiT_small_24576_subset'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -144,12 +144,12 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 def get_batch(split='train', batch_size=batch_size):
     # TODO: sample within songs (this can go over boundaries)
-    data = np.memmap('/home/ubuntu/Data/low_large_24576_subset.bin', dtype=np.float16, mode='r', shape=(4403211, spatial_window, vae_embed_dim))
     if split == 'train':
-        idxs = torch.randint(int(len(data) * 0.98) - n_chunks, (batch_size,))
+        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_train.bin', dtype=np.float16, mode='r')#, shape=(4403211, spatial_window, vae_embed_dim))
     else:
-        idxs = torch.randint(int(len(data) * 0.98), len(data) - n_chunks, (batch_size,))
-        
+        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_val.bin', dtype=np.float16, mode='r')#, shape=(4403211, spatial_window, vae_embed_dim))
+    
+    idxs = torch.randint(len(data) - n_chunks, (batch_size,))    
     x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     
     return x
