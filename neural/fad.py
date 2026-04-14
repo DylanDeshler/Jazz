@@ -304,3 +304,65 @@ class MultiTaskFAD(nn.Module):
         }
         
         return outputs
+
+class BPMProbe(nn.Module):
+    def __init__(self, in_chans, depths=[3, 3, 9, 3], dims=[96, 192, 384, 768], drop_path_rate=0.):
+        stem = nn.Sequential(
+            nn.Conv2d(in_chans, dims[0], kernel_size=3, padding=1),
+            nn.LayerNorm(dims[0], eps=1e-6)
+        )
+        
+        self.downsample_layers = nn.ModuleList()
+        self.downsample_layers.append(stem)
+        for i in range(3):
+            downsample = nn.Sequential(
+                nn.LayerNorm(dims[i], eps=1e-6),
+                nn.Conv2d(dims[i], dims[i+1], kernel_size=2, stride=2)
+            )
+            self.downsample_layers.append(downsample)
+
+        self.stages = nn.ModuleList()
+        dp_rates=[x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))] 
+        cur = 0
+        for i in range(4):
+            stage = nn.Sequential(
+                *[ConvNeXtBlock(dim=dims[i], drop_path=dp_rates[cur + j]) for j in range(depths[i])]
+            )
+            self.stages.append(stage)
+            cur += depths[i]
+        
+        self.norm = nn.LayerNorm(dims[-1], eps=1e-6)
+        self.proj = nn.Linear(dims[-1], 1)
+        
+        self.apply(self._init_weights)
+    
+    def _init_weights(self, m):
+        if isinstance(m, (nn.Conv2d, nn.Linear)):
+            nn.init.trunc_normal_(m.weight, std=.02)
+            nn.init.constant_(m.bias, 0)
+
+    def forward(self, x, labels=None):
+        for i in range(4):
+            if i == 0:
+                x = self.downsample_layers[i][0](x)
+                x = x.permute(0, 2, 3, 1)
+                x = self.downsample_layers[i][1](x)
+                x = x.permute(0, 3, 1, 2)
+            else:
+                x = x.permute(0, 2, 3, 1)
+                x = self.downsample_layers[i][0](x)
+                x = x.permute(0, 3, 1, 2)
+                x = self.downsample_layers[i][1](x)
+                
+            x = self.stages[i](x)
+            
+        x = x.mean([-2, -1])
+        x = self.norm(x)
+        x = self.proj(x)
+        
+        if labels is None:
+            return x
+        
+        loss = F.mse_loss(x, labels)
+        
+        return loss
