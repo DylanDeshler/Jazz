@@ -214,8 +214,8 @@ def estimate_raw_loss():
         for k in tqdm(range(eval_iters)):
             X, labels = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
-                out = model(X)
-                loss = F.mse_loss(out, labels)
+                y = model(X)
+                loss = F.mse_loss(y, labels)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
