@@ -162,9 +162,8 @@ if True:
             batch = torch.from_numpy(np.stack([np.pad(raw[:max_len_trunc], (0, max_len_trunc - len(raw[:max_len_trunc]))) for raw in x], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
             
             for i in range(len(batch) // batch_size + 1):
-                print(batch.shape, latent_mask.shape)
                 _, codes = model.encode(batch[i*batch_size:(i+1)*batch_size])
-                codes, _ = adapter.encode(codes, mask=latent_mask)
+                codes, _ = adapter.encode(codes, mask=latent_mask[i*batch_size:(i+1)*batch_size])
                 this_codes = codes.permute(0, 2, 1).cpu().detach().numpy()
 
                 all_codes.append(this_codes)
