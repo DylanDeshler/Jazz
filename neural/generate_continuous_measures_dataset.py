@@ -167,7 +167,7 @@ if True:
                 this_codes = codes.permute(0, 2, 1).cpu().detach().numpy()
 
                 all_codes.append(this_codes)
-                all_bpms.append(np.asarray(bpms))
+            all_bpms.append(np.asarray(bpms))
             
             if (idx + 1) % (len(paths) // total_write_batches) == 0:
                 print(f'Writing batch {write_idx}...')
