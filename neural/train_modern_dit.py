@@ -145,9 +145,9 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 def get_batch(split='train', batch_size=batch_size):
     # TODO: sample within songs (this can go over boundaries)
     if split == 'train':
-        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_train.bin', dtype=np.float32, mode='r', shape=(356105472, vae_embed_dim))
+        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_train.bin', dtype=np.float32, mode='r', shape=(178052736, vae_embed_dim))
     else:
-        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_val.bin', dtype=np.float32, mode='r', shape=(7820352, vae_embed_dim))
+        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_val.bin', dtype=np.float32, mode='r', shape=(3910176, vae_embed_dim))
     
     idxs = torch.randint(len(data) - n_chunks * spatial_window, (batch_size,))    
     x = torch.from_numpy(np.stack([data[idx:idx+n_chunks * spatial_window] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
