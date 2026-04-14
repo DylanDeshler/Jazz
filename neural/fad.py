@@ -363,9 +363,9 @@ class BPMProbe(nn.Module):
         x = self.proj(x).squeeze(-1)
         
         if labels is not None:
-            labels = (labels - 207.94054) / 141.08382
+            labels = (labels - 187.5) / (226.4151001 - 144.57830811)
             loss = F.mse_loss(x, labels)
             return loss
         
-        x = x * 141.08382 + 207.94054
+        x = x * (226.4151001 - 144.57830811) + 187.5
         return x
