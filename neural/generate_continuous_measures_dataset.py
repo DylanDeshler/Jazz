@@ -19,7 +19,7 @@ import glob
 
 device = torch.device('cuda')
 
-batch_size = 128
+batch_size = 2048
 rate = 16000
 n_samples = 24576
 
@@ -161,12 +161,13 @@ if True:
             
             batch = torch.from_numpy(np.stack([np.pad(raw[:max_len_trunc], (0, max_len_trunc - len(raw[:max_len_trunc]))) for raw in x], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
             
-            _, codes = model.encode(batch)
-            codes, _ = adapter.encode(codes, mask=latent_mask)
-            this_codes = codes.permute(0, 2, 1).cpu().detach().numpy()
+            for i in range(len(batch) // batch_size + 1):
+                _, codes = model.encode(batch[i*batch_size:(i+1)*batch_size])
+                codes, _ = adapter.encode(codes, mask=latent_mask)
+                this_codes = codes.permute(0, 2, 1).cpu().detach().numpy()
 
-            all_codes.append(this_codes)
-            all_bpms.append(np.asarray(bpms))
+                all_codes.append(this_codes)
+                all_bpms.append(np.asarray(bpms))
             
             if (idx + 1) % (len(paths) // total_write_batches) == 0:
                 print(f'Writing batch {write_idx}...')
