@@ -276,6 +276,7 @@ def save_samples(step):
     
     with ctx:
         recon = raw_model.generate(x.clone(), n_steps=50)
+        recon = adapter.decode(x, shape, mask=None)
         recon = tokenizer.decode(recon.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
     
     recon = recon.cpu().detach().float().numpy().squeeze(-2)
@@ -317,11 +318,11 @@ while True:
         losses = estimate_loss()
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         
-        if iter_num % sample_interval == 0 and master_process:
-            model.eval()
-            with ctx:
-                save_samples(iter_num)
-            model.train()
+        # if iter_num % sample_interval == 0 and master_process:
+        #     model.eval()
+        #     with ctx:
+        #         save_samples(iter_num)
+        #     model.train()
         
         if wandb_log:
             wandb.log({
