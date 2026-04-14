@@ -318,7 +318,7 @@ class BPMProbe(nn.Module):
         for i in range(3):
             downsample = nn.Sequential(
                 nn.LayerNorm(dims[i], eps=1e-6),
-                nn.Conv2d(dims[i], dims[i+1], kernel_size=2, stride=2)
+                nn.Conv2d(dims[i], dims[i+1], kernel_size=(2, 1), stride=(2, 1))
             )
             self.downsample_layers.append(downsample)
 
@@ -343,6 +343,7 @@ class BPMProbe(nn.Module):
             nn.init.constant_(m.bias, 0)
 
     def forward(self, x, labels=None):
+        x = x.permute(0, 3, 2, 1)
         print(x.shape)
         for i in range(4):
             if i == 0:
@@ -357,6 +358,7 @@ class BPMProbe(nn.Module):
                 x = self.downsample_layers[i][1](x)
                 
             x = self.stages[i](x)
+            print(x.shape)
             
         x = x.mean([-2, -1])
         x = self.norm(x)
