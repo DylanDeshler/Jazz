@@ -307,6 +307,7 @@ class MultiTaskFAD(nn.Module):
 
 class BPMProbe(nn.Module):
     def __init__(self, in_chans, depths=[3, 3, 9, 3], dims=[96, 192, 384, 768], drop_path_rate=0.):
+        super().__init__()
         stem = nn.Sequential(
             nn.Conv2d(in_chans, dims[0], kernel_size=3, padding=1),
             nn.LayerNorm(dims[0], eps=1e-6)
