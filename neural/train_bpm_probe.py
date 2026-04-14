@@ -26,6 +26,7 @@ from torchinfo import summary
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
@@ -204,6 +205,22 @@ def estimate_loss():
     model.train()
     return out
 
+@torch.no_grad()
+def estimate_raw_loss():
+    out = {}
+    model.eval()
+    for i, split in enumerate(['train', 'val']):
+        losses = torch.zeros(eval_iters)
+        for k in tqdm(range(eval_iters)):
+            X, labels = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
+            with ctx:
+                out = model(X)
+                loss = F.mse_loss(out, labels)
+            losses[k] = loss.item()
+        out[split] = losses.mean()
+    model.train()
+    return out
+
 # learning rate decay scheduler (cosine with warmup)
 def get_lr(it):
     # 1) linear warmup for warmup_iters steps
@@ -248,6 +265,8 @@ while True:
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        raw_losses = estimate_raw_loss()
+        print(f"iter {iter_num}: train raw loss {raw_losses['train']:.6f}, val raw loss {raw_losses['val']:.6f}")
         
         if wandb_log:
             wandb.log({
