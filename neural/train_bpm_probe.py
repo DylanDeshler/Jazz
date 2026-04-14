@@ -216,6 +216,7 @@ def estimate_raw_loss():
             with ctx:
                 out = model(X)
                 loss = F.mse_loss(out, labels)
+                print(loss)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
