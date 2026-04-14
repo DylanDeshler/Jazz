@@ -42,7 +42,7 @@ model.eval()
 model = torch.compile(model)
 encoder_ratios = math.prod(model.encoder.ratios)
 
-ckpt_path = os.path.join('tokenizer_adapter_RoPE_low_large_24576_subset', 'ckpt.pt')
+ckpt_path = os.path.join('tokenizer_adapter_low_large_24576_subset', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 adapter_args = checkpoint['model_args']
 adapter = InvertibleAdapter(**adapter_args).to(device)
