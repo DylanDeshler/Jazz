@@ -145,12 +145,13 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 def get_batch(split='train', batch_size=batch_size):
     # TODO: sample within songs (this can go over boundaries)
     if split == 'train':
-        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_train.bin', dtype=np.float16, mode='r')#, shape=(4403211, spatial_window, vae_embed_dim))
+        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_train.bin', dtype=np.float16, mode='r', shape=(356105472, vae_embed_dim))
     else:
-        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_val.bin', dtype=np.float16, mode='r')#, shape=(4403211, spatial_window, vae_embed_dim))
+        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_val.bin', dtype=np.float16, mode='r', shape=(7820352, vae_embed_dim))
     
-    idxs = torch.randint(len(data) - n_chunks, (batch_size,))    
-    x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    idxs = torch.randint(len(data) - n_chunks * spatial_window, (batch_size,))    
+    x = torch.from_numpy(np.stack([data[idx:idx+n_chunks * spatial_window] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    x = x.view(batch_size, n_chunks, spatial_window, vae_embed_dim)
     
     return x
 
