@@ -189,6 +189,7 @@ if True:
                 write_idx += 1
                 write_paths.append((filename, len(all_codes)))
                 all_codes = []
+                all_bpms = []
     
     # write the remaining batch
     print(f'Writing batch {write_idx}...')
