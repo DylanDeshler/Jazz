@@ -40,7 +40,7 @@ import pyrubberband as pyrb
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'UnconditionalModernDiT_small_24576_subset'
+out_dir = 'UnconditionalModernDiT_small_24576_subset_adapter'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -241,28 +241,6 @@ def get_lr(it):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
 
-def restore_measure(audio, stretch_ratio, sr=16000):
-    """
-    Restores a time-warped measure to its original duration.
-    
-    Args:
-        audio (np.array): The fixed-length audio (from VAE or .npy file).
-                          Can be shape (1, 24576) or (24576,).
-        stretch_ratio (float): The ratio saved in your metadata 
-                               (Original Length / Target Length).
-        sr (int): Sampling rate (default 16000).
-        
-    Returns:
-        np.array: The restored audio array at original duration.
-    """
-    
-    if audio.dtype == np.float16:
-        audio = audio.astype(np.float32)
-    restore_rate = 1.0 / stretch_ratio
-    
-    y_restored = pyrb.time_stretch(audio, sr, restore_rate)
-    return y_restored
-
 @torch.no_grad()
 def save_samples(step):
     batch_dir = os.path.join(out_dir, str(step))
@@ -282,10 +260,7 @@ def save_samples(step):
     recon = recon.cpu().detach().float().numpy().squeeze(-2)
 
     for i in range(n_samples):
-        y, r = recon[i], bpm[i].cpu().detach().numpy()
-        y_ms = [restore_measure(y_m, TARGET_BPM / r_m.item()) for y_m, r_m in zip(y, r)]
-        
-        sf.write(os.path.join(batch_dir, f'{i}.wav'), np.concatenate(y_ms), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}.wav'), recon[i].flatten(), 16000)
 
 # logging
 if wandb_log and master_process:
