@@ -74,24 +74,24 @@ class FM:
         if net_kwargs is None:
             net_kwargs = {}
         
-        # pred = net(x_t, t=t * self.timescale, **net_kwargs)
-        # if guidance != 1.0:
-        #     assert uncond_net_kwargs is not None
-        #     uncond_pred = net(x_t, t=t * self.timescale, **uncond_net_kwargs)
-        #     pred = uncond_pred + guidance * (pred - uncond_pred)
-        
+        pred = net(x_t, t=t * self.timescale, **net_kwargs)
         if guidance != 1.0:
             assert uncond_net_kwargs is not None
-            
-            x_t = torch.cat([x_t, x_t], dim=0)
-            t = torch.cat([t, t], dim=0)
-            combined_kwargs = {}
-            # we assume the keys match
-            for k, v in net_kwargs.items():
-                combined_kwargs[k] = torch.cat([v, uncond_net_kwargs[k]], dim=0)
-            combined_pred = net(x_t, t=t * self.timescale, **combined_kwargs)
-            pred, uncond_pred = combined_pred.chunk(2, dim=0)
+            uncond_pred = net(x_t, t=t * self.timescale, **uncond_net_kwargs)
             pred = uncond_pred + guidance * (pred - uncond_pred)
+        
+        # if guidance != 1.0:
+        #     assert uncond_net_kwargs is not None
+            
+        #     x_t = torch.cat([x_t, x_t], dim=0)
+        #     t = torch.cat([t, t], dim=0)
+        #     combined_kwargs = {}
+        #     # we assume the keys match
+        #     for k, v in net_kwargs.items():
+        #         combined_kwargs[k] = torch.cat([v, uncond_net_kwargs[k]], dim=0)
+        #     combined_pred = net(x_t, t=t * self.timescale, **combined_kwargs)
+        #     pred, uncond_pred = combined_pred.chunk(2, dim=0)
+        #     pred = uncond_pred + guidance * (pred - uncond_pred)
         else:
             pred = net(x_t, t=t * self.timescale, **net_kwargs)
             
@@ -670,7 +670,7 @@ class ModernDiT(nn.Module):
         elif isinstance(module, nn.Embedding):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
-    def forward(self, x, t, bpm, actions):
+    def forward(self, x, t, bpm, actions, unconditional_mask=None):
         B, T, N, C = x.shape
         
         x = rearrange(x, 'b t n c -> (b t) c n')
@@ -685,6 +685,8 @@ class ModernDiT(nn.Module):
         
         if self.use_null_token:
             actions = token_drop(actions, self.null_token.unsqueeze(0), self.training, p_uncond=0.1, p_full=0.8, p_ind_low=0.1, p_ind_high=0.5)
+            if unconditional_mask is not None:
+                actions = torch.where(unconditional_mask, self.null_token.unsqueeze(0), actions)
         
         t = torch.cat([t, actions], dim=-1)
         t = self.fuse_conditioning(t)
@@ -715,8 +717,105 @@ class ModernDiTWrapper(nn.Module):
     def forward(self, x, bpm, actions, t=None):
         return self.diffusion.loss(self.net, x, t=t, net_kwargs={'actions': actions, 'bpm': bpm})
     
-    def generate(self, x, bpm, actions, n_steps=50, uncond_net_kwargs=None, guidance=1.0):
-        return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm}, uncond_net_kwargs=uncond_net_kwargs, guidance=guidance)
+    def generate(self, x, bpm, actions, unconditional_mask=None, n_steps=50, uncond_net_kwargs=None, guidance=1.0):
+        return self.sampler.sample(self.net, x.shape, n_steps=n_steps, net_kwargs={'actions': actions, 'bpm': bpm, 'unconditional_mask': unconditional_mask}, uncond_net_kwargs=uncond_net_kwargs, guidance=guidance)
+
+class UnconditionalModernDiT(nn.Module):
+    def __init__(self,
+                 in_channels,
+                 hidden_size,
+                 spatial_window,
+                 n_chunks,
+                 num_heads=12,
+                 depth=12,
+                 mlp_ratio=4,
+                 **kwargs,
+                 ):
+        super().__init__()
+        self.spatial_window = spatial_window
+        max_input_size = spatial_window * n_chunks
+        
+        self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
+        self.x_embedder = Patcher(in_channels, hidden_size)
+        
+        self.t_block = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(hidden_size, hidden_size * 6, bias=True),
+        )
+        
+        self.blocks = nn.ModuleList([
+            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+        ])
+
+        self.norm = RMSNorm(hidden_size)
+        self.final_layer_scale_shift_table = nn.Parameter(
+            torch.randn(2, hidden_size) / hidden_size ** 0.5,
+        )
+        self.fc = nn.Linear(hidden_size, in_channels, bias=False)
+        
+        self.initialize_weights()
+        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
+    
+    def initialize_weights(self):
+        self.apply(self._init_weights)
+        # zero out classifier weights
+        nn.init.zeros_(self.fc.weight)
+        nn.init.zeros_(self.t_block[-1].weight)
+        nn.init.zeros_(self.t_block[-1].bias)
+        # zero out c_proj weights in all blocks
+        for block in self.blocks:
+            nn.init.zeros_(block.mlp.w3.weight)
+            nn.init.zeros_(block.attn.proj.weight)
+    
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            # https://arxiv.org/pdf/2310.17813
+            fan_out = module.weight.size(0)
+            fan_in = module.weight.size(1)
+            std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
+            nn.init.normal_(module.weight, mean=0.0, std=std)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
+    
+    def forward(self, x, t):
+        B, T, N, C = x.shape
+        
+        x = rearrange(x, 'b t n c -> (b t) c n')
+        x = self.x_embedder(x)
+        x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
+        
+        t = self.t_embedder(t.flatten()).view(B, T, -1)
+        t0 = self.t_block(t)
+        
+        freqs_cis = self.freqs_cis[:x.shape[1]]
+        for block in self.blocks:
+            x = block(x, t0, freqs_cis=freqs_cis)
+        
+        # SAM Audio does not use a non-linearity on t here
+        shift, scale = (self.final_layer_scale_shift_table[None, None] + F.silu(t[:, :, None])).chunk(
+            2, dim=2
+        )
+        x = rearrange(x, 'b (t n) c -> b t n c', t=T, n=N)
+        x = modulate(self.norm(x), shift.expand(-1, -1, N, -1), scale.expand(-1, -1, N, -1))
+        x = self.fc(x)
+        
+        return x
+
+class UnconditionalModernDiTWrapper(nn.Module):
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.net = UnconditionalModernDiT(**kwargs)
+        
+        self.diffusion = FM(timescale=1000.0)
+        self.sampler = FMEulerSampler(self.diffusion)
+    
+    def forward(self, x, t=None):
+        return self.diffusion.loss(self.net, x, t=t)
+    
+    def generate(self, x, n_steps=50):
+        return self.sampler.sample(self.net, x.shape, n_steps=n_steps)
 
 def ModernDiT_large(**kwargs):
     return ModernDiTWrapper(depth=28, hidden_size=1152, num_heads=16, **kwargs)
@@ -729,3 +828,15 @@ def ModernDiT_small(**kwargs):
 
 def ModernDiT_tiny(**kwargs):
     return ModernDiTWrapper(depth=16, hidden_size=768, num_heads=12, **kwargs)
+
+def UnconditionalModernDiT_large(**kwargs):
+    return UnconditionalModernDiTWrapper(depth=28, hidden_size=1152, num_heads=16, **kwargs)
+
+def UnconditionalModernDiT_medium(**kwargs):
+    return UnconditionalModernDiTWrapper(depth=24, hidden_size=1024, num_heads=16, **kwargs)
+
+def UnconditionalModernDiT_small(**kwargs):
+    return UnconditionalModernDiTWrapper(depth=16, hidden_size=1024, num_heads=16, **kwargs)
+
+def UnconditionalModernDiT_tiny(**kwargs):
+    return UnconditionalModernDiTWrapper(depth=16, hidden_size=768, num_heads=12, **kwargs)
