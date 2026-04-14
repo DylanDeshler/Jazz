@@ -362,7 +362,7 @@ class BPMProbe(nn.Module):
             
         x = x.mean(-2).transpose(1, 2)
         x = self.norm(x)
-        x = self.proj(x)
+        x = self.proj(x).squeeze(-1)
         print(x.shape, labels.shape)
         
         if labels is None:
