@@ -152,7 +152,7 @@ def get_batch(split='train', batch_size=batch_size):
     idxs = torch.randint(len(data) - n_chunks * spatial_window, (batch_size,))    
     x = torch.from_numpy(np.stack([data[idx:idx+n_chunks * spatial_window] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     x = x.view(batch_size, n_chunks, spatial_window, vae_embed_dim)
-    
+
     return x
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
@@ -336,11 +336,10 @@ def save_samples(step):
 
     for i in range(n_samples):
         og, y = x[i], recon[i]
-        print(og.shape, y.shape)
 
         # save .wavs
-        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), og, 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y, 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_real.wav'), og.flatten(), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), y.flatten(), 16000)
 
 # logging
 if wandb_log and master_process:
