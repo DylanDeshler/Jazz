@@ -364,7 +364,8 @@ class BPMProbe(nn.Module):
         
         if labels is not None:
             labels = (labels - 187.5) / (226.4151001 - 144.57830811)
-            loss = F.mse_loss(x, labels)
+            # loss = F.mse_loss(x, labels)
+            loss = F.huber_loss(x, labels, delta=1)
             return loss
         
         x = x * (226.4151001 - 144.57830811) + 187.5
