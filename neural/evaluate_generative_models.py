@@ -278,7 +278,7 @@ with torch.no_grad():
                 
                 y2 = y2.view(batch_size * n_chunks, vae_embed_dim, spatial_window)
                 print(y2.shape, shape, mask.shape)
-                y2 = adapter.decode(y2.shape, shape, mask=mask)
+                y2 = adapter.decode(y2, shape, mask=mask)
                 print(y2.shape)
                 
                 noise = torch.randn((1, 1, n_samples), device=device).repeat(max(x.shape[0], m.shape[0]), 1, 1)
