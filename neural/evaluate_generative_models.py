@@ -270,9 +270,9 @@ with torch.no_grad():
                 target_samples = measure_duration_sec * rate
                 latent_lengths = torch.ceil(target_samples / encoder_ratios).long()
                 max_T = latent_lengths.max().item()
-                indices = torch.arange(max_T, device=device).unsqueeze(0)
+                indices = torch.arange(max_T, device=device).unsqueeze(0).unsqueeze(1)
                 lengths_expanded = latent_lengths.unsqueeze(1)
-                print(target_samples.shape, latent_lengths.shape, max_T, indices.shape, lengths_expanded.shape)
+                print(target_samples.shape, latent_lengths.shape, max_T, target_samples, indices.shape, lengths_expanded.shape)
                 valid_mask = indices < lengths_expanded
                 mask = valid_mask.unsqueeze(1).unsqueeze(2)
                 shape = (batch_size, 1, max_T)
