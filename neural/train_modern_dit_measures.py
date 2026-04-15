@@ -32,6 +32,7 @@ from einops import rearrange
 
 from diffusion_forcing import UnconditionalModernDiT_small as net
 from dito import DiToV5 as Tokenizer
+from adapter import InvertibleAdapter
 import soundfile as sf
 
 import torch
@@ -159,6 +160,22 @@ tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 del state_dict
 
+ckpt_path = os.path.join('tokenizer_adapter_low_large_24576_subset', 'ckpt.pt')
+checkpoint = torch.load(ckpt_path, map_location=device)
+adapter_args = checkpoint['model_args']
+
+adapter = InvertibleAdapter(**adapter_args).to(device)
+state_dict = checkpoint['model']
+# fix the keys of the state dictionary :(
+# honestly no idea how checkpoints sometimes get this prefix, have to debug more
+unwanted_prefix = '_orig_mod.'
+for k,v in list(state_dict.items()):
+    if k.startswith(unwanted_prefix):
+        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+adapter.load_state_dict(state_dict)
+adapter.eval()
+del state_dict
+
 model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, spatial_window=spatial_window, use_null_token=use_null_token)
 
 if init_from == 'scratch':
@@ -206,6 +223,7 @@ if compile and 'cuda' in device:
     unoptimized_model = model
     model = torch.compile(model) # requires PyTorch 2.0
     tokenizer = torch.compile(tokenizer)
+    adapter = torch.compile(adapter)
 
 # wrap model into DDP container
 if ddp:
@@ -252,9 +270,21 @@ def save_samples(step):
 
     B, T, N, D = x.shape
     
+    seconds_per_beat = 60.0 / bpm
+    measure_duration_sec = seconds_per_beat * TARGET_SIG
+    
+    target_samples = measure_duration_sec * 16000
+    latent_lengths = torch.ceil(target_samples / math.prod(tokenizer.encoder.ratios)).long()
+    max_T = latent_lengths.max().item()
+    max_len = min(max(lengths), encoder_ratios * (max_seq_len - 1))
+    indices = torch.arange(max_T, device=device).unsqueeze(0)
+    lengths_expanded = latent_lengths.unsqueeze(1)
+    valid_mask = indices < lengths_expanded
+    mask = valid_mask.unsqueeze(1).unsqueeze(2)
+    
     with ctx:
-        recon = raw_model.generate(x.clone(), n_steps=50)
-        recon = adapter.decode(x, shape, mask=None)
+        recon = raw_model.generate(x.shape, n_steps=50)
+        recon = adapter.decode(x, (*x.shape[:-1], max_T), mask=mask)
         recon = tokenizer.decode(recon.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
     
     recon = recon.cpu().detach().float().numpy().squeeze(-2)

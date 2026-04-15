@@ -123,25 +123,6 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
-# poor man's data loader
-# def get_batch(split='train', batch_size=batch_size):
-#     # TODO: sample within songs (this can go over boundaries)
-#     data = np.memmap('/home/ubuntu/Data/low_large_24576_subset.bin', dtype=np.float16, mode='r', shape=(4403211, spatial_window, vae_embed_dim))
-#     meta = np.memmap('/home/ubuntu/Data/measures_meta.bin', dtype=np.float32, mode='r', shape=(4403211, 2))
-#     actions = np.memmap(f'/home/ubuntu/Data/low_measures_large_actions_{n_style_embeddings}.bin', dtype=np.float16, mode='r', shape=(4403211, style_dim))
-#     # actions = np.memmap('/home/ubuntu/Data/low_measures_large_actions_256top5_64_redo.bin', dtype=np.float16, mode='r', shape=(4403211, style_dim))
-#     if split == 'train':
-#         idxs = torch.randint(int(len(data) * 0.98) - n_chunks, (batch_size,))
-#     else:
-#         idxs = torch.randint(int(len(data) * 0.98), len(data) - n_chunks, (batch_size,))
-        
-#     x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-#     ratio = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 0] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-#     bpm = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-#     actions = torch.from_numpy(np.stack([actions[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    
-#     return x, ratio, bpm, actions
-
 def get_batch(split='train', batch_size=batch_size):
     # TODO: sample within songs (this can go over boundaries)
     if split == 'train':
@@ -257,62 +238,6 @@ def get_lr(it):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
 
-def restore_measure(audio, stretch_ratio, sr=16000):
-    """
-    Restores a time-warped measure to its original duration.
-    
-    Args:
-        audio (np.array): The fixed-length audio (from VAE or .npy file).
-                          Can be shape (1, 24576) or (24576,).
-        stretch_ratio (float): The ratio saved in your metadata 
-                               (Original Length / Target Length).
-        sr (int): Sampling rate (default 16000).
-        
-    Returns:
-        np.array: The restored audio array at original duration.
-    """
-    
-    if audio.dtype == np.float16:
-        audio = audio.astype(np.float32)
-    restore_rate = 1.0 / stretch_ratio
-    
-    y_restored = pyrb.time_stretch(audio, sr, restore_rate)
-    return y_restored
-
-# @torch.no_grad()
-# def save_samples(step):
-#     """
-#     Generates samples with the same actions as the input audio
-#     """
-#     batch_dir = os.path.join(out_dir, str(step))
-#     os.makedirs(batch_dir, exist_ok=True)
-    
-#     n_samples = 20
-#     x, ratio, bpm, actions = get_batch('val')
-#     x, ratio, bpm, actions = x[:n_samples], ratio[:n_samples], bpm[:n_samples], actions[:n_samples]
-
-#     B, T, N, D = x.shape
-    
-#     with ctx:
-#         recon = raw_model.generate(x.clone(), bpm, actions, n_steps=50)
-#         x = tokenizer.decode(x.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
-#         recon = tokenizer.decode(recon.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
-    
-#     x = x.cpu().detach().float().numpy().squeeze(-2)
-#     recon = recon.cpu().detach().float().numpy().squeeze(-2)
-
-#     for i in range(n_samples):
-#         og, y, r = x[i], recon[i], ratio[i].cpu().detach().numpy()
-
-#         og_ms, y_ms = [], []
-#         for og_m, y_m, r_m in zip(og, y, r):
-#             og_ms.append(restore_measure(og_m, r_m.item()))
-#             y_ms.append(restore_measure(y_m, r_m.item()))
-        
-#         # save .wavs
-#         sf.write(os.path.join(batch_dir, f'{i}_real.wav'), np.concatenate(og_ms), 16000)
-#         sf.write(os.path.join(batch_dir, f'{i}_recon.wav'), np.concatenate(y_ms), 16000)
-
 @torch.no_grad()
 def save_samples(step):
     """
@@ -327,7 +252,7 @@ def save_samples(step):
     B, T, N, D = x.shape
     
     with ctx:
-        recon = raw_model.generate(x.clone(), n_steps=50)
+        recon = raw_model.generate(x.shape, n_steps=50)
         recon = tokenizer.decode(recon.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
     
     recon = recon.cpu().detach().float().numpy().squeeze(-2)
