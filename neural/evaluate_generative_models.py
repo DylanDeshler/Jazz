@@ -268,7 +268,7 @@ with torch.no_grad():
                 measure_duration_sec = seconds_per_beat * TARGET_SIG
                 
                 target_samples = measure_duration_sec * rate
-                latent_lengths = torch.ceil(target_samples / math.prod(encoder_ratios)).long()
+                latent_lengths = torch.ceil(target_samples / encoder_ratios).long()
                 max_T = latent_lengths.max().item()
                 indices = torch.arange(max_T, device=device).unsqueeze(0)
                 lengths_expanded = latent_lengths.unsqueeze(1)
