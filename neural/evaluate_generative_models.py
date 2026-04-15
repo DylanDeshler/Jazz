@@ -274,7 +274,7 @@ with torch.no_grad():
                 lengths_expanded = latent_lengths.unsqueeze(-1)
                 valid_mask = indices < lengths_expanded
                 mask = valid_mask.unsqueeze(1).unsqueeze(2)
-                shape = (batch_size, 1, max_T)
+                shape = (batch_size * n_chunks, 1, max_T)
                 
                 y2 = y2.view(batch_size * n_chunks, vae_embed_dim, spatial_window)
                 print(y2.shape, shape, mask.shape)
