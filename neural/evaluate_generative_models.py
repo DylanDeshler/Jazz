@@ -179,9 +179,9 @@ audio_paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) fo
 audio_paths = [path for path in audio_paths if os.path.basename(path) in beat_paths]
 beat_paths = [os.path.join('/home/ubuntu/Data/beats', path) for path in beat_paths]
 
-idxs = np.random.choice(np.arange(len(measure_paths)), size=128, replace=False)
+idxs = np.random.choice(np.arange(len(measure_paths)), size=512, replace=False)
 n_steps = 32
-batch_size = 64
+batch_size = 16
 EVAL_ITERATIVE = False
 USE_CLAP = False
 
@@ -259,14 +259,25 @@ with torch.no_grad():
                 
                 y1 = base_dit.generate(shape, n_steps=n_steps)
                 print(y1.shape)
-                
                 y2 = measure_dit.generate(shape, n_steps=n_steps)
-                
                 print(y2.shape)
-                bpm = probe(y2)
-                print(bpm.shape)
-                y2 = adapter.decode(x, (*x.shape[:-1], max_T), mask=mask)
                 
+                bpm = probe(y2)
+                print(bpm.shape, bpm.mean().item(), bpm.std().item())
+                seconds_per_beat = 60.0 / bpm
+                measure_duration_sec = seconds_per_beat * TARGET_SIG
+                
+                target_samples = measure_duration_sec * rate
+                latent_lengths = torch.ceil(target_samples / math.prod(encoder_ratios)).long()
+                max_T = latent_lengths.max().item()
+                indices = torch.arange(max_T, device=device).unsqueeze(0)
+                lengths_expanded = latent_lengths.unsqueeze(1)
+                valid_mask = indices < lengths_expanded
+                mask = valid_mask.unsqueeze(1).unsqueeze(2)
+                shape = (batch_size, 1, max_T)
+                
+                y2 = adapter.decode(x, shape, mask=mask)
+                print(y2.shape)
                 
                 noise = torch.randn((1, 1, n_samples), device=device).repeat(max(x.shape[0], m.shape[0]), 1, 1)
                 y1 = tokenizer.decode(y1.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=n_steps, noise=noise).view(B, T, 1, 24576 * cut_seconds)
