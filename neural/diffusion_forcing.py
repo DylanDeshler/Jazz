@@ -814,8 +814,8 @@ class UnconditionalModernDiTWrapper(nn.Module):
     def forward(self, x, t=None):
         return self.diffusion.loss(self.net, x, t=t)
     
-    def generate(self, shape, n_steps=50):
-        return self.sampler.sample(self.net, shape, n_steps=n_steps)
+    def generate(self, shape, n_steps=50, noise=None):
+        return self.sampler.sample(self.net, shape, n_steps=n_steps, noise=noise)
 
 def ModernDiT_large(**kwargs):
     return ModernDiTWrapper(depth=28, hidden_size=1152, num_heads=16, **kwargs)
