@@ -268,24 +268,15 @@ with torch.no_grad():
                 measure_duration_sec = seconds_per_beat * TARGET_SIG
                 
                 target_samples = measure_duration_sec * rate
-                # target_samples and latent_lengths are shape (16, 15)
                 latent_lengths = torch.ceil(target_samples / encoder_ratios).long()
                 max_T = latent_lengths.max().item()
-
-                # 1. Create indices with max_T on the absolute LAST dimension
-                # Shape: (1, 1, max_T)
                 indices = torch.arange(max_T, device=device).view(1, 1, max_T)
-
-                # 2. Add an empty dimension to the end of your lengths
-                # Shape: (16, 15, 1)
                 lengths_expanded = latent_lengths.unsqueeze(-1)
-
-                # 3. Broadcasting will now perfectly expand both to (16, 15, max_T)
                 valid_mask = indices < lengths_expanded
                 mask = valid_mask.unsqueeze(1).unsqueeze(2)
                 shape = (batch_size, 1, max_T)
                 
-                y2 = adapter.decode(x, shape, mask=mask)
+                y2 = adapter.decode(y2, shape, mask=mask)
                 print(y2.shape)
                 
                 noise = torch.randn((1, 1, n_samples), device=device).repeat(max(x.shape[0], m.shape[0]), 1, 1)
