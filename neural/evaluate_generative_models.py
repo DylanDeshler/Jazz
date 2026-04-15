@@ -253,20 +253,24 @@ with torch.no_grad():
         
         ## Standard approach
         if not EVAL_ITERATIVE:
-            noise = torch.randn((1, 1, n_samples), device=device).repeat(max(x.shape[0], m.shape[0]), 1, 1)
             with ctx:
                 shape = (batch_size, n_chunks, spatial_window, vae_embed_dim)
+                noise = torch.randn(shape, device=device)
                 
                 y1 = base_dit.generate(shape, n_steps=n_steps)
                 print(y1.shape)
                 
                 y2 = measure_dit.generate(shape, n_steps=n_steps)
+                
                 print(y2.shape)
                 bpm = probe(y2)
                 print(bpm.shape)
-                recon = adapter.decode(x, (*x.shape[:-1], max_T), mask=mask)
-                recon = tokenizer.decode(recon.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
+                y2 = adapter.decode(x, (*x.shape[:-1], max_T), mask=mask)
                 
+                
+                noise = torch.randn((1, 1, n_samples), device=device).repeat(max(x.shape[0], m.shape[0]), 1, 1)
+                y1 = tokenizer.decode(y1.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=n_steps, noise=noise).view(B, T, 1, 24576 * cut_seconds)
+                y2 = tokenizer.decode(y2.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=n_steps, noise=noise).view(B, T, 1, 24576 * cut_seconds)
             
             x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
             
