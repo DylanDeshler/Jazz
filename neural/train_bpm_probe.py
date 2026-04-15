@@ -44,7 +44,7 @@ save_interval = 5000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir
@@ -208,7 +208,7 @@ def estimate_loss():
     return out
 
 @torch.no_grad()
-def estimate_raw_loss():
+def estimate_raw_mse():
     out = {}
     model.eval()
     for i, split in enumerate(['train', 'val']):
@@ -267,8 +267,8 @@ while True:
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-        raw_losses = estimate_raw_loss()
-        print(f"iter {iter_num}: train raw loss {raw_losses['train']:.6f}, val raw loss {raw_losses['val']:.6f}")
+        raw_losses = estimate_raw_mse()
+        print(f"iter {iter_num}: train raw mse {raw_losses['train']:.6f}, val raw mse {raw_losses['val']:.6f}")
         
         if wandb_log:
             wandb.log({
