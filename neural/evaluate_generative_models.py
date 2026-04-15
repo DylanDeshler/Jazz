@@ -273,8 +273,8 @@ with torch.no_grad():
                 indices = torch.arange(max_T, device=device).view(1, 1, max_T)
                 lengths_expanded = latent_lengths.unsqueeze(-1)
                 valid_mask = indices < lengths_expanded
-                valid_mask_flat = valid_mask.view(batch_size * n_chunks, max_T)
-                mask = valid_mask_flat.unsqueeze(1).unsqueeze(2)
+                mask = valid_mask.view(batch_size * n_chunks, max_T)
+                mask #= valid_mask_flat.unsqueeze(1).unsqueeze(2)
                 shape = (batch_size * n_chunks, 1, max_T)
                 
                 y2 = y2.view(batch_size * n_chunks, vae_embed_dim, spatial_window)
