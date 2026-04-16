@@ -181,6 +181,24 @@ def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', win
             
     return torch.from_numpy(smoothed).to(bpm_tensor.device)
 
+def process_bpm(bpm, method='median', window_size=3):
+    bpm = smooth_bpm_predictions(bpm, method=method, window_size=window_size)
+    seconds_per_beat = 60.0 / bpm
+    measure_duration_sec = seconds_per_beat * TARGET_SIG
+    
+    target_samples = (measure_duration_sec * rate).long()
+    max_len = min(target_samples.max().item(), encoder_ratios * (max_seq_len - 1))
+    max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
+    max_latent_len = max_len // encoder_ratios
+    
+    indices = torch.arange(max_latent_len, device=device).view(1, 1, -1)
+    lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
+    mask = indices < lengths
+    mask = mask.view(batch_size * n_chunks, max_latent_len)
+    shape = (batch_size * n_chunks, 1, max_latent_len)
+    
+    return mask, shape, max_len
+
 # Tokenizers
 tokenizer = load_model(os.path.join('tokenizer_low_large_24576_subset', 'ckpt.pt'), Tokenizer)
 encoder_ratios = math.prod(tokenizer.encoder.ratios)
@@ -264,20 +282,7 @@ with torch.no_grad():
                 y2 = measure_dit.generate(shape, n_steps=n_steps, noise=noise)
                 
             bpm = probe(y2)
-            bpm = smooth_bpm_predictions(bpm, method='moving_average', window_size=3)
-            seconds_per_beat = 60.0 / bpm
-            measure_duration_sec = seconds_per_beat * TARGET_SIG
-            
-            target_samples = (measure_duration_sec * rate).long()
-            max_len = min(target_samples.max().item(), encoder_ratios * (max_seq_len - 1))
-            max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
-            max_latent_len = max_len // encoder_ratios
-            
-            indices = torch.arange(max_latent_len, device=device).view(1, 1, -1)
-            lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
-            mask = indices < lengths
-            mask = mask.view(batch_size * n_chunks, max_latent_len)
-            shape = (batch_size * n_chunks, 1, max_latent_len)
+            mask, shape, max_len = process_bpm(bpm, method='median', window_size=3)
             
             with ctx:
                 y2 = y2.transpose(2, 3).view(batch_size * n_chunks, vae_embed_dim, spatial_window)
