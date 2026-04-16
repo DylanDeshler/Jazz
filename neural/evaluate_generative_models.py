@@ -179,9 +179,9 @@ audio_paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) fo
 audio_paths = [path for path in audio_paths if os.path.basename(path) in beat_paths]
 beat_paths = [os.path.join('/home/ubuntu/Data/beats', path) for path in beat_paths]
 
-idxs = np.random.choice(np.arange(len(measure_paths)), size=4, replace=False)
+idxs = np.random.choice(np.arange(len(measure_paths)), size=64, replace=False)
 n_steps = 32
-batch_size = 16
+batch_size = 32
 EVAL_ITERATIVE = False
 USE_CLAP = False
 
@@ -225,31 +225,6 @@ with torch.no_grad():
             continue
         
         x_raw = wav[first_frame:last_frame]
-        
-        remainder = len(x_raw) % n_samples
-        pad_length = (n_samples - remainder) if remainder != 0 else 0
-        
-        x_padded = x_raw
-        if pad_length > 0:
-            x_padded = np.pad(x_raw, (0, pad_length))
-        
-        x = [x_padded[chunk * n_samples:(chunk+1) * n_samples] for chunk in range(len(x_padded) // n_samples)]
-        x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-        
-        lengths = [len(raw) for raw in m_raw]
-        max_len = max(lengths)
-        max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
-        m_padded = torch.from_numpy(np.stack([np.pad(raw, (0, max_len - len(raw))) for raw in m_raw], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-        
-        max_len_trunc = min(max(lengths), encoder_ratios * (max_seq_len - 1))
-        max_len_trunc = encoder_ratios * math.ceil(max_len_trunc / encoder_ratios)
-
-        indices = torch.arange(max_len_trunc // encoder_ratios).unsqueeze(0)
-        lengths = torch.from_numpy(np.asarray(lengths)).unsqueeze(1)
-        lengths = (lengths + encoder_ratios - 1) // encoder_ratios
-        latent_mask = (indices < lengths).to(device)
-        
-        m_padded_trunc = torch.from_numpy(np.stack([np.pad(raw[:max_len_trunc], (0, max_len_trunc - len(raw[:max_len_trunc]))) for raw in m_raw], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
         ## Standard approach
         if not EVAL_ITERATIVE:
@@ -301,6 +276,14 @@ with torch.no_grad():
             target_samples = target_samples.flatten().cpu().detach().numpy()
             y2 = y2.squeeze().cpu().detach().numpy()
             y2 = np.concatenate([y[:(max_len - min(samples, max_len))] for y, samples in zip(y2, target_samples)], axis=0)
+            
+            out = []
+            for y, samples in zip(y2, target_samples):
+                print(y.shape, samples)
+                out.append(y[:(max_len - min(samples, max_len))])
+                print(out[-1].shape)
+            y2 = np.concatenate(out, axis=0)
+            
             y2 = torch.from_numpy(y2.astype(np.float32)).to(device, non_blocking=True)
             
             # Custom embs
