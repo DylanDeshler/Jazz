@@ -316,7 +316,7 @@ def get_batch(split='train', batch_size=batch_size):
     x = []
     for idx in idxs:
         # wav = wavs[idx]
-        wav = librosa.load(paths[idx], sr=None)
+        wav, _ = librosa.load(paths[idx], sr=rate)
         beat_path = os.path.join('/home/ubuntu/Data/beats', os.path.basename(paths[idx]))
         
         tries = 0
