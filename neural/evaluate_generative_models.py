@@ -10,6 +10,7 @@ from collections import defaultdict
 import torch
 import numpy as np
 from scipy import linalg
+from scipy.signal import medfilt
 from contextlib import nullcontext
 import torch.nn.functional as F
 
@@ -153,6 +154,32 @@ def drop_to_multiple(a, multiple):
     a = a.view(-1, 1, multiple)
     return a
 
+def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', window_size: int = 3) -> torch.Tensor:
+    """
+    Smooths the instantaneous BPM predictions across the chunk dimension.
+    bpm_tensor: shape (Batch, Chunks)
+    """
+    if method == 'global':
+        # Collapse the sequence to the mean tempo per batch item
+        mean_bpm = bpm_tensor.mean(dim=1, keepdim=True)
+        return mean_bpm.expand_as(bpm_tensor)
+    
+    bpm_np = bpm_tensor.cpu().numpy()
+    smoothed = np.zeros_like(bpm_np)
+    
+    for i in range(bpm_np.shape[0]):
+        if method == 'median':
+            # medfilt requires odd window sizes
+            smoothed[i] = medfilt(bpm_np[i], kernel_size=window_size)
+            
+        elif method == 'moving_average':
+            kernel = np.ones(window_size) / window_size
+            # Pad edges so the sequence length stays 15
+            padded = np.pad(bpm_np[i], (window_size//2, window_size//2), mode='edge')
+            smoothed[i] = np.convolve(padded, kernel, mode='valid')
+            
+    return torch.from_numpy(smoothed).to(bpm_tensor.device)
+
 # Tokenizers
 tokenizer = load_model(os.path.join('tokenizer_low_large_24576_subset', 'ckpt.pt'), Tokenizer)
 encoder_ratios = math.prod(tokenizer.encoder.ratios)
@@ -179,7 +206,7 @@ audio_paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) fo
 audio_paths = [path for path in audio_paths if os.path.basename(path) in beat_paths]
 beat_paths = [os.path.join('/home/ubuntu/Data/beats', path) for path in beat_paths]
 
-idxs = np.random.choice(np.arange(len(measure_paths)), size=64, replace=False)
+idxs = np.random.choice(np.arange(len(measure_paths)), size=4, replace=False)
 n_steps = 32
 batch_size = 16
 EVAL_ITERATIVE = False
@@ -236,6 +263,7 @@ with torch.no_grad():
                 y2 = measure_dit.generate(shape, n_steps=n_steps, noise=noise)
                 
                 bpm = probe(y2)
+                bpm = smooth_bpm_predictions(bpm, method='global', window_size=3)
                 seconds_per_beat = 60.0 / bpm
                 measure_duration_sec = seconds_per_beat * TARGET_SIG
                 
