@@ -181,38 +181,6 @@ def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', win
             
     return torch.from_numpy(smoothed).to(bpm_tensor.device)
 
-def predict_measures(gen_shape, n_steps, gen_noise, method='median', window_size=3):
-    with ctx:
-        y2 = measure_dit.generate(gen_shape, n_steps=n_steps, noise=gen_noise)
-    
-    bpm = probe(y2)
-    bpm = smooth_bpm_predictions(bpm, method=method, window_size=window_size)
-    seconds_per_beat = 60.0 / bpm
-    measure_duration_sec = seconds_per_beat * TARGET_SIG
-    
-    target_samples = (measure_duration_sec * rate).long()
-    max_len = min(target_samples.max().item(), encoder_ratios * (max_seq_len - 1))
-    max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
-    max_latent_len = max_len // encoder_ratios
-    
-    indices = torch.arange(max_latent_len, device=device).view(1, 1, -1)
-    lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
-    mask = indices < lengths
-    mask = mask.view(batch_size * n_chunks, max_latent_len)
-    shape = (batch_size * n_chunks, 1, max_latent_len)
-        
-    with ctx:
-        y2 = y2.transpose(2, 3).view(batch_size * n_chunks, vae_embed_dim, spatial_window)
-        y2 = adapter.decode(y2, shape, mask=mask)
-        y2 = tokenizer.decode(y2, shape=(1, max_len), n_steps=n_steps, noise=None)
-    
-    target_samples = target_samples.flatten().cpu().detach().numpy()
-    y2 = y2.squeeze().cpu().detach().numpy()
-    y2 = np.concatenate([y[:min(int(samples), max_len)] for y, samples in zip(y2, target_samples)], axis=0)
-    y2 = torch.from_numpy(y2.astype(np.float32)).to(device, non_blocking=True)
-    
-    return y2
-
 def crossfade_chunks(chunks: list, overlap_samples: int) -> np.ndarray:
     """
     Takes a list of 1D numpy arrays (raw audio measures) and stitches them 
@@ -249,6 +217,45 @@ def crossfade_chunks(chunks: list, overlap_samples: int) -> np.ndarray:
         current_idx += chunk_len - overlap_samples
         
     return out
+
+def predict_measures(gen_shape, n_steps, gen_noise, method='median', window_size=3, overlap_samples=0):
+    with ctx:
+        y2 = measure_dit.generate(gen_shape, n_steps=n_steps, noise=gen_noise)
+    
+    bpm = probe(y2)
+    bpm = smooth_bpm_predictions(bpm, method=method, window_size=window_size)
+    seconds_per_beat = 60.0 / bpm
+    measure_duration_sec = seconds_per_beat * TARGET_SIG
+    
+    target_samples = (measure_duration_sec * rate).long()
+    max_len = min(target_samples.max().item(), encoder_ratios * (max_seq_len - 1))
+    max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
+    max_latent_len = max_len // encoder_ratios
+    
+    indices = torch.arange(max_latent_len, device=device).view(1, 1, -1)
+    lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
+    mask = indices < lengths
+    mask = mask.view(batch_size * n_chunks, max_latent_len)
+    shape = (batch_size * n_chunks, 1, max_latent_len)
+        
+    with ctx:
+        y2 = y2.transpose(2, 3).view(batch_size * n_chunks, vae_embed_dim, spatial_window)
+        y2 = adapter.decode(y2, shape, mask=mask)
+        y2 = tokenizer.decode(y2, shape=(1, max_len), n_steps=n_steps, noise=None)
+    
+    target_samples = target_samples.flatten().cpu().detach().numpy()
+    y2_gold = y2.squeeze().cpu().detach().numpy()
+    
+    y2 = np.concatenate([y[:min(int(samples), max_len)] for y, samples in zip(y2_gold, target_samples)], axis=0)
+    y2 = torch.from_numpy(y2.astype(np.float32)).to(device, non_blocking=True)
+    
+    if overlap_samples == 0:
+        return y2
+    
+    y2_cross = crossfade_chunks([y[:min(int(samples), max_len)] for y, samples in zip(y2_gold, target_samples)], overlap_samples)
+    y2_cross = torch.from_numpy(y2.astype(np.float32)).to(device, non_blocking=True)
+    
+    return y2, y2_cross
 
 # Tokenizers
 tokenizer = load_model(os.path.join('tokenizer_low_large_24576_subset', 'ckpt.pt'), Tokenizer)
@@ -287,6 +294,10 @@ y1_embs = []
 y2_embs = []
 y3_embs = []
 y4_embs = []
+y1_cross_embs = []
+y2_cross_embs = []
+y3_cross_embs = []
+y4_cross_embs = []
 out_dir = '/home/ubuntu/Data/FAD_generative_samples'
 os.makedirs(out_dir, exist_ok=True)
 with torch.no_grad():
@@ -335,18 +346,10 @@ with torch.no_grad():
                 y1 = y1.transpose(2, 3).view(batch_size * n_chunks, vae_embed_dim, spatial_window)
                 y1 = tokenizer.decode(y1, shape=(1, 24576), n_steps=n_steps, noise=None)
             
-            y2 = predict_measures(gen_shape, n_steps, gen_noise, method='global', window_size=3)
-            y3 = predict_measures(gen_shape, n_steps, gen_noise, method='moving_average', window_size=3)
-            y4 = predict_measures(gen_shape, n_steps, gen_noise, method='median', window_size=3)
-            print(y2.shape, y3.shape, y4.shape)
-            
-            # overlap_sec = 0.02  # 20 milliseconds is usually enough to kill clicks
-            # overlap_samples = int(overlap_sec * rate)
-            
-            # # (Decode your latents to raw audio chunks first)
-            # y2_raw_chunks = [y1, y2, y3... y15] # list of 1D numpy arrays for one batch item
-            
-            # final_audio = crossfade_chunks(y2_raw_chunks, overlap_samples)
+            overlap_samples = int(0.02 * rate)
+            y2, y2_cross = predict_measures(gen_shape, n_steps, gen_noise, method='global', window_size=3, overlap_samples=overlap_samples)
+            y3, y3_cross = predict_measures(gen_shape, n_steps, gen_noise, method='moving_average', window_size=3, overlap_samples=overlap_samples)
+            y4, y4_cross = predict_measures(gen_shape, n_steps, gen_noise, method='median', window_size=3, overlap_samples=overlap_samples)
             
             x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
             
@@ -357,6 +360,11 @@ with torch.no_grad():
                 y2 = drop_to_multiple(y2, 16383 * 5)
                 y3 = drop_to_multiple(y3, 16383 * 5)
                 y4 = drop_to_multiple(y4, 16383 * 5)
+                
+                y1_cross = drop_to_multiple(y1_cross, 16383 * 5)
+                y2_cross = drop_to_multiple(y2_cross, 16383 * 5)
+                y3_cross = drop_to_multiple(y3_cross, 16383 * 5)
+                y4_cross = drop_to_multiple(y4_cross, 16383 * 5)
                 with ctx:
                     try:
                         real_emb = fad.forward_features(x)
@@ -364,6 +372,11 @@ with torch.no_grad():
                         y2_emb = fad.forward_features(y2)
                         y3_emb = fad.forward_features(y3)
                         y4_emb = fad.forward_features(y4)
+                        
+                        y1_cross_emb = fad.forward_features(y1_cross)
+                        y2_cross_emb = fad.forward_features(y2_cross)
+                        y3_cross_emb = fad.forward_features(y3_cross)
+                        y4_cross_emb = fad.forward_features(y4_cross)
                     except Exception as e:
                         print(e)
                         continue
@@ -373,6 +386,11 @@ with torch.no_grad():
             y2_embs.append(y2_emb.cpu().detach().numpy())
             y3_embs.append(y3_emb.cpu().detach().numpy())
             y4_embs.append(y4_emb.cpu().detach().numpy())
+            
+            y1_cross_embs.append(y1_cross_emb.cpu().detach().numpy())
+            y2_cross_embs.append(y2_cross_emb.cpu().detach().numpy())
+            y3_cross_embs.append(y3_cross_emb.cpu().detach().numpy())
+            y4_cross_embs.append(y4_cross_emb.cpu().detach().numpy())
         
         ## Iterative for measuring impact of n_steps
         else:
@@ -436,6 +454,30 @@ with torch.no_grad():
                 samplerate=rate,
                 subtype='PCM_16'
             )
+            sf.write(
+                file=os.path.join(out_dir, f'{idx}_base_{name}'), 
+                data=y1[to_sample].flatten().cpu().detach().numpy(), 
+                samplerate=rate,
+                subtype='PCM_16'
+            )
+            sf.write(
+                file=os.path.join(out_dir, f'{idx}_measure_cross_global_{name}'), 
+                data=y2_cross[to_sample].flatten().cpu().detach().numpy(), 
+                samplerate=rate,
+                subtype='PCM_16'
+            )
+            sf.write(
+                file=os.path.join(out_dir, f'{idx}_measure_cross_movingaverage_{name}'), 
+                data=y3_cross[to_sample].flatten().cpu().detach().numpy(), 
+                samplerate=rate,
+                subtype='PCM_16'
+            )
+            sf.write(
+                file=os.path.join(out_dir, f'{idx}_measure_cross_median_{name}'), 
+                data=y4_cross[to_sample].flatten().cpu().detach().numpy(), 
+                samplerate=rate,
+                subtype='PCM_16'
+            )
 
 if not EVAL_ITERATIVE:
     real_mu, real_sigma = calculate_embd_statistics(np.concatenate(real_embs, axis=0))
@@ -443,16 +485,29 @@ if not EVAL_ITERATIVE:
     y2_mu, y2_sigma = calculate_embd_statistics(np.concatenate(y2_embs, axis=0))
     y3_mu, y3_sigma = calculate_embd_statistics(np.concatenate(y3_embs, axis=0))
     y4_mu, y4_sigma = calculate_embd_statistics(np.concatenate(y4_embs, axis=0))
+    
+    y1_cross_mu, y1_cross_sigma = calculate_embd_statistics(np.concatenate(y1_cross_embs, axis=0))
+    y2_cross_mu, y2_cross_sigma = calculate_embd_statistics(np.concatenate(y2_cross_embs, axis=0))
+    y3_cross_mu, y3_cross_sigma = calculate_embd_statistics(np.concatenate(y3_cross_embs, axis=0))
+    y4_cross_mu, y4_cross_sigma = calculate_embd_statistics(np.concatenate(y4_cross_embs, axis=0))
 
     y1_fad = calculate_frechet_distance(y1_mu, y1_sigma, real_mu, real_sigma)
     y2_fad = calculate_frechet_distance(y2_mu, y2_sigma, real_mu, real_sigma)
     y3_fad = calculate_frechet_distance(y3_mu, y3_sigma, real_mu, real_sigma)
     y4_fad = calculate_frechet_distance(y4_mu, y4_sigma, real_mu, real_sigma)
+    
+    y1_cross_fad = calculate_frechet_distance(y1_cross_mu, y1_cross_sigma, real_mu, real_sigma)
+    y2_cross_fad = calculate_frechet_distance(y2_cross_mu, y2_cross_sigma, real_mu, real_sigma)
+    y3_cross_fad = calculate_frechet_distance(y3_cross_mu, y3_cross_sigma, real_mu, real_sigma)
+    y4_cross_fad = calculate_frechet_distance(y4_cross_mu, y4_cross_sigma, real_mu, real_sigma)
 
     print('Base -> Real Samples FAD: ', y1_fad)
     print('Measure (Global BPM) -> Real Samples FAD: ', y2_fad)
     print('Measure (Moving Average BPM) -> Real Samples FAD: ', y3_fad)
     print('Measure (Median BPM) -> Real Samples FAD: ', y4_fad)
+    print('Measure (Crossfade Global BPM) -> Real Samples FAD: ', y2_cross_fad)
+    print('Measure (Crossfade Moving Average BPM) -> Real Samples FAD: ', y3_cross_fad)
+    print('Measure (Crossfade Median BPM) -> Real Samples FAD: ', y4_cross_fad)
 
 else: 
     fads = defaultdict(list)
