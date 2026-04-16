@@ -165,7 +165,7 @@ def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', win
         mean_bpm = bpm_tensor.mean(dim=1, keepdim=True)
         return mean_bpm.expand_as(bpm_tensor)
     
-    bpm_np = bpm_tensor.cpu().numpy()
+    bpm_np = bpm_tensor.cpu().detach().numpy()
     smoothed = np.zeros_like(bpm_np)
     
     for i in range(bpm_np.shape[0]):
@@ -385,6 +385,9 @@ if not EVAL_ITERATIVE:
 
     print('Base -> Real Samples FAD: ', base_fad)
     print('Measure -> Real Samples FAD: ', measure_fad)
+    
+    # Base -> Real Samples FAD:  84.20853125885412
+    # Measure (global BPM smoothing) -> Real Samples FAD:  85.90389779774385
 
 else: 
     fads = defaultdict(list)
