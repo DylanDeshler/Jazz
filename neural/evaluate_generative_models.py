@@ -257,9 +257,9 @@ with torch.no_grad():
                 shape = (batch_size, n_chunks, spatial_window, vae_embed_dim)
                 noise = torch.randn(shape, device=device)
                 
-                y1 = base_dit.generate(shape, n_steps=n_steps, noise=None)
+                y1 = base_dit.generate(shape, n_steps=n_steps, noise=noise)
                 print(y1.shape)
-                y2 = measure_dit.generate(shape, n_steps=n_steps, noise=None)
+                y2 = measure_dit.generate(shape, n_steps=n_steps, noise=noise)
                 print(y2.shape)
                 
                 bpm = probe(y2)
@@ -279,16 +279,6 @@ with torch.no_grad():
                 mask = mask.view(batch_size * n_chunks, max_latent_len)
                 shape = (batch_size * n_chunks, 1, max_latent_len)
                 
-                # latent_lengths = torch.clamp(torch.ceil(target_samples / encoder_ratios).long(), max=128)
-                # max_T = latent_lengths.max().item()
-                # max_len_trunc = min(int(target_samples.max().item()), encoder_ratios * (max_seq_len - 1))
-                # max_len_trunc = encoder_ratios * math.ceil(max_len_trunc / encoder_ratios)
-                # indices = torch.arange(max_T, device=device).view(1, 1, max_T)
-                # lengths_expanded = latent_lengths.unsqueeze(-1)
-                # valid_mask = indices < lengths_expanded
-                # mask = valid_mask.view(batch_size * n_chunks, max_T)
-                # shape = (batch_size * n_chunks, 1, max_T)
-                
                 y2 = y2.transpose(2, 3).view(batch_size * n_chunks, vae_embed_dim, spatial_window)
                 print(y2.shape, shape, mask.shape)
                 y2 = adapter.decode(y2, shape, mask=mask)
@@ -302,23 +292,22 @@ with torch.no_grad():
             
             x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
             
-            y1 = y1.cpu().detach().numpy().flatten()
-            if pad_length > 0:
-                y1 = y1[:-pad_length]
-            y1 = torch.from_numpy(y1.astype(np.float32)).to(device, non_blocking=True)
+            # y1 = y1.cpu().detach().numpy().flatten()
+            # if pad_length > 0:
+            #     y1 = y1[:-pad_length]
+            # y1 = torch.from_numpy(y1.astype(np.float32)).to(device, non_blocking=True)
+            
+            y1 = y1.squeeze().cpu().detach().numpy()
+            
+            print(target_samples.shape, y2.shape)
+            target_samples = target_samples.cpu().detach().numpy()
+            y2 = y2.squeeze().cpu().detach().numpy()
+            y2 = np.concatenate([y[:(max_len - min(samples, max_len))] for y, samples in zip(y2, target_samples)], axis=0)
+            y2 = torch.from_numpy(y2.astype(np.float32)).to(device, non_blocking=True)
             
             y4 = y4.squeeze().cpu().detach().numpy()
             y4 = np.concatenate([y[:-(max_len - len(pad))] for y, pad in zip(y4, m_raw)], axis=0)
             y4 = torch.from_numpy(y4.astype(np.float32)).to(device, non_blocking=True)
-            
-            y5 = y5.squeeze().cpu().detach().numpy()
-            y5 = np.concatenate([y[:-(max_len_trunc - len(pad[:max_len_trunc]))] for y, pad in zip(y5, m_raw)], axis=0)
-            y5 = torch.from_numpy(y5.astype(np.float32)).to(device, non_blocking=True)
-            
-            m = np.concatenate([restore_measure(m_.squeeze(), ratio) for m_, ratio in zip(m.cpu().detach().numpy(), ratios)], axis=0)
-            m = torch.from_numpy(m.astype(np.float32)).to(device, non_blocking=True)
-            y3 = np.concatenate([restore_measure(y.squeeze(), ratio) for y, ratio in zip(y3.cpu().detach().numpy(), ratios)], axis=0)
-            y3 = torch.from_numpy(y3.astype(np.float32)).to(device, non_blocking=True)
             
             # Custom embs
             if not USE_CLAP:
