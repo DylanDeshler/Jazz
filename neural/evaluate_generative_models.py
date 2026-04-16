@@ -158,6 +158,7 @@ def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', win
     """
     Smooths the instantaneous BPM predictions across the chunk dimension.
     bpm_tensor: shape (Batch, Chunks)
+    method: One of median, global, moving_average
     """
     if method == 'global':
         # Collapse the sequence to the mean tempo per batch item
@@ -263,7 +264,7 @@ with torch.no_grad():
                 y2 = measure_dit.generate(shape, n_steps=n_steps, noise=noise)
                 
                 bpm = probe(y2)
-                bpm = smooth_bpm_predictions(bpm, method='global', window_size=3)
+                bpm = smooth_bpm_predictions(bpm, method='moving_average', window_size=3)
                 seconds_per_beat = 60.0 / bpm
                 measure_duration_sec = seconds_per_beat * TARGET_SIG
                 
