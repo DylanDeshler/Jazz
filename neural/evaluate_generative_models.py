@@ -256,29 +256,30 @@ with torch.no_grad():
         
         ## Standard approach
         if not EVAL_ITERATIVE:
+            shape = (batch_size, n_chunks, spatial_window, vae_embed_dim)
+            noise = torch.randn(shape, device=device)
+            
             with ctx:
-                shape = (batch_size, n_chunks, spatial_window, vae_embed_dim)
-                noise = torch.randn(shape, device=device)
-                
                 y1 = base_dit.generate(shape, n_steps=n_steps, noise=noise)
                 y2 = measure_dit.generate(shape, n_steps=n_steps, noise=noise)
                 
-                bpm = probe(y2)
-                bpm = smooth_bpm_predictions(bpm, method='moving_average', window_size=3)
-                seconds_per_beat = 60.0 / bpm
-                measure_duration_sec = seconds_per_beat * TARGET_SIG
-                
-                target_samples = (measure_duration_sec * rate).long()
-                max_len = min(target_samples.max().item(), encoder_ratios * (max_seq_len - 1))
-                max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
-                max_latent_len = max_len // encoder_ratios
-                
-                indices = torch.arange(max_latent_len, device=device).view(1, 1, -1)
-                lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
-                mask = indices < lengths
-                mask = mask.view(batch_size * n_chunks, max_latent_len)
-                shape = (batch_size * n_chunks, 1, max_latent_len)
-                
+            bpm = probe(y2)
+            bpm = smooth_bpm_predictions(bpm, method='moving_average', window_size=3)
+            seconds_per_beat = 60.0 / bpm
+            measure_duration_sec = seconds_per_beat * TARGET_SIG
+            
+            target_samples = (measure_duration_sec * rate).long()
+            max_len = min(target_samples.max().item(), encoder_ratios * (max_seq_len - 1))
+            max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
+            max_latent_len = max_len // encoder_ratios
+            
+            indices = torch.arange(max_latent_len, device=device).view(1, 1, -1)
+            lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
+            mask = indices < lengths
+            mask = mask.view(batch_size * n_chunks, max_latent_len)
+            shape = (batch_size * n_chunks, 1, max_latent_len)
+            
+            with ctx:
                 y2 = y2.transpose(2, 3).view(batch_size * n_chunks, vae_embed_dim, spatial_window)
                 y2 = adapter.decode(y2, shape, mask=mask)
                 y1 = y1.transpose(2, 3).view(batch_size * n_chunks, vae_embed_dim, spatial_window)
