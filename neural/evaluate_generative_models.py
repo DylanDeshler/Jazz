@@ -213,6 +213,43 @@ def predict_measures(gen_shape, n_steps, gen_noise, method='median', window_size
     
     return y2
 
+def crossfade_chunks(chunks: list, overlap_samples: int) -> np.ndarray:
+    """
+    Takes a list of 1D numpy arrays (raw audio measures) and stitches them 
+    together with a linear crossfade to eliminate phase clicks.
+    """
+    if not chunks:
+        return np.array([])
+        
+    # Create linear fade envelopes
+    fade_out = np.linspace(1.0, 0.0, overlap_samples, dtype=np.float32)
+    fade_in = np.linspace(0.0, 1.0, overlap_samples, dtype=np.float32)
+    
+    # Calculate the exact length of the final continuous array
+    total_length = sum(len(c) for c in chunks) - overlap_samples * (len(chunks) - 1)
+    out = np.zeros(total_length, dtype=np.float32)
+    
+    current_idx = 0
+    for i, chunk in enumerate(chunks):
+        chunk_len = len(chunk)
+        end_idx = current_idx + chunk_len
+        
+        if i == 0:
+            # First chunk writes directly
+            out[current_idx:end_idx] = chunk
+        else:
+            # 1. Fade the overlapping region
+            out[current_idx : current_idx + overlap_samples] *= fade_out
+            out[current_idx : current_idx + overlap_samples] += chunk[:overlap_samples] * fade_in
+            
+            # 2. Write the rest of the new chunk
+            out[current_idx + overlap_samples : end_idx] = chunk[overlap_samples:]
+            
+        # Advance the pointer, but step back by the overlap amount
+        current_idx += chunk_len - overlap_samples
+        
+    return out
+
 # Tokenizers
 tokenizer = load_model(os.path.join('tokenizer_low_large_24576_subset', 'ckpt.pt'), Tokenizer)
 encoder_ratios = math.prod(tokenizer.encoder.ratios)
@@ -301,6 +338,15 @@ with torch.no_grad():
             y2 = predict_measures(gen_shape, n_steps, gen_noise, method='global', window_size=3)
             y3 = predict_measures(gen_shape, n_steps, gen_noise, method='moving_average', window_size=3)
             y4 = predict_measures(gen_shape, n_steps, gen_noise, method='median', window_size=3)
+            print(y2.shape, y3.shape, y4.shape)
+            
+            # overlap_sec = 0.02  # 20 milliseconds is usually enough to kill clicks
+            # overlap_samples = int(overlap_sec * rate)
+            
+            # # (Decode your latents to raw audio chunks first)
+            # y2_raw_chunks = [y1, y2, y3... y15] # list of 1D numpy arrays for one batch item
+            
+            # final_audio = crossfade_chunks(y2_raw_chunks, overlap_samples)
             
             x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
             
