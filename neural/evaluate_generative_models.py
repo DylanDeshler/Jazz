@@ -180,7 +180,7 @@ audio_paths = [path for path in audio_paths if os.path.basename(path) in beat_pa
 beat_paths = [os.path.join('/home/ubuntu/Data/beats', path) for path in beat_paths]
 
 idxs = np.random.choice(np.arange(len(measure_paths)), size=512, replace=False)
-n_steps = 32
+n_steps = 4
 batch_size = 16
 EVAL_ITERATIVE = False
 USE_CLAP = False
@@ -195,7 +195,7 @@ with torch.no_grad():
         measure_path, audio_path, beat_path = measure_paths[idx], audio_paths[idx], beat_paths[idx]
         
         wav, _ = librosa.load(audio_path, sr=None)
-        wav = wav[:batch_size * rate]
+        wav = wav[:batch_size * n_chunks * rate]
         
         beat_data = parse_beat_file(beat_path)
         downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
