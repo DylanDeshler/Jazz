@@ -257,9 +257,9 @@ with torch.no_grad():
                 shape = (batch_size, n_chunks, spatial_window, vae_embed_dim)
                 noise = torch.randn(shape, device=device)
                 
-                y1 = base_dit.generate(shape, n_steps=n_steps)
+                y1 = base_dit.generate(shape, n_steps=n_steps, noise=None)
                 print(y1.shape)
-                y2 = measure_dit.generate(shape, n_steps=n_steps)
+                y2 = measure_dit.generate(shape, n_steps=n_steps, noise=None)
                 print(y2.shape)
                 
                 bpm = probe(y2)
@@ -280,11 +280,12 @@ with torch.no_grad():
                 y2 = y2.transpose(2, 3).view(batch_size * n_chunks, vae_embed_dim, spatial_window)
                 print(y2.shape, shape, mask.shape)
                 y2 = adapter.decode(y2, shape, mask=mask)
-                print(y2.shape)
-                
-                noise = torch.randn((1, 1, n_samples), device=device).repeat(max(x.shape[0], m.shape[0]), 1, 1)
-                y1 = tokenizer.decode(y1.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=n_steps, noise=noise).view(B, T, 1, 24576 * cut_seconds)
-                y2 = tokenizer.decode(y2.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=n_steps, noise=noise).view(B, T, 1, 24576 * cut_seconds)
+                y1 = y1.transpose(2, 3).view(batch_size * n_chunks, vae_embed_dim, spatial_window)
+                print(y1.shape, y2.shape)
+                # .view(B, T, 1, 24576 * cut_seconds)
+                y1 = tokenizer.decode(y1, shape=(1, 24576), n_steps=n_steps, noise=None)
+                y2 = tokenizer.decode(y2, shape=(1, target_samples.max().item()), n_steps=n_steps, noise=None)
+                print(y1.shape, y2.shape)
             
             x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
             
