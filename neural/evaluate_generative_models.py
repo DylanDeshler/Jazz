@@ -283,7 +283,7 @@ audio_paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) fo
 audio_paths = [path for path in audio_paths if os.path.basename(path) in beat_paths]
 beat_paths = [os.path.join('/home/ubuntu/Data/beats', path) for path in beat_paths]
 
-idxs = np.random.choice(np.arange(len(measure_paths)), size=32, replace=False)
+idxs = np.random.choice(np.arange(len(measure_paths)), size=2, replace=False)
 n_steps = 32
 batch_size = 16
 EVAL_ITERATIVE = False
@@ -496,6 +496,14 @@ if not EVAL_ITERATIVE:
     print('Measure (Crossfade Global BPM) -> Real Samples FAD: ', y2_cross_fad)
     print('Measure (Crossfade Moving Average BPM) -> Real Samples FAD: ', y3_cross_fad)
     print('Measure (Crossfade Median BPM) -> Real Samples FAD: ', y4_cross_fad)
+    
+    # Base -> Real Samples FAD:  79.1717773751819
+    # Measure (Global BPM) -> Real Samples FAD:  80.04139918974391
+    # Measure (Moving Average BPM) -> Real Samples FAD:  79.57578327725473
+    # Measure (Median BPM) -> Real Samples FAD:  81.30687320329737
+    # Measure (Crossfade Global BPM) -> Real Samples FAD:  80.08685637125599
+    # Measure (Crossfade Moving Average BPM) -> Real Samples FAD:  80.16544857161716
+    # Measure (Crossfade Median BPM) -> Real Samples FAD:  81.47119008674753
 
 else: 
     fads = defaultdict(list)
