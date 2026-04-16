@@ -294,7 +294,6 @@ y1_embs = []
 y2_embs = []
 y3_embs = []
 y4_embs = []
-y1_cross_embs = []
 y2_cross_embs = []
 y3_cross_embs = []
 y4_cross_embs = []
@@ -361,7 +360,6 @@ with torch.no_grad():
                 y3 = drop_to_multiple(y3, 16383 * 5)
                 y4 = drop_to_multiple(y4, 16383 * 5)
                 
-                y1_cross = drop_to_multiple(y1_cross, 16383 * 5)
                 y2_cross = drop_to_multiple(y2_cross, 16383 * 5)
                 y3_cross = drop_to_multiple(y3_cross, 16383 * 5)
                 y4_cross = drop_to_multiple(y4_cross, 16383 * 5)
@@ -373,7 +371,6 @@ with torch.no_grad():
                         y3_emb = fad.forward_features(y3)
                         y4_emb = fad.forward_features(y4)
                         
-                        y1_cross_emb = fad.forward_features(y1_cross)
                         y2_cross_emb = fad.forward_features(y2_cross)
                         y3_cross_emb = fad.forward_features(y3_cross)
                         y4_cross_emb = fad.forward_features(y4_cross)
@@ -387,7 +384,6 @@ with torch.no_grad():
             y3_embs.append(y3_emb.cpu().detach().numpy())
             y4_embs.append(y4_emb.cpu().detach().numpy())
             
-            y1_cross_embs.append(y1_cross_emb.cpu().detach().numpy())
             y2_cross_embs.append(y2_cross_emb.cpu().detach().numpy())
             y3_cross_embs.append(y3_cross_emb.cpu().detach().numpy())
             y4_cross_embs.append(y4_cross_emb.cpu().detach().numpy())
@@ -455,12 +451,6 @@ with torch.no_grad():
                 subtype='PCM_16'
             )
             sf.write(
-                file=os.path.join(out_dir, f'{idx}_base_{name}'), 
-                data=y1[to_sample].flatten().cpu().detach().numpy(), 
-                samplerate=rate,
-                subtype='PCM_16'
-            )
-            sf.write(
                 file=os.path.join(out_dir, f'{idx}_measure_cross_global_{name}'), 
                 data=y2_cross[to_sample].flatten().cpu().detach().numpy(), 
                 samplerate=rate,
@@ -486,7 +476,6 @@ if not EVAL_ITERATIVE:
     y3_mu, y3_sigma = calculate_embd_statistics(np.concatenate(y3_embs, axis=0))
     y4_mu, y4_sigma = calculate_embd_statistics(np.concatenate(y4_embs, axis=0))
     
-    y1_cross_mu, y1_cross_sigma = calculate_embd_statistics(np.concatenate(y1_cross_embs, axis=0))
     y2_cross_mu, y2_cross_sigma = calculate_embd_statistics(np.concatenate(y2_cross_embs, axis=0))
     y3_cross_mu, y3_cross_sigma = calculate_embd_statistics(np.concatenate(y3_cross_embs, axis=0))
     y4_cross_mu, y4_cross_sigma = calculate_embd_statistics(np.concatenate(y4_cross_embs, axis=0))
@@ -496,7 +485,6 @@ if not EVAL_ITERATIVE:
     y3_fad = calculate_frechet_distance(y3_mu, y3_sigma, real_mu, real_sigma)
     y4_fad = calculate_frechet_distance(y4_mu, y4_sigma, real_mu, real_sigma)
     
-    y1_cross_fad = calculate_frechet_distance(y1_cross_mu, y1_cross_sigma, real_mu, real_sigma)
     y2_cross_fad = calculate_frechet_distance(y2_cross_mu, y2_cross_sigma, real_mu, real_sigma)
     y3_cross_fad = calculate_frechet_distance(y3_cross_mu, y3_cross_sigma, real_mu, real_sigma)
     y4_cross_fad = calculate_frechet_distance(y4_cross_mu, y4_cross_sigma, real_mu, real_sigma)
