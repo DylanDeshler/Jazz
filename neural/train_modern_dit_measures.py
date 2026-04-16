@@ -61,8 +61,9 @@ batch_size = 128
 TARGET_SIG = 4
 TARGET_BPM = 60 * TARGET_SIG / (24576 / 16000)
 # model
+gradient_checkpointing = True
 spatial_window = 48
-n_chunks = 15
+n_chunks = 32
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
 n_style_embeddings = 256
@@ -159,6 +160,7 @@ for k,v in list(state_dict.items()):
 tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 del state_dict
+encoder_ratios = math.prod(tokenizer.encoder.ratios)
 
 ckpt_path = os.path.join('tokenizer_adapter_low_large_24576_subset', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
@@ -175,8 +177,9 @@ for k,v in list(state_dict.items()):
 adapter.load_state_dict(state_dict)
 adapter.eval()
 del state_dict
+max_adapter_len = adapter.max_seq_len
 
-model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, spatial_window=spatial_window, use_null_token=use_null_token)
+model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, spatial_window=spatial_window, use_null_token=use_null_token, gradient_checkpointing=gradient_checkpointing)
 
 if init_from == 'scratch':
     # init a new model from scratch
@@ -268,29 +271,38 @@ def save_samples(step):
     x, bpm = get_batch('val')
     x, bpm = x[:n_samples], bpm[:n_samples]
 
-    B, T, N, D = x.shape
+    n_steps = 50
+    
+    with ctx:
+        y = model.generate(x.shape, n_steps=n_steps)
     
     seconds_per_beat = 60.0 / bpm
     measure_duration_sec = seconds_per_beat * TARGET_SIG
     
-    target_samples = measure_duration_sec * 16000
-    latent_lengths = torch.ceil(target_samples / math.prod(tokenizer.encoder.ratios)).long()
-    max_T = latent_lengths.max().item()
-    max_len = min(max(lengths), encoder_ratios * (max_seq_len - 1))
-    indices = torch.arange(max_T, device=device).unsqueeze(0)
-    lengths_expanded = latent_lengths.unsqueeze(1)
-    valid_mask = indices < lengths_expanded
-    mask = valid_mask.unsqueeze(1).unsqueeze(2)
+    target_samples = (measure_duration_sec * 16000).long()
+    max_len = min(target_samples.max().item(), encoder_ratios * (max_adapter_len - 1))
+    max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
+    max_latent_len = max_len // encoder_ratios
     
+    indices = torch.arange(max_latent_len, device=device).view(1, 1, -1)
+    lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
+    mask = indices < lengths
+    mask = mask.view(batch_size * n_chunks, max_latent_len)
+    shape = (batch_size * n_chunks, 1, max_latent_len)
+        
     with ctx:
-        recon = raw_model.generate(x.shape, n_steps=50)
-        recon = adapter.decode(x, (*x.shape[:-1], max_T), mask=mask)
-        recon = tokenizer.decode(recon.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=50).view(B, T, 1, 24576 * cut_seconds)
+        y = y.transpose(2, 3).view(batch_size * n_chunks, vae_embed_dim, spatial_window)
+        y = adapter.decode(y, shape, mask=mask)
+        y = tokenizer.decode(y, shape=(1, max_len), n_steps=n_steps)
     
-    recon = recon.cpu().detach().float().numpy().squeeze(-2)
+    print(y.shape, target_samples.shape)
+    target_samples = target_samples.flatten().cpu().detach().numpy()
+    y = y.squeeze().cpu().detach().numpy()
+    y = np.concatenate([y[:min(int(samples), max_len)] for y, samples in zip(y, target_samples)], axis=0)
+    print(y.shape)
 
     for i in range(n_samples):
-        sf.write(os.path.join(batch_dir, f'{i}.wav'), recon[i].flatten(), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}.wav'), y[i].flatten(), 16000)
 
 # logging
 if wandb_log and master_process:

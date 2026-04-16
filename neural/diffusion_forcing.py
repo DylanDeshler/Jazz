@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from einops import rearrange, repeat
+from torch.utils.checkpoint import checkpoint
 
 import math
 from typing import Optional, List, Callable
@@ -591,12 +592,16 @@ class Patcher(torch.nn.Module):
         self,
         in_channels: int,
         out_channels: int,
+        kernel_size: int=3,
+        stride: int=1,
     ):
         super().__init__()
         self.block = ResnetBlock1d(
             in_channels=in_channels,
             out_channels=out_channels,
             num_groups=1,
+            kernel_size=kernel_size,
+            stride=stride,
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -729,14 +734,17 @@ class UnconditionalModernDiT(nn.Module):
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4,
+                 gradient_checkpointing=False,
                  **kwargs,
                  ):
         super().__init__()
         self.spatial_window = spatial_window
+        self.gradient_checkpointing = gradient_checkpointing
         max_input_size = spatial_window * n_chunks
+        self.patch_size = 2
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
-        self.x_embedder = Patcher(in_channels, hidden_size)
+        self.x_embedder = Patcher(in_channels, hidden_size, kernel_size=self.patch_size, stride=self.patch_size)
         
         self.t_block = nn.Sequential(
             nn.SiLU(),
@@ -751,7 +759,7 @@ class UnconditionalModernDiT(nn.Module):
         self.final_layer_scale_shift_table = nn.Parameter(
             torch.randn(2, hidden_size) / hidden_size ** 0.5,
         )
-        self.fc = nn.Linear(hidden_size, in_channels, bias=False)
+        self.fc = nn.Linear(hidden_size, in_channels * self.patch_size, bias=False)
         
         self.initialize_weights()
         self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
@@ -790,15 +798,19 @@ class UnconditionalModernDiT(nn.Module):
         t0 = self.t_block(t)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
+        
         for block in self.blocks:
-            x = block(x, t0, freqs_cis=freqs_cis)
+            if self.gradient_checkpointing and self.training:
+                x = checkpoint(block, x, t0, freqs_cis=freqs_cis, use_reentrant=False)
+            else:
+                x = block(x, t0, freqs_cis=freqs_cis)
         
         # SAM Audio does not use a non-linearity on t here
         shift, scale = (self.final_layer_scale_shift_table[None, None] + F.silu(t[:, :, None])).chunk(
             2, dim=2
         )
-        x = rearrange(x, 'b (t n) c -> b t n c', t=T, n=N)
-        x = modulate(self.norm(x), shift.expand(-1, -1, N, -1), scale.expand(-1, -1, N, -1))
+        x = rearrange(x, 'b (t n) c -> b t n c', t=T, n=N // self.patch_size)
+        x = modulate(self.norm(x), shift.expand(-1, -1, N // self.patch_size, -1), scale.expand(-1, -1, N // self.patch_size, -1))
         x = self.fc(x)
         
         return x
