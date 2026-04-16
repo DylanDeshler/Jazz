@@ -273,6 +273,7 @@ with torch.no_grad():
                 
                 indices = torch.arange(max_len // encoder_ratios).unsqueeze(0)
                 lengths = (target_samples.unsqueeze(1) + encoder_ratios - 1) // encoder_ratios
+                print(indices.shape, lengths.shape)
                 mask = (indices < lengths).to(device)
                 shape = (batch_size * n_chunks, 1, max_len // encoder_ratios)
                 
