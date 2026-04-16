@@ -274,9 +274,9 @@ with torch.no_grad():
             # y1 = torch.from_numpy(y1.astype(np.float32)).to(device, non_blocking=True)
             
             print(target_samples.shape, y1.shape, y2.shape)
-            target_samples = target_samples.flatten().cpu().detach().numpy()
-            y2 = y2.squeeze().cpu().detach().numpy()
-            y2 = np.concatenate([y[:(max_len - min(samples, max_len))] for y, samples in zip(y2, target_samples)], axis=0)
+            # target_samples = target_samples.flatten().cpu().detach().numpy()
+            # y2 = y2.squeeze().cpu().detach().numpy()
+            # y2 = np.concatenate([y[:(max_len - min(samples, max_len))] for y, samples in zip(y2, target_samples)], axis=0)
             
             # out = []
             # for y, samples in zip(y2, target_samples):
@@ -285,7 +285,7 @@ with torch.no_grad():
             #     print(out[-1].shape)
             # y2 = np.concatenate(out, axis=0)
             
-            y2 = torch.from_numpy(y2.astype(np.float32)).to(device, non_blocking=True)
+            # y2 = torch.from_numpy(y2.astype(np.float32)).to(device, non_blocking=True)
             
             # Custom embs
             if not USE_CLAP:
