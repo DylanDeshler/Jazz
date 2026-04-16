@@ -385,35 +385,35 @@ elif init_from.startswith('gpt2'):
     for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
         model_args[k] = getattr(model.config, k)
 
-ckpt_path = os.path.join('tokenizer_low_large_24576_subset', 'ckpt.pt')
-checkpoint = torch.load(ckpt_path, map_location=device)
-tokeinzer_args = checkpoint['model_args']
+# ckpt_path = os.path.join('tokenizer_low_large_24576_subset', 'ckpt.pt')
+# checkpoint = torch.load(ckpt_path, map_location=device)
+# tokeinzer_args = checkpoint['model_args']
 
-tokenizer = Tokenizer(**tokeinzer_args)
-state_dict = checkpoint['model']
-# fix the keys of the state dictionary :(
-# honestly no idea how checkpoints sometimes get this prefix, have to debug more
-unwanted_prefix = '_orig_mod.'
-for k,v in list(state_dict.items()):
-    if k.startswith(unwanted_prefix):
-        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-tokenizer.load_state_dict(state_dict)
-tokenizer.to(device)
-summary(tokenizer)
+# tokenizer = Tokenizer(**tokeinzer_args)
+# state_dict = checkpoint['model']
+# # fix the keys of the state dictionary :(
+# # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+# unwanted_prefix = '_orig_mod.'
+# for k,v in list(state_dict.items()):
+#     if k.startswith(unwanted_prefix):
+#         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+# tokenizer.load_state_dict(state_dict)
+# tokenizer.to(device)
+# summary(tokenizer)
 
-ckpt_path = os.path.join('tokenizer_adapter_low_large_24576_subset', 'ckpt.pt')
-checkpoint = torch.load(ckpt_path, map_location=device)
-model_args = checkpoint['model_args']
+# ckpt_path = os.path.join('tokenizer_adapter_low_large_24576_subset', 'ckpt.pt')
+# checkpoint = torch.load(ckpt_path, map_location=device)
+# model_args = checkpoint['model_args']
 
-model = Transformer(**model_args)
-state_dict = checkpoint['model']
-# fix the keys of the state dictionary :(
-# honestly no idea how checkpoints sometimes get this prefix, have to debug more
-unwanted_prefix = '_orig_mod.'
-for k,v in list(state_dict.items()):
-    if k.startswith(unwanted_prefix):
-        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-model.load_state_dict(state_dict)
+# model = Transformer(**model_args)
+# state_dict = checkpoint['model']
+# # fix the keys of the state dictionary :(
+# # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+# unwanted_prefix = '_orig_mod.'
+# for k,v in list(state_dict.items()):
+#     if k.startswith(unwanted_prefix):
+#         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+# model.load_state_dict(state_dict)
 
 model.to(device)
 summary(model)
