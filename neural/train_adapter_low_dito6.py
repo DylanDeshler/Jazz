@@ -40,7 +40,7 @@ import glob
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
 out_dir = 'tokenizer_adapter_low_large_24576_subset_cotrain'
-eval_interval = 2500
+eval_interval = 5000
 log_interval = 100
 eval_iters = 300
 eval_only = False # if True, script exits right after the first eval
@@ -66,7 +66,7 @@ enocder_depth = 4
 decoder_depth = 2
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 50000 # total number of training iterations
+max_iters = 30000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.999
