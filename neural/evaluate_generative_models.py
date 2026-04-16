@@ -179,7 +179,7 @@ audio_paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) fo
 audio_paths = [path for path in audio_paths if os.path.basename(path) in beat_paths]
 beat_paths = [os.path.join('/home/ubuntu/Data/beats', path) for path in beat_paths]
 
-idxs = np.random.choice(np.arange(len(measure_paths)), size=64, replace=False)
+idxs = np.random.choice(np.arange(len(measure_paths)), size=4, replace=False)
 n_steps = 32
 batch_size = 16
 EVAL_ITERATIVE = False
@@ -237,7 +237,8 @@ with torch.no_grad():
                 y2 = measure_dit.generate(shape, n_steps=n_steps, noise=noise)
                 print(y2.shape)
                 
-                bpm = probe(y2)
+                # bpm = probe(y2)
+                bpm = torch.ones((batch_size, n_chunks), device=device) * n_samples
                 print(bpm.shape, bpm.mean().item(), bpm.std().item())
                 seconds_per_beat = 60.0 / bpm
                 measure_duration_sec = seconds_per_beat * TARGET_SIG
@@ -275,14 +276,14 @@ with torch.no_grad():
             print(target_samples.shape, y1.shape, y2.shape)
             target_samples = target_samples.flatten().cpu().detach().numpy()
             y2 = y2.squeeze().cpu().detach().numpy()
-            # y2 = np.concatenate([y[:(max_len - min(samples, max_len))] for y, samples in zip(y2, target_samples)], axis=0)
+            y2 = np.concatenate([y[:(max_len - min(samples, max_len))] for y, samples in zip(y2, target_samples)], axis=0)
             
-            out = []
-            for y, samples in zip(y2, target_samples):
-                print(y.shape, samples, max_len)
-                out.append(y[:(max_len - min(samples, max_len))])
-                print(out[-1].shape)
-            y2 = np.concatenate(out, axis=0)
+            # out = []
+            # for y, samples in zip(y2, target_samples):
+            #     print(y.shape, samples, max_len)
+            #     out.append(y[:(max_len - min(samples, max_len))])
+            #     print(out[-1].shape)
+            # y2 = np.concatenate(out, axis=0)
             
             y2 = torch.from_numpy(y2.astype(np.float32)).to(device, non_blocking=True)
             
