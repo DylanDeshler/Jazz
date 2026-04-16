@@ -39,7 +39,7 @@ import glob
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'tokenizer_adapter_RoPE_low_large_24576_subset'
+out_dir = 'tokenizer_adapter_low_large_24576_subset_cotrain'
 eval_interval = 1000
 log_interval = 100
 eval_iters = 300
@@ -52,8 +52,8 @@ wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 16 # used to simulate larger batch sizes
-batch_size = 8 # if gradient_accumulation_steps > 1, this is the micro-batch size
+gradient_accumulation_steps = 1 # used to simulate larger batch sizes
+batch_size = 128 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
 n_samples = 24576
@@ -66,7 +66,7 @@ enocder_depth = 4
 decoder_depth = 2
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 50000 # total number of training iterations
+max_iters = 100000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.999
@@ -123,7 +123,7 @@ ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torc
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 ## Load tokenizer
-ckpt_path = os.path.join('tokenizer_low_large_24576_subset', 'ckpt.pt')#.replace('_adapter_', '_')
+ckpt_path = os.path.join('tokenizer_low_large_24576_subset', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 tokeinzer_args = checkpoint['model_args']
 
@@ -136,8 +136,6 @@ for k,v in list(state_dict.items()):
     if k.startswith(unwanted_prefix):
         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
 tokenizer.load_state_dict(state_dict)
-tokenizer.requires_grad = False
-tokenizer.eval()
 del checkpoint
 encoder_ratios = math.prod(tokenizer.encoder.ratios)
 
@@ -290,6 +288,7 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as exec
 durations = np.asarray([len(wav) for wav in wavs])
 train_durations = durations[train_idx] / np.sum(durations[train_idx])
 test_durations = durations[test_idx] / np.sum(durations[test_idx])
+del wavs
 
 def slice_random_measure(beat_path):
     beat_data = parse_beat_file(beat_path)
@@ -316,7 +315,8 @@ def get_batch(split='train', batch_size=batch_size):
     
     x = []
     for idx in idxs:
-        wav = wavs[idx]
+        # wav = wavs[idx]
+        wav = librosa.load(paths[idx], sr=None)
         beat_path = os.path.join('/home/ubuntu/Data/beats', os.path.basename(paths[idx]))
         
         tries = 0
@@ -402,7 +402,8 @@ checkpoint = None # free up memory
 if compile and 'cuda' in device:
     print("compiling the model... (takes a ~minute)")
     unoptimized_model = model
-    model = torch.compile(model) # requires PyTorch 2.0
+    model = torch.compile(model)
+    tokenizer = torch.compile(tokenizer)
 
 # wrap model into DDP container
 if ddp:
@@ -413,6 +414,7 @@ if ddp:
 def estimate_loss():
     out = {}
     model.eval()
+    tokenizer.eval()
     for split in ['train', 'val']:
         losses = torch.zeros(eval_iters)
         for k in tqdm(range(eval_iters)):
@@ -425,6 +427,7 @@ def estimate_loss():
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
+    tokenizer.train()
     return out
 
 # learning rate decay scheduler (cosine with warmup)
@@ -475,6 +478,7 @@ X, latent_mask, sample_mask = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
+raw_tokenizer = tokenizer.module if ddp else tokenizer
 running_mfu = -1.0
 while True:
 
@@ -489,12 +493,14 @@ while True:
     if iter_num % eval_interval == 0 and master_process:
         X, latent_mask, sample_mask = get_batch('test')
         model.eval()
+        tokenizer.eval()
         with ctx:
             _, z = tokenizer.encode(X)
             t = torch.rand(z.shape[0], device=z.device)
             z = model(z, latent_mask)
             logits = tokenizer.decode(z, shape=X.shape, n_steps=100)
         model.train()
+        tokenizer.train()
         save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
@@ -510,7 +516,8 @@ while True:
         if iter_num > 0 and losses['val'] < best_val_loss:
             best_val_loss = losses['val']
             checkpoint = {
-                'model': raw_model.state_dict(),
+                'adapter': raw_model.state_dict(),
+                'tokenizer': raw_tokenizer.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'model_args': model_args,
                 'iter_num': iter_num,
@@ -522,7 +529,8 @@ while True:
             torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
         if iter_num > 0 and always_save_checkpoint:
             checkpoint = {
-                'model': raw_model.state_dict(),
+                'adapter': raw_model.state_dict(),
+                'tokenizer': raw_tokenizer.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'model_args': model_args,
                 'iter_num': iter_num,
