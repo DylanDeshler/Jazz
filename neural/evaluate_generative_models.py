@@ -284,7 +284,7 @@ with torch.no_grad():
                 print(y1.shape, y2.shape)
                 # .view(B, T, 1, 24576 * cut_seconds)
                 y1 = tokenizer.decode(y1, shape=(1, 24576), n_steps=n_steps, noise=None)
-                y2 = tokenizer.decode(y2, shape=(1, target_samples.max().item()), n_steps=n_steps, noise=None)
+                y2 = tokenizer.decode(y2, shape=(1, int(target_samples.max().item())), n_steps=n_steps, noise=None)
                 print(y1.shape, y2.shape)
             
             x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
