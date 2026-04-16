@@ -300,7 +300,7 @@ with torch.no_grad():
             y1 = y1.squeeze().cpu().detach().numpy()
             
             print(target_samples.shape, y2.shape)
-            target_samples = target_samples.cpu().detach().numpy()
+            target_samples = target_samples.flatten().cpu().detach().numpy()
             y2 = y2.squeeze().cpu().detach().numpy()
             y2 = np.concatenate([y[:(max_len - min(samples, max_len))] for y, samples in zip(y2, target_samples)], axis=0)
             y2 = torch.from_numpy(y2.astype(np.float32)).to(device, non_blocking=True)
