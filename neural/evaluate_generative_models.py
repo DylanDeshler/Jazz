@@ -267,17 +267,24 @@ with torch.no_grad():
                 seconds_per_beat = 60.0 / bpm
                 measure_duration_sec = seconds_per_beat * TARGET_SIG
                 
-                target_samples = measure_duration_sec * rate
-                latent_lengths = torch.clamp(torch.ceil(target_samples / encoder_ratios).long(), max=128)
-                max_T = latent_lengths.max().item()
-                max_len_trunc = min(int(target_samples.max().item()), encoder_ratios * (max_seq_len - 1))
-                max_len_trunc = encoder_ratios * math.ceil(max_len_trunc / encoder_ratios)
-                indices = torch.arange(max_T, device=device).view(1, 1, max_T)
-                lengths_expanded = latent_lengths.unsqueeze(-1)
-                valid_mask = indices < lengths_expanded
-                mask = valid_mask.view(batch_size * n_chunks, max_T)
-                mask #= valid_mask_flat.unsqueeze(1).unsqueeze(2)
-                shape = (batch_size * n_chunks, 1, max_T)
+                target_samples = (measure_duration_sec * rate).long()
+                max_len = min(target_samples.max().item(), encoder_ratios * (max_seq_len - 1))
+                max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
+                
+                indices = torch.arange(max_len // encoder_ratios).unsqueeze(0)
+                lengths = (target_samples + encoder_ratios - 1) // encoder_ratios
+                mask = (indices < lengths).to(device)
+                shape = (batch_size * n_chunks, 1, max_len // encoder_ratios)
+                
+                # latent_lengths = torch.clamp(torch.ceil(target_samples / encoder_ratios).long(), max=128)
+                # max_T = latent_lengths.max().item()
+                # max_len_trunc = min(int(target_samples.max().item()), encoder_ratios * (max_seq_len - 1))
+                # max_len_trunc = encoder_ratios * math.ceil(max_len_trunc / encoder_ratios)
+                # indices = torch.arange(max_T, device=device).view(1, 1, max_T)
+                # lengths_expanded = latent_lengths.unsqueeze(-1)
+                # valid_mask = indices < lengths_expanded
+                # mask = valid_mask.view(batch_size * n_chunks, max_T)
+                # shape = (batch_size * n_chunks, 1, max_T)
                 
                 y2 = y2.transpose(2, 3).view(batch_size * n_chunks, vae_embed_dim, spatial_window)
                 print(y2.shape, shape, mask.shape)
@@ -285,9 +292,9 @@ with torch.no_grad():
                 y1 = y1.transpose(2, 3).view(batch_size * n_chunks, vae_embed_dim, spatial_window)
                 print(y1.shape, y2.shape)
                 # .view(B, T, 1, 24576 * cut_seconds)
-                print(target_samples.max().item(), max_len_trunc)
+                # print(target_samples.max().item(), max_len_trunc)
                 y1 = tokenizer.decode(y1, shape=(1, 24576), n_steps=n_steps, noise=None)
-                y2 = tokenizer.decode(y2, shape=(1, int(target_samples.max().item())), n_steps=n_steps, noise=None)
+                y2 = tokenizer.decode(y2, shape=(1, max_len), n_steps=n_steps, noise=None)
                 print(y1.shape, y2.shape)
             
             x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
