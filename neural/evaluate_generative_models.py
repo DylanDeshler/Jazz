@@ -283,7 +283,6 @@ with torch.no_grad():
                 y2 = drop_to_multiple(y2, 16383 * 5)
                 with ctx:
                     try:
-                        print(x.shape, y1.shape, y2.shape)
                         real_emb = fad.forward_features(x)
                         base_emb = fad.forward_features(y1)
                         measure_emb = fad.forward_features(y2)
