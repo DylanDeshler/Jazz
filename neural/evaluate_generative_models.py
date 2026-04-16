@@ -275,7 +275,7 @@ with torch.no_grad():
             print(target_samples.shape, y1.shape, y2.shape)
             target_samples = target_samples.flatten().cpu().detach().numpy()
             y2 = y2.squeeze().cpu().detach().numpy()
-            y2 = np.concatenate([y[:(max_len - min(samples, max_len))] for y, samples in zip(y2, target_samples)], axis=0)
+            # y2 = np.concatenate([y[:(max_len - min(samples, max_len))] for y, samples in zip(y2, target_samples)], axis=0)
             
             out = []
             for y, samples in zip(y2, target_samples):
