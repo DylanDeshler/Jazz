@@ -40,7 +40,7 @@ import glob
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
 out_dir = 'tokenizer_adapter_low_large_24576_subset_cotrain'
-eval_interval = 1000
+eval_interval = 2500
 log_interval = 100
 eval_iters = 300
 eval_only = False # if True, script exits right after the first eval
@@ -52,8 +52,8 @@ wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 2 # used to simulate larger batch sizes
-batch_size = 32 # if gradient_accumulation_steps > 1, this is the micro-batch size
+gradient_accumulation_steps = 4 # used to simulate larger batch sizes
+batch_size = 16 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
 n_samples = 24576
