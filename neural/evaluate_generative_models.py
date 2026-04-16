@@ -181,7 +181,7 @@ beat_paths = [os.path.join('/home/ubuntu/Data/beats', path) for path in beat_pat
 
 idxs = np.random.choice(np.arange(len(measure_paths)), size=64, replace=False)
 n_steps = 32
-batch_size = 32
+batch_size = 16
 EVAL_ITERATIVE = False
 USE_CLAP = False
 
