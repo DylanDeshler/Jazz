@@ -385,9 +385,6 @@ elif init_from.startswith('gpt2'):
     for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
         model_args[k] = getattr(model.config, k)
 
-model.to(device)
-summary(model)
-
 ckpt_path = os.path.join('tokenizer_low_large_24576_subset', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 tokeinzer_args = checkpoint['model_args']
@@ -401,6 +398,8 @@ for k,v in list(state_dict.items()):
     if k.startswith(unwanted_prefix):
         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
 tokenizer.load_state_dict(state_dict)
+tokenizer.to(device)
+summary(tokenizer)
 
 ckpt_path = os.path.join('tokenizer_adapter_low_large_24576_subset', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
@@ -415,6 +414,9 @@ for k,v in list(state_dict.items()):
     if k.startswith(unwanted_prefix):
         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
 model.load_state_dict(state_dict)
+
+model.to(device)
+summary(model)
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
