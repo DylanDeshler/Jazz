@@ -238,7 +238,7 @@ with torch.no_grad():
                 print(y2.shape)
                 
                 # bpm = probe(y2)
-                bpm = torch.ones((batch_size, n_chunks), device=device) * n_samples
+                bpm = torch.ones((batch_size, n_chunks), device=device) * 157
                 print(bpm.shape, bpm.mean().item(), bpm.std().item())
                 seconds_per_beat = 60.0 / bpm
                 measure_duration_sec = seconds_per_beat * TARGET_SIG
