@@ -244,18 +244,18 @@ def predict_measures(gen_shape, n_steps, gen_noise, method='median', window_size
         y2 = tokenizer.decode(y2, shape=(1, max_len), n_steps=n_steps, noise=None)
     
     target_samples = target_samples.flatten().cpu().detach().numpy()
-    y2_gold = y2.squeeze().cpu().detach().numpy()
+    y2 = y2.squeeze().cpu().detach().numpy()
     
-    y2 = np.concatenate([y[:min(int(samples), max_len)] for y, samples in zip(y2_gold, target_samples)], axis=0)
+    if overlap_samples > 0:
+        y2_cross = crossfade_chunks([y[:min(int(samples), max_len)] for y, samples in zip(y2, target_samples)], overlap_samples)
+        y2_cross = torch.from_numpy(y2_cross.astype(np.float32)).to(device, non_blocking=True)
+    
+    y2 = np.concatenate([y[:min(int(samples), max_len)] for y, samples in zip(y2, target_samples)], axis=0)
     y2 = torch.from_numpy(y2.astype(np.float32)).to(device, non_blocking=True)
     
-    if overlap_samples == 0:
-        return y2
-    
-    y2_cross = crossfade_chunks([y[:min(int(samples), max_len)] for y, samples in zip(y2_gold, target_samples)], overlap_samples)
-    y2_cross = torch.from_numpy(y2.astype(np.float32)).to(device, non_blocking=True)
-    
-    return y2, y2_cross
+    if overlap_samples > 0:
+        return y2, y2_cross
+    return y2
 
 # Tokenizers
 tokenizer = load_model(os.path.join('tokenizer_low_large_24576_subset', 'ckpt.pt'), Tokenizer)
