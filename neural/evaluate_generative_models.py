@@ -179,7 +179,7 @@ audio_paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) fo
 audio_paths = [path for path in audio_paths if os.path.basename(path) in beat_paths]
 beat_paths = [os.path.join('/home/ubuntu/Data/beats', path) for path in beat_paths]
 
-idxs = np.random.choice(np.arange(len(measure_paths)), size=4, replace=False)
+idxs = np.random.choice(np.arange(len(measure_paths)), size=64, replace=False)
 n_steps = 32
 batch_size = 16
 EVAL_ITERATIVE = False
@@ -233,13 +233,9 @@ with torch.no_grad():
                 noise = torch.randn(shape, device=device)
                 
                 y1 = base_dit.generate(shape, n_steps=n_steps, noise=noise)
-                print(y1.shape)
                 y2 = measure_dit.generate(shape, n_steps=n_steps, noise=noise)
-                print(y2.shape)
                 
-                # bpm = probe(y2)
-                bpm = torch.ones((batch_size, n_chunks), device=device) * 157
-                print(bpm.shape, bpm.mean().item(), bpm.std().item())
+                bpm = probe(y2)
                 seconds_per_beat = 60.0 / bpm
                 measure_duration_sec = seconds_per_beat * TARGET_SIG
                 
@@ -250,22 +246,15 @@ with torch.no_grad():
                 
                 indices = torch.arange(max_latent_len, device=device).view(1, 1, -1)
                 lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
-                print(indices.shape, lengths.shape)
                 mask = indices < lengths
                 mask = mask.view(batch_size * n_chunks, max_latent_len)
-                mask = torch.ones_like(mask).bool()
                 shape = (batch_size * n_chunks, 1, max_latent_len)
                 
                 y2 = y2.transpose(2, 3).view(batch_size * n_chunks, vae_embed_dim, spatial_window)
-                print(y2.shape, shape, mask.shape)
                 y2 = adapter.decode(y2, shape, mask=mask)
                 y1 = y1.transpose(2, 3).view(batch_size * n_chunks, vae_embed_dim, spatial_window)
-                print(y1.shape, y2.shape)
-                # .view(B, T, 1, 24576 * cut_seconds)
-                # print(target_samples.max().item(), max_len_trunc)
                 y1 = tokenizer.decode(y1, shape=(1, 24576), n_steps=n_steps, noise=None)
                 y2 = tokenizer.decode(y2, shape=(1, max_len), n_steps=n_steps, noise=None)
-                print(y1.shape, y2.shape)
             
             x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
             
@@ -274,10 +263,9 @@ with torch.no_grad():
             #     y1 = y1[:-pad_length]
             # y1 = torch.from_numpy(y1.astype(np.float32)).to(device, non_blocking=True)
             
-            print(target_samples.shape, y1.shape, y2.shape)
-            # target_samples = target_samples.flatten().cpu().detach().numpy()
-            # y2 = y2.squeeze().cpu().detach().numpy()
-            # y2 = np.concatenate([y[:(max_len - min(samples, max_len))] for y, samples in zip(y2, target_samples)], axis=0)
+            target_samples = target_samples.flatten().cpu().detach().numpy()
+            y2 = y2.squeeze().cpu().detach().numpy()
+            y2 = np.concatenate([y[:(max_len - min(samples, max_len))] for y, samples in zip(y2, target_samples)], axis=0)
             
             # out = []
             # for y, samples in zip(y2, target_samples):
@@ -286,7 +274,7 @@ with torch.no_grad():
             #     print(out[-1].shape)
             # y2 = np.concatenate(out, axis=0)
             
-            # y2 = torch.from_numpy(y2.astype(np.float32)).to(device, non_blocking=True)
+            y2 = torch.from_numpy(y2.astype(np.float32)).to(device, non_blocking=True)
             
             # Custom embs
             if not USE_CLAP:
