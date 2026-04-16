@@ -52,8 +52,8 @@ wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 1 # used to simulate larger batch sizes
-batch_size = 64 # if gradient_accumulation_steps > 1, this is the micro-batch size
+gradient_accumulation_steps = 2 # used to simulate larger batch sizes
+batch_size = 32 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
 n_samples = 24576
@@ -66,7 +66,7 @@ enocder_depth = 4
 decoder_depth = 2
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 100000 # total number of training iterations
+max_iters = 50000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.999
@@ -387,6 +387,34 @@ elif init_from.startswith('gpt2'):
 
 model.to(device)
 summary(model)
+
+ckpt_path = os.path.join('tokenizer_low_large_24576_subset', 'ckpt.pt')
+checkpoint = torch.load(ckpt_path, map_location=device)
+tokeinzer_args = checkpoint['model_args']
+
+tokenizer = Tokenizer(**tokeinzer_args)
+state_dict = checkpoint['model']
+# fix the keys of the state dictionary :(
+# honestly no idea how checkpoints sometimes get this prefix, have to debug more
+unwanted_prefix = '_orig_mod.'
+for k,v in list(state_dict.items()):
+    if k.startswith(unwanted_prefix):
+        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+tokenizer.load_state_dict(state_dict)
+
+ckpt_path = os.path.join('tokenizer_adapter_low_large_24576_subset', 'ckpt.pt')
+checkpoint = torch.load(ckpt_path, map_location=device)
+model_args = checkpoint['model_args']
+
+model = Transformer(**model_args)
+state_dict = checkpoint['model']
+# fix the keys of the state dictionary :(
+# honestly no idea how checkpoints sometimes get this prefix, have to debug more
+unwanted_prefix = '_orig_mod.'
+for k,v in list(state_dict.items()):
+    if k.startswith(unwanted_prefix):
+        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+model.load_state_dict(state_dict)
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
