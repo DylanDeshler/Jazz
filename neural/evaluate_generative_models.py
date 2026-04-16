@@ -297,17 +297,11 @@ with torch.no_grad():
             #     y1 = y1[:-pad_length]
             # y1 = torch.from_numpy(y1.astype(np.float32)).to(device, non_blocking=True)
             
-            y1 = y1.squeeze().cpu().detach().numpy()
-            
-            print(target_samples.shape, y2.shape)
+            print(target_samples.shape, y1.shape, y2.shape)
             target_samples = target_samples.flatten().cpu().detach().numpy()
             y2 = y2.squeeze().cpu().detach().numpy()
             y2 = np.concatenate([y[:(max_len - min(samples, max_len))] for y, samples in zip(y2, target_samples)], axis=0)
             y2 = torch.from_numpy(y2.astype(np.float32)).to(device, non_blocking=True)
-            
-            y4 = y4.squeeze().cpu().detach().numpy()
-            y4 = np.concatenate([y[:-(max_len - len(pad))] for y, pad in zip(y4, m_raw)], axis=0)
-            y4 = torch.from_numpy(y4.astype(np.float32)).to(device, non_blocking=True)
             
             # Custom embs
             if not USE_CLAP:
@@ -316,6 +310,7 @@ with torch.no_grad():
                 y2 = drop_to_multiple(y2, 16383 * 5)
                 with ctx:
                     try:
+                        print(x.shape, y1.shape, y2.shape)
                         real_emb = fad.forward_features(x)
                         base_emb = fad.forward_features(y1)
                         measure_emb = fad.forward_features(y2)
