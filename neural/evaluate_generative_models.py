@@ -276,7 +276,7 @@ with torch.no_grad():
                 lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
                 print(indices.shape, lengths.shape)
                 mask = indices < lengths
-                mask = mask.view(batch_size * n_chunks, )
+                mask = mask.view(batch_size * n_chunks, max_latent_len)
                 shape = (batch_size * n_chunks, 1, max_latent_len)
                 
                 # latent_lengths = torch.clamp(torch.ceil(target_samples / encoder_ratios).long(), max=128)
