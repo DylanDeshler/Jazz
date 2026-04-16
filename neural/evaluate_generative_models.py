@@ -239,7 +239,7 @@ audio_paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) fo
 audio_paths = [path for path in audio_paths if os.path.basename(path) in beat_paths]
 beat_paths = [os.path.join('/home/ubuntu/Data/beats', path) for path in beat_paths]
 
-idxs = np.random.choice(np.arange(len(measure_paths)), size=4, replace=False)
+idxs = np.random.choice(np.arange(len(measure_paths)), size=32, replace=False)
 n_steps = 32
 batch_size = 16
 EVAL_ITERATIVE = False
