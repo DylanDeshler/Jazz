@@ -283,7 +283,7 @@ audio_paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) fo
 audio_paths = [path for path in audio_paths if os.path.basename(path) in beat_paths]
 beat_paths = [os.path.join('/home/ubuntu/Data/beats', path) for path in beat_paths]
 
-idxs = np.random.choice(np.arange(len(measure_paths)), size=2, replace=False)
+idxs = np.random.choice(np.arange(len(measure_paths)), size=32, replace=False)
 n_steps = 32
 batch_size = 16
 EVAL_ITERATIVE = False
@@ -345,7 +345,7 @@ with torch.no_grad():
                 y1 = y1.transpose(2, 3).view(batch_size * n_chunks, vae_embed_dim, spatial_window)
                 y1 = tokenizer.decode(y1, shape=(1, 24576), n_steps=n_steps, noise=None)
             
-            overlap_samples = int(0.02 * rate)
+            overlap_samples = int(0.01 * rate)
             y2, y2_cross = predict_measures(gen_shape, n_steps, gen_noise, method='global', window_size=3, overlap_samples=overlap_samples)
             y3, y3_cross = predict_measures(gen_shape, n_steps, gen_noise, method='moving_average', window_size=3, overlap_samples=overlap_samples)
             y4, y4_cross = predict_measures(gen_shape, n_steps, gen_noise, method='median', window_size=3, overlap_samples=overlap_samples)
