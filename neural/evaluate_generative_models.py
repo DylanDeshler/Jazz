@@ -253,6 +253,7 @@ with torch.no_grad():
                 print(indices.shape, lengths.shape)
                 mask = indices < lengths
                 mask = mask.view(batch_size * n_chunks, max_latent_len)
+                mask = torch.ones_like(mask).bool()
                 shape = (batch_size * n_chunks, 1, max_latent_len)
                 
                 y2 = y2.transpose(2, 3).view(batch_size * n_chunks, vae_embed_dim, spatial_window)
