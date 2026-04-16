@@ -181,6 +181,38 @@ def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', win
             
     return torch.from_numpy(smoothed).to(bpm_tensor.device)
 
+def predict_measures(gen_shape, n_steps, gen_noise, method='median', window_size=3):
+    with ctx:
+        y2 = measure_dit.generate(gen_shape, n_steps=n_steps, noise=gen_noise)
+    
+    bpm = probe(y2)
+    bpm = smooth_bpm_predictions(bpm, method=method, window_size=window_size)
+    seconds_per_beat = 60.0 / bpm
+    measure_duration_sec = seconds_per_beat * TARGET_SIG
+    
+    target_samples = (measure_duration_sec * rate).long()
+    max_len = min(target_samples.max().item(), encoder_ratios * (max_seq_len - 1))
+    max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
+    max_latent_len = max_len // encoder_ratios
+    
+    indices = torch.arange(max_latent_len, device=device).view(1, 1, -1)
+    lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
+    mask = indices < lengths
+    mask = mask.view(batch_size * n_chunks, max_latent_len)
+    shape = (batch_size * n_chunks, 1, max_latent_len)
+        
+    with ctx:
+        y2 = y2.transpose(2, 3).view(batch_size * n_chunks, vae_embed_dim, spatial_window)
+        y2 = adapter.decode(y2, shape, mask=mask)
+        y2 = tokenizer.decode(y2, shape=(1, max_len), n_steps=n_steps, noise=None)
+    
+    target_samples = target_samples.flatten().cpu().detach().numpy()
+    y2 = y2.squeeze().cpu().detach().numpy()
+    y2 = np.concatenate([y[:min(int(samples), max_len)] for y, samples in zip(y2, target_samples)], axis=0)
+    y2 = torch.from_numpy(y2.astype(np.float32)).to(device, non_blocking=True)
+    
+    return y2
+
 # Tokenizers
 tokenizer = load_model(os.path.join('tokenizer_low_large_24576_subset', 'ckpt.pt'), Tokenizer)
 encoder_ratios = math.prod(tokenizer.encoder.ratios)
@@ -214,8 +246,10 @@ EVAL_ITERATIVE = False
 USE_CLAP = False
 
 real_embs = []
-base_embs = []
-measure_embs = []
+y1_embs = []
+y2_embs = []
+y3_embs = []
+y4_embs = []
 out_dir = '/home/ubuntu/Data/FAD_generative_samples'
 os.makedirs(out_dir, exist_ok=True)
 with torch.no_grad():
@@ -256,75 +290,43 @@ with torch.no_grad():
         
         ## Standard approach
         if not EVAL_ITERATIVE:
-            shape = (batch_size, n_chunks, spatial_window, vae_embed_dim)
-            noise = torch.randn(shape, device=device)
+            gen_shape = (batch_size, n_chunks, spatial_window, vae_embed_dim)
+            gen_noise = torch.randn(gen_shape, device=device)
             
             with ctx:
-                y1 = base_dit.generate(shape, n_steps=n_steps, noise=noise)
-                y2 = measure_dit.generate(shape, n_steps=n_steps, noise=noise)
-                
-            bpm = probe(y2)
-            bpm = smooth_bpm_predictions(bpm, method='median', window_size=3)
-            seconds_per_beat = 60.0 / bpm
-            measure_duration_sec = seconds_per_beat * TARGET_SIG
-            
-            target_samples = (measure_duration_sec * rate).long()
-            max_len = min(target_samples.max().item(), encoder_ratios * (max_seq_len - 1))
-            max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
-            max_latent_len = max_len // encoder_ratios
-            
-            indices = torch.arange(max_latent_len, device=device).view(1, 1, -1)
-            lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
-            mask = indices < lengths
-            mask = mask.view(batch_size * n_chunks, max_latent_len)
-            shape = (batch_size * n_chunks, 1, max_latent_len)
-            
-            with ctx:
+                y1 = base_dit.generate(gen_shape, n_steps=n_steps, noise=gen_noise)
                 y1 = y1.transpose(2, 3).view(batch_size * n_chunks, vae_embed_dim, spatial_window)
                 y1 = tokenizer.decode(y1, shape=(1, 24576), n_steps=n_steps, noise=None)
-                
-                y2 = y2.transpose(2, 3).view(batch_size * n_chunks, vae_embed_dim, spatial_window)
-                y2 = adapter.decode(y2, shape, mask=mask)
-                y2 = tokenizer.decode(y2, shape=(1, max_len), n_steps=n_steps, noise=None)
+            
+            y2 = predict_measures(gen_shape, n_steps, gen_noise, method='global', window_size=3)
+            y3 = predict_measures(gen_shape, n_steps, gen_noise, method='moving_average', window_size=3)
+            y4 = predict_measures(gen_shape, n_steps, gen_noise, method='median', window_size=3)
             
             x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
-            
-            # y1 = y1.cpu().detach().numpy().flatten()
-            # if pad_length > 0:
-            #     y1 = y1[:-pad_length]
-            # y1 = torch.from_numpy(y1.astype(np.float32)).to(device, non_blocking=True)
-            
-            target_samples = target_samples.flatten().cpu().detach().numpy()
-            y2 = y2.squeeze().cpu().detach().numpy()
-            # y2 = np.concatenate([y[:(max_len - min(samples, max_len))] for y, samples in zip(y2, target_samples)], axis=0)
-            y2 = np.concatenate([y[:min(int(samples), max_len)] for y, samples in zip(y2, target_samples)], axis=0)
-            
-            # out = []
-            # for y, samples in zip(y2, target_samples):
-            #     print(y.shape, samples, max_len)
-            #     out.append(y[:(max_len - min(samples, max_len))])
-            #     print(out[-1].shape)
-            # y2 = np.concatenate(out, axis=0)
-            
-            y2 = torch.from_numpy(y2.astype(np.float32)).to(device, non_blocking=True)
             
             # Custom embs
             if not USE_CLAP:
                 x = drop_to_multiple(x, 16383 * 5)
                 y1 = drop_to_multiple(y1, 16383 * 5)
                 y2 = drop_to_multiple(y2, 16383 * 5)
+                y3 = drop_to_multiple(y3, 16383 * 5)
+                y4 = drop_to_multiple(y4, 16383 * 5)
                 with ctx:
                     try:
                         real_emb = fad.forward_features(x)
-                        base_emb = fad.forward_features(y1)
-                        measure_emb = fad.forward_features(y2)
+                        y1_emb = fad.forward_features(y1)
+                        y2_emb = fad.forward_features(y2)
+                        y3_emb = fad.forward_features(y3)
+                        y4_emb = fad.forward_features(y4)
                     except Exception as e:
                         print(e)
                         continue
             
             real_embs.append(real_emb.cpu().detach().numpy())
-            base_embs.append(base_emb.cpu().detach().numpy())
-            measure_embs.append(measure_emb.cpu().detach().numpy())
+            y1_embs.append(y1_emb.cpu().detach().numpy())
+            y2_embs.append(y2_emb.cpu().detach().numpy())
+            y3_embs.append(y3_emb.cpu().detach().numpy())
+            y4_embs.append(y4_emb.cpu().detach().numpy())
         
         ## Iterative for measuring impact of n_steps
         else:
@@ -371,25 +373,40 @@ with torch.no_grad():
                 subtype='PCM_16'
             )
             sf.write(
-                file=os.path.join(out_dir, f'{idx}_measure_{name}'), 
+                file=os.path.join(out_dir, f'{idx}_measure_global_{name}'), 
                 data=y2[to_sample].flatten().cpu().detach().numpy(), 
+                samplerate=rate,
+                subtype='PCM_16'
+            )
+            sf.write(
+                file=os.path.join(out_dir, f'{idx}_measure_movingaverage_{name}'), 
+                data=y3[to_sample].flatten().cpu().detach().numpy(), 
+                samplerate=rate,
+                subtype='PCM_16'
+            )
+            sf.write(
+                file=os.path.join(out_dir, f'{idx}_measure_median_{name}'), 
+                data=y4[to_sample].flatten().cpu().detach().numpy(), 
                 samplerate=rate,
                 subtype='PCM_16'
             )
 
 if not EVAL_ITERATIVE:
     real_mu, real_sigma = calculate_embd_statistics(np.concatenate(real_embs, axis=0))
-    base_mu, base_sigma = calculate_embd_statistics(np.concatenate(base_embs, axis=0))
-    measure_mu, measure_sigma = calculate_embd_statistics(np.concatenate(measure_embs, axis=0))
+    y1_mu, y1_sigma = calculate_embd_statistics(np.concatenate(y1_embs, axis=0))
+    y2_mu, y2_sigma = calculate_embd_statistics(np.concatenate(y2_embs, axis=0))
+    y3_mu, y3_sigma = calculate_embd_statistics(np.concatenate(y3_embs, axis=0))
+    y4_mu, y4_sigma = calculate_embd_statistics(np.concatenate(y4_embs, axis=0))
 
-    base_fad = calculate_frechet_distance(base_mu, base_sigma, real_mu, real_sigma)
-    measure_fad = calculate_frechet_distance(measure_mu, measure_sigma, real_mu, real_sigma)
+    y1_fad = calculate_frechet_distance(y1_mu, y1_sigma, real_mu, real_sigma)
+    y2_fad = calculate_frechet_distance(y2_mu, y2_sigma, real_mu, real_sigma)
+    y3_fad = calculate_frechet_distance(y3_mu, y3_sigma, real_mu, real_sigma)
+    y4_fad = calculate_frechet_distance(y4_mu, y4_sigma, real_mu, real_sigma)
 
-    print('Base -> Real Samples FAD: ', base_fad)
-    print('Measure -> Real Samples FAD: ', measure_fad)
-    
-    # Base -> Real Samples FAD:  84.20853125885412
-    # Measure (global BPM smoothing) -> Real Samples FAD:  85.90389779774385
+    print('Base -> Real Samples FAD: ', y1_fad)
+    print('Measure (Global BPM) -> Real Samples FAD: ', y2_fad)
+    print('Measure (Moving Average BPM) -> Real Samples FAD: ', y3_fad)
+    print('Measure (Median BPM) -> Real Samples FAD: ', y4_fad)
 
 else: 
     fads = defaultdict(list)
