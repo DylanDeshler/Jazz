@@ -752,7 +752,7 @@ class UnconditionalModernDiT(nn.Module):
         self.patch_size = patch_size
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
-        self.x_embedder = Patcher(in_channels, hidden_size, kernel_size=self.patch_size, stride=self.patch_size)
+        self.x_embedder = Patcher(in_channels, hidden_size, patch_size=patch_size)
         
         self.t_block = nn.Sequential(
             nn.SiLU(),
@@ -767,7 +767,7 @@ class UnconditionalModernDiT(nn.Module):
         self.final_layer_scale_shift_table = nn.Parameter(
             torch.randn(2, hidden_size) / hidden_size ** 0.5,
         )
-        self.fc = nn.Linear(hidden_size, in_channels * self.patch_size, bias=False)
+        self.fc = nn.Linear(hidden_size, in_channels * patch_size, bias=False)
         
         self.initialize_weights()
         self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
