@@ -272,6 +272,7 @@ def save_samples(step):
     n_samples = 20
     x, bpm = get_batch('val')
     x, bpm = x[:n_samples], bpm[:n_samples]
+    print(x.shape, bpm.shape)
     
     with ctx:
         y = model.generate(x.shape, n_steps=n_steps)
