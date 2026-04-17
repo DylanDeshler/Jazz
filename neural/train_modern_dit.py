@@ -48,7 +48,7 @@ save_interval = 5000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir
@@ -265,7 +265,10 @@ def save_samples(step):
 # logging
 if wandb_log and master_process:
     import wandb
-    wandb.init(project=wandb_project, name=wandb_run_name, config=config)
+    if init_from == 'scratch':
+        wandb.init(project=wandb_project, name=wandb_run_name, config=config)
+    elif init_from == 'resume':
+        wandb.init(project=wandb_project, name=wandb_run_name, config=config, id='u078az0h', resume='must')
 
 # training loop
 X = get_batch('train') # fetch the very first batch
@@ -293,11 +296,11 @@ while True:
         losses = estimate_loss()
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         
-        # if iter_num % sample_interval == 0 and master_process:
-        #     model.eval()
-        #     with ctx:
-        #         save_samples(iter_num)
-        #     model.train()
+        if iter_num % sample_interval == 0 and master_process:
+            model.eval()
+            with ctx:
+                save_samples(iter_num)
+            model.train()
         
         if wandb_log:
             wandb.log({
