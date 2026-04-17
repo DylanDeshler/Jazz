@@ -18,7 +18,7 @@ from dito import DiToV5 as Tokenizer
 from fad import MultiTaskFAD as FAD, BPMProbe
 from adapter import InvertibleAdapter as Adapter
 from contrast import Transformer as Contrast
-from diffusion_forcing import UnconditionalModernDiT_small as DiT
+from diffusion_forcing import UnconditionalModernDiT_smedium as DiT
 
 torch.manual_seed(0)
 np.random.seed(0)
@@ -265,9 +265,9 @@ max_seq_len = adapter.max_seq_len
 probe = load_model(os.path.join('tokenizer_low_measures_fix_subset_BPMProbe', 'ckpt.pt'), BPMProbe)
 
 # DiTs
-base_dit = load_model(os.path.join('UnconditionalModernDiT_small_24576_subset', 'ckpt.pt'), DiT)
-measure_dit = load_model(os.path.join('UnconditionalModernDiT_small_24576_subset_adapter', 'ckpt.pt'), DiT)
-n_chunks = 15
+base_dit = load_model(os.path.join('UnconditionalModernDiT_smedium_24576_subset_32chunks', 'ckpt.pt'), DiT)
+measure_dit = load_model(os.path.join('UnconditionalModernDiT_smedium_24576_subset_adapter_32chunks', 'ckpt.pt'), DiT)
+n_chunks = 32
 spatial_window = 48
 vae_embed_dim = 16
 
@@ -285,7 +285,7 @@ beat_paths = [os.path.join('/home/ubuntu/Data/beats', path) for path in beat_pat
 
 idxs = np.random.choice(np.arange(len(measure_paths)), size=32, replace=False)
 n_steps = 32
-batch_size = 16
+batch_size = 4
 EVAL_ITERATIVE = False
 USE_CLAP = False
 
