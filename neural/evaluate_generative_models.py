@@ -346,9 +346,9 @@ with torch.no_grad():
                 y1 = tokenizer.decode(y1, shape=(1, 24576), n_steps=n_steps, noise=None)
             
             overlap_samples = int(0.01 * rate)
-            y2, y2_cross = predict_measures(gen_shape, n_steps, gen_noise, method='global', window_size=3, overlap_samples=overlap_samples)
+            # y2, y2_cross = predict_measures(gen_shape, n_steps, gen_noise, method='global', window_size=3, overlap_samples=overlap_samples)
             y3, y3_cross = predict_measures(gen_shape, n_steps, gen_noise, method='moving_average', window_size=3, overlap_samples=overlap_samples)
-            y4, y4_cross = predict_measures(gen_shape, n_steps, gen_noise, method='median', window_size=3, overlap_samples=overlap_samples)
+            # y4, y4_cross = predict_measures(gen_shape, n_steps, gen_noise, method='median', window_size=3, overlap_samples=overlap_samples)
             
             x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
             
@@ -356,37 +356,37 @@ with torch.no_grad():
             if not USE_CLAP:
                 x = drop_to_multiple(x, 16383 * 5)
                 y1 = drop_to_multiple(y1, 16383 * 5)
-                y2 = drop_to_multiple(y2, 16383 * 5)
+                # y2 = drop_to_multiple(y2, 16383 * 5)
                 y3 = drop_to_multiple(y3, 16383 * 5)
-                y4 = drop_to_multiple(y4, 16383 * 5)
+                # y4 = drop_to_multiple(y4, 16383 * 5)
                 
-                y2_cross = drop_to_multiple(y2_cross, 16383 * 5)
-                y3_cross = drop_to_multiple(y3_cross, 16383 * 5)
-                y4_cross = drop_to_multiple(y4_cross, 16383 * 5)
+                # y2_cross = drop_to_multiple(y2_cross, 16383 * 5)
+                # y3_cross = drop_to_multiple(y3_cross, 16383 * 5)
+                # y4_cross = drop_to_multiple(y4_cross, 16383 * 5)
                 with ctx:
                     try:
                         real_emb = fad.forward_features(x)
                         y1_emb = fad.forward_features(y1)
-                        y2_emb = fad.forward_features(y2)
+                        # y2_emb = fad.forward_features(y2)
                         y3_emb = fad.forward_features(y3)
-                        y4_emb = fad.forward_features(y4)
+                        # y4_emb = fad.forward_features(y4)
                         
-                        y2_cross_emb = fad.forward_features(y2_cross)
-                        y3_cross_emb = fad.forward_features(y3_cross)
-                        y4_cross_emb = fad.forward_features(y4_cross)
+                        # y2_cross_emb = fad.forward_features(y2_cross)
+                        # y3_cross_emb = fad.forward_features(y3_cross)
+                        # y4_cross_emb = fad.forward_features(y4_cross)
                     except Exception as e:
                         print(e)
                         continue
             
             real_embs.append(real_emb.cpu().detach().numpy())
             y1_embs.append(y1_emb.cpu().detach().numpy())
-            y2_embs.append(y2_emb.cpu().detach().numpy())
+            # y2_embs.append(y2_emb.cpu().detach().numpy())
             y3_embs.append(y3_emb.cpu().detach().numpy())
-            y4_embs.append(y4_emb.cpu().detach().numpy())
+            # y4_embs.append(y4_emb.cpu().detach().numpy())
             
-            y2_cross_embs.append(y2_cross_emb.cpu().detach().numpy())
-            y3_cross_embs.append(y3_cross_emb.cpu().detach().numpy())
-            y4_cross_embs.append(y4_cross_emb.cpu().detach().numpy())
+            # y2_cross_embs.append(y2_cross_emb.cpu().detach().numpy())
+            # y3_cross_embs.append(y3_cross_emb.cpu().detach().numpy())
+            # y4_cross_embs.append(y4_cross_emb.cpu().detach().numpy())
         
         ## Iterative for measuring impact of n_steps
         else:
@@ -432,70 +432,70 @@ with torch.no_grad():
                 samplerate=rate,
                 subtype='PCM_16'
             )
-            sf.write(
-                file=os.path.join(out_dir, f'{idx}_measure_global_{name}'), 
-                data=y2[to_sample].flatten().cpu().detach().numpy(), 
-                samplerate=rate,
-                subtype='PCM_16'
-            )
+            # sf.write(
+            #     file=os.path.join(out_dir, f'{idx}_measure_global_{name}'), 
+            #     data=y2[to_sample].flatten().cpu().detach().numpy(), 
+            #     samplerate=rate,
+            #     subtype='PCM_16'
+            # )
             sf.write(
                 file=os.path.join(out_dir, f'{idx}_measure_movingaverage_{name}'), 
                 data=y3[to_sample].flatten().cpu().detach().numpy(), 
                 samplerate=rate,
                 subtype='PCM_16'
             )
-            sf.write(
-                file=os.path.join(out_dir, f'{idx}_measure_median_{name}'), 
-                data=y4[to_sample].flatten().cpu().detach().numpy(), 
-                samplerate=rate,
-                subtype='PCM_16'
-            )
-            sf.write(
-                file=os.path.join(out_dir, f'{idx}_measure_cross_global_{name}'), 
-                data=y2_cross[to_sample].flatten().cpu().detach().numpy(), 
-                samplerate=rate,
-                subtype='PCM_16'
-            )
-            sf.write(
-                file=os.path.join(out_dir, f'{idx}_measure_cross_movingaverage_{name}'), 
-                data=y3_cross[to_sample].flatten().cpu().detach().numpy(), 
-                samplerate=rate,
-                subtype='PCM_16'
-            )
-            sf.write(
-                file=os.path.join(out_dir, f'{idx}_measure_cross_median_{name}'), 
-                data=y4_cross[to_sample].flatten().cpu().detach().numpy(), 
-                samplerate=rate,
-                subtype='PCM_16'
-            )
+            # sf.write(
+            #     file=os.path.join(out_dir, f'{idx}_measure_median_{name}'), 
+            #     data=y4[to_sample].flatten().cpu().detach().numpy(), 
+            #     samplerate=rate,
+            #     subtype='PCM_16'
+            # )
+            # sf.write(
+            #     file=os.path.join(out_dir, f'{idx}_measure_cross_global_{name}'), 
+            #     data=y2_cross[to_sample].flatten().cpu().detach().numpy(), 
+            #     samplerate=rate,
+            #     subtype='PCM_16'
+            # )
+            # sf.write(
+            #     file=os.path.join(out_dir, f'{idx}_measure_cross_movingaverage_{name}'), 
+            #     data=y3_cross[to_sample].flatten().cpu().detach().numpy(), 
+            #     samplerate=rate,
+            #     subtype='PCM_16'
+            # )
+            # sf.write(
+            #     file=os.path.join(out_dir, f'{idx}_measure_cross_median_{name}'), 
+            #     data=y4_cross[to_sample].flatten().cpu().detach().numpy(), 
+            #     samplerate=rate,
+            #     subtype='PCM_16'
+            # )
 
 if not EVAL_ITERATIVE:
     real_mu, real_sigma = calculate_embd_statistics(np.concatenate(real_embs, axis=0))
     y1_mu, y1_sigma = calculate_embd_statistics(np.concatenate(y1_embs, axis=0))
-    y2_mu, y2_sigma = calculate_embd_statistics(np.concatenate(y2_embs, axis=0))
+    # y2_mu, y2_sigma = calculate_embd_statistics(np.concatenate(y2_embs, axis=0))
     y3_mu, y3_sigma = calculate_embd_statistics(np.concatenate(y3_embs, axis=0))
-    y4_mu, y4_sigma = calculate_embd_statistics(np.concatenate(y4_embs, axis=0))
+    # y4_mu, y4_sigma = calculate_embd_statistics(np.concatenate(y4_embs, axis=0))
     
-    y2_cross_mu, y2_cross_sigma = calculate_embd_statistics(np.concatenate(y2_cross_embs, axis=0))
-    y3_cross_mu, y3_cross_sigma = calculate_embd_statistics(np.concatenate(y3_cross_embs, axis=0))
-    y4_cross_mu, y4_cross_sigma = calculate_embd_statistics(np.concatenate(y4_cross_embs, axis=0))
+    # y2_cross_mu, y2_cross_sigma = calculate_embd_statistics(np.concatenate(y2_cross_embs, axis=0))
+    # y3_cross_mu, y3_cross_sigma = calculate_embd_statistics(np.concatenate(y3_cross_embs, axis=0))
+    # y4_cross_mu, y4_cross_sigma = calculate_embd_statistics(np.concatenate(y4_cross_embs, axis=0))
 
     y1_fad = calculate_frechet_distance(y1_mu, y1_sigma, real_mu, real_sigma)
-    y2_fad = calculate_frechet_distance(y2_mu, y2_sigma, real_mu, real_sigma)
+    # y2_fad = calculate_frechet_distance(y2_mu, y2_sigma, real_mu, real_sigma)
     y3_fad = calculate_frechet_distance(y3_mu, y3_sigma, real_mu, real_sigma)
-    y4_fad = calculate_frechet_distance(y4_mu, y4_sigma, real_mu, real_sigma)
+    # y4_fad = calculate_frechet_distance(y4_mu, y4_sigma, real_mu, real_sigma)
     
-    y2_cross_fad = calculate_frechet_distance(y2_cross_mu, y2_cross_sigma, real_mu, real_sigma)
-    y3_cross_fad = calculate_frechet_distance(y3_cross_mu, y3_cross_sigma, real_mu, real_sigma)
-    y4_cross_fad = calculate_frechet_distance(y4_cross_mu, y4_cross_sigma, real_mu, real_sigma)
+    # y2_cross_fad = calculate_frechet_distance(y2_cross_mu, y2_cross_sigma, real_mu, real_sigma)
+    # y3_cross_fad = calculate_frechet_distance(y3_cross_mu, y3_cross_sigma, real_mu, real_sigma)
+    # y4_cross_fad = calculate_frechet_distance(y4_cross_mu, y4_cross_sigma, real_mu, real_sigma)
 
     print('Base -> Real Samples FAD: ', y1_fad)
-    print('Measure (Global BPM) -> Real Samples FAD: ', y2_fad)
+    # print('Measure (Global BPM) -> Real Samples FAD: ', y2_fad)
     print('Measure (Moving Average BPM) -> Real Samples FAD: ', y3_fad)
-    print('Measure (Median BPM) -> Real Samples FAD: ', y4_fad)
-    print('Measure (Crossfade Global BPM) -> Real Samples FAD: ', y2_cross_fad)
-    print('Measure (Crossfade Moving Average BPM) -> Real Samples FAD: ', y3_cross_fad)
-    print('Measure (Crossfade Median BPM) -> Real Samples FAD: ', y4_cross_fad)
+    # print('Measure (Median BPM) -> Real Samples FAD: ', y4_fad)
+    # print('Measure (Crossfade Global BPM) -> Real Samples FAD: ', y2_cross_fad)
+    # print('Measure (Crossfade Moving Average BPM) -> Real Samples FAD: ', y3_cross_fad)
+    # print('Measure (Crossfade Median BPM) -> Real Samples FAD: ', y4_cross_fad)
     
     # Base -> Real Samples FAD:  79.1717773751819
     # Measure (Global BPM) -> Real Samples FAD:  80.04139918974391
