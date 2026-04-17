@@ -268,11 +268,10 @@ def save_samples(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
     
+    n_steps = 50
     n_samples = 20
     x, bpm = get_batch('val')
     x, bpm = x[:n_samples], bpm[:n_samples]
-
-    n_steps = 50
     
     with ctx:
         y = model.generate(x.shape, n_steps=n_steps)
@@ -288,11 +287,11 @@ def save_samples(step):
     indices = torch.arange(max_latent_len, device=device).view(1, 1, -1)
     lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
     mask = indices < lengths
-    mask = mask.view(batch_size * n_chunks, max_latent_len)
-    shape = (batch_size * n_chunks, 1, max_latent_len)
+    mask = mask.view(n_samples * n_chunks, max_latent_len)
+    shape = (n_samples * n_chunks, 1, max_latent_len)
         
     with ctx:
-        y = y.transpose(2, 3).view(batch_size * n_chunks, vae_embed_dim, spatial_window)
+        y = y.transpose(2, 3).view(n_samples * n_chunks, vae_embed_dim, spatial_window)
         y = adapter.decode(y, shape, mask=mask)
         y = tokenizer.decode(y, shape=(1, max_len), n_steps=n_steps)
     
@@ -333,8 +332,8 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        losses = estimate_loss()
-        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        # losses = estimate_loss()
+        # print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         
         if iter_num % sample_interval == 0 and master_process:
             model.eval()
