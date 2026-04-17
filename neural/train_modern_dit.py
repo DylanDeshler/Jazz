@@ -302,7 +302,7 @@ while True:
                 save_samples(iter_num)
             model.train()
         
-        if wandb_log:
+        if wandb_log and local_iter_num > 0:
             wandb.log({
                 "iter": iter_num,
                 "train/loss": losses['train'],
