@@ -585,6 +585,7 @@ class ResnetBlock1d(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         h = self.block1(x)
         h = self.block2(h)
+        print(x.shape, h.shape)
         return h + self.to_out(x)
 
 class Patcher(torch.nn.Module):
