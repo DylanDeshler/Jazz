@@ -576,16 +576,22 @@ class ResnetBlock1d(nn.Module):
             num_groups=num_groups,
         )
 
-        self.to_out = (
-            nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=1)
-            if in_channels != out_channels
-            else nn.Identity()
-        )
+        if stride > 1:
+            self.to_out = (
+                nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride)
+                if in_channels != out_channels
+                else nn.Identity()
+            )
+        else:
+            self.to_out = (
+                nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=1)
+                if in_channels != out_channels
+                else nn.Identity()
+            )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         h = self.block1(x)
         h = self.block2(h)
-        print(x.shape, h.shape)
         return h + self.to_out(x)
 
 class Patcher(torch.nn.Module):
