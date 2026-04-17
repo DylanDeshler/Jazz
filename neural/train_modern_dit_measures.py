@@ -295,12 +295,10 @@ def save_samples(step):
         y = adapter.decode(y, shape, mask=mask)
         y = tokenizer.decode(y, shape=(1, max_len), n_steps=n_steps)
     
+    target_samples = target_samples.cpu().detach().numpy()
+    y = y.squeeze().cpu().detach().numpy()
     for i in range(n_samples):
-        target_samples = target_samples.cpu().detach().numpy()
-        y = y.squeeze().cpu().detach().numpy()
-        print(target_samples.shape, y.shape)
         this_y = np.concatenate([y_[:min(int(samples), max_len)] for y_, samples in zip(y[i*n_chunks:(i+1)*n_chunks], target_samples[i])], axis=0)
-        print(this_y.shape)
         
         sf.write(os.path.join(batch_dir, f'{i}.wav'), this_y.flatten(), 16000)
 
