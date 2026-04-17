@@ -856,6 +856,9 @@ def UnconditionalModernDiT_large(**kwargs):
 def UnconditionalModernDiT_medium(**kwargs):
     return UnconditionalModernDiTWrapper(depth=24, hidden_size=1024, num_heads=16, **kwargs)
 
+def UnconditionalModernDiT_smedium(**kwargs):
+    return UnconditionalModernDiTWrapper(depth=20, hidden_size=768, num_heads=12, **kwargs)
+
 def UnconditionalModernDiT_small(**kwargs):
     return UnconditionalModernDiTWrapper(depth=16, hidden_size=1024, num_heads=16, **kwargs)
 
