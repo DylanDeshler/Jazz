@@ -61,6 +61,7 @@ batch_size = 128
 TARGET_SIG = 4
 TARGET_BPM = 60 * TARGET_SIG / (24576 / 16000)
 # model
+patch_size = 2
 gradient_checkpointing = True
 spatial_window = 48
 n_chunks = 32
@@ -179,7 +180,7 @@ adapter.eval()
 del state_dict
 max_adapter_len = adapter.max_seq_len
 
-model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, spatial_window=spatial_window, use_null_token=use_null_token, gradient_checkpointing=gradient_checkpointing)
+model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, spatial_window=spatial_window, use_null_token=use_null_token, gradient_checkpointing=gradient_checkpointing, patch_size=patch_size)
 
 if init_from == 'scratch':
     # init a new model from scratch

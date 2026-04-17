@@ -742,13 +742,14 @@ class UnconditionalModernDiT(nn.Module):
                  depth=12,
                  mlp_ratio=4,
                  gradient_checkpointing=False,
+                 patch_size=1,
                  **kwargs,
                  ):
         super().__init__()
         self.spatial_window = spatial_window
         self.gradient_checkpointing = gradient_checkpointing
         max_input_size = spatial_window * n_chunks
-        self.patch_size = 2
+        self.patch_size = patch_size
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
         self.x_embedder = Patcher(in_channels, hidden_size, kernel_size=self.patch_size, stride=self.patch_size)
