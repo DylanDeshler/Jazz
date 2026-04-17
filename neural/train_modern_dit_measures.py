@@ -41,7 +41,7 @@ import pyrubberband as pyrb
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'UnconditionalModernDiT_medium_24576_subset_adapter_32chunks'
+out_dir = 'UnconditionalModernDiT_smedium_24576_subset_adapter_32chunks'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -333,11 +333,11 @@ while True:
         losses = estimate_loss()
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         
-        # if iter_num % sample_interval == 0 and master_process:
-        #     model.eval()
-        #     with ctx:
-        #         save_samples(iter_num)
-        #     model.train()
+        if iter_num % sample_interval == 0 and master_process:
+            model.eval()
+            with ctx:
+                save_samples(iter_num)
+            model.train()
         
         if wandb_log and not (init_from == 'resume' and local_iter_num == 0):
             wandb.log({
