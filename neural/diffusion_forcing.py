@@ -537,7 +537,7 @@ class ConvBlock1d(nn.Module):
             kernel_size=kernel_size,
             stride=stride,
             dilation=dilation,
-            padding=kernel_size//2 if stride == 1 else 1
+            padding=kernel_size//2
         )
 
     def forward(
@@ -565,7 +565,7 @@ class ResnetBlock1d(nn.Module):
             in_channels=in_channels,
             out_channels=out_channels,
             kernel_size=kernel_size,
-            stride=stride,
+            stride=stride, 
             dilation=dilation,
             num_groups=num_groups,
         )
@@ -573,21 +573,21 @@ class ResnetBlock1d(nn.Module):
         self.block2 = ConvBlock1d(
             in_channels=out_channels,
             out_channels=out_channels,
+            kernel_size=kernel_size,
+            stride=1,
+            dilation=dilation,
             num_groups=num_groups,
         )
 
-        if stride > 1:
-            self.to_out = (
-                nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride)
-                if in_channels != out_channels
-                else nn.Identity()
+        if in_channels != out_channels or stride != 1:
+            self.to_out = nn.Conv1d(
+                in_channels=in_channels, 
+                out_channels=out_channels, 
+                kernel_size=1, 
+                stride=stride
             )
         else:
-            self.to_out = (
-                nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=1)
-                if in_channels != out_channels
-                else nn.Identity()
-            )
+            self.to_out = nn.Identity()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         h = self.block1(x)
@@ -599,16 +599,16 @@ class Patcher(torch.nn.Module):
         self,
         in_channels: int,
         out_channels: int,
-        kernel_size: int=3,
-        stride: int=1,
+        patch_size: int = 2,
     ):
         super().__init__()
+        self.patch_size = patch_size
+        
         self.block = ResnetBlock1d(
             in_channels=in_channels,
             out_channels=out_channels,
+            stride=patch_size,
             num_groups=1,
-            kernel_size=kernel_size,
-            stride=stride,
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
