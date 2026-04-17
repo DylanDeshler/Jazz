@@ -272,7 +272,6 @@ def save_samples(step):
     n_samples = 20
     x, bpm = get_batch('val')
     x, bpm = x[:n_samples], bpm[:n_samples]
-    print(x.shape, bpm.shape)
     
     with ctx:
         y = model.generate(x.shape, n_steps=n_steps)
@@ -296,14 +295,13 @@ def save_samples(step):
         y = adapter.decode(y, shape, mask=mask)
         y = tokenizer.decode(y, shape=(1, max_len), n_steps=n_steps)
     
-    print(y.shape, target_samples.shape)
-    target_samples = target_samples.flatten().cpu().detach().numpy()
-    y = y.squeeze().cpu().detach().numpy()
-    y = np.concatenate([y[:min(int(samples), max_len)] for y, samples in zip(y, target_samples)], axis=0)
-    print(y.shape)
-
     for i in range(n_samples):
-        sf.write(os.path.join(batch_dir, f'{i}.wav'), y[i].flatten(), 16000)
+        target_samples = target_samples.cpu().detach().numpy()
+        y = y.squeeze().cpu().detach().numpy()
+        this_y = np.concatenate([y_[:min(int(samples), max_len)] for y_, samples in zip(y[i], target_samples[i])], axis=0)
+        print(this_y.shape)
+        
+        sf.write(os.path.join(batch_dir, f'{i}.wav'), this_y.flatten(), 16000)
 
 # logging
 if wandb_log and master_process:
