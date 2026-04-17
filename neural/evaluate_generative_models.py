@@ -266,7 +266,7 @@ probe = load_model(os.path.join('tokenizer_low_measures_fix_subset_BPMProbe', 'c
 
 # DiTs
 base_dit = load_model(os.path.join('UnconditionalModernDiT_smedium_24576_subset_32chunks', 'ckpt.pt'), DiT)
-measure_dit = load_model(os.path.join('UnconditionalModernDiT_medium_24576_subset_adapter_32chunks', 'ckpt.pt'), DiT)
+measure_dit = load_model(os.path.join('UnconditionalModernDiT_smedium_24576_subset_adapter_32chunks', 'ckpt.pt'), DiT)
 n_chunks = 32
 spatial_window = 48
 vae_embed_dim = 16
@@ -504,6 +504,10 @@ if not EVAL_ITERATIVE:
     # Measure (Crossfade Global BPM) -> Real Samples FAD:  80.08685637125599
     # Measure (Crossfade Moving Average BPM) -> Real Samples FAD:  80.16544857161716
     # Measure (Crossfade Median BPM) -> Real Samples FAD:  81.47119008674753
+    
+    ## 32 chunks 20k steps
+    # Base -> Real Samples FAD:  60.32056499563096
+    # Measure (Moving Average BPM) -> Real Samples FAD:  55.841230800035945
 
 else: 
     fads = defaultdict(list)
