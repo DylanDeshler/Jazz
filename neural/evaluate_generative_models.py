@@ -266,7 +266,7 @@ probe = load_model(os.path.join('tokenizer_low_measures_fix_subset_BPMProbe', 'c
 
 # DiTs
 base_dit = load_model(os.path.join('UnconditionalModernDiT_smedium_24576_subset_32chunks', 'ckpt.pt'), DiT)
-measure_dit = load_model(os.path.join('UnconditionalModernDiT_smedium_24576_subset_adapter_32chunks', 'ckpt.pt'), DiT)
+measure_dit = load_model(os.path.join('UnconditionalModernDiT_medium_24576_subset_adapter_32chunks', 'ckpt.pt'), DiT)
 n_chunks = 32
 spatial_window = 48
 vae_embed_dim = 16
