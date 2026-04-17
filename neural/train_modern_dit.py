@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from diffusion_forcing import UnconditionalModernDiT_small as net
+from diffusion_forcing import UnconditionalModernDiT_smedium as net
 from dito import DiToV5 as Tokenizer
 import soundfile as sf
 
@@ -40,14 +40,14 @@ import pyrubberband as pyrb
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'UnconditionalModernDiT_small_24576_subset'
+out_dir = 'UnconditionalModernDiT_smedium_24576_subset_32chunks'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
 save_interval = 5000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
-always_save_checkpoint = False # if True, always save a checkpoint after each eval
+always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
@@ -58,8 +58,10 @@ dataset = ''
 gradient_accumulation_steps = 1
 batch_size = 128
 # model
+patch_size = 2
+gradient_checkpointing = True
 spatial_window = 48
-n_chunks = 15
+n_chunks = 32
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
 n_style_embeddings = 256
@@ -68,13 +70,13 @@ use_null_token = True
 cut_seconds = 1
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 100000 # total number of training iterations
+max_iters = 1000000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
-decay_lr = True # whether to decay the learning rate
+decay_lr = False # whether to decay the learning rate
 warmup_iters = 5000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
@@ -156,7 +158,7 @@ tokenizer.load_state_dict(state_dict)
 tokenizer.eval()
 del state_dict
 
-model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, spatial_window=spatial_window, use_null_token=use_null_token)
+model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, spatial_window=spatial_window, use_null_token=use_null_token, gradient_checkpointing=gradient_checkpointing, patch_size=patch_size)
 
 if init_from == 'scratch':
     # init a new model from scratch
@@ -291,11 +293,11 @@ while True:
         losses = estimate_loss()
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         
-        if iter_num % sample_interval == 0 and master_process:
-            model.eval()
-            with ctx:
-                save_samples(iter_num)
-            model.train()
+        # if iter_num % sample_interval == 0 and master_process:
+        #     model.eval()
+        #     with ctx:
+        #         save_samples(iter_num)
+        #     model.train()
         
         if wandb_log:
             wandb.log({
@@ -306,20 +308,32 @@ while True:
                 "mfu": running_mfu*100, # convert to percentage
                 "tokens": tokens_trained,
             })
-        if losses['val'] < best_val_loss or always_save_checkpoint:
+        if iter_num > 0 and losses['val'] < best_val_loss:
             best_val_loss = losses['val']
-            if iter_num > 0:
-                checkpoint = {
-                    'model': raw_model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'model_args': model_args,
-                    'iter_num': iter_num,
-                    'best_val_loss': best_val_loss,
-                    'config': config,
-                    'tokens': tokens_trained,
-                }
-                print(f"saving checkpoint to {out_dir}")
-                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+            checkpoint = {
+                'model': raw_model.state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'model_args': model_args,
+                'iter_num': iter_num,
+                'val_loss': best_val_loss,
+                'best_val_loss': best_val_loss,
+                'config': config,
+                'tokens': tokens_trained,
+            }
+            torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+            print(f"saving new best checkpoint to {out_dir}")
+        if iter_num > 0 and always_save_checkpoint:
+            checkpoint = {
+                'model': raw_model.state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'model_args': model_args,
+                'iter_num': iter_num,
+                'val_loss': losses['val'],
+                'best_val_loss': best_val_loss,
+                'config': config,
+                'tokens': tokens_trained,
+            }
+            torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
     
     if eval_only:
         break
