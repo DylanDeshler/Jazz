@@ -138,7 +138,7 @@ def get_batch(split='train', batch_size=batch_size):
     
     idxs = torch.randint(len(data) - n_chunks, (batch_size,))    
     x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    meta = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    meta = torch.from_numpy(np.stack([meta[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
 
     return x, meta
 
