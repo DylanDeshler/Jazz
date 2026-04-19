@@ -265,8 +265,9 @@ max_seq_len = adapter.max_seq_len
 probe = load_model(os.path.join('tokenizer_low_measures_fix_subset_BPMProbe', 'ckpt.pt'), BPMProbe)
 
 # DiTs
-base_dit = load_model(os.path.join('UnconditionalModernDiT_smedium_24576_subset_32chunks', 'ckpt.pt'), DiT)
-measure_dit = load_model(os.path.join('UnconditionalModernDiT_smedium_24576_subset_adapter_32chunks', 'ckpt.pt'), DiT)
+checkpoint_step = 130000
+base_dit = load_model(os.path.join('UnconditionalModernDiT_smedium_24576_subset_32chunks', f'ckpt_{checkpoint_step}.pt'), DiT)
+measure_dit = load_model(os.path.join('UnconditionalModernDiT_smedium_24576_subset_adapter_32chunks', f'ckpt_{checkpoint_step}.pt'), DiT)
 n_chunks = 32
 spatial_window = 48
 vae_embed_dim = 16
@@ -284,7 +285,7 @@ audio_paths = [path for path in audio_paths if os.path.basename(path) in beat_pa
 beat_paths = [os.path.join('/home/ubuntu/Data/beats', path) for path in beat_paths]
 
 idxs = np.random.choice(np.arange(len(measure_paths)), size=32, replace=False)
-n_steps = 32
+n_steps = 64
 batch_size = 4
 EVAL_ITERATIVE = False
 USE_CLAP = False
