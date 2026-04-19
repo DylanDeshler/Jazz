@@ -265,7 +265,8 @@ max_seq_len = adapter.max_seq_len
 probe = load_model(os.path.join('tokenizer_low_measures_fix_subset_BPMProbe', 'ckpt.pt'), BPMProbe)
 
 # DiTs
-checkpoint_step = 40000
+import sys
+checkpoint_step = int(sys.argv[1])
 base_dit = load_model(os.path.join('UnconditionalModernDiT_smedium_24576_subset_32chunks', f'ckpt_{checkpoint_step}.pt'), DiT)
 measure_dit = load_model(os.path.join('UnconditionalModernDiT_smedium_24576_subset_adapter_32chunks', f'ckpt_{checkpoint_step}.pt'), DiT)
 n_chunks = 32
