@@ -44,7 +44,7 @@ log_interval = 100
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -58,14 +58,14 @@ rate = 16000
 n_samples = 24576
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 1000000 # total number of training iterations
+max_iters = 375000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.999
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
-decay_lr = False # whether to decay the learning rate
-warmup_iters = 5000 # how many steps to warm up for
+decay_lr = True # whether to decay the learning rate
+warmup_iters = 345000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
@@ -360,7 +360,7 @@ if wandb_log and master_process:
     if init_from == 'scratch':
         wandb.init(project=wandb_project, name=wandb_run_name, config=config)
     elif init_from == 'resume':
-        wandb.init(project=wandb_project, name=wandb_run_name, config=config, id='6epdpb5n', resume='must')
+        wandb.init(project=wandb_project, name=wandb_run_name, config=config, id='8bzg1hgg', resume='must')
 
 # training loop
 
@@ -388,12 +388,12 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        X = get_batch('test')
-        model.eval()
-        with ctx:
-            logits = raw_model.reconstruct(X, n_steps=100)
-        model.train()
-        save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
+        # X = get_batch('test')
+        # model.eval()
+        # with ctx:
+        #     logits = raw_model.reconstruct(X, n_steps=100)
+        # model.train()
+        # save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
@@ -418,6 +418,7 @@ while True:
                 'tokens': tokens_trained,
             }
             torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+            print(f"saving new best checkpoint to {out_dir}")
         if iter_num > 0 and always_save_checkpoint:
             checkpoint = {
                 'model': raw_model.state_dict(),
