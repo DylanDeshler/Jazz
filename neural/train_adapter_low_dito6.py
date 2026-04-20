@@ -52,8 +52,8 @@ wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 4 # used to simulate larger batch sizes
-batch_size = 32 # if gradient_accumulation_steps > 1, this is the micro-batch size
+gradient_accumulation_steps = 6 # used to simulate larger batch sizes
+batch_size = 24 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
 n_samples = 24576
@@ -488,14 +488,14 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        # X, latent_mask, sample_mask = get_batch('test')
-        # model.eval()
-        # with ctx:
-        #     _, z = tokenizer.encode(X)
-        #     z = model(z, latent_mask)
-        #     logits = tokenizer.decode(z, shape=X.shape, n_steps=100)
-        # model.train()
-        # save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
+        X, latent_mask, sample_mask = get_batch('test')
+        model.eval()
+        with ctx:
+            _, z = tokenizer.encode(X)
+            z = model(z, latent_mask)
+            logits = tokenizer.decode(z, shape=X.shape, n_steps=100)
+        model.train()
+        save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         if wandb_log:
