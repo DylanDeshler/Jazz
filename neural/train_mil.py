@@ -50,7 +50,7 @@ sample_rate = 16000
 n_fft = 1024
 hop_length = 256
 n_mels = 192
-time_length = 32*6
+time_length = 32 * 6
 frequency_length = 64
 # adamw optimizer
 learning_rate = 4e-3 * math.sqrt(batch_size / 4096) # max learning rate
@@ -416,7 +416,7 @@ def save_samples(iter_num, activation_threshold=0.5, min_length_sec=1.0, apply_p
                 aspect='auto', 
                 origin='lower', 
                 cmap='magma', 
-                extent=[0, total_duration_sec, 0, 128]
+                extent=[0, total_duration_sec, 0, n_mels]
             )
             ax_mel.axvspan(best_start_sec, best_end_sec, color='lime', alpha=0.2)
             
