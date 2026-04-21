@@ -442,7 +442,8 @@ class MIL(nn.Module):
     def _init_weights(self, m):
         if isinstance(m, (nn.Conv2d, nn.Linear)):
             nn.init.trunc_normal_(m.weight, std=.02)
-            nn.init.constant_(m.bias, 0)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
 
     def forward(self, x, targets=None):
         x = self.to_mel(x)

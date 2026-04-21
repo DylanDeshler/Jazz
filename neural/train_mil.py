@@ -234,7 +234,7 @@ def get_batch(split='train'):
 iter_num = 0
 best_val_loss = 1e9
 
-num_instruments = np.asarray(instrument_labels).shape[1]
+num_instruments = len(mlb.classes_)
 model_args = dict(
     num_instruments=num_instruments,
     n_fft=n_fft,
