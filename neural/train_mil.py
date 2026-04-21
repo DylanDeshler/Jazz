@@ -1,6 +1,5 @@
 import torch
 import torch.nn.functional as F
-import torchaudio
 import torchaudio.transforms as T
 
 import os
@@ -395,7 +394,7 @@ def save_samples(iter_num, activation_threshold=0.5, min_length_sec=1.0, apply_p
             # --- Save Audio Snippet ---
             audio_snippet = X[b, :, best_start:best_end]
             wav_path = os.path.join(batch_dir, f"{class_name}_{b}.wav")
-            torchaudio.save(wav_path, audio_snippet.cpu(), sample_rate)
+            sf.write(wav_path, audio_snippet.cpu(), sample_rate)
             
             # --- Two-Tier Aligned Plotting ---
             best_start_sec = best_start / sample_rate
