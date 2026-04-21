@@ -37,7 +37,7 @@ eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = False # disabled by default
+wandb_log = True # disabled by default
 wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
@@ -50,8 +50,8 @@ sample_rate = 16000
 n_fft = 1024
 hop_length = 256
 n_mels = 192
-time_length=32*6
-frequency_length=64
+time_length = 32*6
+frequency_length = 64
 # adamw optimizer
 learning_rate = 4e-3 * math.sqrt(batch_size / 4096) # max learning rate
 max_iters = 1000000 # total number of training iterations
@@ -561,23 +561,23 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        # losses = estimate_loss()
-        # print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-        # train_metrics = estimate_mAP('train')
-        # for k, v in train_metrics.items():
-        #     if isinstance(v, dict):
-        #         for kk, vv in v.items():
-        #             print(f'train {k} {kk} = {vv:.4f}')
-        #     else:
-        #         print(f'train {k} = {v:.4f}')
-        # val_metrics = estimate_mAP('val')
-        # for k, v in val_metrics.items():
-        #     if isinstance(v, dict):
-        #         for kk, vv in v.items():
-        #             print(f'val {k} {kk} = {vv:.4f}')
-        #     else:
-        #         print(f'val {k} = {v:.4f}')
-        # save_samples(iter_num)
+        losses = estimate_loss()
+        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        train_metrics = estimate_mAP('train')
+        for k, v in train_metrics.items():
+            if isinstance(v, dict):
+                for kk, vv in v.items():
+                    print(f'train {k} {kk} = {vv:.4f}')
+            else:
+                print(f'train {k} = {v:.4f}')
+        val_metrics = estimate_mAP('val')
+        for k, v in val_metrics.items():
+            if isinstance(v, dict):
+                for kk, vv in v.items():
+                    print(f'val {k} {kk} = {vv:.4f}')
+            else:
+                print(f'val {k} = {v:.4f}')
+        save_samples(iter_num)
         
         if wandb_log:
             log_dict = {
