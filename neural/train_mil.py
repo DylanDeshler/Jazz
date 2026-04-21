@@ -11,6 +11,7 @@ import numpy as np
 import soundfile as sf
 from torchinfo import summary
 from mil import MIL as net
+from fad import MultiTaskFAD as net
 
 import matplotlib.pyplot as plt
 import scipy.ndimage
