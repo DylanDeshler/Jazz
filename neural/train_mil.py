@@ -212,9 +212,9 @@ test_durations = durations[test_idx] / np.sum(durations[test_idx])
 
 def get_batch(split='train'):
     if split == 'train':
-        idxs = np.random.choice(train_idx, batch_size).tolist()#, p=train_durations).tolist()
+        idxs = np.random.choice(train_idx, batch_size, p=train_durations).tolist()
     else:
-        idxs = np.random.choice(test_idx, batch_size).tolist()#, p=test_durations).tolist()
+        idxs = np.random.choice(test_idx, batch_size, p=test_durations).tolist()
     
     x = []
     inst = []
