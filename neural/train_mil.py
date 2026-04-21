@@ -4,14 +4,12 @@ import torchaudio
 import torchaudio.transforms as T
 
 import os
-import csv
 import math
 import time
 import numpy as np
 import soundfile as sf
 from torchinfo import summary
 from mil import MIL as net
-from fad import MultiTaskFAD as net
 
 import matplotlib.pyplot as plt
 import scipy.ndimage
@@ -248,8 +246,8 @@ model_args = dict(
     depths=[3, 3, 9, 3],
     dims=[96, 192, 384, 768],
     drop_path_rate=0.1,
-    num_heads=12,
-    transformer_layers=2,
+    num_heads=8,
+    transformer_layers=1,
     time_length=time_length,
     frequency_length=frequency_length
 )
