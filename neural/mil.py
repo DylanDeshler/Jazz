@@ -473,6 +473,7 @@ class MIL(nn.Module):
         
         B, C, H, W = x.shape
         x = rearrange(x, 'b c h w -> b (h w) c')
+        print(x.shape)
         
         freqs_cis = precompute_freqs_cis_2d(
             dim=self.head_dim, 

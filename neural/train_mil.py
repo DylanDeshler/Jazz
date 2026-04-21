@@ -47,7 +47,7 @@ dataset = ''
 gradient_accumulation_steps = 1
 batch_size = 8
 # model
-n_samples = 16383 * 30
+n_samples = 16383 * 5
 sample_rate = 16000
 n_fft = 1024
 hop_length = 512
