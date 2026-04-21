@@ -453,6 +453,7 @@ class MIL(nn.Module):
 
     def forward(self, x, targets=None):
         x = self.to_mel(x)
+        print(x.shape)
         
         if self.training:
             x = self.augment(x)
