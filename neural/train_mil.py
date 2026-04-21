@@ -42,8 +42,8 @@ wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 4
-batch_size = 32
+gradient_accumulation_steps = 2
+batch_size = 64
 # model
 n_samples = 16383 * 30
 sample_rate = 16000
