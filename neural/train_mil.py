@@ -342,7 +342,7 @@ def save_samples(iter_num, activation_threshold=0.5, min_length_sec=1.0, apply_p
         raw_mels = amplitude_to_db(mel_transform(X))
         frame_probs = model(X)['frame_probs']
         
-    frame_probs_np = frame_probs.cpu().detach().numpy()
+    frame_probs_np = frame_probs.cpu().detach().float().numpy()
     
     # 4. Post-Processing
     if apply_post_processing:
