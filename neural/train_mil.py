@@ -174,8 +174,9 @@ import librosa
 paths = glob.glob('/home/ubuntu/Data/wavs/*.wav')
 wavs = []
 
-from sklearn.model_selection import StratifiedGroupKFold
-kf = StratifiedGroupKFold(n_splits=20, shuffle=True, random_state=0)
+# from sklearn.model_selection import StratifiedGroupKFold
+from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
+kf = MultilabelStratifiedKFold(n_splits=20, shuffle=True, random_state=0)
 
 valid_idxs = []
 for path in paths:
@@ -186,7 +187,8 @@ year_keys = [(year // 10) * 10 for year in years]
 strat_key = [f'{year}_{record}' for i, (year, record) in enumerate(zip(year_keys, record_label_names)) if i in valid_idxs]
 artists = [artist for i, artist in enumerate(artists) if i in valid_idxs]
 instrument_labels = [instrument_labels for i, inst in enumerate(instrument_labels) if i in valid_idxs]
-train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], instrument_labels, artists))
+# train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], instrument_labels, artists))
+train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], instrument_labels))
 
 import concurrent.futures
 from multiprocessing import cpu_count
