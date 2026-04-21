@@ -472,7 +472,6 @@ class MIL(nn.Module):
             x = self.stages[i](x)
         
         B, C, H, W = x.shape
-        print(x.shape)
         x = rearrange(x, 'b c h w -> b (h w) c')
         
         freqs_cis = precompute_freqs_cis_2d(
@@ -486,7 +485,7 @@ class MIL(nn.Module):
             x = block(x, freqs_cis=freqs_cis)
         
         x = rearrange(x, 'b (h w) c -> b h w c', h=H, w=W)
-        frame_logits = torch.einsum('btfc,nc->btfn', x, self.query_norm(self.queries)).max(dim=1)[0]
+        frame_logits = torch.einsum('bftc,nc->bftn', x, self.query_norm(self.queries)).max(dim=1)[0]
         frame_probs = torch.sigmoid(frame_logits) 
         
         temporal_features = x.mean(dim=1)
