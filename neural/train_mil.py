@@ -578,10 +578,18 @@ while True:
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         train_metrics = estimate_mAP('train')
         for k, v in train_metrics.items():
-            print(f'train {k} = {v:.4f}')
+            if isinstance(v, dict):
+                for kk, vv in v.items():
+                    print(f'train {k} {kk} = {vv:.4f}')
+            else:
+                print(f'train {k} = {v:.4f}')
         val_metrics = estimate_mAP('val')
         for k, v in val_metrics.items():
-            print(f'val {k} = {v:.4f}')
+            if isinstance(v, dict):
+                for kk, vv in v.items():
+                    print(f'val {k} {kk} = {vv:.4f}')
+            else:
+                print(f'val {k} = {v:.4f}')
         save_samples(iter_num)
         
         if wandb_log:
