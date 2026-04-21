@@ -342,7 +342,7 @@ def save_samples(iter_num, activation_threshold=0.5, min_length_sec=1.0, apply_p
         raw_mels = amplitude_to_db(mel_transform(X))
         frame_probs = model(X)['frame_probs']
         
-    frame_probs_np = frame_probs.cpu().numpy()
+    frame_probs_np = frame_probs.cpu().detach().numpy()
     
     # 4. Post-Processing
     if apply_post_processing:
@@ -510,7 +510,7 @@ def estimate_mAP(split):
         c_loss = per_class_loss[c]
         c_ap = per_class_ap[c]
         
-        metrics[c_name] = {'loss': c_loss, 'ap': c_ap}
+        metrics[c_name] = {'ap': c_ap}
     
     return metrics
 
@@ -574,22 +574,22 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        losses = estimate_loss()
-        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-        train_metrics = estimate_mAP('train')
-        for k, v in train_metrics.items():
-            if isinstance(v, dict):
-                for kk, vv in v.items():
-                    print(f'train {k} {kk} = {vv:.4f}')
-            else:
-                print(f'train {k} = {v:.4f}')
-        val_metrics = estimate_mAP('val')
-        for k, v in val_metrics.items():
-            if isinstance(v, dict):
-                for kk, vv in v.items():
-                    print(f'val {k} {kk} = {vv:.4f}')
-            else:
-                print(f'val {k} = {v:.4f}')
+        # losses = estimate_loss()
+        # print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        # train_metrics = estimate_mAP('train')
+        # for k, v in train_metrics.items():
+        #     if isinstance(v, dict):
+        #         for kk, vv in v.items():
+        #             print(f'train {k} {kk} = {vv:.4f}')
+        #     else:
+        #         print(f'train {k} = {v:.4f}')
+        # val_metrics = estimate_mAP('val')
+        # for k, v in val_metrics.items():
+        #     if isinstance(v, dict):
+        #         for kk, vv in v.items():
+        #             print(f'val {k} {kk} = {vv:.4f}')
+        #     else:
+        #         print(f'val {k} = {v:.4f}')
         save_samples(iter_num)
         
         if wandb_log:
