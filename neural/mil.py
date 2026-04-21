@@ -453,7 +453,6 @@ class MIL(nn.Module):
 
     def forward(self, x, targets=None):
         x = self.to_mel(x)
-        print(x.shape)
         
         if self.training:
             x = self.augment(x)
@@ -473,6 +472,7 @@ class MIL(nn.Module):
             x = self.stages[i](x)
         
         B, C, H, W = x.shape
+        print(x.shape)
         x = rearrange(x, 'b c h w -> b (h w) c')
         
         freqs_cis = precompute_freqs_cis_2d(
