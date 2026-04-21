@@ -318,6 +318,8 @@ def save_samples(iter_num, activation_threshold=0.5, min_length_sec=1.0, apply_p
     os.makedirs(batch_dir, exist_ok=True)
     
     X, targets = get_batch('val')
+    X = X[:10]
+    targets = targets[:10]
     B, _, total_samples = X.shape
     total_duration_sec = total_samples / sample_rate
     min_length_samples = int(min_length_sec * sample_rate)
