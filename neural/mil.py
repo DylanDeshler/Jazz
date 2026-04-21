@@ -486,10 +486,10 @@ class MIL(nn.Module):
             x = block(x, freqs_cis=freqs_cis)
         
         x = rearrange(x, 'b (h w) c -> b h w c', h=H, w=W)
-        frame_logits = torch.einsum('btfc,nc->btfn', x, self.query_norm(self.queries)).max(dim=2)[0]
+        frame_logits = torch.einsum('btfc,nc->btfn', x, self.query_norm(self.queries)).max(dim=1)[0]
         frame_probs = torch.sigmoid(frame_logits) 
         
-        temporal_features = x.mean(dim=2)
+        temporal_features = x.mean(dim=1)
         attn_logits = self.proj(temporal_features)
         
         attn_weights = torch.softmax(attn_logits, dim=1)

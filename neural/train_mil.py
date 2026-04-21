@@ -189,37 +189,38 @@ instrument_labels = [inst for i, inst in enumerate(instrument_labels) if i in va
 # train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], instrument_labels, artists))
 train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], instrument_labels))
 
-import concurrent.futures
-from multiprocessing import cpu_count
-wavs = [None] * len(paths)
+# import concurrent.futures
+# from multiprocessing import cpu_count
+# wavs = [None] * len(paths)
 
-with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
-    future_to_index = {
-        executor.submit(lambda x: librosa.load(x, sr=sample_rate)[0], path): i 
-        for i, path in enumerate(paths)
-    }
+# with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
+#     future_to_index = {
+#         executor.submit(lambda x: librosa.load(x, sr=sample_rate)[0], path): i 
+#         for i, path in enumerate(paths)
+#     }
     
-    for future in tqdm(concurrent.futures.as_completed(future_to_index), desc='Loading wav files', total=len(paths)):
-        original_index = future_to_index[future]
-        wav = future.result()
-        wavs[original_index] = wav
+#     for future in tqdm(concurrent.futures.as_completed(future_to_index), desc='Loading wav files', total=len(paths)):
+#         original_index = future_to_index[future]
+#         wav = future.result()
+#         wavs[original_index] = wav
 
-durations = np.asarray([len(wav) for wav in wavs])
-train_durations = durations[train_idx] / np.sum(durations[train_idx])
-test_durations = durations[test_idx] / np.sum(durations[test_idx])
-del wavs
+# durations = np.asarray([len(wav) for wav in wavs])
+# train_durations = durations[train_idx] / np.sum(durations[train_idx])
+# test_durations = durations[test_idx] / np.sum(durations[test_idx])
+# del wavs
 
 def get_batch(split='train'):
     if split == 'train':
-        idxs = np.random.choice(train_idx, batch_size, p=train_durations).tolist()
+        idxs = np.random.choice(train_idx, batch_size).tolist()#, p=train_durations).tolist()
     else:
-        idxs = np.random.choice(test_idx, batch_size, p=test_durations).tolist()
+        idxs = np.random.choice(test_idx, batch_size).tolist()#, p=test_durations).tolist()
     
     x = []
     inst = []
     for idx in idxs:
         # wav = wavs[idx]
-        wav = librosa.load(paths[idx], sr=None)[0]
+        # wav = librosa.load(paths[idx], sr=None)[0]
+        wav = torchaudio.load(paths[idx], sr=None)[0]
         url = paths[idx].split('/')[-1].split('.')[0]
         print(paths[idx], url, url_map[url])
         
@@ -230,7 +231,7 @@ def get_batch(split='train'):
     x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
     inst = torch.from_numpy(np.asarray(inst).astype(np.float32)).pin_memory().to(device, non_blocking=True)
     
-    return x, targets
+    return x, inst
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
@@ -575,7 +576,7 @@ while True:
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-        train_metrics = estimate_mAP('trian')
+        train_metrics = estimate_mAP('train')
         for k, v in train_metrics.items():
             print(f'train {k} = {v:.4f}')
         val_metrics = estimate_mAP('val')
