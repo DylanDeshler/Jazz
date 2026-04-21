@@ -186,7 +186,7 @@ for path in paths:
 year_keys = [(year // 10) * 10 for year in years]
 strat_key = [f'{year}_{record}' for i, (year, record) in enumerate(zip(year_keys, record_label_names)) if i in valid_idxs]
 artists = [artist for i, artist in enumerate(artists) if i in valid_idxs]
-instrument_labels = [instrument_labels for i, inst in enumerate(instrument_labels) if i in valid_idxs]
+instrument_labels = [inst for i, inst in enumerate(instrument_labels) if i in valid_idxs]
 # train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], instrument_labels, artists))
 train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], instrument_labels))
 
