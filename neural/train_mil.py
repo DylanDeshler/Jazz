@@ -208,6 +208,7 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as exec
 durations = np.asarray([len(wav) for wav in wavs])
 train_durations = durations[train_idx] / np.sum(durations[train_idx])
 test_durations = durations[test_idx] / np.sum(durations[test_idx])
+del wavs
 
 def get_batch(split='train'):
     if split == 'train':
@@ -218,7 +219,8 @@ def get_batch(split='train'):
     x = []
     inst = []
     for idx in idxs:
-        wav = wavs[idx]
+        # wav = wavs[idx]
+        wav = librosa.load(paths[idx], sr=None)[0]
         url = paths[idx].split('/')[-1].split('.')[0]
         
         start = np.random.randint(len(wav) - n_samples)
