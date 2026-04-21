@@ -45,7 +45,7 @@ dataset = ''
 gradient_accumulation_steps = 4
 batch_size = 32
 # model
-n_samples = 16383 * 10
+n_samples = 16383 * 30
 sample_rate = 16000
 n_fft = 1024
 hop_length = 256
@@ -591,7 +591,7 @@ while True:
         #             print(f'val {k} {kk} = {vv:.4f}')
         #     else:
         #         print(f'val {k} = {v:.4f}')
-        save_samples(iter_num)
+        # save_samples(iter_num)
         
         if wandb_log:
             log_dict = {
