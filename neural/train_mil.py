@@ -46,7 +46,7 @@ dataset = ''
 gradient_accumulation_steps = 1
 batch_size = 8
 # model
-n_samples = 16383 * 5
+n_samples = 16383 * 30
 sample_rate = 16000
 n_fft = 1024
 hop_length = 512
@@ -185,9 +185,8 @@ for path in paths:
 year_keys = [(year // 10) * 10 for year in years]
 strat_key = [f'{year}_{record}' for i, (year, record) in enumerate(zip(year_keys, record_label_names)) if i in valid_idxs]
 artists = [artist for i, artist in enumerate(artists) if i in valid_idxs]
-instrument_labels = [inst for i, inst in enumerate(instrument_labels) if i in valid_idxs]
 # train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], instrument_labels, artists))
-train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], instrument_labels))
+train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], [inst for i, inst in enumerate(instrument_labels) if i in valid_idxs]))
 
 # import concurrent.futures
 # from multiprocessing import cpu_count
@@ -247,8 +246,8 @@ model_args = dict(
     depths=[3, 3, 9, 3],
     dims=[96, 192, 384, 768],
     drop_path_rate=0.1,
-    num_heads=8,
-    transformer_layers=1,
+    num_heads=12,
+    transformer_layers=2,
     time_length=time_length,
     frequency_length=frequency_length
 )
