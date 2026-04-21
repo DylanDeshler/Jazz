@@ -444,6 +444,12 @@ class MIL(nn.Module):
             nn.init.trunc_normal_(m.weight, std=.02)
             if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
+        
+        nn.init.zeros_(self.proj.weight)
+        # zero out c_proj weights in all blocks
+        for block in self.blocks:
+            nn.init.zeros_(block.mlp.w3.weight)
+            nn.init.zeros_(block.attn.proj.weight)
 
     def forward(self, x, targets=None):
         x = self.to_mel(x)
