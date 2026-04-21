@@ -42,8 +42,8 @@ wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 2
-batch_size = 64
+gradient_accumulation_steps = 8
+batch_size = 16
 # model
 n_samples = 16383 * 30
 sample_rate = 16000
@@ -187,33 +187,19 @@ artists = [artist for i, artist in enumerate(artists) if i in valid_idxs]
 # train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], instrument_labels, artists))
 train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], [inst for i, inst in enumerate(instrument_labels) if i in valid_idxs]))
 
-# import concurrent.futures
-# from multiprocessing import cpu_count
-# # wavs = [None] * len(paths)
-# durations = []
-
-# with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
-#     future_to_index = {
-#         executor.submit(lambda x: librosa.load(x, sr=sample_rate)[0], path): i 
-#         for i, path in enumerate(paths)
-#     }
-    
-#     for future in tqdm(concurrent.futures.as_completed(future_to_index), desc='Loading wav files', total=len(paths)):
-#         original_index = future_to_index[future]
-#         wav = future.result()
-#         # wavs[original_index] = wav
-#         durations.append(len(wav))
-
-# durations = np.asarray(durations)
-# # durations = np.asarray([len(wav) for wav in wavs])
-# train_durations = durations[train_idx] / np.sum(durations[train_idx])
-# test_durations = durations[test_idx] / np.sum(durations[test_idx])
+durations = []
+for path in tqdm(paths):
+    durations.append(sf.info(path).duration)
+durations = np.asarray(durations)
+train_durations = durations[train_idx] / np.sum(durations[train_idx])
+test_durations = durations[test_idx] / np.sum(durations[test_idx])
+del durations
 
 def get_batch(split='train'):
     if split == 'train':
-        idxs = np.random.choice(train_idx, batch_size).tolist()#, p=train_durations).tolist()
+        idxs = np.random.choice(train_idx, batch_size, p=train_durations).tolist()
     else:
-        idxs = np.random.choice(test_idx, batch_size).tolist()#, p=test_durations).tolist()
+        idxs = np.random.choice(test_idx, batch_size, p=test_durations).tolist()
     
     x = []
     inst = []
