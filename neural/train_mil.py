@@ -218,10 +218,9 @@ def get_batch(split='train'):
     inst = []
     for idx in idxs:
         # wav = wavs[idx]
-        wav = librosa.load(paths[idx], sr=None)[0]
-        # wav = torchaudio.load(paths[idx])[0]
+        # wav = librosa.load(paths[idx], sr=None)[0]
+        wav = torchaudio.load(paths[idx])[0]
         url = paths[idx].split('/')[-1].split('.')[0]
-        print(paths[idx], url, url_map[url])
         
         start = np.random.randint(len(wav) - n_samples)
         inst.append(instrument_labels[url_map[url]])
