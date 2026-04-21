@@ -27,7 +27,7 @@ from sklearn.preprocessing import MultiLabelBinarizer
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'MIL'
+out_dir = 'MIL_base'
 eval_interval = 2500
 sample_interval = 2500
 log_interval = 100
@@ -50,7 +50,7 @@ sample_rate = 16000
 n_fft = 1024
 hop_length = 256
 n_mels = 192
-time_length = 32 * 6
+time_length = 32 * 3
 frequency_length = 64
 # adamw optimizer
 learning_rate = 4e-3 * math.sqrt(batch_size / 4096) # max learning rate
@@ -229,11 +229,11 @@ model_args = dict(
     hop_length=hop_length,
     n_mels=n_mels,
     in_chans=1,
-    depths=[3, 3, 9, 3],
-    dims=[96, 192, 384, 768],
+    # depths=[3, 3, 9, 3], dims=[96, 192, 384, 768],
+    depths=[3, 3, 27, 3], dims=[128, 256, 512, 1024],
     drop_path_rate=0.1,
-    num_heads=12,
-    transformer_layers=2,
+    num_heads=16,
+    transformer_layers=4,
     time_length=time_length,
     frequency_length=frequency_length
 )
