@@ -188,25 +188,27 @@ artists = [artist for i, artist in enumerate(artists) if i in valid_idxs]
 # train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], instrument_labels, artists))
 train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], [inst for i, inst in enumerate(instrument_labels) if i in valid_idxs]))
 
-# import concurrent.futures
-# from multiprocessing import cpu_count
+import concurrent.futures
+from multiprocessing import cpu_count
 # wavs = [None] * len(paths)
+durations = []
 
-# with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
-#     future_to_index = {
-#         executor.submit(lambda x: librosa.load(x, sr=sample_rate)[0], path): i 
-#         for i, path in enumerate(paths)
-#     }
+with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
+    future_to_index = {
+        executor.submit(lambda x: librosa.load(x, sr=sample_rate)[0], path): i 
+        for i, path in enumerate(paths)
+    }
     
-#     for future in tqdm(concurrent.futures.as_completed(future_to_index), desc='Loading wav files', total=len(paths)):
-#         original_index = future_to_index[future]
-#         wav = future.result()
-#         wavs[original_index] = wav
+    for future in tqdm(concurrent.futures.as_completed(future_to_index), desc='Loading wav files', total=len(paths)):
+        original_index = future_to_index[future]
+        wav = future.result()
+        # wavs[original_index] = wav
+        durations.append(len(wav))
 
+durations = np.asarray(durations)
 # durations = np.asarray([len(wav) for wav in wavs])
-# train_durations = durations[train_idx] / np.sum(durations[train_idx])
-# test_durations = durations[test_idx] / np.sum(durations[test_idx])
-# del wavs
+train_durations = durations[train_idx] / np.sum(durations[train_idx])
+test_durations = durations[test_idx] / np.sum(durations[test_idx])
 
 def get_batch(split='train'):
     if split == 'train':
