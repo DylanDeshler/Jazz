@@ -40,7 +40,7 @@ import pyrubberband as pyrb
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'UnconditionalModernDiT_smedium_24576_subset_32chunks'
+out_dir = 'UnconditionalModernDiT_smedium_24576_32chunks'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -48,7 +48,7 @@ save_interval = 5000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir
@@ -127,10 +127,14 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 def get_batch(split='train', batch_size=batch_size):
     # TODO: sample within songs (this can go over boundaries)
+    # if split == 'train':
+    #     data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_train.bin', dtype=np.float32, mode='r', shape=(178052736, vae_embed_dim))
+    # else:
+    #     data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_val.bin', dtype=np.float32, mode='r', shape=(3910176, vae_embed_dim))
     if split == 'train':
-        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_train.bin', dtype=np.float32, mode='r', shape=(178052736, vae_embed_dim))
+        data = np.memmap('/home/ubuntu/Data/low_large_24576_train.bin', dtype=np.float32, mode='r', shape=(232981344, vae_embed_dim))
     else:
-        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_val.bin', dtype=np.float32, mode='r', shape=(3910176, vae_embed_dim))
+        data = np.memmap('/home/ubuntu/Data/low_large_24576_val.bin', dtype=np.float32, mode='r', shape=(5102160, vae_embed_dim))
     
     idxs = torch.randint(len(data) - n_chunks * spatial_window, (batch_size,))    
     x = torch.from_numpy(np.stack([data[idx:idx+n_chunks * spatial_window] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
@@ -142,7 +146,7 @@ def get_batch(split='train', batch_size=batch_size):
 iter_num = 0
 best_val_loss = 1e9
 
-ckpt_path = os.path.join('tokenizer_low_large_24576_subset', 'ckpt.pt')
+ckpt_path = os.path.join('tokenizer_low_large_24576', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 tokenizer_args = checkpoint['model_args']
 
