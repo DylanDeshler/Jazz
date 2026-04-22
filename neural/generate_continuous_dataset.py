@@ -22,8 +22,8 @@ batch_size = 128
 rate = 16000
 n_samples = 24576
 
-out_prefix = 'low_large_24576_subset'
-ckpt_path = os.path.join('tokenizer_low_large_24576_subset', 'ckpt.pt')
+out_prefix = 'low_large_24576'
+ckpt_path = os.path.join('tokenizer_low_large_24576', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 tokenizer_args = checkpoint['model_args']
 vae_embed_dim = tokenizer_args['dimension']
@@ -39,10 +39,12 @@ for k,v in list(state_dict.items()):
 model.load_state_dict(state_dict)
 model.eval()
 
-paths = glob.glob('/home/ubuntu/Data/measures/*')
-with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
-    beat_paths = json.load(f)
-paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
+# paths = glob.glob('/home/ubuntu/Data/measures/*')
+# with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
+#     beat_paths = json.load(f)
+# paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
+
+paths = glob.glob('/home/ubuntu/Data/wavs/*')
 print(len(paths))
 
 import concurrent.futures
