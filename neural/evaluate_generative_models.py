@@ -287,7 +287,8 @@ audio_paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) fo
 audio_paths = [path for path in audio_paths if os.path.basename(path) in beat_paths]
 beat_paths = [os.path.join('/home/ubuntu/Data/beats', path) for path in beat_paths]
 
-idxs = np.random.choice(np.arange(int(0.95 * len(measure_paths)), len(measure_paths)), size=256, replace=False)
+measure_paths = glob.glob('/home/ubuntu/Data/wavs/*')
+idxs = np.random.choice(np.arange(len(measure_paths)), size=256, replace=False)
 n_steps = 32
 batch_size = 4
 EVAL_ITERATIVE = False
@@ -306,39 +307,43 @@ out_dir = '/home/ubuntu/Data/FAD_generative_samples'
 os.makedirs(out_dir, exist_ok=True)
 with torch.no_grad():
     for idx in tqdm(idxs):
-        measure_path, audio_path, beat_path = measure_paths[idx], audio_paths[idx], beat_paths[idx]
+        # measure_path, audio_path, beat_path = measure_paths[idx], audio_paths[idx], beat_paths[idx]
         
-        wav, _ = librosa.load(audio_path, sr=None)
+        # wav, _ = librosa.load(audio_path, sr=None)
+        # wav = wav[:batch_size * n_chunks * rate]
+        
+        # beat_data = parse_beat_file(beat_path)
+        # downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
+        
+        # m_raw = []
+        # first_frame, last_frame = None, None
+        # for i in range(len(downbeat_indices) - 1):
+        #     start_idx = downbeat_indices[i]
+        #     end_idx = downbeat_indices[i+1]
+            
+        #     t_start = beat_data[start_idx]['time']
+        #     t_end = beat_data[end_idx]['time']
+            
+        #     frame_start = int(t_start * rate)
+        #     frame_end = int(t_end * rate)
+            
+        #     if frame_end > len(wav):
+        #         break
+            
+        #     if first_frame is None:
+        #         first_frame = frame_start
+        #     last_frame = frame_end
+            
+        #     m_raw.append(wav[frame_start:frame_end])
+            
+        # if last_frame - first_frame < 16383 * 5:
+        #     continue
+        
+        # x_raw = wav[first_frame:last_frame]
+        
+        wav, _ = librosa.load(measure_paths[idx], sr=None)
         wav = wav[:batch_size * n_chunks * rate]
-        
-        beat_data = parse_beat_file(beat_path)
-        downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
-        
-        m_raw = []
-        first_frame, last_frame = None, None
-        for i in range(len(downbeat_indices) - 1):
-            start_idx = downbeat_indices[i]
-            end_idx = downbeat_indices[i+1]
-            
-            t_start = beat_data[start_idx]['time']
-            t_end = beat_data[end_idx]['time']
-            
-            frame_start = int(t_start * rate)
-            frame_end = int(t_end * rate)
-            
-            if frame_end > len(wav):
-                break
-            
-            if first_frame is None:
-                first_frame = frame_start
-            last_frame = frame_end
-            
-            m_raw.append(wav[frame_start:frame_end])
-            
-        if last_frame - first_frame < 16383 * 5:
-            continue
-        
-        x_raw = wav[first_frame:last_frame]
+        x_raw = wav
         
         ## Standard approach
         if not EVAL_ITERATIVE:
