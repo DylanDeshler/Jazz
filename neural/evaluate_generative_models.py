@@ -341,7 +341,8 @@ with torch.no_grad():
         
         # x_raw = wav[first_frame:last_frame]
         
-        wav, _ = librosa.load(measure_paths[idx], sr=None)
+        measure_path = measure_paths[idx]
+        wav, _ = librosa.load(measure_path, sr=None)
         wav = wav[:batch_size * n_chunks * rate]
         x_raw = wav
         
