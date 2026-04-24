@@ -553,14 +553,14 @@ class PixelUnshuffleChannelAveragingDownSampleLayer(nn.Module):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
-        assert in_channels * factor % out_channels == 0, f'{in_channels} {factor} {out_channels}'
-        self.group_size = in_channels * factor // out_channels
+        assert in_channels * (factor ** 2) % out_channels == 0, f'{in_channels} {factor} {out_channels}'
+        self.group_size = in_channels * (factor ** 2) // out_channels
         self.pixel_unshuffle = nn.PixelUnshuffle(factor)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.pixel_unshuffle(x)
-        B, C, L = x.shape
-        x = x.view(B, self.out_channels, self.group_size, L)
+        B, C, H, W = x.shape
+        x = x.view(B, self.out_channels, self.group_size, H, W)
         x = x.mean(dim=2)
         return x
 
