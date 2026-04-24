@@ -721,7 +721,7 @@ class UNet(nn.Module):
 
         print('====== UP =====')
         # up
-        # skips.pop()
+        skips.pop()
         for i in reversed(range(4)):
             print(i, x.shape)
             x = self.upsample_layers[i](x)
