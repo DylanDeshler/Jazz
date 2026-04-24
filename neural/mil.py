@@ -758,4 +758,4 @@ if __name__ == '__main__':
     summary(net)
     x = torch.randn(32, 1, 16383 * 5)
     y = net(x)
-    print(y)
+    print(y.shape)
