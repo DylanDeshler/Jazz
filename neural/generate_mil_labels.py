@@ -203,7 +203,7 @@ if True:
 
             this_codes = np.concatenate(this_codes, axis=0)
 
-            print(x.shape, this_codes.view(-1, num_classes).shape)
+            print(x.shape, this_codes.reshape(-1, num_classes).shape)
             all_codes.append(this_codes)
             
             if (idx + 1) % (len(paths) // total_write_batches) == 0:
