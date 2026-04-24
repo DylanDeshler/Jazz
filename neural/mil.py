@@ -688,11 +688,9 @@ class UNet(nn.Module):
         if self.training:
             x = self.augment(x)
         
-        print('====== DOWN =====')
         # down
         skips = [x]
         for i in range(4):
-            print(i, x.shape)
             if i == 0:
                 x = self.downsample_layers[i][0](x)
                 x = x.permute(0, 2, 3, 1)
@@ -702,11 +700,11 @@ class UNet(nn.Module):
                 x = self.downsample_layers[i](x)
                 
             x = self.down_stages[i](x)
-            skips.append(x)
-            print(i, x.shape)
+            if skips > 0:
+                skips.append(x)
+        
         
         # middle
-        print('====== MIDDLE =====')
         B, C, H, W = x.shape
         x = rearrange(x, 'b c h w -> b (h w) c')
         
@@ -715,39 +713,30 @@ class UNet(nn.Module):
             height=H, 
             width=W
         ).to(x.device)
-        # x = self.transformer_norm(x)
-        # x = self.transformer_proj(x)
         for block in self.blocks:
             x = block(x, freqs_cis=freqs_cis)
-        
         x = rearrange(x, 'b (h w) c -> b c h w', h=H, w=W)
         
-
-        print('====== UP =====')
         # up
-        skips.pop()
         for i in reversed(range(4)):
-            print(i, x.shape)
             x = self.upsample_layers[i](x)
             
-            print(i, x.shape, skips[-1].shape)
             x = torch.cat([x, skips.pop()], dim=1)
             x = self.skip_projs[i](x)
             
             x = self.up_stages[i](x)
-            print(i, x.shape)
             
         x = x.permute(0, 2, 3, 1)
         x = self.norm(x)
         x = x.permute(0, 3, 1, 2)
         x = self.proj(x)
-        print(x.shape)
         
         if targets is not None:
             alpha = 0.2
             smooth_targets = targets * (1.0 - alpha) + (alpha / 2.0)
             loss = F.binary_cross_entropy_with_logits(x, smooth_targets, reduction='none')
             loss_mask = targets > -1
+            print((loss * loss_mask).sum().shape, loss_mask.sum().shape)
             loss = (loss * loss_mask).sum() / loss_mask.sum()
             return loss
         
