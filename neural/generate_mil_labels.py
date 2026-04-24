@@ -171,12 +171,10 @@ if True:
             this_codes = []
             
             n_cuts = len(x) // n_samples
-            if n_cuts == 0:
-                continue
             
             batch = torch.from_numpy(np.stack([x[i * n_samples: (i + 1) * n_samples] for i in range(n_cuts)], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
             
-            for i in range(len(batch) // batch_size + 1):
+            for i in range(math.ceil(len(batch) / batch_size)):
                 probs = model(batch[i*batch_size:(i+1)*batch_size])['frame_probs'].cpu().detach().float().numpy()
                 probs = scipy.signal.medfilt(
                     probs, 
