@@ -229,8 +229,6 @@ if True:
     print(f'Writing batch {write_idx}...')
     all_codes = np.concatenate(all_codes, axis=0)
 
-    all_codes = all_codes.reshape(all_codes.shape[0] * all_codes.shape[1], all_codes.shape[2])
-
     filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_{str(write_idx).zfill(2)}.bin')
     dtype = np.float32
     arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_codes.shape)
