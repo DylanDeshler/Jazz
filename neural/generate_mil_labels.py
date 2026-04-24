@@ -172,7 +172,6 @@ if True:
             
             n_cuts = len(x) // n_samples
             batch = torch.from_numpy(np.stack([x[i * n_samples: (i + 1) * n_samples] for i in range(n_cuts)], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-            print(batch.shape)
             probs = model(batch)['frame_probs'].cpu().detach().float().numpy()
             probs = scipy.signal.medfilt(
                 probs, 
@@ -182,7 +181,6 @@ if True:
             probs = F.interpolate(
                 probs, size=batch.shape[-1], mode='linear', align_corners=False
             ).transpose(1, 2).cpu().detach().numpy()
-            print(probs.shape)
             this_codes.append(probs)
             
             # pad with 0s for last section
@@ -204,7 +202,6 @@ if True:
             this_codes = np.concatenate(this_codes, axis=0)
             this_codes = this_codes.reshape(-1, num_classes)[:len(x)]
             this_codes = np.concatenate([x[:, np.newaxis], this_codes], axis=1)
-            print(this_codes.shape)
             all_codes.append(this_codes)
             
             if (idx + 1) % (len(paths) // total_write_batches) == 0:
