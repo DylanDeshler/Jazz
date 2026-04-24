@@ -15,6 +15,7 @@ import math
 import soundfile as sf
 import librosa
 import glob
+import h5py
 
 def calculate_gmm_thresholds(
     probabilities: np.ndarray, 
@@ -164,6 +165,53 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as exec
         original_index = future_to_index[future]
         wav = future.result()
         wavs[original_index] = wav
+
+with h5py.File(out_prefix + '.h5', 'w') as h5_file, torch.no_grad():
+    for idx, x in enumerate(tqdm(wavs)):
+        this_codes = []
+        n_cuts = len(x) // n_samples
+            
+        batch = torch.from_numpy(np.stack([x[i * n_samples: (i + 1) * n_samples] for i in range(n_cuts)], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+        
+        for i in range(math.ceil(len(batch) / batch_size)):
+            with ctx:
+                probs = model(batch[i*batch_size:(i+1)*batch_size])['frame_probs']
+    
+            probs = scipy.signal.medfilt(
+                probs.cpu().detach().float().numpy(),
+                kernel_size=(1, 11, 1)
+            )
+            probs = torch.from_numpy(probs).transpose(1, 2)
+            probs = F.interpolate(
+                probs, size=batch.shape[-1], mode='linear', align_corners=False
+            ).transpose(1, 2).cpu().detach().numpy()
+            this_codes.append(probs)
+        
+        # pad with 0s for last section
+        if len(x) - n_cuts * n_samples > 0:
+            batch = np.zeros((1, n_samples), dtype=np.float32)
+            batch[0, :len(x) - n_cuts * n_samples] = x[n_cuts * n_samples:]
+            batch = torch.from_numpy(batch).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+            probs = model(batch)['frame_probs'].cpu().detach().float().numpy()
+            probs = scipy.signal.medfilt(
+                probs, 
+                kernel_size=(1, 11, 1)
+            )
+            probs = torch.from_numpy(probs).transpose(1, 2)
+            probs = F.interpolate(
+                probs, size=batch.shape[-1], mode='linear', align_corners=False
+            ).transpose(1, 2).cpu().detach().numpy()
+            this_codes.append(probs)
+
+        this_codes = np.concatenate(this_codes, axis=0)
+        this_codes = this_codes.reshape(-1, num_classes)[:len(x)]
+        this_codes = np.concatenate([x[:, np.newaxis], this_codes], axis=1)
+        
+        h5_file.create_dataset(
+            name=str(idx), 
+            data=this_codes, 
+            compression="lzf" 
+        )
 
 if True:
     write_idx = 0
