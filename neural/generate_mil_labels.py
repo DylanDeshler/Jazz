@@ -121,7 +121,7 @@ n_samples = 16383 * 30
 
 out_prefix = 'MIL_labels'
 ckpt_path = os.path.join('MIL', 'ckpt.pt')
-checkpoint = torch.load(ckpt_path, map_location=device)
+checkpoint = torch.load(ckpt_path, map_location=device, weights_only=False)
 model_args = checkpoint['model_args']
 vae_embed_dim = model_args['dimension']
 
