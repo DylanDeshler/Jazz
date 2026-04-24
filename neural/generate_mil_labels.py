@@ -172,16 +172,18 @@ if True:
             
             n_cuts = len(x) // n_samples
             batch = torch.from_numpy(np.stack([x[i * n_samples: (i + 1) * n_samples] for i in range(n_cuts)], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-            probs = model(batch)['frame_probs'].cpu().detach().float().numpy()
-            probs = scipy.signal.medfilt(
-                probs, 
-                kernel_size=(1, 11, 1)
-            )
-            probs = torch.from_numpy(probs).transpose(1, 2)
-            probs = F.interpolate(
-                probs, size=batch.shape[-1], mode='linear', align_corners=False
-            ).transpose(1, 2).cpu().detach().numpy()
-            this_codes.append(probs)
+            
+            for i in range(len(batch) // batch_size + 1):
+                probs = model(batch[i*batch_size:(i+1)*batch_size])['frame_probs'].cpu().detach().float().numpy()
+                probs = scipy.signal.medfilt(
+                    probs, 
+                    kernel_size=(1, 11, 1)
+                )
+                probs = torch.from_numpy(probs).transpose(1, 2)
+                probs = F.interpolate(
+                    probs, size=batch.shape[-1], mode='linear', align_corners=False
+                ).transpose(1, 2).cpu().detach().numpy()
+                this_codes.append(probs)
             
             # pad with 0s for last section
             if len(x) - n_cuts * n_samples > 0:
