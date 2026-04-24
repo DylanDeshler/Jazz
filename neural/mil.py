@@ -504,3 +504,288 @@ class MIL(nn.Module):
             outputs['loss'] = F.binary_cross_entropy_with_logits(clip_logits, smooth_targets)
         
         return outputs
+
+class ImageEmbedding(nn.Module):
+    def __init__(self, in_channels, out_channels=320) -> None:
+        super().__init__()
+        self.f = nn.Conv1d(in_channels, out_channels, kernel_size=3, padding=1)
+
+    def forward(self, x) -> torch.Tensor:
+        return self.f(x)
+
+
+class ImageUnembedding(nn.Module):
+    def __init__(self, in_channels=320, out_channels=3) -> None:
+        super().__init__()
+        self.gn = nn.GroupNorm(32, in_channels)
+        self.f = nn.Conv1d(in_channels, out_channels, kernel_size=3, padding=1)
+
+    def forward(self, x) -> torch.Tensor:
+        return self.f(F.silu(self.gn(x)))
+
+class ConvPixelUnshuffleDownSampleLayer(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        factor: int,
+        kernel_size: int = 3
+    ):
+        super().__init__()
+        assert out_channels % factor == 0, f'{out_channels}, {factor}'
+        self.norm = nn.GroupNorm(32, in_channels)
+        self.conv = nn.Conv1d(in_channels, out_channels // factor, kernel_size=kernel_size, padding=kernel_size // 2)
+        self.pixel_unshuffle = nn.PixelUnshuffle(factor)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.norm(x)
+        x = self.conv(x)
+        x = self.pixel_unshuffle(x)
+        return x
+
+class PixelUnshuffleChannelAveragingDownSampleLayer(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        factor: int,
+    ):
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        assert in_channels * factor % out_channels == 0, f'{in_channels} {factor} {out_channels}'
+        self.group_size = in_channels * factor // out_channels
+        self.pixel_unshuffle = nn.PixelUnshuffle(factor)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.pixel_unshuffle(x)
+        B, C, L = x.shape
+        x = x.view(B, self.out_channels, self.group_size, L)
+        x = x.mean(dim=2)
+        return x
+
+class DownsampleV3(nn.Module):
+    def __init__(self, in_channels, out_channels, ratio):
+        super().__init__()
+        self.conv = ConvPixelUnshuffleDownSampleLayer(in_channels, out_channels, ratio, ratio * 2 + 1)
+        self.shortcut = PixelUnshuffleChannelAveragingDownSampleLayer(in_channels, out_channels, ratio)
+    
+    def forward(self, x, t=None):
+        x = self.conv(x) + self.shortcut(x)
+        return x
+
+class ConvPixelShuffleUpSampleLayer(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        factor: int,
+        kernel_size: int = 3
+    ):
+        super().__init__()
+        self.norm = nn.GroupNorm(32, in_channels)
+        self.conv = nn.Conv1d(in_channels, out_channels * factor, kernel_size=kernel_size, padding=kernel_size // 2)
+        self.pixel_shuffle = nn.PixelShuffle(factor)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.norm(x)
+        x = self.conv(x)
+        x = self.pixel_shuffle(x)
+        return x
+
+class ChannelDuplicatingPixelUnshuffleUpSampleLayer(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        factor: int,
+    ):
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        assert out_channels * factor % in_channels == 0, f'{out_channels} {factor} {in_channels}'
+        self.repeats = out_channels * factor // in_channels
+        self.pixel_shuffle = nn.PixelShuffle(factor)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x.repeat_interleave(self.repeats, dim=1)
+        x = self.pixel_shuffle(x)
+        return x
+
+class UpsampleV3(nn.Module):
+    def __init__(self, in_channels, out_channels, ratio):
+        super().__init__()
+        self.conv = ConvPixelShuffleUpSampleLayer(in_channels, out_channels, ratio, ratio * 2 + 1)
+        self.shortcut = ChannelDuplicatingPixelUnshuffleUpSampleLayer(in_channels, out_channels, ratio)
+    
+    def forward(self, x, t=None):
+        x = self.conv(x) + self.shortcut(x)
+        return x
+
+class UNet(nn.Module):
+    def __init__(self, num_instruments, n_fft=1024, hop_length=512, n_mels=192, in_chans=1, depths=[3, 3, 9, 3], dims=[96, 192, 384, 768], drop_path_rate=0., time_length=32, frequency_length=64):
+        super().__init__()
+        
+        self.to_mel = ToMel(16000, n_fft, hop_length, n_mels)
+        self.augment = SpecAugment(time_length, frequency_length)
+        
+        self.downsample_layers = nn.ModuleList()
+        stem = nn.Sequential(
+            nn.Conv2d(in_chans, dims[0], kernel_size=4, stride=4),
+            nn.LayerNorm(dims[0], eps=1e-6)
+        )
+        self.downsample_layers.append(stem)
+        
+        for i in range(3):
+            if i == len(depths) - 1:
+                downsample = DownsampleV3(dims[i], dims[i], ratio)
+            else:
+                downsample = DownsampleV3(dims[i], dims[i+1], ratio)
+            self.downsample_layers.append(downsample)
+
+        self.down_stages = nn.ModuleList()
+        dp_rates = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))] 
+        cur = 0
+        for i in range(4):
+            stage = nn.Sequential(
+                *[ConvNeXtBlock(dim=dims[i], drop_path=dp_rates[cur + j]) for j in range(depths[i])]
+            )
+            self.down_stages.append(stage)
+            cur += depths[i]
+        
+        self.skip_projs = nn.ModuleList([])
+        self.upsample_layers = nn.ModuleList([])
+        self.upsample_layers.append(nn.ModuleList([AdaLNConvBlock(channels[-1], channels[-1], type=type)]))
+        for i in reversed(range(3)):
+            blocks = nn.ModuleList([])
+            if ratio > 1:
+                if i == len(channels) - 1:
+                    upsample = UpsampleV3(channel, channel, ratio)
+                else:
+                    upsample = UpsampleV3(channels[i+1], channel, ratio)
+            self.skip_projs.insert(0, nn.Conv1d(channel * 2, channel, kernel_size=1))
+            for _ in range(depth):
+                blocks.append(AdaLNConvBlock(channel, channel, dilation=2 ** _, type=type))
+            self.up.insert(0, blocks)
+        
+        self.norm = nn.LayerNorm(dims[-1], eps=1e-6)
+        self.proj = nn.Linear(dims[-1], num_instruments)
+        
+        self.apply(self._init_weights)
+    
+    
+        depths = [3] * len(channels)
+        self.skip_projs = nn.ModuleList([])
+        self.up = nn.ModuleList([])
+        self.up.append(nn.ModuleList([AdaLNConvBlock(channels[-1], channels[-1], type=type)]))
+        for i, (channel, depth, ratio) in reversed(list(enumerate(zip(channels, depths, ratios)))):
+            blocks = nn.ModuleList([])
+            if ratio > 1:
+                if i == len(channels) - 1:
+                    blocks.append(UpsampleV3(channel, channel, ratio))
+                else:
+                    blocks.append(UpsampleV3(channels[i+1], channel, ratio))
+            self.skip_projs.insert(0, nn.Conv1d(channel * 2, channel, kernel_size=1))
+            for _ in range(depth):
+                blocks.append(AdaLNConvBlock(channel, channel, dilation=2 ** _, type=type))
+            self.up.insert(0, blocks)
+
+        self.output = ImageUnembedding(in_channels=channels[0], out_channels=1)
+    
+        self.initialize_weights()
+    
+    def _init_weights(self, m):
+        if isinstance(m, (nn.Conv2d, nn.Linear)):
+            nn.init.trunc_normal_(m.weight, std=.02)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        
+        nn.init.zeros_(self.proj.weight)
+        # zero out c_proj weights in all blocks
+        for block in self.blocks:
+            nn.init.zeros_(block.mlp.w3.weight)
+            nn.init.zeros_(block.attn.proj.weight)
+
+    def forward(self, x, targets=None):
+        x = self.to_mel(x)
+        
+        if self.training:
+            x = self.augment(x)
+        
+        # down
+        skips = [x]
+        for i in range(4):
+            if i == 0:
+                x = self.downsample_layers[i][0](x)
+                x = x.permute(0, 2, 3, 1)
+                x = self.downsample_layers[i][1](x)
+                x = x.permute(0, 3, 1, 2)
+            else:
+                x = x.permute(0, 2, 3, 1)
+                x = self.downsample_layers[i][0](x)
+                x = x.permute(0, 3, 1, 2)
+                x = self.downsample_layers[i][1](x)
+                
+            x = self.stages[i](x)
+            skips.append(x)
+        
+        # middle
+        
+
+        # up
+        skips.pop()
+        for i in reversed(range(4)):
+            x = torch.cat([x, skips.pop()], dim=1)
+            x = self.skip_projs[-i](x)
+            x = self.stages[i](x)
+            
+            x = x.permute(0, 2, 3, 1)
+            x = self.downsample_layers[i][0](x)
+            x = x.permute(0, 3, 1, 2)
+            x = self.downsample_layers[i][1](x)
+        
+        x = x.mean(2, 3)
+        x = self.norm(x)
+        x = self.proj(x)
+        
+        if targets is not None:
+            alpha = 0.2
+            smooth_targets = targets * (1.0 - alpha) + (alpha / 2.0)
+            loss = F.binary_cross_entropy_with_logits(x, smooth_targets, reduction='none')
+            loss_mask = targets > -1
+            loss = (loss * loss_mask).sum() / loss_mask.sum()
+            return loss
+        
+        return x
+
+    # def forward(self, x, t=None, z_dec=None) -> torch.Tensor:
+        
+
+    #     skips = [x]
+    #     for i, down in enumerate(self.down):
+    #         c = self.c_projs[i](t) + self.c_projs[i](self.interpolate(x, z_dec))
+    #         for block in down:
+    #             x = block(x, c)
+    #         skips.append(x)
+
+    #     c = self.c_projs[-1](t) + self.c_projs[-1](self.interpolate(x, z_dec))
+    #     for mid in self.mid:
+    #         x = mid(x, c)
+
+    #     skips.pop()
+    #     for i, up in enumerate(reversed(self.up)):
+    #         for block in up:
+    #             if isinstance(block, UpsampleV3):
+    #                 x = block(x, c)
+    #                 x = torch.cat([x, skips.pop()], dim=1)
+    #                 x = self.skip_projs[-i](x)
+    #                 c = self.c_projs[-i](t) + self.c_projs[-i](self.interpolate(x, z_dec))
+    #             else:
+    #                 x = block(x, c)
+
+    #     return self.output(x)
+
+if __name__ == '__main__':
+    net = UNet(10)
+    x = torch.randn(32, 1, 16383 * 5)
+    y = net(x)
