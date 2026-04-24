@@ -699,6 +699,7 @@ class UNet(nn.Module):
         if self.training:
             x = self.augment(x)
         
+        print('====== DOWN =====')
         # down
         skips = [x]
         for i in range(4):
@@ -718,6 +719,7 @@ class UNet(nn.Module):
         # middle
         
 
+        print('====== UP =====')
         # up
         # skips.pop()
         for i in reversed(range(4)):
