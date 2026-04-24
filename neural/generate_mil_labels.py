@@ -136,6 +136,7 @@ for k,v in list(state_dict.items()):
 model.load_state_dict(state_dict)
 model.eval()
 model = torch.compile(model)
+num_classes = model.queries.shape[0]
 
 paths = glob.glob('/home/ubuntu/Data/measures/*')
 with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
@@ -174,17 +175,14 @@ if True:
             for i in range(n_batches):
                 batch = torch.from_numpy(np.stack([x[(i*batch_size+j)*n_samples:(i*batch_size+j+1)*n_samples] for j in range(min(n_batches, batch_size))], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
                 probs = model(batch)['frame_probs'].cpu().detach().float().numpy()
-                print(probs.shape)
                 probs = scipy.signal.medfilt(
                     probs, 
                     kernel_size=(1, 11, 1)
                 )
-                print(probs.shape)
                 probs = torch.from_numpy(probs).transpose(1, 2)
                 probs = F.interpolate(
                     probs, size=batch.shape[-1], mode='linear', align_corners=False
-                ).cpu().detach().numpy()
-                print(probs.shape)
+                ).transpose(1, 2).cpu().detach().numpy()
                 this_codes.append(probs)
             
             i = math.ceil(n_cuts / batch_size)
@@ -199,7 +197,7 @@ if True:
                 probs = torch.from_numpy(probs).transpose(1, 2)
                 probs = F.interpolate(
                     probs, size=batch.shape[-1], mode='linear', align_corners=False
-                ).cpu().detach().numpy()
+                ).transpose(1, 2).cpu().detach().numpy()
                 this_codes.append(probs)
 
             # pad with 0s for last section
@@ -215,7 +213,7 @@ if True:
                 probs = torch.from_numpy(probs).transpose(1, 2)
                 probs = F.interpolate(
                     probs, size=batch.shape[-1], mode='linear', align_corners=False
-                ).cpu().detach().numpy()
+                ).transpose(1, 2).cpu().detach().numpy()
                 this_codes.append(probs)
 
             this_codes = np.concatenate(this_codes, axis=0)
@@ -267,11 +265,11 @@ for path in paths:
 cur_idx = 0
 filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_train.bin')
 train_length = np.sum([length for path, length in write_paths[:-2]])
-arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, vae_embed_dim))
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, num_classes))
 print(arr.shape)
 
 for path, length in write_paths[:-2]:
-    data = np.memmap(path, dtype=dtype, mode='r', shape=(length, vae_embed_dim))
+    data = np.memmap(path, dtype=dtype, mode='r', shape=(length, num_classes))
 
     arr[cur_idx:cur_idx+length] = data
     arr.flush()
@@ -282,27 +280,21 @@ for path, length in write_paths[:-2]:
 cur_idx = 0
 filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_val.bin')
 val_length = np.sum([length for path, length in write_paths[-2:]])
-arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length, vae_embed_dim))
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length, num_classes))
 print(arr.shape)
 
 for path, length in write_paths[-2:]:
-    data = np.memmap(path, dtype=dtype, mode='r', shape=(length, vae_embed_dim))
+    data = np.memmap(path, dtype=dtype, mode='r', shape=(length, num_classes))
 
     arr[cur_idx:cur_idx+length] = data
     arr.flush()
 
     cur_idx += length
 
-if __name__ == "__main__":
-    neg_t, pos_t = calculate_gmm_thresholds(
-        probabilities=simulated_probs, 
-        class_name="Saxophone", 
-        n_components=3, 
-        std_multiplier=2.0
-    )
-    
-    with ctx:
-        raw_mels = amplitude_to_db(mel_transform(X))
-        frame_probs = model(X)['frame_probs']
-        
+# neg_t, pos_t = calculate_gmm_thresholds(
+#     probabilities=simulated_probs, 
+#     class_name="Saxophone", 
+#     n_components=3, 
+#     std_multiplier=2.0
+# )
     
