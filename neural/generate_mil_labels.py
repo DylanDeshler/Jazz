@@ -211,10 +211,8 @@ torch.cuda.set_device(device)
 #             dtype=np.float16
 #         )
 
-for i in range(num_classes):
+for i in range(1, num_classes + 1):
     file = h5py.File(out_prefix + '.h5', 'r')
-    for key in file.keys():
-        print(file[key].shape)
     probs = [file[key][i] for key in file.keys()]
     probs = np.concatenate(probs, axis=0)
     print(probs.shape)
