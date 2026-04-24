@@ -714,8 +714,11 @@ class UNet(nn.Module):
             x = self.up_stages[i](x)
             print(i, x.shape)
             
+        x.permute(0, 2, 3, 1)
         x = self.norm(x)
+        x = x.permute(0, 3, 1, 2)
         x = self.proj(x)
+        print(x.shape)
         
         if targets is not None:
             alpha = 0.2
@@ -733,3 +736,4 @@ if __name__ == '__main__':
     summary(net)
     x = torch.randn(32, 1, 16383 * 5)
     y = net(x)
+    print(y)
