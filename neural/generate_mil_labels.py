@@ -215,13 +215,13 @@ with h5py.File(out_prefix + '.h5', 'w') as h5_file, torch.no_grad():
         # )
         # h5_file.create_dataset(
         #     name='labels',
-        #     date=this_codes.astype(np.float16), 
+        #     data=this_codes.astype(np.float16), 
         #     compression='lzf',
         #     dtype=np.float16
         # )
         h5_file.create_dataset(
             name=str(idx),
-            date=this_codes.astype(np.float16), 
+            data=this_codes.astype(np.float16), 
             compression='lzf',
             dtype=np.float16
         )
