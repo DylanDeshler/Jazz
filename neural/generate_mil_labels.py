@@ -22,7 +22,6 @@ def calculate_gmm_thresholds(
     class_name: str = "Instrument", 
     n_components: int = 3, 
     std_multiplier: float = 2.0,
-    plot: bool = True
 ):
     """
     Fits a GMM to continuous probability predictions to automatically 
@@ -71,47 +70,45 @@ def calculate_gmm_thresholds(
     
     # --- Failsafes & Bounds Checking ---
     # Clamp to valid probability ranges
-    neg_threshold = np.clip(neg_threshold, 0.01, 0.40) 
-    pos_threshold = np.clip(pos_threshold, 0.60, 0.99)
+    # neg_threshold = np.clip(neg_threshold, 0.01, 0.40) 
+    # pos_threshold = np.clip(pos_threshold, 0.60, 0.99)
     
     # Ensure the Ignore Zone actually exists
-    if neg_threshold >= pos_threshold:
-        print(f"Warning: Overlapping thresholds for {class_name}. Falling back to percentiles.")
-        neg_threshold = np.percentile(probabilities, 60)
-        pos_threshold = np.percentile(probabilities, 95)
+    # if neg_threshold >= pos_threshold:
+    #     print(f"Warning: Overlapping thresholds for {class_name}. Falling back to percentiles.")
+    #     neg_threshold = np.percentile(probabilities, 60)
+    #     pos_threshold = np.percentile(probabilities, 95)
 
     print(f"[{class_name}] Negative Threshold (<): {neg_threshold:.3f}")
     print(f"[{class_name}] Positive Threshold (>): {pos_threshold:.3f}")
     print(f"[{class_name}] Ignore Zone: {neg_threshold:.3f} to {pos_threshold:.3f}")
 
-    # 6. Optional Visualization
-    if plot:
-        plt.figure(figsize=(10, 5))
-        
-        # Plot the raw histogram
-        plt.hist(probabilities, bins=100, density=True, alpha=0.5, color='gray', label='Raw Probabilities')
-        
-        # Plot the individual Gaussian bells
-        x_axis = np.linspace(0, 1, 1000).reshape(-1, 1)
-        logprob = gmm.score_samples(x_axis)
-        pdf = np.exp(logprob)
-        plt.plot(x_axis, pdf, '-k', label='Combined GMM Fit')
-        
-        # Add threshold lines
-        plt.axvline(neg_threshold, color='red', linestyle='--', linewidth=2, label=f'Neg Threshold ({neg_threshold:.2f})')
-        plt.axvline(pos_threshold, color='green', linestyle='--', linewidth=2, label=f'Pos Threshold ({pos_threshold:.2f})')
-        
-        # Highlight the zones
-        plt.axvspan(0, neg_threshold, alpha=0.1, color='red')
-        plt.axvspan(pos_threshold, 1, alpha=0.1, color='green')
-        
-        plt.title(f"GMM Tri-State Thresholds: {class_name}")
-        plt.xlabel("Phase 1 Probability")
-        plt.ylabel("Density")
-        plt.legend()
-        plt.xlim(0, 1)
-        plt.tight_layout()
-        plt.savefig(os.path.join(out_dir, f'{class_name}_probs.png'))
+    plt.figure(figsize=(10, 5))
+    
+    # Plot the raw histogram
+    plt.hist(probabilities, bins=100, density=True, alpha=0.5, color='gray', label='Raw Probabilities')
+    
+    # Plot the individual Gaussian bells
+    x_axis = np.linspace(0, 1, 1000).reshape(-1, 1)
+    logprob = gmm.score_samples(x_axis)
+    pdf = np.exp(logprob)
+    plt.plot(x_axis, pdf, '-k', label='Combined GMM Fit')
+    
+    # Add threshold lines
+    plt.axvline(neg_threshold, color='red', linestyle='--', linewidth=2, label=f'Neg Threshold ({neg_threshold:.2f})')
+    plt.axvline(pos_threshold, color='green', linestyle='--', linewidth=2, label=f'Pos Threshold ({pos_threshold:.2f})')
+    
+    # Highlight the zones
+    plt.axvspan(0, neg_threshold, alpha=0.1, color='red')
+    plt.axvspan(pos_threshold, 1, alpha=0.1, color='green')
+    
+    plt.title(f"GMM Tri-State Thresholds: {class_name}")
+    plt.xlabel("Phase 1 Probability")
+    plt.ylabel("Density")
+    plt.legend()
+    plt.xlim(0, 1)
+    plt.tight_layout()
+    plt.savefig(f'{out_prefix}_{class_name}_probs.png')
 
     return neg_threshold, pos_threshold
 
@@ -145,79 +142,81 @@ ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torc
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 torch.cuda.set_device(device)
 
-paths = glob.glob('/home/ubuntu/Data/measures/*')
-with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
-    beat_paths = json.load(f)
-paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
-print(len(paths))
+# paths = glob.glob('/home/ubuntu/Data/measures/*')
+# with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
+#     beat_paths = json.load(f)
+# paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
+# print(len(paths))
 
-import concurrent.futures
-from multiprocessing import cpu_count
-wavs = [None] * len(paths)
+# import concurrent.futures
+# from multiprocessing import cpu_count
+# wavs = [None] * len(paths)
 
-with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
-    future_to_index = {
-        executor.submit(lambda x: librosa.load(x, sr=rate)[0], path): i 
-        for i, path in enumerate(paths)
-    }
+# with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
+#     future_to_index = {
+#         executor.submit(lambda x: librosa.load(x, sr=rate)[0], path): i 
+#         for i, path in enumerate(paths)
+#     }
     
-    for future in tqdm(concurrent.futures.as_completed(future_to_index), desc='Loading wav files', total=len(paths)):
-        original_index = future_to_index[future]
-        wav = future.result()
-        wavs[original_index] = wav
+#     for future in tqdm(concurrent.futures.as_completed(future_to_index), desc='Loading wav files', total=len(paths)):
+#         original_index = future_to_index[future]
+#         wav = future.result()
+#         wavs[original_index] = wav
 
-with h5py.File(out_prefix + '.h5', 'w') as h5_file, torch.no_grad():
-    for idx, x in enumerate(tqdm(wavs)):
-        this_codes = []
-        n_cuts = len(x) // n_samples
+# with h5py.File(out_prefix + '.h5', 'w') as h5_file, torch.no_grad():
+#     for idx, x in enumerate(tqdm(wavs)):
+#         this_codes = []
+#         n_cuts = len(x) // n_samples
             
-        batch = torch.from_numpy(np.stack([x[i * n_samples: (i + 1) * n_samples] for i in range(n_cuts)], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+#         batch = torch.from_numpy(np.stack([x[i * n_samples: (i + 1) * n_samples] for i in range(n_cuts)], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
-        for i in range(math.ceil(len(batch) / batch_size)):
-            with ctx:
-                probs = model(batch[i*batch_size:(i+1)*batch_size])['frame_probs']
+#         for i in range(math.ceil(len(batch) / batch_size)):
+#             with ctx:
+#                 probs = model(batch[i*batch_size:(i+1)*batch_size])['frame_probs']
     
-            probs = scipy.signal.medfilt(
-                probs.cpu().detach().float().numpy(),
-                kernel_size=(1, 11, 1)
-            )
-            probs = torch.from_numpy(probs).transpose(1, 2)
-            probs = F.interpolate(
-                probs, size=batch.shape[-1], mode='linear', align_corners=False
-            ).transpose(1, 2).cpu().detach().numpy()
-            this_codes.append(probs)
+#             probs = scipy.signal.medfilt(
+#                 probs.cpu().detach().float().numpy(),
+#                 kernel_size=(1, 11, 1)
+#             )
+#             probs = torch.from_numpy(probs).transpose(1, 2)
+#             probs = F.interpolate(
+#                 probs, size=batch.shape[-1], mode='linear', align_corners=False
+#             ).transpose(1, 2).cpu().detach().numpy()
+#             this_codes.append(probs)
         
-        # pad with 0s for last section
-        if len(x) - n_cuts * n_samples > 0:
-            batch = np.zeros((1, n_samples), dtype=np.float32)
-            batch[0, :len(x) - n_cuts * n_samples] = x[n_cuts * n_samples:]
-            batch = torch.from_numpy(batch).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-            probs = model(batch)['frame_probs'].cpu().detach().float().numpy()
-            probs = scipy.signal.medfilt(
-                probs, 
-                kernel_size=(1, 11, 1)
-            )
-            probs = torch.from_numpy(probs).transpose(1, 2)
-            probs = F.interpolate(
-                probs, size=batch.shape[-1], mode='linear', align_corners=False
-            ).transpose(1, 2).cpu().detach().numpy()
-            this_codes.append(probs)
+#         # pad with 0s for last section
+#         if len(x) - n_cuts * n_samples > 0:
+#             batch = np.zeros((1, n_samples), dtype=np.float32)
+#             batch[0, :len(x) - n_cuts * n_samples] = x[n_cuts * n_samples:]
+#             batch = torch.from_numpy(batch).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+#             probs = model(batch)['frame_probs'].cpu().detach().float().numpy()
+#             probs = scipy.signal.medfilt(
+#                 probs, 
+#                 kernel_size=(1, 11, 1)
+#             )
+#             probs = torch.from_numpy(probs).transpose(1, 2)
+#             probs = F.interpolate(
+#                 probs, size=batch.shape[-1], mode='linear', align_corners=False
+#             ).transpose(1, 2).cpu().detach().numpy()
+#             this_codes.append(probs)
 
-        this_codes = np.concatenate(this_codes, axis=0)
-        this_codes = this_codes.reshape(-1, num_classes)[:len(x)]
-        this_codes = np.concatenate([x[:, np.newaxis], this_codes], axis=1)
+#         this_codes = np.concatenate(this_codes, axis=0)
+#         this_codes = this_codes.reshape(-1, num_classes)[:len(x)]
+#         this_codes = np.concatenate([x[:, np.newaxis], this_codes], axis=1)
         
-        h5_file.create_dataset(
-            name=str(idx),
-            data=this_codes.astype(np.float16), 
-            compression='lzf',
-            dtype=np.float16
-        )
+#         h5_file.create_dataset(
+#             name=str(idx),
+#             data=this_codes.astype(np.float16), 
+#             compression='lzf',
+#             dtype=np.float16
+#         )
 
-# neg_t, pos_t = calculate_gmm_thresholds(
-#     probabilities=simulated_probs, 
-#     class_name="Saxophone", 
-#     n_components=3, 
-#     std_multiplier=2.0
-# )
+for i in range(num_classes):
+    probs = h5py.File(out_prefix + '.h5', 'r')[:][i]
+    neg_t, pos_t = calculate_gmm_thresholds(
+        probabilities=probs, 
+        class_name=str(i), 
+        n_components=3, 
+        std_multiplier=2.0
+    )
     
