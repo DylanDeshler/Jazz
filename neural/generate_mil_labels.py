@@ -171,6 +171,9 @@ if True:
             this_codes = []
             
             n_cuts = len(x) // n_samples
+            if n_cuts == 0:
+                continue
+            
             batch = torch.from_numpy(np.stack([x[i * n_samples: (i + 1) * n_samples] for i in range(n_cuts)], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
             
             for i in range(len(batch) // batch_size + 1):
