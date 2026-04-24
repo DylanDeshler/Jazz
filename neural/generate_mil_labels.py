@@ -116,7 +116,7 @@ def calculate_gmm_thresholds(
 
 device = torch.device('cuda')
 
-batch_size = 128
+batch_size = 16
 rate = 16000
 n_samples = 16383 * 30
 
@@ -216,6 +216,7 @@ if True:
                 ).transpose(1, 2).cpu().detach().numpy()
                 this_codes.append(probs)
 
+            print(x.shape, this_codes.shape)
             this_codes = np.concatenate(this_codes, axis=0)
             all_codes.append(this_codes)
             
