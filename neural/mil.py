@@ -720,7 +720,7 @@ class UNet(nn.Module):
         for block in self.blocks:
             x = block(x, freqs_cis=freqs_cis)
         
-        x = rearrange(x, 'b (h w) c -> b h w c', h=H, w=W)
+        x = rearrange(x, 'b (h w) c -> b c h w', h=H, w=W)
         
 
         print('====== UP =====')
