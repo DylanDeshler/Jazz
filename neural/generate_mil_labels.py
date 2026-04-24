@@ -108,7 +108,9 @@ def calculate_gmm_thresholds(
     plt.legend()
     plt.xlim(0, 1)
     plt.tight_layout()
-    plt.savefig(os.path.join(out_prefix, f'{class_name}_probs.png'))
+    plot_dir = '/home/ubuntu/Data/MIL_label_GMMs'
+    os.makedirs(plot_dir, exist_ok=True)
+    plt.savefig(os.path.join(plot_dir, f'{class_name}_probs.png'))
 
     return neg_threshold, pos_threshold
 
@@ -212,10 +214,10 @@ print(len(paths))
 #         )
 
 np.random.seed(0)
-to_samples = np.random.choice(np.arange(len(paths)), 128, replace=False)
+to_samples = np.random.choice(np.arange(len(paths)), 32, replace=False)
 for i in range(1, num_classes + 1):
     file = h5py.File(out_prefix + '.h5', 'r')
-    probs = [file[str(key)][:, i].astype(np.float32) for key in to_samples]
+    probs = [file[str(key)][::rate / 10, i].astype(np.float32) for key in to_samples]
     probs = np.concatenate(probs, axis=0)
     print(probs.shape)
     neg_t, pos_t = calculate_gmm_thresholds(
