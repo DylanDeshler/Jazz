@@ -638,9 +638,9 @@ class UNet(nn.Module):
         
         for i in range(3):
             if i == len(depths) - 1:
-                downsample = DownsampleV3(dims[i], dims[i], ratio)
+                downsample = DownsampleV3(dims[i], dims[i], 2)
             else:
-                downsample = DownsampleV3(dims[i], dims[i+1], ratio)
+                downsample = DownsampleV3(dims[i], dims[i+1], 2)
             self.downsample_layers.append(downsample)
 
         self.down_stages = nn.ModuleList()
@@ -655,18 +655,23 @@ class UNet(nn.Module):
         
         self.skip_projs = nn.ModuleList([])
         self.upsample_layers = nn.ModuleList([])
-        self.upsample_layers.append(nn.ModuleList([AdaLNConvBlock(channels[-1], channels[-1], type=type)]))
+        # self.upsample_layers.append(nn.ModuleList([AdaLNConvBlock(channels[-1], channels[-1], type=type)]))
         for i in reversed(range(3)):
-            blocks = nn.ModuleList([])
-            if ratio > 1:
-                if i == len(channels) - 1:
-                    upsample = UpsampleV3(channel, channel, ratio)
-                else:
-                    upsample = UpsampleV3(channels[i+1], channel, ratio)
-            self.skip_projs.insert(0, nn.Conv1d(channel * 2, channel, kernel_size=1))
-            for _ in range(depth):
-                blocks.append(AdaLNConvBlock(channel, channel, dilation=2 ** _, type=type))
-            self.up.insert(0, blocks)
+            if i == len(depths) - 1:
+                upsample = UpsampleV3(dims[i], dims[i], 2)
+            else:
+                upsample = UpsampleV3(dims[i+1], dims[i], 2)
+            self.upsample_layers.insert(0, upsample)
+            self.skip_projs.insert(0, nn.Conv1d(dims[i] * 2, dims[i], kernel_size=1))
+        
+        self.up_stages = nn.ModuleList()
+        cur = 0
+        for i in reversed(range(4)):
+            stage = nn.Sequential(
+                *[ConvNeXtBlock(dim=dims[i], drop_path=dp_rates[cur + j]) for j in range(depths[i])]
+            )
+            self.up_stages.insert(0, stage)
+            cur += depths[i]
         
         self.norm = nn.LayerNorm(dims[-1], eps=1e-6)
         self.proj = nn.Linear(dims[-1], num_instruments)
@@ -674,25 +679,25 @@ class UNet(nn.Module):
         self.apply(self._init_weights)
     
     
-        depths = [3] * len(channels)
-        self.skip_projs = nn.ModuleList([])
-        self.up = nn.ModuleList([])
-        self.up.append(nn.ModuleList([AdaLNConvBlock(channels[-1], channels[-1], type=type)]))
-        for i, (channel, depth, ratio) in reversed(list(enumerate(zip(channels, depths, ratios)))):
-            blocks = nn.ModuleList([])
-            if ratio > 1:
-                if i == len(channels) - 1:
-                    blocks.append(UpsampleV3(channel, channel, ratio))
-                else:
-                    blocks.append(UpsampleV3(channels[i+1], channel, ratio))
-            self.skip_projs.insert(0, nn.Conv1d(channel * 2, channel, kernel_size=1))
-            for _ in range(depth):
-                blocks.append(AdaLNConvBlock(channel, channel, dilation=2 ** _, type=type))
-            self.up.insert(0, blocks)
+        # depths = [3] * len(channels)
+        # self.skip_projs = nn.ModuleList([])
+        # self.up = nn.ModuleList([])
+        # self.up.append(nn.ModuleList([AdaLNConvBlock(channels[-1], channels[-1], type=type)]))
+        # for i, (channel, depth, ratio) in reversed(list(enumerate(zip(channels, depths, ratios)))):
+        #     blocks = nn.ModuleList([])
+        #     if ratio > 1:
+        #         if i == len(channels) - 1:
+        #             blocks.append(UpsampleV3(channel, channel, ratio))
+        #         else:
+        #             blocks.append(UpsampleV3(channels[i+1], channel, ratio))
+        #     self.skip_projs.insert(0, nn.Conv1d(channel * 2, channel, kernel_size=1))
+        #     for _ in range(depth):
+        #         blocks.append(AdaLNConvBlock(channel, channel, dilation=2 ** _, type=type))
+        #     self.up.insert(0, blocks)
 
-        self.output = ImageUnembedding(in_channels=channels[0], out_channels=1)
+        # self.output = ImageUnembedding(in_channels=channels[0], out_channels=1)
     
-        self.initialize_weights()
+        # self.initialize_weights()
     
     def _init_weights(self, m):
         if isinstance(m, (nn.Conv2d, nn.Linear)):
@@ -726,8 +731,9 @@ class UNet(nn.Module):
                 x = x.permute(0, 3, 1, 2)
                 x = self.downsample_layers[i][1](x)
                 
-            x = self.stages[i](x)
+            x = self.down_stages[i](x)
             skips.append(x)
+            print(x.shape)
         
         # middle
         
@@ -737,7 +743,8 @@ class UNet(nn.Module):
         for i in reversed(range(4)):
             x = torch.cat([x, skips.pop()], dim=1)
             x = self.skip_projs[-i](x)
-            x = self.stages[i](x)
+            x = self.up_stages[i](x)
+            print(x.shape)
             
             x = x.permute(0, 2, 3, 1)
             x = self.downsample_layers[i][0](x)
