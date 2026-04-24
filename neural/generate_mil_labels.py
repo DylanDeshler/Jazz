@@ -214,7 +214,7 @@ print(len(paths))
 #         )
 
 np.random.seed(0)
-to_samples = np.random.choice(np.arange(len(paths)), 32, replace=False)
+to_samples = np.random.choice(np.arange(len(paths)), 256, replace=False)
 for i in range(1, num_classes + 1):
     file = h5py.File(out_prefix + '.h5', 'r')
     probs = [file[str(key)][::(rate // 10), i].astype(np.float32) for key in to_samples]
