@@ -714,7 +714,7 @@ class UNet(nn.Module):
             x = self.up_stages[i](x)
             print(i, x.shape)
             
-        x.permute(0, 2, 3, 1)
+        x = x.permute(0, 2, 3, 1)
         x = self.norm(x)
         x = x.permute(0, 3, 1, 2)
         x = self.proj(x)
