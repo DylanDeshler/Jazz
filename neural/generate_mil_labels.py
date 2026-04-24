@@ -108,7 +108,7 @@ def calculate_gmm_thresholds(
     plt.legend()
     plt.xlim(0, 1)
     plt.tight_layout()
-    plt.savefig(f'{out_prefix}_{class_name}_probs.png')
+    plt.savefig(os.path.join(out_prefix, f'{class_name}_probs.png'))
 
     return neg_threshold, pos_threshold
 
@@ -213,11 +213,9 @@ torch.cuda.set_device(device)
 
 for i in range(1, num_classes + 1):
     file = h5py.File(out_prefix + '.h5', 'r')
-    for key in file.keys():
-        print(file[key][:, i].astype(np.float32).shape)
-    # probs = [file[key][i].astype(np.float32) for key in file.keys()]
-    # probs = np.concatenate(probs, axis=0)
-    # print(probs.shape)
+    probs = [file[key][:, i].astype(np.float32) for key in file.keys()]
+    probs = np.concatenate(probs, axis=0)
+    print(probs.shape)
     neg_t, pos_t = calculate_gmm_thresholds(
         probabilities=probs, 
         class_name=str(i), 
