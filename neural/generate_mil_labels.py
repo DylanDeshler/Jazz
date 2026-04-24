@@ -158,9 +158,6 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as exec
         wavs[original_index] = wav
 
 if True:
-
-    test = False
-
     write_idx = 0
     write_paths = []
     total_write_batches = 48
@@ -170,10 +167,9 @@ if True:
     with torch.no_grad():
         for idx, x in enumerate(tqdm(wavs)):
             this_codes = []
-            if test:
-                this_samples = []
-
+            
             n_cuts = len(x) // n_samples
+            print(len(x), len(x) // n_samples)
             for i in range(n_cuts // batch_size):
                 batch = torch.from_numpy(np.stack([x[(i*batch_size+j)*n_samples:(i*batch_size+j+1)*n_samples] for j in range(batch_size)], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
                 probs = model(batch)['frame_probs'].cpu().detach().float().numpy()
