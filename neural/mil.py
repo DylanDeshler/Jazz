@@ -700,8 +700,7 @@ class UNet(nn.Module):
                 x = self.downsample_layers[i](x)
                 
             x = self.down_stages[i](x)
-            if i > 0:
-                skips.append(x)
+            skips.append(x)
         
         
         # middle
@@ -718,6 +717,7 @@ class UNet(nn.Module):
         x = rearrange(x, 'b (h w) c -> b c h w', h=H, w=W)
         
         # up
+        skips.pop()
         for i in reversed(range(4)):
             x = self.upsample_layers[i](x)
             
