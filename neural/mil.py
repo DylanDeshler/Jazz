@@ -718,15 +718,10 @@ class UNet(nn.Module):
             x = self.augment(x)
         
         # down
+        x = x.permute(0, 2, 3, 1)
         skips = [x]
         for i in range(4):
-            if i == 0:
-                x = self.downsample_layers[i](x)
-            else:
-                x = x.permute(0, 2, 3, 1)
-                x = self.downsample_layers[i][0](x)
-                x = x.permute(0, 3, 1, 2)
-                x = self.downsample_layers[i][1](x)
+            x = self.downsample_layers[i](x)
                 
             x = self.down_stages[i](x)
             skips.append(x)
