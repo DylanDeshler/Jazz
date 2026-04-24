@@ -290,7 +290,7 @@ def fetch_single_sample(idx, n_samples, pos_thresh, neg_thresh):
 # 3. The Global Thread Pool
 # Create this ONCE outside of your function. 
 # 8 to 12 workers is usually the sweet spot for NVMe SSDs.
-executor = ThreadPoolExecutor(max_workers=8)
+executor = ThreadPoolExecutor(max_workers=16)
 
 def get_batch(split='train'):
     if split == 'train':
