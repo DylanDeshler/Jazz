@@ -720,7 +720,7 @@ class UNet(nn.Module):
         # down
         skips = [x]
         for i in range(4):
-            print(x.shape)
+            print(i, x.shape)
             if i == 0:
                 x = self.downsample_layers[i][0](x)
                 x = x.permute(0, 2, 3, 1)
@@ -731,7 +731,7 @@ class UNet(nn.Module):
                 
             x = self.down_stages[i](x)
             skips.append(x)
-            print(x.shape)
+            print(i, x.shape)
         
         # middle
         
