@@ -700,7 +700,7 @@ class UNet(nn.Module):
                 x = self.downsample_layers[i](x)
                 
             x = self.down_stages[i](x)
-            if skips > 0:
+            if i > 0:
                 skips.append(x)
         
         
