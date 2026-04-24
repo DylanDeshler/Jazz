@@ -638,12 +638,13 @@ class UNet(nn.Module):
         self.skip_projs = nn.ModuleList([])
         self.upsample_layers = nn.ModuleList([])
         # self.upsample_layers.append(nn.ModuleList([AdaLNConvBlock(channels[-1], channels[-1], type=type)]))
-        for i in reversed(range(3)):
-            upsample = UpsampleV3(dims[i+1], dims[i], 2)
+        for i in reversed(range(4)):
+            if i == 0:
+                upsample = UpsampleV3(dims[i+1], dims[i], 4)
+            else:
+                upsample = UpsampleV3(dims[i+1], dims[i], 2)
             self.upsample_layers.insert(0, upsample)
             self.skip_projs.insert(0, nn.Conv2d(dims[i] * 2, dims[i], kernel_size=1))
-        self.upsample_layers.insert(0, UpsampleV3(dims[0], dims[0], 4))
-        self.skip_projs.insert(0, nn.Conv2d(dims[i] * 2, dims[i], kernel_size=1))
         
         self.up_stages = nn.ModuleList()
         cur = 0
