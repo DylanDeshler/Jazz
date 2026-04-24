@@ -722,7 +722,13 @@ class UNet(nn.Module):
         skips = [x]
         for i in range(4):
             print(x.shape)
-            x = self.downsample_layers[i](x)
+            if i == 0:
+                x = self.downsample_layers[i][0](x)
+                x = x.permute(0, 2, 3, 1)
+                x = self.downsample_layers[i][1](x)
+                x = x.permute(0, 3, 1, 2)
+            else:
+                x = self.downsample_layers[i](x)
                 
             x = self.down_stages[i](x)
             skips.append(x)
