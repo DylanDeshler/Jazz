@@ -241,6 +241,8 @@ negative_thresholds = {
     8: 0.280,
     9: 0.314
 }
+positive_thresholds = np.array([positive_thresholds[i] for i in range(len(mlb.classes_))])
+negative_thresholds = np.array([negative_thresholds[i] for i in range(len(mlb.classes_))])
 
 from concurrent.futures import ThreadPoolExecutor
 import threading

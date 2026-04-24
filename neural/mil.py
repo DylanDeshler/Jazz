@@ -739,7 +739,6 @@ class UNet(nn.Module):
         if targets is not None:
             alpha = 0.2
             smooth_targets = targets * (1.0 - alpha) + (alpha / 2.0)
-            print(x.shape, smooth_targets.shape)
             loss = F.binary_cross_entropy_with_logits(x, smooth_targets, reduction='none')
             loss_mask = targets > -1
             loss = (loss * loss_mask).sum() / loss_mask.sum()
