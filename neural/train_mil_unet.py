@@ -256,7 +256,7 @@ def get_batch(split='train'):
         wav = data[:, 0]
         labels = data[:, 1:]
         
-        for label_idx in labels.shape[-1]:
+        for label_idx in range(labels.shape[-1]):
             pos_mask = labels[:, label_idx] > positive_thresholds[label_idx]
             neg_mask = labels[:, label_idx] < negative_thresholds[label_idx]
             labels[pos_mask] = 1
