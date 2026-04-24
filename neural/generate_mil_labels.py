@@ -203,7 +203,7 @@ if True:
 
             this_codes = np.concatenate(this_codes, axis=0)
             this_codes = this_codes.reshape(-1, num_classes)[:len(x)]
-            this_codes = np.concatenate([x.unsqueeze(1), this_codes], axis=1)
+            this_codes = np.concatenate([x[:, np.newaxis], this_codes], axis=1)
             print(this_codes.shape)
             all_codes.append(this_codes)
             
