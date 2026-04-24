@@ -667,6 +667,7 @@ class UNet(nn.Module):
         self.norm = nn.LayerNorm(dims[0], eps=1e-6)
         self.proj = nn.Conv2d(dims[0], num_instruments, kernel_size=1)
         
+        self.head_dim = dims[-1] // num_heads
         self.apply(self._init_weights)
     
     def _init_weights(self, m):
