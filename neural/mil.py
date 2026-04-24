@@ -637,19 +637,20 @@ class UNet(nn.Module):
         
         self.skip_projs = nn.ModuleList([])
         self.upsample_layers = nn.ModuleList([])
-        for i in reversed(range(4)):
-            if i == 0:
-                upsample = UpsampleV3(dims[i], dims[i], 4)
-            else:
-                upsample = UpsampleV3(dims[i], dims[i-1], 2)
-            self.upsample_layers.insert(0, upsample)
-            self.skip_projs.insert(0, nn.Conv2d(dims[i-1] * 2, dims[i-1], kernel_size=1))
-        
         self.up_stages = nn.ModuleList()
         cur = 0
         for i in reversed(range(4)):
+            if i == 0:
+                out_ch = dims[0]
+                upsample = UpsampleV3(dims[i], out_ch, 4)
+            else:
+                out_ch = dims[i-1]
+                upsample = UpsampleV3(dims[i], out_ch, 2)
+            self.upsample_layers.insert(0, upsample)
+            self.skip_projs.insert(0, nn.Conv2d(out_ch * 2, out_ch, kernel_size=1))
+        
             stage = nn.Sequential(
-                *[ConvNeXtBlock(dim=dims[i], drop_path=dp_rates[cur + j]) for j in range(depths[i])]
+                *[ConvNeXtBlock(dim=out_ch, drop_path=dp_rates[cur + j]) for j in range(depths[i])]
             )
             self.up_stages.insert(0, stage)
             cur += depths[i]
