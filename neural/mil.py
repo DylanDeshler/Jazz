@@ -719,17 +719,16 @@ class UNet(nn.Module):
         
 
         # up
-        skips.pop()
+        # skips.pop()
         for i in reversed(range(4)):
+            print(i, x.shape, skips[-1].shape)
             x = torch.cat([x, skips.pop()], dim=1)
             x = self.skip_projs[-i](x)
             x = self.up_stages[i](x)
-            print(x.shape)
+            print(i, x.shape)
             
-            x = x.permute(0, 2, 3, 1)
-            x = self.downsample_layers[i][0](x)
-            x = x.permute(0, 3, 1, 2)
-            x = self.downsample_layers[i][1](x)
+            x = self.upsample_layers[i](x)
+            print(i, x.shape)
         
         x = x.mean(2, 3)
         x = self.norm(x)
