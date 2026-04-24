@@ -532,9 +532,9 @@ class ConvPixelUnshuffleDownSampleLayer(nn.Module):
         kernel_size: int = 3
     ):
         super().__init__()
-        assert out_channels % factor == 0, f'{out_channels}, {factor}'
+        assert out_channels % (factor ** 2) == 0, f'{out_channels}, {factor}'
         self.norm = nn.GroupNorm(32, in_channels)
-        self.conv = nn.Conv2d(in_channels, out_channels // factor, kernel_size=kernel_size, padding=kernel_size // 2)
+        self.conv = nn.Conv2d(in_channels, out_channels // (factor ** 2), kernel_size=kernel_size, padding=kernel_size // 2)
         self.pixel_unshuffle = nn.PixelUnshuffle(factor)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
