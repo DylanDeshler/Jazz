@@ -212,7 +212,9 @@ torch.cuda.set_device(device)
 #         )
 
 for i in range(num_classes):
-    probs = h5py.File(out_prefix + '.h5', 'r')[:][i]
+    probs = h5py.File(out_prefix + '.h5', 'r')
+    print(probs.keys())
+    # [:][i]
     neg_t, pos_t = calculate_gmm_thresholds(
         probabilities=probs, 
         class_name=str(i), 
