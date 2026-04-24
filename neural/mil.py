@@ -718,7 +718,6 @@ class UNet(nn.Module):
             x = self.augment(x)
         
         # down
-        x = x.permute(0, 2, 3, 1)
         skips = [x]
         for i in range(4):
             print(x.shape)
