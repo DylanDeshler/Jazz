@@ -250,11 +250,11 @@ for path in paths:
 cur_idx = 0
 filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_train.bin')
 train_length = np.sum([length for path, length in write_paths[:-2]])
-arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, num_classes))
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, num_classes + 1))
 print(arr.shape)
 
 for path, length in write_paths[:-2]:
-    data = np.memmap(path, dtype=dtype, mode='r', shape=(length, num_classes))
+    data = np.memmap(path, dtype=dtype, mode='r', shape=(length, num_classes + 1))
 
     arr[cur_idx:cur_idx+length] = data
     arr.flush()
@@ -265,11 +265,11 @@ for path, length in write_paths[:-2]:
 cur_idx = 0
 filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_val.bin')
 val_length = np.sum([length for path, length in write_paths[-2:]])
-arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length, num_classes))
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length, num_classes + 1))
 print(arr.shape)
 
 for path, length in write_paths[-2:]:
-    data = np.memmap(path, dtype=dtype, mode='r', shape=(length, num_classes))
+    data = np.memmap(path, dtype=dtype, mode='r', shape=(length, num_classes + 1))
 
     arr[cur_idx:cur_idx+length] = data
     arr.flush()
