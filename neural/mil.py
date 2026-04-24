@@ -707,9 +707,9 @@ class UNet(nn.Module):
         
         nn.init.zeros_(self.proj.weight)
         # zero out c_proj weights in all blocks
-        for block in self.blocks:
-            nn.init.zeros_(block.mlp.w3.weight)
-            nn.init.zeros_(block.attn.proj.weight)
+        # for block in self.blocks:
+        #     nn.init.zeros_(block.mlp.w3.weight)
+        #     nn.init.zeros_(block.attn.proj.weight)
 
     def forward(self, x, targets=None):
         x = self.to_mel(x)
