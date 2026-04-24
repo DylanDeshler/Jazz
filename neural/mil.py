@@ -638,7 +638,7 @@ class UNet(nn.Module):
         self.skip_projs = nn.ModuleList([])
         self.upsample_layers = nn.ModuleList([])
         # self.upsample_layers.append(nn.ModuleList([AdaLNConvBlock(channels[-1], channels[-1], type=type)]))
-        for i in reversed(range(3)):
+        for i in reversed(range(4)):
             if i == len(depths) - 1:
                 upsample = UpsampleV3(dims[i], dims[i], 2)
             else:
