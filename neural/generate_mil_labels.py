@@ -162,7 +162,7 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as exec
 if True:
     write_idx = 0
     write_paths = []
-    total_write_batches = 48
+    total_write_batches = 100
 
     all_codes = []
     all_instruments = []
