@@ -188,9 +188,12 @@ ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torc
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 import glob
-import librosa
-paths = glob.glob('/home/ubuntu/Data/wavs/*.wav')
-wavs = []
+import json
+paths = glob.glob('/home/ubuntu/Data/measures/*')
+with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
+    beat_paths = json.load(f)
+paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
+print(len(paths))
 
 # from sklearn.model_selection import StratifiedGroupKFold
 from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
