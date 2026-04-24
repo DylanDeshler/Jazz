@@ -116,7 +116,7 @@ def calculate_gmm_thresholds(
 
 device = torch.device('cuda')
 
-batch_size = 16
+batch_size = 4
 rate = 16000
 n_samples = 16383 * 30
 
@@ -137,6 +137,11 @@ model.load_state_dict(state_dict)
 model.eval()
 model = torch.compile(model)
 num_classes = model.queries.shape[0]
+
+device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
+# note: float16 data type will automatically use a GradScaler
+ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
+ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 paths = glob.glob('/home/ubuntu/Data/measures/*')
 with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
@@ -175,9 +180,11 @@ if True:
             batch = torch.from_numpy(np.stack([x[i * n_samples: (i + 1) * n_samples] for i in range(n_cuts)], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
             
             for i in range(math.ceil(len(batch) / batch_size)):
-                probs = model(batch[i*batch_size:(i+1)*batch_size])['frame_probs'].cpu().detach().float().numpy()
+                with ctx:
+                    probs = model(batch[i*batch_size:(i+1)*batch_size])['frame_probs']
+        
                 probs = scipy.signal.medfilt(
-                    probs, 
+                    probs.cpu().detach().float().numpy(),
                     kernel_size=(1, 11, 1)
                 )
                 probs = torch.from_numpy(probs).transpose(1, 2)
