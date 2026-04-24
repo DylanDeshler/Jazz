@@ -142,7 +142,7 @@ ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torc
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 torch.cuda.set_device(device)
 
-# paths = glob.glob('/home/ubuntu/Data/measures/*')
+paths = glob.glob('/home/ubuntu/Data/measures/*')
 # with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
 #     beat_paths = json.load(f)
 # paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
@@ -211,9 +211,11 @@ torch.cuda.set_device(device)
 #             dtype=np.float16
 #         )
 
+np.random.seed(0)
+to_samples = np.random.choice(np.arange(len(paths)), 128, replace=False)
 for i in range(1, num_classes + 1):
     file = h5py.File(out_prefix + '.h5', 'r')
-    probs = [file[key][:, i].astype(np.float32) for key in file.keys()]
+    probs = [file[str(key)][:, i].astype(np.float32) for key in to_samples]
     probs = np.concatenate(probs, axis=0)
     print(probs.shape)
     neg_t, pos_t = calculate_gmm_thresholds(
