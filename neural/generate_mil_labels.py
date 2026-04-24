@@ -120,7 +120,7 @@ batch_size = 4
 rate = 16000
 n_samples = 16383 * 30
 
-out_prefix = 'MIL_labels'
+out_prefix = '/home/ubuntu/Data/MIL_labels'
 ckpt_path = os.path.join('MIL', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device, weights_only=False)
 model_args = checkpoint['model_args']
@@ -207,10 +207,23 @@ with h5py.File(out_prefix + '.h5', 'w') as h5_file, torch.no_grad():
         this_codes = this_codes.reshape(-1, num_classes)[:len(x)]
         this_codes = np.concatenate([x[:, np.newaxis], this_codes], axis=1)
         
+        # h5_file.create_dataset(
+        #     name='wav', 
+        #     data=x.astype(np.float16),
+        #     compression="lzf",
+        #     dtype=np.float16
+        # )
+        # h5_file.create_dataset(
+        #     name='labels',
+        #     date=this_codes.astype(np.float16), 
+        #     compression='lzf',
+        #     dtype=np.float16
+        # )
         h5_file.create_dataset(
-            name=str(idx), 
-            data=this_codes, 
-            compression="lzf" 
+            name=str(idx),
+            date=this_codes.astype(np.float16), 
+            compression='lzf',
+            dtype=np.float16
         )
 
 if True:
