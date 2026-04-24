@@ -736,7 +736,6 @@ class UNet(nn.Module):
             smooth_targets = targets * (1.0 - alpha) + (alpha / 2.0)
             loss = F.binary_cross_entropy_with_logits(x, smooth_targets, reduction='none')
             loss_mask = targets > -1
-            print((loss * loss_mask).sum().shape, loss_mask.sum().shape)
             loss = (loss * loss_mask).sum() / loss_mask.sum()
             return loss
         
@@ -748,4 +747,3 @@ if __name__ == '__main__':
     summary(net)
     x = torch.randn(32, 1, 16383 * 5)
     y = net(x)
-    print(y.shape)
