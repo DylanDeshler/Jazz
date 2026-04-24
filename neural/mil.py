@@ -714,8 +714,6 @@ class UNet(nn.Module):
             x = self.up_stages[i](x)
             print(i, x.shape)
             
-        
-        x = x.mean((2, 3))
         x = self.norm(x)
         x = self.proj(x)
         
@@ -730,6 +728,8 @@ class UNet(nn.Module):
         return x
 
 if __name__ == '__main__':
+    from torchinfo import summary
     net = UNet(10)
+    summary(net)
     x = torch.randn(32, 1, 16383 * 5)
     y = net(x)
