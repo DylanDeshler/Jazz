@@ -123,7 +123,6 @@ out_prefix = 'MIL_labels'
 ckpt_path = os.path.join('MIL', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device, weights_only=False)
 model_args = checkpoint['model_args']
-vae_embed_dim = model_args['dimension']
 
 model = MIL(**model_args).to(device)
 state_dict = checkpoint['model']
@@ -170,7 +169,6 @@ if True:
     all_instruments = []
     with torch.no_grad():
         for idx, x in enumerate(tqdm(wavs)):
-            # instruments = song_instruments[path.split('/')[-1]]
             this_codes = []
             if test:
                 this_samples = []
@@ -209,7 +207,6 @@ if True:
 
             # pad with 0s for last section
             if len(x) - (i * batch_size + remainder) * n_samples > 0:
-                # print(len(x), ' - ', (i * batch_size + remainder) * n_samples, ' == ', len(x) - (i * batch_size + remainder) * n_samples)
                 batch = np.zeros((1, n_samples), dtype=np.float32)
                 batch[0, :len(x) - (i * batch_size + remainder) * n_samples] = x[(i * batch_size + remainder) * n_samples:]
                 batch = torch.from_numpy(batch).unsqueeze(1).pin_memory().to(device, non_blocking=True)
@@ -267,7 +264,6 @@ write_paths = []
 paths = [f'{out_prefix}_{str(i).zfill(2)}.bin' for i in range(total_write_batches + 1)]
 for path in paths:
     data = np.memmap(path, dtype=np.float32, mode='r')
-    data = data.reshape((-1, vae_embed_dim))
     write_paths.append((path, len(data)))
 
 # write tokens to train.bin
