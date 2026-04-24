@@ -346,220 +346,6 @@ if ddp:
     model = DDP(model, device_ids=[ddp_local_rank])
 
 @torch.no_grad()
-def save_samples(iter_num, activation_threshold=0.5, min_length_sec=1.0, apply_post_processing=True, median_filter_size_frames=11):
-    """
-    Takes raw waveforms, generates Mels internally, runs the model, extracts dynamic 
-    audio segments, and generates a two-tier temporally aligned plot.
-    
-    Args:
-        model: Trained MIL model.
-        preprocessor: The AudioPreprocessor module to format Mels for the model.
-        raw_waveforms: (B, 1, Total_Samples) tensor.
-        labels: (B, Num_Classes) binary ground truth tensor.
-    """
-    model.eval()
-    batch_dir = os.path.join(out_dir, str(iter_num))
-    os.makedirs(batch_dir, exist_ok=True)
-    
-    X, targets = get_batch('val')
-    X = X[:10]
-    targets = targets[:10]
-    B, _, total_samples = X.shape
-    total_duration_sec = total_samples / sample_rate
-    min_length_samples = int(min_length_sec * sample_rate)
-    
-    # 1. Generate Mel Spectrograms
-    mel_transform = T.MelSpectrogram(
-        sample_rate=sample_rate,
-        n_fft=n_fft,
-        hop_length=hop_length,
-        n_mels=n_mels,
-        f_min=40.0,
-        f_max=sample_rate // 2,
-        power=2.0,
-        normalized=True,      # Normalizes the STFT to be magnitude invariant
-        center=True,          # Padding to keep time/length consistent
-        pad_mode='reflect'    # Better for audio boundary artifacts
-    ).to(device)
-    amplitude_to_db = T.AmplitudeToDB(top_db=80.0).to(device)
-    
-    with ctx:
-        raw_mels = amplitude_to_db(mel_transform(X))
-        frame_probs = model(X)['frame_probs']
-        
-    frame_probs_np = frame_probs.cpu().detach().float().numpy()
-    
-    # 4. Post-Processing
-    if apply_post_processing:
-        frame_probs_np = scipy.signal.medfilt(
-            frame_probs_np, 
-            kernel_size=(1, median_filter_size_frames, 1)
-        )
-        
-    probs_tensor = torch.from_numpy(frame_probs_np).transpose(1, 2)
-    
-    # Interpolate to sample level
-    sample_level_probs = F.interpolate(
-        probs_tensor, size=total_samples, mode='linear', align_corners=False
-    )
-    
-    for b in range(B):
-        present_classes = torch.where(targets[b] == 1.0)[0].cpu().tolist()
-        
-        for c in present_classes:
-            class_name = mlb.classes_[c]
-            prob_curve = sample_level_probs[b, c, :].numpy()
-            
-            # --- Dynamic Extraction Logic ---
-            binary_mask = (prob_curve >= activation_threshold).astype(int)
-            labeled_mask, num_features = scipy.ndimage.label(binary_mask)
-            
-            best_start, best_end, highest_mean_prob = 0, 0, -1.0
-            
-            if num_features > 0:
-                for feature_idx in range(1, num_features + 1):
-                    block_indices = np.where(labeled_mask == feature_idx)[0]
-                    start_idx, end_idx = block_indices[0], block_indices[-1]
-                    
-                    if (end_idx - start_idx) >= min_length_samples:
-                        mean_prob = prob_curve[start_idx:end_idx].mean()
-                        if mean_prob > highest_mean_prob:
-                            highest_mean_prob = mean_prob
-                            best_start, best_end = start_idx, end_idx
-                            
-            # Fallback if no block meets minimum length
-            if highest_mean_prob == -1.0:
-                peak_idx = np.argmax(prob_curve)
-                half_window = min_length_samples // 2
-                best_start = max(0, peak_idx - half_window)
-                best_end = min(total_samples, peak_idx + half_window)
-                if best_end - best_start < min_length_samples:
-                    if best_start == 0: best_end = min(total_samples, min_length_samples)
-                    else: best_start = max(0, total_samples - min_length_samples)
-            
-            # --- Save Audio Snippet ---
-            audio_snippet = X[b, :, best_start:best_end]
-            wav_path = os.path.join(batch_dir, f"{class_name}_{b}.wav")
-            sf.write(wav_path, audio_snippet.squeeze().cpu().detach().float().numpy(), sample_rate)
-            
-            # --- Two-Tier Aligned Plotting ---
-            best_start_sec = best_start / sample_rate
-            best_end_sec = best_end / sample_rate
-            time_axis = np.linspace(0, total_duration_sec, total_samples)
-            mel_to_plot = raw_mels[b, 0].cpu().numpy()
-            
-            # Create subplots sharing the X-axis (Time)
-            fig, (ax_prob, ax_mel) = plt.subplots(
-                2, 1, 
-                figsize=(12, 6), 
-                sharex=True, 
-                gridspec_kw={'height_ratios': [1, 2.5]}
-            )
-            
-            # Top Plot: Probability Curve
-            ax_prob.plot(time_axis, prob_curve, color='#00aaff', linewidth=2)
-            ax_prob.axhline(activation_threshold, color='red', linestyle='--', alpha=0.5, label='Threshold')
-            ax_prob.axvspan(best_start_sec, best_end_sec, color='lime', alpha=0.2, label='Extracted Region')
-            
-            ax_prob.set_title(f"Detection Timeline: {class_name}", fontsize=12, fontweight='bold')
-            ax_prob.set_ylabel("Probability", fontsize=10)
-            ax_prob.set_ylim(0, 1.05)
-            ax_prob.legend(loc="upper right", fontsize=9)
-            ax_prob.grid(True, alpha=0.3)
-            
-            # Bottom Plot: Mel Spectrogram
-            # Use 'extent' to map the 2D array exactly to physical seconds
-            ax_mel.imshow(
-                mel_to_plot, 
-                aspect='auto', 
-                origin='lower', 
-                cmap='magma', 
-                extent=[0, total_duration_sec, 0, n_mels]
-            )
-            ax_mel.axvspan(best_start_sec, best_end_sec, color='lime', alpha=0.2)
-            
-            ax_mel.set_ylabel("Mel Bins", fontsize=10)
-            ax_mel.set_xlabel("Time (seconds)", fontsize=10)
-            
-            # Clean up layout to remove space between plots
-            plt.subplots_adjust(hspace=0.05)
-            
-            plot_path = os.path.join(batch_dir, f"{class_name}_{b}.png")
-            plt.savefig(plot_path, dpi=150, bbox_inches='tight')
-            plt.close(fig)
-    model.train()
-
-@torch.no_grad
-def estimate_mAP(split):
-    """
-    Evaluates the MIL model on a validation set and calculates
-    BCE Loss, Average Precision (AP) for each class, and the overall mAP.
-    
-    Args:
-        model: The trained MusicTaggingMIL model.
-        val_loader: DataLoader for your validation set.
-        class_names: List of strings containing instrument names.
-        device: 'cuda' or 'cpu'.
-        
-    Returns:
-        mAP: The Mean Average Precision across all valid classes (float).
-        class_metrics: Dictionary containing 'loss' and 'ap' for each class.
-    """
-    model.eval()
-    
-    all_clip_logits = []
-    all_labels = []
-    
-    for _ in tqdm(range(eval_iters)):
-        X, targets = get_batch(split)
-        with ctx:
-            clip_logits = model(X, targets)['clip_logits']
-            all_clip_logits.append(clip_logits.cpu().detach())
-            all_labels.append(targets.cpu().detach())
-    model.train()
-    
-    # Concatenate all batches into single tensors
-    all_clip_logits = torch.cat(all_clip_logits, dim=0)
-    all_labels = torch.cat(all_labels, dim=0)
-    
-    # 1. Calculate Per-Class BCE Loss
-    raw_losses = F.binary_cross_entropy_with_logits(all_clip_logits, all_labels, reduction='none')
-    per_class_loss = raw_losses.mean(dim=0).numpy()
-    
-    # 2. Calculate Per-Class Average Precision (AP)
-    all_clip_probs = torch.sigmoid(all_clip_logits).numpy()
-    all_labels_np = all_labels.numpy()
-    
-    per_class_ap = np.zeros(num_instruments)
-    for c in range(num_instruments):
-        # Edge case guard: AP is undefined if a class never appears in the validation set
-        if np.sum(all_labels_np[:, c]) == 0:
-            per_class_ap[c] = np.nan 
-        else:
-            per_class_ap[c] = average_precision_score(
-                y_true=all_labels_np[:, c], 
-                y_score=all_clip_probs[:, c],
-                average='macro'
-            )
-            
-    # 3. Calculate Mean Average Precision (mAP)
-    valid_aps = per_class_ap[~np.isnan(per_class_ap)]
-    map_score = np.mean(valid_aps) if len(valid_aps) > 0 else 0.0
-    
-    
-    metrics = {}
-    metrics['mAP'] = map_score
-    
-    for c in range(num_instruments):
-        c_name = mlb.classes_[c]
-        c_loss = per_class_loss[c]
-        c_ap = per_class_ap[c]
-        
-        metrics[c_name] = {'ap': c_ap}
-    
-    return metrics
-
-@torch.no_grad()
 def estimate_loss():
     out = {}
     model.eval()
@@ -621,21 +407,6 @@ while True:
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-        train_metrics = estimate_mAP('train')
-        for k, v in train_metrics.items():
-            if isinstance(v, dict):
-                for kk, vv in v.items():
-                    print(f'train {k} {kk} = {vv:.4f}')
-            else:
-                print(f'train {k} = {v:.4f}')
-        val_metrics = estimate_mAP('val')
-        for k, v in val_metrics.items():
-            if isinstance(v, dict):
-                for kk, vv in v.items():
-                    print(f'val {k} {kk} = {vv:.4f}')
-            else:
-                print(f'val {k} = {v:.4f}')
-        save_samples(iter_num)
         
         if wandb_log:
             log_dict = {
@@ -646,8 +417,6 @@ while True:
                 "train/loss": losses['train'],
                 "val/loss": losses['val']
             }
-            log_dict |= {f'train/{k}': v for k, v in train_metrics.items()}
-            log_dict |= {f'val/{k}': v for k, v in val_metrics.items()}
             wandb.log(log_dict)
             
         if iter_num > 0 and losses['val'] < best_val_loss:
@@ -661,7 +430,6 @@ while True:
                 'best_val_loss': best_val_loss,
                 'config': config,
                 'tokens': tokens_trained,
-                'mAP': val_metrics['mAP']
             }
             torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
         if iter_num > 0 and always_save_checkpoint:
@@ -674,7 +442,6 @@ while True:
                 'best_val_loss': best_val_loss,
                 'config': config,
                 'tokens': tokens_trained,
-                'mAP': val_metrics['mAP']
             }
             torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
             
