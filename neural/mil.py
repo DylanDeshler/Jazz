@@ -643,11 +643,13 @@ class UNet(nn.Module):
             if i == 0:
                 out_ch = dims[0]
                 upsample = UpsampleV3(dims[i], out_ch, 4)
+                proj = nn.Conv2d(out_ch + in_chans, out_ch, kernel_size=1)
             else:
                 out_ch = dims[i-1]
                 upsample = UpsampleV3(dims[i], out_ch, 2)
+                proj = nn.Conv2d(out_ch * 2, out_ch, kernel_size=1)
             self.upsample_layers.insert(0, upsample)
-            self.skip_projs.insert(0, nn.Conv2d(out_ch * 2, out_ch, kernel_size=1))
+            self.skip_projs.insert(0, proj)
         
             stage = nn.Sequential(
                 *[ConvNeXtBlock(dim=out_ch, drop_path=dp_rates[cur + j]) for j in range(depths[i])]
@@ -708,8 +710,6 @@ class UNet(nn.Module):
             print(i, x.shape, skips[-1].shape)
             x = torch.cat([x, skips.pop()], dim=1)
             x = self.skip_projs[i](x)
-            
-   
             
             x = self.up_stages[i](x)
             print(i, x.shape)
