@@ -252,9 +252,8 @@ def get_batch(split='train'):
     x = []
     inst = []
     for idx in idxs:
-        start = np.random.randint(len(wav) - n_samples)
         h5_file = h5py.File('/home/ubuntu/Data/MIL_labels.h5', 'r')
-        data = h5_file[str(idx)][start:start+n_samples].astype(np.float32)
+        data = h5_file[str(idx)][:].astype(np.float32)
         wav = data[:, 0]
         labels = data[:, 1:]
         
@@ -267,8 +266,9 @@ def get_batch(split='train'):
         
         url = paths[idx].split('/')[-1].split('.')[0]
         
-        inst.append(labels)
-        x.append(wav)
+        start = np.random.randint(len(wav) - n_samples)
+        inst.append(labels[start:start+n_samples])
+        x.append(wav[start:start+n_samples])
         
     x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
     inst = torch.from_numpy(np.asarray(inst).astype(np.float32)).pin_memory().to(device, non_blocking=True)
