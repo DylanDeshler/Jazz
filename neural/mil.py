@@ -683,6 +683,7 @@ class UNet(nn.Module):
             nn.init.zeros_(block.attn.proj.weight)
 
     def forward(self, x, targets=None):
+        B, C, L = x.shape
         x = self.to_mel(x)
         
         if self.training:
@@ -730,10 +731,15 @@ class UNet(nn.Module):
         x = self.norm(x)
         x = x.permute(0, 3, 1, 2)
         x = self.proj(x)
+        x = x.mean(2)
+        x = F.interpolate(
+            x, size=L, mode='linear', align_corners=False
+        ).transpose(1, 2)
         
         if targets is not None:
             alpha = 0.2
             smooth_targets = targets * (1.0 - alpha) + (alpha / 2.0)
+            print(x.shape, smooth_targets.shape)
             loss = F.binary_cross_entropy_with_logits(x, smooth_targets, reduction='none')
             loss_mask = targets > -1
             loss = (loss * loss_mask).sum() / loss_mask.sum()
