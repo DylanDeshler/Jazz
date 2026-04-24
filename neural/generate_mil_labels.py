@@ -114,8 +114,7 @@ def calculate_gmm_thresholds(
 
     return neg_threshold, pos_threshold
 
-device = torch.device('cuda')
-
+device = 'cuda'
 batch_size = 4
 rate = 16000
 n_samples = 16383 * 30
@@ -142,6 +141,7 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 # note: float16 data type will automatically use a GradScaler
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
+torch.cuda.set_device(device)
 
 paths = glob.glob('/home/ubuntu/Data/measures/*')
 with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
