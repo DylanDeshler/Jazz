@@ -183,7 +183,8 @@ if True:
                 probs = torch.from_numpy(probs).transpose(1, 2)
                 probs = F.interpolate(
                     probs, size=batch.shape[-1], mode='linear', align_corners=False
-                ).transpose(0, 1).cpu().detach().numpy()
+                ).cpu().detach().numpy()
+                print(probs.shape)
                 this_codes.append(probs)
             
             i = math.ceil(n_cuts / batch_size)
@@ -198,7 +199,7 @@ if True:
                 probs = torch.from_numpy(probs).transpose(1, 2)
                 probs = F.interpolate(
                     probs, size=batch.shape[-1], mode='linear', align_corners=False
-                ).transpose(0, 1).cpu().detach().numpy()
+                ).cpu().detach().numpy()
                 this_codes.append(probs)
 
             # pad with 0s for last section
