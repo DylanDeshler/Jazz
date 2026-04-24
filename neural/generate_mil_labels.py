@@ -114,7 +114,7 @@ def calculate_gmm_thresholds(
 
     return neg_threshold, pos_threshold
 
-device = 'cuda'
+device = 'cuda:0'
 batch_size = 4
 rate = 16000
 n_samples = 16383 * 30
