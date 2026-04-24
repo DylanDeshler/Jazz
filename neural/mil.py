@@ -605,12 +605,13 @@ class UpsampleV3(nn.Module):
         return x
 
 class UNet(nn.Module):
-    def __init__(self, num_instruments, n_fft=1024, hop_length=512, n_mels=192, in_chans=1, depths=[3, 3, 9, 3], dims=[96, 192, 384, 768], drop_path_rate=0., time_length=32, frequency_length=64):
+    def __init__(self, num_instruments, n_fft=1024, hop_length=512, n_mels=192, in_chans=1, depths=[3, 3, 9, 3], dims=[96, 192, 384, 768], drop_path_rate=0., time_length=32, frequency_length=64, num_heads=8, transformer_layers=2, mlp_ratio=4):
         super().__init__()
         
         self.to_mel = ToMel(16000, n_fft, hop_length, n_mels)
         self.augment = SpecAugment(time_length, frequency_length)
         
+        # down
         self.downsample_layers = nn.ModuleList()
         stem = nn.Sequential(
             nn.Conv2d(in_chans, dims[0], kernel_size=4, stride=4),
@@ -635,6 +636,12 @@ class UNet(nn.Module):
             self.down_stages.append(stage)
             cur += depths[i]
         
+        # middle
+        self.blocks = nn.ModuleList([
+            SelfAttentionBlock(dims[-1], num_heads, mlp_ratio=mlp_ratio) for _ in range(transformer_layers)
+        ])
+        
+        # up
         self.skip_projs = nn.ModuleList([])
         self.upsample_layers = nn.ModuleList([])
         self.up_stages = nn.ModuleList()
@@ -670,9 +677,9 @@ class UNet(nn.Module):
         
         nn.init.zeros_(self.proj.weight)
         # zero out c_proj weights in all blocks
-        # for block in self.blocks:
-        #     nn.init.zeros_(block.mlp.w3.weight)
-        #     nn.init.zeros_(block.attn.proj.weight)
+        for block in self.blocks:
+            nn.init.zeros_(block.mlp.w3.weight)
+            nn.init.zeros_(block.attn.proj.weight)
 
     def forward(self, x, targets=None):
         x = self.to_mel(x)
@@ -698,6 +705,21 @@ class UNet(nn.Module):
             print(i, x.shape)
         
         # middle
+        print('====== MIDDLE =====')
+        B, C, H, W = x.shape
+        x = rearrange(x, 'b c h w -> b (h w) c')
+        
+        freqs_cis = precompute_freqs_cis_2d(
+            dim=self.head_dim, 
+            height=H, 
+            width=W
+        ).to(x.device)
+        # x = self.transformer_norm(x)
+        # x = self.transformer_proj(x)
+        for block in self.blocks:
+            x = block(x, freqs_cis=freqs_cis)
+        
+        x = rearrange(x, 'b (h w) c -> b h w c', h=H, w=W)
         
 
         print('====== UP =====')
