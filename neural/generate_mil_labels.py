@@ -11,6 +11,7 @@ import torch.nn.functional as F
 from mil import MIL
 import scipy.signal
 
+import math
 import soundfile as sf
 import librosa
 import glob
@@ -170,7 +171,7 @@ if True:
             
             n_cuts = len(x) // n_samples
             print(len(x), len(x) // n_samples)
-            for i in range(n_cuts // batch_size):
+            for i in range(math.ceil(n_cuts / batch_size)):
                 batch = torch.from_numpy(np.stack([x[(i*batch_size+j)*n_samples:(i*batch_size+j+1)*n_samples] for j in range(batch_size)], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
                 probs = model(batch)['frame_probs'].cpu().detach().float().numpy()
                 probs = scipy.signal.medfilt(
@@ -184,10 +185,8 @@ if True:
                 print(probs.shape)
                 this_codes.append(probs)
             
-            # remainder = len(x) - n_cuts * n_samples
-            i = n_cuts // batch_size
+            i = math.ceil(n_cuts / batch_size)
             remainder = n_cuts - i * batch_size
-            # print(i, remainder, n_cuts, i * batch_size)
             if remainder > 0:
                 batch = torch.from_numpy(np.stack([x[(i*batch_size+j)*n_samples:(i*batch_size+j+1)*n_samples] for j in range(remainder)], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
                 probs = model(batch)['frame_probs'].cpu().detach().float().numpy()
