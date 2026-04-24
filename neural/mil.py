@@ -643,6 +643,7 @@ class UNet(nn.Module):
             self.upsample_layers.insert(0, upsample)
             self.skip_projs.insert(0, nn.Conv2d(dims[i] * 2, dims[i], kernel_size=1))
         self.upsample_layers.insert(0, UpsampleV3(dims[0], dims[0], 4))
+        self.skip_projs.insert(0, nn.Conv2d(dims[i] * 2, dims[i], kernel_size=1))
         
         self.up_stages = nn.ModuleList()
         cur = 0
