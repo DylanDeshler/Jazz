@@ -171,6 +171,8 @@ if True:
             
             n_cuts = len(x) // n_samples
             for i in range(math.ceil(n_cuts / batch_size)):
+                for j in range(batch_size):
+                    print(x[(i*batch_size+j)*n_samples:(i*batch_size+j+1)*n_samples].shape)
                 batch = torch.from_numpy(np.stack([x[(i*batch_size+j)*n_samples:(i*batch_size+j+1)*n_samples] for j in range(batch_size)], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
                 probs = model(batch)['frame_probs'].cpu().detach().float().numpy()
                 probs = scipy.signal.medfilt(
