@@ -637,10 +637,9 @@ class UNet(nn.Module):
         
         self.skip_projs = nn.ModuleList([])
         self.upsample_layers = nn.ModuleList([])
-        # self.upsample_layers.append(nn.ModuleList([AdaLNConvBlock(channels[-1], channels[-1], type=type)]))
         for i in reversed(range(4)):
             if i == 0:
-                upsample = UpsampleV3(dims[i], dims[i-1], 4)
+                upsample = UpsampleV3(dims[i], dims[i], 4)
             else:
                 upsample = UpsampleV3(dims[i], dims[i-1], 2)
             self.upsample_layers.insert(0, upsample)
@@ -655,31 +654,10 @@ class UNet(nn.Module):
             self.up_stages.insert(0, stage)
             cur += depths[i]
         
-        self.norm = nn.LayerNorm(dims[-1], eps=1e-6)
-        self.proj = nn.Linear(dims[-1], num_instruments)
+        self.norm = nn.LayerNorm(dims[0], eps=1e-6)
+        self.proj = nn.Conv2d(dims[0], num_instruments, kernel_size=1)
         
         self.apply(self._init_weights)
-    
-    
-        # depths = [3] * len(channels)
-        # self.skip_projs = nn.ModuleList([])
-        # self.up = nn.ModuleList([])
-        # self.up.append(nn.ModuleList([AdaLNConvBlock(channels[-1], channels[-1], type=type)]))
-        # for i, (channel, depth, ratio) in reversed(list(enumerate(zip(channels, depths, ratios)))):
-        #     blocks = nn.ModuleList([])
-        #     if ratio > 1:
-        #         if i == len(channels) - 1:
-        #             blocks.append(UpsampleV3(channel, channel, ratio))
-        #         else:
-        #             blocks.append(UpsampleV3(channels[i+1], channel, ratio))
-        #     self.skip_projs.insert(0, nn.Conv1d(channel * 2, channel, kernel_size=1))
-        #     for _ in range(depth):
-        #         blocks.append(AdaLNConvBlock(channel, channel, dilation=2 ** _, type=type))
-        #     self.up.insert(0, blocks)
-
-        # self.output = ImageUnembedding(in_channels=channels[0], out_channels=1)
-    
-        # self.initialize_weights()
     
     def _init_weights(self, m):
         if isinstance(m, (nn.Conv2d, nn.Linear)):
@@ -749,33 +727,6 @@ class UNet(nn.Module):
             return loss
         
         return x
-
-    # def forward(self, x, t=None, z_dec=None) -> torch.Tensor:
-        
-
-    #     skips = [x]
-    #     for i, down in enumerate(self.down):
-    #         c = self.c_projs[i](t) + self.c_projs[i](self.interpolate(x, z_dec))
-    #         for block in down:
-    #             x = block(x, c)
-    #         skips.append(x)
-
-    #     c = self.c_projs[-1](t) + self.c_projs[-1](self.interpolate(x, z_dec))
-    #     for mid in self.mid:
-    #         x = mid(x, c)
-
-    #     skips.pop()
-    #     for i, up in enumerate(reversed(self.up)):
-    #         for block in up:
-    #             if isinstance(block, UpsampleV3):
-    #                 x = block(x, c)
-    #                 x = torch.cat([x, skips.pop()], dim=1)
-    #                 x = self.skip_projs[-i](x)
-    #                 c = self.c_projs[-i](t) + self.c_projs[-i](self.interpolate(x, z_dec))
-    #             else:
-    #                 x = block(x, c)
-
-    #     return self.output(x)
 
 if __name__ == '__main__':
     net = UNet(10)
