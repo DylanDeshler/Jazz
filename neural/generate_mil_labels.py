@@ -216,8 +216,9 @@ if True:
                 ).transpose(1, 2).cpu().detach().numpy()
                 this_codes.append(probs)
 
-            print(x.shape, this_codes.shape)
             this_codes = np.concatenate(this_codes, axis=0)
+
+            print(x.shape, this_codes.shape)
             all_codes.append(this_codes)
             
             if (idx + 1) % (len(paths) // total_write_batches) == 0:
