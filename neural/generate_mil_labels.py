@@ -174,6 +174,7 @@ if True:
             n_batches = math.ceil(n_cuts / batch_size)
             for i in range(n_batches):
                 batch = torch.from_numpy(np.stack([x[(i*batch_size+j)*n_samples:(i*batch_size+j+1)*n_samples] for j in range(min(n_batches, batch_size))], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+                print(batch.shape)
                 probs = model(batch)['frame_probs'].cpu().detach().float().numpy()
                 probs = scipy.signal.medfilt(
                     probs, 
@@ -183,9 +184,10 @@ if True:
                 probs = F.interpolate(
                     probs, size=batch.shape[-1], mode='linear', align_corners=False
                 ).transpose(1, 2).cpu().detach().numpy()
+                print(probs.shape)
                 this_codes.append(probs)
             
-            i = math.ceil(n_cuts / batch_size)
+            i = n_batches
             remainder = n_cuts - i * batch_size
             if remainder > 0:
                 batch = torch.from_numpy(np.stack([x[(i*batch_size+j)*n_samples:(i*batch_size+j+1)*n_samples] for j in range(remainder)], axis=0)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
