@@ -505,24 +505,6 @@ class MIL(nn.Module):
         
         return outputs
 
-class ImageEmbedding(nn.Module):
-    def __init__(self, in_channels, out_channels=320) -> None:
-        super().__init__()
-        self.f = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
-
-    def forward(self, x) -> torch.Tensor:
-        return self.f(x)
-
-
-class ImageUnembedding(nn.Module):
-    def __init__(self, in_channels=320, out_channels=3) -> None:
-        super().__init__()
-        self.gn = nn.GroupNorm(32, in_channels)
-        self.f = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
-
-    def forward(self, x) -> torch.Tensor:
-        return self.f(F.silu(self.gn(x)))
-
 class ConvPixelUnshuffleDownSampleLayer(nn.Module):
     def __init__(
         self,
@@ -584,7 +566,7 @@ class ConvPixelShuffleUpSampleLayer(nn.Module):
     ):
         super().__init__()
         self.norm = nn.GroupNorm(32, in_channels)
-        self.conv = nn.Conv2d(in_channels, out_channels * factor, kernel_size=kernel_size, padding=kernel_size // 2)
+        self.conv = nn.Conv2d(in_channels, out_channels * (factor ** 2), kernel_size=kernel_size, padding=kernel_size // 2)
         self.pixel_shuffle = nn.PixelShuffle(factor)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -603,8 +585,8 @@ class ChannelDuplicatingPixelUnshuffleUpSampleLayer(nn.Module):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
-        assert out_channels * factor % in_channels == 0, f'{out_channels} {factor} {in_channels}'
-        self.repeats = out_channels * factor // in_channels
+        assert out_channels * (factor ** 2) % in_channels == 0, f'{out_channels} {factor} {in_channels}'
+        self.repeats = out_channels * (factor ** 2) // in_channels
         self.pixel_shuffle = nn.PixelShuffle(factor)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
