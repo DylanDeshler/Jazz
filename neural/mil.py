@@ -508,7 +508,7 @@ class MIL(nn.Module):
 class ImageEmbedding(nn.Module):
     def __init__(self, in_channels, out_channels=320) -> None:
         super().__init__()
-        self.f = nn.Conv1d(in_channels, out_channels, kernel_size=3, padding=1)
+        self.f = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
 
     def forward(self, x) -> torch.Tensor:
         return self.f(x)
@@ -518,7 +518,7 @@ class ImageUnembedding(nn.Module):
     def __init__(self, in_channels=320, out_channels=3) -> None:
         super().__init__()
         self.gn = nn.GroupNorm(32, in_channels)
-        self.f = nn.Conv1d(in_channels, out_channels, kernel_size=3, padding=1)
+        self.f = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
 
     def forward(self, x) -> torch.Tensor:
         return self.f(F.silu(self.gn(x)))
@@ -534,7 +534,7 @@ class ConvPixelUnshuffleDownSampleLayer(nn.Module):
         super().__init__()
         assert out_channels % factor == 0, f'{out_channels}, {factor}'
         self.norm = nn.GroupNorm(32, in_channels)
-        self.conv = nn.Conv1d(in_channels, out_channels // factor, kernel_size=kernel_size, padding=kernel_size // 2)
+        self.conv = nn.Conv2d(in_channels, out_channels // factor, kernel_size=kernel_size, padding=kernel_size // 2)
         self.pixel_unshuffle = nn.PixelUnshuffle(factor)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -584,7 +584,7 @@ class ConvPixelShuffleUpSampleLayer(nn.Module):
     ):
         super().__init__()
         self.norm = nn.GroupNorm(32, in_channels)
-        self.conv = nn.Conv1d(in_channels, out_channels * factor, kernel_size=kernel_size, padding=kernel_size // 2)
+        self.conv = nn.Conv2d(in_channels, out_channels * factor, kernel_size=kernel_size, padding=kernel_size // 2)
         self.pixel_shuffle = nn.PixelShuffle(factor)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -662,7 +662,7 @@ class UNet(nn.Module):
             else:
                 upsample = UpsampleV3(dims[i+1], dims[i], 2)
             self.upsample_layers.insert(0, upsample)
-            self.skip_projs.insert(0, nn.Conv1d(dims[i] * 2, dims[i], kernel_size=1))
+            self.skip_projs.insert(0, nn.Conv2d(dims[i] * 2, dims[i], kernel_size=1))
         
         self.up_stages = nn.ModuleList()
         cur = 0
