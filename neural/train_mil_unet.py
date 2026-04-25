@@ -507,6 +507,8 @@ def save_samples(iter_num):
         plt.tight_layout()
         plt.savefig(os.path.join(batch_dir, f"segmentation_eval_{i}.png"), dpi=150)
         plt.close()
+        
+        sf.write(os.path.join(batch_dir, f"{i}.wav"), X[i].squeeze().cpu().detach().float().numpy(), sample_rate)
 
 def get_lr(it):
     # 1) linear warmup for warmup_iters steps
