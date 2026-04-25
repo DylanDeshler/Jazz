@@ -11,6 +11,7 @@ from torchinfo import summary
 from mil import UNet as net
 
 import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
 import scipy.ndimage
 import scipy.signal
 import h5py
@@ -315,39 +316,6 @@ def get_batch(split='train'):
     
     return x, inst
 
-# def get_batch(split='train'):
-#     if split == 'train':
-#         idxs = np.random.choice(train_idx, batch_size, p=train_durations).tolist()
-#     else:
-#         idxs = np.random.choice(test_idx, batch_size, p=test_durations).tolist()
-    
-#     x = []
-#     inst = []
-#     for idx in idxs:
-#         h5_file = h5py.File('/home/ubuntu/Data/MIL_labels.h5', 'r')
-#         data = h5_file[str(idx)][:].astype(np.float32)
-#         wav = data[:, 0]
-#         labels = data[:, 1:]
-        
-#         for label_idx in range(labels.shape[-1]):
-#             pos_mask = labels[:, label_idx] > positive_thresholds[label_idx]
-#             neg_mask = labels[:, label_idx] < negative_thresholds[label_idx]
-#             labels[pos_mask] = 1
-#             labels[neg_mask] = 0
-#             labels[~pos_mask & ~neg_mask] = -1
-        
-#         url = paths[idx].split('/')[-1].split('.')[0]
-        
-#         start = np.random.randint(len(wav) - n_samples)
-#         inst.append(labels[start:start+n_samples])
-#         x.append(wav[start:start+n_samples])
-        
-#     x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-#     inst = torch.from_numpy(np.asarray(inst).astype(np.float32)).pin_memory().to(device, non_blocking=True)
-#     print(x.shape, inst.unique())
-    
-#     return x, inst
-
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
 best_val_loss = 1e9
@@ -433,6 +401,108 @@ def estimate_loss():
     model.train()
     return out
 
+@torch.no_grad()
+def estimate_mAP(split):
+    model.eval()
+    
+    all_preds = []
+    all_targets = []
+    
+    for _ in tqdm(range(eval_iters)):
+        X, targets = get_batch(split)
+        with ctx:
+            all_preds.append(model(X).cpu().detach().numpy())
+            all_targets.append(targets.cpu().detach().numpy())
+    model.train()
+        
+    # Concatenate all batches -> (Total_Items, Num_Classes, Samples)
+    all_preds = np.concatenate(all_preds, axis=0)
+    all_targets = np.concatenate(all_targets, axis=0)
+    
+    num_classes = all_targets.shape[-1]
+    metrics = {}
+    
+    for c in range(num_classes):
+        c_name = mlb.classes_[c]
+        
+        # Flatten the entire validation set for this specific class
+        preds_c = all_preds[:, :, c].flatten()
+        targets_c = all_targets[:, :, c].flatten()
+        
+        # Find exactly where the labels are NOT -1
+        valid_mask = targets_c > -0.5
+        
+        # Protection against a class missing entirely from the validation batch
+        if valid_mask.sum() == 0:
+            continue
+            
+        valid_preds = preds_c[valid_mask]
+        valid_targets = targets_c[valid_mask]
+        
+        ap = average_precision_score(valid_targets, valid_preds)
+        metrics[c_name] = ap
+    
+    metrics['mAP'] = np.mean(list(metrics.values()))
+    
+    return metrics
+
+@torch.no_grad()
+def save_samples(iter_num):
+    batch_dir = os.path.join(out_dir, str(iter_num))
+    os.makedirs(batch_dir, exist_ok=True)
+    
+    X, targets = get_batch('val')
+    X = X[:10]
+    targets = targets[:10]
+    B, _, total_samples = X.shape
+    
+    model.eval()
+    with ctx:
+        mels = model.to_mel(X)
+        preds = model(X)
+    model.train()
+    
+    X = X.cpu().numpy()
+    mels = mels.cpu().numpy()
+    targets = targets.cpu().numpy()
+    preds = preds.cpu().numpy()
+    print(X.shape, mels.shape, targets.shape, preds.shape)
+    
+    # Custom colormap for Ground Truth so -1 (Ignore) is visually distinct (Gray)
+    # 0 = Blue (Negative), 0.5 = Gray (Ignore), 1 = Red (Positive)
+    gt_cmap = LinearSegmentedColormap.from_list("gt_cmap", ["blue", "gray", "red"])
+    
+    # Loop through the requested number of samples in the batch
+    for i in range(B):
+        fig, axes = plt.subplots(3, 1, figsize=(14, 10), gridspec_kw={'height_ratios': [2, 1, 1]})
+        
+        # --- 1. Mel Spectrogram ---
+        mel = mels[i, 0] # Drop the channel dimension
+        im0 = axes[0].imshow(mel, aspect='auto', origin='lower', cmap='magma')
+        axes[0].set_title(f"Sample {i}: Input Mel Spectrogram")
+        axes[0].set_ylabel("Frequency (Mels)")
+        
+        # --- 2. Ground Truth ---
+        # Remap targets so imshow handles the -1, 0, 1 scale perfectly
+        gt = targets[i] # Shape: (20, Samples)
+        im1 = axes[1].imshow(gt, aspect='auto', origin='lower', cmap=gt_cmap, vmin=-1, vmax=1)
+        axes[1].set_title("Ground Truth Masks (-1=Gray, 0=Blue, 1=Red)")
+        axes[1].set_ylabel("Instruments")
+        
+        # --- 3. Predictions ---
+        pred = preds[i] # Shape: (20, Samples)
+        im2 = axes[2].imshow(pred, aspect='auto', origin='lower', cmap='magma', vmin=0, vmax=1)
+        axes[2].set_title("Predicted Probabilities (0.0 to 1.0)")
+        axes[2].set_ylabel("Instruments")
+        axes[2].set_xlabel("Time (Raw Audio Samples)")
+        
+        # Note: We do not share the X-axis because axes[0] is in Mel Frames, 
+        # while axes[1] and axes[2] are in raw audio samples.
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(batch_dir, f"segmentation_eval_{i}.png"), dpi=150)
+        plt.close()
+
 def get_lr(it):
     # 1) linear warmup for warmup_iters steps
     if it < warmup_iters:
@@ -480,6 +550,13 @@ while True:
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        train_metrics = estimate_mAP('train')
+        for k, v in train_metrics.items():
+            print(f'train {k} = {v:.4f}')
+        val_metrics = estimate_mAP('val')
+        for k, v in val_metrics.items():
+            print(f'val {k} = {v:.4f}')
+        save_samples(iter_num)
         
         if wandb_log:
             log_dict = {

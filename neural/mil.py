@@ -744,7 +744,7 @@ class UNet(nn.Module):
             loss = (loss * loss_mask).sum() / loss_mask.sum()
             return loss
         
-        return x
+        return torch.sigmoid(x)
 
 if __name__ == '__main__':
     from torchinfo import summary
