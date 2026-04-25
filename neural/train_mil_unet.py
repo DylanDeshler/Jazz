@@ -39,7 +39,7 @@ eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = False # disabled by default
+wandb_log = True # disabled by default
 wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
@@ -290,7 +290,7 @@ def fetch_single_sample(idx, n_samples, pos_thresh, neg_thresh):
 
 # 3. The Global Thread Pool
 # Create this ONCE outside of your function.
-executor = ThreadPoolExecutor(max_workers=8)
+executor = ThreadPoolExecutor(max_workers=16)
 
 def get_batch(split='train'):
     if split == 'train':
