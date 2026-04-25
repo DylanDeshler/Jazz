@@ -44,8 +44,8 @@ wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 2
-batch_size = 64
+gradient_accumulation_steps = 1
+batch_size = 128
 # model
 n_samples = 16383 * 5
 sample_rate = 16000
@@ -219,28 +219,28 @@ test_durations = durations[test_idx] / np.sum(durations[test_idx])
 del durations
 
 positive_thresholds = {
-    0: 0.703,
-    1: 0.652,
-    2: 0.522,
-    3: 0.845,
-    4: 0.364,
-    5: 0.629,
-    6: 0.687,
-    7: 0.746,
-    8: 0.740,
-    9: 0.740
+    0: 0.90,
+    1: 0.875,
+    2: 0.8,
+    3: 0.92,
+    4: 0.2,
+    5: 0.8,
+    6: 0.85,
+    7: 0.92,
+    8: 0.92,
+    9: 0.92
 }
 negative_thresholds = {
-    0: 0.303,
-    1: 0.199,
-    2: 0.291,
-    3: 0.724,
-    4: 0.152,
-    5: 0.225,
-    6: 0.238,
-    7: 0.291,
-    8: 0.280,
-    9: 0.314
+    0: 0.15,
+    1: 0.2,
+    2: 0.175,
+    3: 0.7,
+    4: 0.1,
+    5: 0.15,
+    6: 0.15,
+    7: 0.15,
+    8: 0.15,
+    9: 0.15
 }
 positive_thresholds = np.array([positive_thresholds[i] for i in range(len(mlb.classes_))])
 negative_thresholds = np.array([negative_thresholds[i] for i in range(len(mlb.classes_))])
@@ -290,7 +290,7 @@ def fetch_single_sample(idx, n_samples, pos_thresh, neg_thresh):
 
 # 3. The Global Thread Pool
 # Create this ONCE outside of your function.
-executor = ThreadPoolExecutor(max_workers=16)
+executor = ThreadPoolExecutor(max_workers=8)
 
 def get_batch(split='train'):
     if split == 'train':
