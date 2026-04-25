@@ -664,7 +664,7 @@ class UNet(nn.Module):
                 *[ConvNeXtBlock(dim=out_ch, drop_path=dp_rates[cur + j]) for j in range(depth)]
             )
             self.up_stages.insert(0, stage)
-            cur += depth[i]
+            cur += depth
         
         self.norm = nn.LayerNorm(dims[0], eps=1e-6)
         self.proj = nn.Conv2d(dims[0], num_instruments, kernel_size=1)
