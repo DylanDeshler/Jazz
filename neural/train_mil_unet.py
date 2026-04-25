@@ -462,10 +462,10 @@ def save_samples(iter_num):
         preds = model(X)
     model.train()
     
-    X = X.cpu().float().numpy()
+    X = X.cpu().numpy()
     mels = mels.cpu().float().numpy()
     targets = targets.cpu().numpy()
-    preds = preds.cpu().numpy()
+    preds = preds.cpu().float().numpy()
     print(X.shape, mels.shape, targets.shape, preds.shape)
     
     # Custom colormap for Ground Truth so -1 (Ignore) is visually distinct (Gray)
