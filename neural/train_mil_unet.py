@@ -35,16 +35,16 @@ log_interval = 100
 save_interval = 2500
 eval_iters = 300
 eval_only = False # if True, script exits right after the first eval
-always_save_checkpoint = False # if True, always save a checkpoint after each eval
+always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = False # disabled by default
+wandb_log = True # disabled by default
 wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 1
-batch_size = 128
+gradient_accumulation_steps = 2
+batch_size = 64
 # model
 n_samples = 16383 * 5
 sample_rate = 16000
@@ -288,8 +288,7 @@ def fetch_single_sample(idx, n_samples, pos_thresh, neg_thresh):
     return wav, new_labels
 
 # 3. The Global Thread Pool
-# Create this ONCE outside of your function. 
-# 8 to 12 workers is usually the sweet spot for NVMe SSDs.
+# Create this ONCE outside of your function.
 executor = ThreadPoolExecutor(max_workers=16)
 
 def get_batch(split='train'):
