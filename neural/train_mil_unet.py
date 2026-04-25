@@ -37,7 +37,7 @@ save_interval = 2500
 eval_iters = 300
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir
@@ -408,11 +408,11 @@ def estimate_mAP(split):
     all_preds = []
     all_targets = []
     
-    for _ in tqdm(range(eval_iters)):
+    for _ in tqdm(range(eval_iters // 2)):
         X, targets = get_batch(split)
         with ctx:
-            all_preds.append(model(X).cpu().detach())
-            all_targets.append(targets.cpu().detach())
+            all_preds.append(model(X)[:, ::10].cpu().detach())
+            all_targets.append(targets[:, ::10].cpu().detach())
     model.train()
         
     # Concatenate all batches -> (Total_Items, Num_Classes, Samples)
@@ -462,8 +462,8 @@ def save_samples(iter_num):
         preds = model(X)
     model.train()
     
-    X = X.cpu().numpy()
-    mels = mels.cpu().numpy()
+    X = X.cpu().float().numpy()
+    mels = mels.cpu().float().numpy()
     targets = targets.cpu().numpy()
     preds = preds.cpu().numpy()
     print(X.shape, mels.shape, targets.shape, preds.shape)
@@ -550,12 +550,12 @@ while True:
     if iter_num % eval_interval == 0 and master_process:
         # losses = estimate_loss()
         # print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-        train_metrics = estimate_mAP('train')
-        for k, v in train_metrics.items():
-            print(f'train {k} = {v:.4f}')
-        val_metrics = estimate_mAP('val')
-        for k, v in val_metrics.items():
-            print(f'val {k} = {v:.4f}')
+        # train_metrics = estimate_mAP('train')
+        # for k, v in train_metrics.items():
+        #     print(f'train {k} = {v:.4f}')
+        # val_metrics = estimate_mAP('val')
+        # for k, v in val_metrics.items():
+        #     print(f'val {k} = {v:.4f}')
         save_samples(iter_num)
         
         if wandb_log:
