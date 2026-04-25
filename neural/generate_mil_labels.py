@@ -215,13 +215,14 @@ print(len(paths))
 
 np.random.seed(0)
 to_samples = np.random.choice(np.arange(len(paths)), 8192, replace=False)
+file = h5py.File(out_prefix + '.h5', 'r')
+probs = [file[str(key)][::(rate // 10)].astype(np.float32) for key in to_samples]
+probs = np.concatenate(probs, axis=0)
+print(probs.shape)
+
 for i in range(1, num_classes + 1):
-    file = h5py.File(out_prefix + '.h5', 'r')
-    probs = [file[str(key)][::(rate // 10), i].astype(np.float32) for key in to_samples]
-    probs = np.concatenate(probs, axis=0)
-    print(probs.shape)
     neg_t, pos_t = calculate_gmm_thresholds(
-        probabilities=probs, 
+        probabilities=probs[:, i], 
         class_name=str(i), 
         n_components=3, 
         std_multiplier=1.0
