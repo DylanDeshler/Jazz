@@ -469,6 +469,7 @@ def save_samples(iter_num):
     # Custom colormap for Ground Truth so -1 (Ignore) is visually distinct (Gray)
     # 0 = Blue (Negative), 0.5 = Gray (Ignore), 1 = Red (Positive)
     gt_cmap = LinearSegmentedColormap.from_list("gt_cmap", ["blue", "gray", "red"])
+    pred_cmap = LinearSegmentedColormap.from_list("pred_cmap", ["blue", "red"])
     
     # Loop through the requested number of samples in the batch
     for i in range(B):
@@ -493,7 +494,7 @@ def save_samples(iter_num):
         
         # --- 3. Predictions ---
         pred = preds[i].transpose(1, 0) # Shape: (20, Samples)
-        im2 = axes[2].imshow(pred, aspect='auto', origin='lower', cmap='magma', vmin=0, vmax=1, extent=[0, total_seconds, -0.5, num_instruments -0.5], interpolation='nearest')
+        im2 = axes[2].imshow(pred, aspect='auto', origin='lower', cmap=pred_cmap, vmin=0, vmax=1, extent=[0, total_seconds, -0.5, num_instruments -0.5], interpolation='nearest')
         axes[2].set_title("Predicted Probabilities (0.0 to 1.0)")
         axes[2].set_ylabel("Instruments")
         axes[2].set_yticks(np.arange(num_instruments))
