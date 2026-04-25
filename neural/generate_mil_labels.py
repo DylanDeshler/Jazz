@@ -224,6 +224,56 @@ for i in range(1, num_classes + 1):
         probabilities=probs, 
         class_name=str(i), 
         n_components=3, 
-        std_multiplier=2.0
+        std_multiplier=1.0
     )
-    
+
+# (15700758,)
+# Fitting GMM for 1...
+# [1] Negative Threshold (<): 0.303
+# [1] Positive Threshold (>): 0.703
+# [1] Ignore Zone: 0.303 to 0.703
+# (15700758,)
+# Fitting GMM for 2...
+# [2] Negative Threshold (<): 0.199
+# [2] Positive Threshold (>): 0.652
+# [2] Ignore Zone: 0.199 to 0.652
+# (15700758,)
+# Fitting GMM for 3...
+# [3] Negative Threshold (<): 0.291
+# [3] Positive Threshold (>): 0.522
+# [3] Ignore Zone: 0.291 to 0.522
+# (15700758,)
+# Fitting GMM for 4...
+# [4] Negative Threshold (<): 0.845
+# [4] Positive Threshold (>): 0.724
+# [4] Ignore Zone: 0.845 to 0.724
+# (15700758,)
+# Fitting GMM for 5...
+# [5] Negative Threshold (<): 0.152
+# [5] Positive Threshold (>): 0.364
+# [5] Ignore Zone: 0.152 to 0.364
+# (15700758,)
+# Fitting GMM for 6...
+# [6] Negative Threshold (<): 0.225
+# [6] Positive Threshold (>): 0.629
+# [6] Ignore Zone: 0.225 to 0.629
+# (15700758,)
+# Fitting GMM for 7...
+# [7] Negative Threshold (<): 0.238
+# [7] Positive Threshold (>): 0.687
+# [7] Ignore Zone: 0.238 to 0.687
+# (15700758,)
+# Fitting GMM for 8...
+# [8] Negative Threshold (<): 0.291
+# [8] Positive Threshold (>): 0.746
+# [8] Ignore Zone: 0.291 to 0.746
+# (15700758,)
+# Fitting GMM for 9...
+# [9] Negative Threshold (<): 0.280
+# [9] Positive Threshold (>): 0.740
+# [9] Ignore Zone: 0.280 to 0.740
+# (15700758,)
+# Fitting GMM for 10...
+# [10] Negative Threshold (<): 0.314
+# [10] Positive Threshold (>): 0.740
+# [10] Ignore Zone: 0.314 to 0.740
