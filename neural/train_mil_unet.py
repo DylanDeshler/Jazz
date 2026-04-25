@@ -465,7 +465,6 @@ def save_samples(iter_num):
     mels = mels.cpu().float().numpy()
     targets = targets.cpu().numpy()
     preds = preds.cpu().float().numpy()
-    print(mels.shape, targets.shape, preds.shape)
     
     # Custom colormap for Ground Truth so -1 (Ignore) is visually distinct (Gray)
     # 0 = Blue (Negative), 0.5 = Gray (Ignore), 1 = Red (Positive)
@@ -473,7 +472,7 @@ def save_samples(iter_num):
     
     # Loop through the requested number of samples in the batch
     for i in range(B):
-        total_seconds = targets[i].shape[1] / sample_rate
+        total_seconds = targets[i].shape[0] / sample_rate
         
         fig, axes = plt.subplots(3, 1, figsize=(14, 10), gridspec_kw={'height_ratios': [2, 1, 1]}, sharex=True)
         
@@ -486,7 +485,7 @@ def save_samples(iter_num):
         # --- 2. Ground Truth ---
         # Remap targets so imshow handles the -1, 0, 1 scale perfectly
         gt = targets[i].transpose(1, 0) # Shape: (20, Samples)
-        im1 = axes[1].imshow(gt, aspect='auto', origin='lower', cmap=gt_cmap, vmin=-1, vmax=1, extent=[0, total_seconds, 0, num_instruments], interpolation='nearest')
+        im1 = axes[1].imshow(gt, aspect='auto', origin='lower', cmap=gt_cmap, vmin=-1, vmax=1, extent=[0, total_seconds, -0.5, num_instruments -0.5], interpolation='nearest')
         axes[1].set_title("Ground Truth Masks (-1=Gray, 0=Blue, 1=Red)")
         axes[1].set_ylabel("Instruments")
         axes[1].set_yticks(np.arange(num_instruments))
@@ -494,11 +493,11 @@ def save_samples(iter_num):
         
         # --- 3. Predictions ---
         pred = preds[i].transpose(1, 0) # Shape: (20, Samples)
-        im2 = axes[2].imshow(pred, aspect='auto', origin='lower', cmap='magma', vmin=0, vmax=1, extent=[0, total_seconds, 0, num_instruments], interpolation='nearest')
+        im2 = axes[2].imshow(pred, aspect='auto', origin='lower', cmap='magma', vmin=0, vmax=1, extent=[0, total_seconds, -0.5, num_instruments -0.5], interpolation='nearest')
         axes[2].set_title("Predicted Probabilities (0.0 to 1.0)")
         axes[2].set_ylabel("Instruments")
-        axes[1].set_yticks(np.arange(num_instruments))
-        axes[1].set_yticklabels(mlb.classes_, fontsize=8)
+        axes[2].set_yticks(np.arange(num_instruments))
+        axes[2].set_yticklabels(mlb.classes_, fontsize=8)
         axes[2].set_xlabel("Time (Raw Audio Samples)")
         
         # Note: We do not share the X-axis because axes[0] is in Mel Frames, 
