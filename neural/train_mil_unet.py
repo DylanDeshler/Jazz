@@ -473,29 +473,31 @@ def save_samples(iter_num):
     
     # Loop through the requested number of samples in the batch
     for i in range(B):
-        fig, axes = plt.subplots(3, 1, figsize=(14, 10), gridspec_kw={'height_ratios': [2, 1, 1]})
+        total_seconds = targets[i].shape[1] / sample_rate
+        
+        fig, axes = plt.subplots(3, 1, figsize=(14, 10), gridspec_kw={'height_ratios': [2, 1, 1]}, sharex=True)
         
         # --- 1. Mel Spectrogram ---
         mel = mels[i, 0] # Drop the channel dimension
-        im0 = axes[0].imshow(mel, aspect='auto', origin='lower', cmap='magma')
+        im0 = axes[0].imshow(mel, aspect='auto', origin='lower', cmap='magma', extent=[0, total_seconds, 0, mel.shape[0]])
         axes[0].set_title(f"Sample {i}: Input Mel Spectrogram")
         axes[0].set_ylabel("Frequency (Mels)")
         
         # --- 2. Ground Truth ---
         # Remap targets so imshow handles the -1, 0, 1 scale perfectly
         gt = targets[i].transpose(1, 0) # Shape: (20, Samples)
-        im1 = axes[1].imshow(gt, aspect='auto', origin='lower', cmap=gt_cmap, vmin=-1, vmax=1)
+        im1 = axes[1].imshow(gt, aspect='auto', origin='lower', cmap=gt_cmap, vmin=-1, vmax=1, extent=[0, total_seconds, 0, num_instruments], interpolation='nearest')
         axes[1].set_title("Ground Truth Masks (-1=Gray, 0=Blue, 1=Red)")
         axes[1].set_ylabel("Instruments")
-        axes[1].set_yticks(np.arange(len(mlb.classes_)))
+        axes[1].set_yticks(np.arange(num_instruments))
         axes[1].set_yticklabels(mlb.classes_, fontsize=8)
         
         # --- 3. Predictions ---
         pred = preds[i].transpose(1, 0) # Shape: (20, Samples)
-        im2 = axes[2].imshow(pred, aspect='auto', origin='lower', cmap='magma', vmin=0, vmax=1)
+        im2 = axes[2].imshow(pred, aspect='auto', origin='lower', cmap='magma', vmin=0, vmax=1, extent=[0, total_seconds, 0, num_instruments], interpolation='nearest')
         axes[2].set_title("Predicted Probabilities (0.0 to 1.0)")
         axes[2].set_ylabel("Instruments")
-        axes[1].set_yticks(np.arange(len(mlb.classes_)))
+        axes[1].set_yticks(np.arange(num_instruments))
         axes[1].set_yticklabels(mlb.classes_, fontsize=8)
         axes[2].set_xlabel("Time (Raw Audio Samples)")
         
