@@ -549,7 +549,7 @@ class PixelUnshuffleChannelAveragingDownSampleLayer(nn.Module):
 class DownsampleV3(nn.Module):
     def __init__(self, in_channels, out_channels, ratio):
         super().__init__()
-        self.conv = ConvPixelUnshuffleDownSampleLayer(in_channels, out_channels, ratio, ratio * 2 + 1)
+        self.conv = ConvPixelUnshuffleDownSampleLayer(in_channels, out_channels, ratio, kernel_size=1)
         self.shortcut = PixelUnshuffleChannelAveragingDownSampleLayer(in_channels, out_channels, ratio)
     
     def forward(self, x, t=None):
@@ -597,7 +597,7 @@ class ChannelDuplicatingPixelUnshuffleUpSampleLayer(nn.Module):
 class UpsampleV3(nn.Module):
     def __init__(self, in_channels, out_channels, ratio):
         super().__init__()
-        self.conv = ConvPixelShuffleUpSampleLayer(in_channels, out_channels, ratio, ratio * 2 + 1)
+        self.conv = ConvPixelShuffleUpSampleLayer(in_channels, out_channels, ratio, kernel_size=1)
         self.shortcut = ChannelDuplicatingPixelUnshuffleUpSampleLayer(in_channels, out_channels, ratio)
     
     def forward(self, x, t=None):
@@ -664,7 +664,7 @@ class UNet(nn.Module):
                 *[ConvNeXtBlock(dim=out_ch, drop_path=dp_rates[cur + j]) for j in range(depth)]
             )
             self.up_stages.insert(0, stage)
-            cur += depths[i]
+            cur += depth[i]
         
         self.norm = nn.LayerNorm(dims[0], eps=1e-6)
         self.proj = nn.Conv2d(dims[0], num_instruments, kernel_size=1)
