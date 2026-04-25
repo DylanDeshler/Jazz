@@ -555,14 +555,14 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        # losses = estimate_loss()
-        # print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-        # train_metrics = estimate_mAP('train')
-        # for k, v in train_metrics.items():
-        #     print(f'train {k} = {v:.4f}')
-        # val_metrics = estimate_mAP('val')
-        # for k, v in val_metrics.items():
-        #     print(f'val {k} = {v:.4f}')
+        losses = estimate_loss()
+        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        train_metrics = estimate_mAP('train')
+        for k, v in train_metrics.items():
+            print(f'train {k} = {v:.4f}')
+        val_metrics = estimate_mAP('val')
+        for k, v in val_metrics.items():
+            print(f'val {k} = {v:.4f}')
         save_samples(iter_num)
         
         if wandb_log:
@@ -574,6 +574,8 @@ while True:
                 "train/loss": losses['train'],
                 "val/loss": losses['val']
             }
+            log_dict |= {f'train/{k}': v for k, v in train_metrics.items()}
+            log_dict |= {f'val/{k}': v for k, v in val_metrics.items()}
             wandb.log(log_dict)
             
         if iter_num > 0 and losses['val'] < best_val_loss:
@@ -587,6 +589,7 @@ while True:
                 'best_val_loss': best_val_loss,
                 'config': config,
                 'tokens': tokens_trained,
+                'mAP': val_metrics['mAP']
             }
             torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
         if iter_num > 0 and always_save_checkpoint:
@@ -599,6 +602,7 @@ while True:
                 'best_val_loss': best_val_loss,
                 'config': config,
                 'tokens': tokens_trained,
+                'mAP': val_metrics['mAP']
             }
             torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
             
