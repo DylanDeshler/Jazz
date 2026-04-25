@@ -462,11 +462,10 @@ def save_samples(iter_num):
         preds = model(X)
     model.train()
     
-    X = X.cpu().numpy()
     mels = mels.cpu().float().numpy()
     targets = targets.cpu().numpy()
     preds = preds.cpu().float().numpy()
-    print(X.shape, mels.shape, targets.shape, preds.shape)
+    print(mels.shape, targets.shape, preds.shape)
     
     # Custom colormap for Ground Truth so -1 (Ignore) is visually distinct (Gray)
     # 0 = Blue (Negative), 0.5 = Gray (Ignore), 1 = Red (Positive)
@@ -484,13 +483,13 @@ def save_samples(iter_num):
         
         # --- 2. Ground Truth ---
         # Remap targets so imshow handles the -1, 0, 1 scale perfectly
-        gt = targets[i] # Shape: (20, Samples)
+        gt = targets[i].transpose(0, 1) # Shape: (20, Samples)
         im1 = axes[1].imshow(gt, aspect='auto', origin='lower', cmap=gt_cmap, vmin=-1, vmax=1)
         axes[1].set_title("Ground Truth Masks (-1=Gray, 0=Blue, 1=Red)")
         axes[1].set_ylabel("Instruments")
         
         # --- 3. Predictions ---
-        pred = preds[i] # Shape: (20, Samples)
+        pred = preds[i].transpose(0, 1) # Shape: (20, Samples)
         im2 = axes[2].imshow(pred, aspect='auto', origin='lower', cmap='magma', vmin=0, vmax=1)
         axes[2].set_title("Predicted Probabilities (0.0 to 1.0)")
         axes[2].set_ylabel("Instruments")
