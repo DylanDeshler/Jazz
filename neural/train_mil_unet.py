@@ -411,13 +411,13 @@ def estimate_mAP(split):
     for _ in tqdm(range(eval_iters)):
         X, targets = get_batch(split)
         with ctx:
-            all_preds.append(model(X).cpu().detach().numpy())
-            all_targets.append(targets.cpu().detach().numpy())
+            all_preds.append(model(X))
+            all_targets.append(targets)
     model.train()
         
     # Concatenate all batches -> (Total_Items, Num_Classes, Samples)
-    all_preds = np.concatenate(all_preds, axis=0)
-    all_targets = np.concatenate(all_targets, axis=0)
+    all_preds = torch.cat(all_preds, dim=0).cpu().detach().numpy()
+    all_targets = torch.cat(all_targets, dim=0).cpu().detach().numpy()
     
     num_classes = all_targets.shape[-1]
     metrics = {}
