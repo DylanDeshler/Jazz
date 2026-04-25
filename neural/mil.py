@@ -649,17 +649,19 @@ class UNet(nn.Module):
         for i in reversed(range(4)):
             if i == 0:
                 out_ch = dims[0]
+                depth = depths[0]
                 upsample = UpsampleV3(dims[i], out_ch, 4)
                 proj = nn.Conv2d(out_ch + in_chans, out_ch, kernel_size=1)
             else:
                 out_ch = dims[i-1]
+                depth = depths[i-1]
                 upsample = UpsampleV3(dims[i], out_ch, 2)
                 proj = nn.Conv2d(out_ch * 2, out_ch, kernel_size=1)
             self.upsample_layers.insert(0, upsample)
             self.skip_projs.insert(0, proj)
         
             stage = nn.Sequential(
-                *[ConvNeXtBlock(dim=out_ch, drop_path=dp_rates[cur + j]) for j in range(depths[i])]
+                *[ConvNeXtBlock(dim=out_ch, drop_path=dp_rates[cur + j]) for j in range(depth)]
             )
             self.up_stages.insert(0, stage)
             cur += depths[i]
