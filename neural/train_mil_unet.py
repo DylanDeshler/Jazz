@@ -483,7 +483,7 @@ def save_samples(iter_num):
         
         # --- 2. Ground Truth ---
         # Remap targets so imshow handles the -1, 0, 1 scale perfectly
-        gt = targets[i].transpose(0, 1) # Shape: (20, Samples)
+        gt = targets[i].transpose(1, 0) # Shape: (20, Samples)
         im1 = axes[1].imshow(gt, aspect='auto', origin='lower', cmap=gt_cmap, vmin=-1, vmax=1)
         axes[1].set_title("Ground Truth Masks (-1=Gray, 0=Blue, 1=Red)")
         axes[1].set_ylabel("Instruments")
@@ -491,7 +491,7 @@ def save_samples(iter_num):
         axes[1].set_yticklabels(mlb.classes_, fontsize=8)
         
         # --- 3. Predictions ---
-        pred = preds[i].transpose(0, 1) # Shape: (20, Samples)
+        pred = preds[i].transpose(1, 0) # Shape: (20, Samples)
         im2 = axes[2].imshow(pred, aspect='auto', origin='lower', cmap='magma', vmin=0, vmax=1)
         axes[2].set_title("Predicted Probabilities (0.0 to 1.0)")
         axes[2].set_ylabel("Instruments")
