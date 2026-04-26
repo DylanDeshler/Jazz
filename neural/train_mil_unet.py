@@ -331,7 +331,7 @@ model_args = dict(
     # depths=[3, 3, 9, 3], dims=[96, 192, 384, 768],
     depths=[3, 3, 27, 3], dims=[128, 256, 512, 1024],
     drop_path_rate=0.1,
-    num_heads=12,
+    num_heads=16,
     transformer_layers=2,
     time_length=time_length,
     frequency_length=frequency_length
