@@ -328,10 +328,10 @@ model_args = dict(
     n_mels=n_mels,
     in_chans=1,
     # depths=[3, 3, 9, 3], dims=[64, 128, 256, 512],
-    depths=[3, 3, 9, 3], dims=[96, 192, 384, 768],
-    # depths=[3, 3, 27, 3], dims=[128, 256, 512, 1024],
+    # depths=[3, 3, 9, 3], dims=[96, 192, 384, 768],
+    depths=[3, 3, 27, 3], dims=[128, 256, 512, 1024],
     drop_path_rate=0.1,
-    num_heads=8,
+    num_heads=12,
     transformer_layers=2,
     time_length=time_length,
     frequency_length=frequency_length
