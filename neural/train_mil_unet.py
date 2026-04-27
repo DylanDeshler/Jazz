@@ -55,7 +55,7 @@ n_mels = 192
 time_length = 32
 frequency_length = 64
 # adamw optimizer
-learning_rate = 4e-3 * math.sqrt(batch_size / 4096) # max learning rate
+learning_rate = 4e-3 * math.sqrt(batch_size * gradient_accumulation_steps / 4096) # max learning rate
 max_iters = 1000000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
@@ -523,8 +523,6 @@ def get_lr(it):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
 
-
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 model.train()
 
 if wandb_log and master_process:

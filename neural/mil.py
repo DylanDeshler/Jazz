@@ -636,10 +636,10 @@ class UNet(nn.Module):
             self.down_stages.append(stage)
             cur += depths[i]
         
-        # middle
-        self.blocks = nn.ModuleList([
-            SelfAttentionBlock(dims[-1], num_heads, mlp_ratio=mlp_ratio) for _ in range(transformer_layers)
-        ])
+        # # middle
+        # self.blocks = nn.ModuleList([
+        #     SelfAttentionBlock(dims[-1], num_heads, mlp_ratio=mlp_ratio) for _ in range(transformer_layers)
+        # ])
         
         # up
         self.skip_projs = nn.ModuleList([])
@@ -706,18 +706,18 @@ class UNet(nn.Module):
             skips.append(x)
         
         
-        # middle
-        B, C, H, W = x.shape
-        x = rearrange(x, 'b c h w -> b (h w) c')
+        # # middle
+        # B, C, H, W = x.shape
+        # x = rearrange(x, 'b c h w -> b (h w) c')
         
-        freqs_cis = precompute_freqs_cis_2d(
-            dim=self.head_dim, 
-            height=H, 
-            width=W
-        ).to(x.device)
-        for block in self.blocks:
-            x = block(x, freqs_cis=freqs_cis)
-        x = rearrange(x, 'b (h w) c -> b c h w', h=H, w=W)
+        # freqs_cis = precompute_freqs_cis_2d(
+        #     dim=self.head_dim, 
+        #     height=H, 
+        #     width=W
+        # ).to(x.device)
+        # for block in self.blocks:
+        #     x = block(x, freqs_cis=freqs_cis)
+        # x = rearrange(x, 'b (h w) c -> b c h w', h=H, w=W)
         
         # up
         skips.pop()
