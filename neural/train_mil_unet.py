@@ -37,9 +37,9 @@ save_interval = 2500
 eval_iters = 300
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = True # disabled by default
+wandb_log = False # disabled by default
 wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
@@ -317,29 +317,94 @@ def fetch_single_sample(idx, n_samples, pos_thresh, neg_thresh):
 # Create this ONCE outside of your function.
 executor = ThreadPoolExecutor(max_workers=16)
 
-def get_batch(split='train'):
-    if split == 'train':
+import queue
+import threading
+
+# 1. Create a thread-safe Queue to hold our ready-to-go batches.
+# maxsize=3 prevents the CPU from blowing up your RAM by loading 100 batches ahead.
+batch_queue = queue.Queue(maxsize=3)
+stop_event = threading.Event()
+
+def prefetch_worker():
+    """This function runs forever in the background, constantly filling the queue."""
+    while not stop_event.is_set():
+        # Re-use our fast multithreaded logic to build a batch
         idxs = np.random.choice(train_idx, batch_size, p=train_durations).tolist()
+            
+        # executor is your ThreadPoolExecutor from the previous code
+        results = list(executor.map(
+            lambda idx: fetch_single_sample(idx, n_samples, positive_thresholds, negative_thresholds), 
+            idxs
+        ))
+        
+        x = [res[0] for res in results]
+        inst = [res[1] for res in results]
+        
+        # Pin memory on the background thread!
+        x = torch.from_numpy(np.asarray(x)).unsqueeze(1).pin_memory()
+        inst = torch.from_numpy(np.asarray(inst)).pin_memory()
+        
+        # 2. Block here if the queue is full, wait for the GPU to consume a batch.
+        batch_queue.put((x, inst))
+
+# 3. Start the background prefetcher before your training loop begins
+prefetch_thread = threading.Thread(target=prefetch_worker, daemon=True)
+prefetch_thread.start()
+
+def get_batch(split='train'):
+    # 1. Instantly pop a pre-assembled batch from RAM
+    # This will block ONLY if the queue is completely empty (meaning your GPU is 
+    # faster than your SSD can read, which is the ultimate bottleneck).
+    if split == 'train':
+        x, inst = batch_queue.get()
+        
+        # 2. Shoot to GPU (non_blocking=True works perfectly because memory is pinned)
+        x = x.to(device, non_blocking=True)
+        inst = inst.to(device, non_blocking=True)
     else:
         idxs = np.random.choice(test_idx, batch_size, p=test_durations).tolist()
     
-    # 4. Multithreaded Mapping
-    # This fires off all `batch_size` requests simultaneously.
-    # The main thread waits here until all workers finish grabbing their samples.
-    results = list(executor.map(
-        lambda idx: fetch_single_sample(idx, n_samples, positive_thresholds, negative_thresholds), 
-        idxs
-    ))
+        # 4. Multithreaded Mapping
+        # This fires off all `batch_size` requests simultaneously.
+        # The main thread waits here until all workers finish grabbing their samples.
+        results = list(executor.map(
+            lambda idx: fetch_single_sample(idx, n_samples, positive_thresholds, negative_thresholds), 
+            idxs
+        ))
+        
+        # Unpack the results
+        x = [res[0] for res in results]
+        inst = [res[1] for res in results]
     
-    # Unpack the results
-    x = [res[0] for res in results]
-    inst = [res[1] for res in results]
-    
-    # Convert to Tensors and shoot to GPU
-    x = torch.from_numpy(np.asarray(x)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-    inst = torch.from_numpy(np.asarray(inst)).pin_memory().to(device, non_blocking=True)
+        # Convert to Tensors and shoot to GPU
+        x = torch.from_numpy(np.asarray(x)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+        inst = torch.from_numpy(np.asarray(inst)).pin_memory().to(device, non_blocking=True)
     
     return x, inst
+
+# def get_batch(split='train'):
+#     if split == 'train':
+#         idxs = np.random.choice(train_idx, batch_size, p=train_durations).tolist()
+#     else:
+#         idxs = np.random.choice(test_idx, batch_size, p=test_durations).tolist()
+    
+#     # 4. Multithreaded Mapping
+#     # This fires off all `batch_size` requests simultaneously.
+#     # The main thread waits here until all workers finish grabbing their samples.
+#     results = list(executor.map(
+#         lambda idx: fetch_single_sample(idx, n_samples, positive_thresholds, negative_thresholds), 
+#         idxs
+#     ))
+    
+#     # Unpack the results
+#     x = [res[0] for res in results]
+#     inst = [res[1] for res in results]
+    
+#     # Convert to Tensors and shoot to GPU
+#     x = torch.from_numpy(np.asarray(x)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+#     inst = torch.from_numpy(np.asarray(inst)).pin_memory().to(device, non_blocking=True)
+    
+#     return x, inst
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
