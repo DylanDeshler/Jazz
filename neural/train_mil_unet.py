@@ -415,7 +415,7 @@ def get_batch(split='train'):
     x = []
     labels = []
     for idx in idxs:
-        data = np.load(f'/home/ubuntu/Data/MIL_labels/{idx}.npy', mmap_mode='r').astype(np.float32)
+        data = np.load(f'/home/ubuntu/Data/MIL_labels/{idx}.npy', mmap_mode='r')
         start = np.random.randint(0, len(data) - n_samples)
         x.append(data[start:start+n_samples, 0])
         labels.append(data[start:start+n_samples, 1:])
@@ -428,8 +428,8 @@ def get_batch(split='train'):
     inst[pos_mask] = 1.0
     inst[neg_mask] = 0.0
     
-    x = torch.from_numpy(np.asarray(x)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-    inst = torch.from_numpy(inst).pin_memory().to(device, non_blocking=True)
+    x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+    inst = torch.from_numpy(inst.astype(np.float32)).pin_memory().to(device, non_blocking=True)
     
     return x, inst
 
