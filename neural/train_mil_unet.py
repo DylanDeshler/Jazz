@@ -322,7 +322,7 @@ import threading
 
 # 1. Create a thread-safe Queue to hold our ready-to-go batches.
 # maxsize=3 prevents the CPU from blowing up your RAM by loading 100 batches ahead.
-batch_queue = queue.Queue(maxsize=3)
+batch_queue = queue.Queue(maxsize=100)
 stop_event = threading.Event()
 
 def prefetch_worker():
