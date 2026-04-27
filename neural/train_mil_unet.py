@@ -30,10 +30,10 @@ from sklearn.preprocessing import MultiLabelBinarizer
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
 out_dir = 'MIL_unet'
-eval_interval = 2500
-sample_interval = 2500
+eval_interval = 5000
+sample_interval = 5000
 log_interval = 100
-save_interval = 2500
+save_interval = 5000
 eval_iters = 300
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
@@ -44,8 +44,8 @@ wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 4
-batch_size = 32
+gradient_accumulation_steps = 1
+batch_size = 128
 # model
 n_samples = 16383 * 5
 sample_rate = 16000
