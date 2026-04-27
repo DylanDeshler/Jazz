@@ -218,29 +218,54 @@ train_durations = durations[train_idx] / np.sum(durations[train_idx])
 test_durations = durations[test_idx] / np.sum(durations[test_idx])
 del durations
 
+# positive_thresholds = {
+#     0: 0.90,
+#     1: 0.875,
+#     2: 0.8,
+#     3: 0.92,
+#     4: 0.2,
+#     5: 0.8,
+#     6: 0.85,
+#     7: 0.92,
+#     8: 0.92,
+#     9: 0.92
+# }
+# negative_thresholds = {
+#     0: 0.15,
+#     1: 0.2,
+#     2: 0.175,
+#     3: 0.7,
+#     4: 0.1,
+#     5: 0.15,
+#     6: 0.15,
+#     7: 0.15,
+#     8: 0.15,
+#     9: 0.15
+# }
+
 positive_thresholds = {
-    0: 0.90,
-    1: 0.875,
-    2: 0.8,
-    3: 0.92,
-    4: 0.2,
-    5: 0.8,
-    6: 0.85,
-    7: 0.92,
-    8: 0.92,
-    9: 0.92
+    0: 0.703,
+    1: 0.652,
+    2: 0.522,
+    3: 0.845,
+    4: 0.364,
+    5: 0.629,
+    6: 0.687,
+    7: 0.746,
+    8: 0.740,
+    9: 0.740
 }
 negative_thresholds = {
-    0: 0.15,
-    1: 0.2,
-    2: 0.175,
-    3: 0.7,
-    4: 0.1,
-    5: 0.15,
-    6: 0.15,
-    7: 0.15,
-    8: 0.15,
-    9: 0.15
+    0: 0.303,
+    1: 0.199,
+    2: 0.291,
+    3: 0.724,
+    4: 0.152,
+    5: 0.225,
+    6: 0.238,
+    7: 0.291,
+    8: 0.280,
+    9: 0.314
 }
 positive_thresholds = np.array([positive_thresholds[i] for i in range(len(mlb.classes_))])
 negative_thresholds = np.array([negative_thresholds[i] for i in range(len(mlb.classes_))])
