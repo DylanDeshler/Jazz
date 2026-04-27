@@ -213,20 +213,27 @@ print(len(paths))
 #             dtype=np.float16
 #         )
 
-np.random.seed(0)
-to_samples = np.random.choice(np.arange(len(paths)), 8192, replace=False)
+os.makedirs(out_prefix, exist_ok=True)
 file = h5py.File(out_prefix + '.h5', 'r')
-probs = [file[str(key)][::(rate // 10)].astype(np.float32) for key in to_samples]
-probs = np.concatenate(probs, axis=0)
-print(probs.shape)
+for idx in tqdm(file.keys()):
+    data = file[idx][:]
+    
+    np.save(os.path.join(out_prefix, f"{idx}.npy"), data)
 
-for i in range(1, num_classes + 1):
-    neg_t, pos_t = calculate_gmm_thresholds(
-        probabilities=probs[:, i], 
-        class_name=str(i), 
-        n_components=3, 
-        std_multiplier=1.0
-    )
+# np.random.seed(0)
+# to_samples = np.random.choice(np.arange(len(paths)), 8192, replace=False)
+# file = h5py.File(out_prefix + '.h5', 'r')
+# probs = [file[str(key)][::(rate // 10)].astype(np.float32) for key in to_samples]
+# probs = np.concatenate(probs, axis=0)
+# print(probs.shape)
+
+# for i in range(1, num_classes + 1):
+#     neg_t, pos_t = calculate_gmm_thresholds(
+#         probabilities=probs[:, i], 
+#         class_name=str(i), 
+#         n_components=3, 
+#         std_multiplier=1.0
+#     )
 
 # (15700758,)
 # Fitting GMM for 1...
