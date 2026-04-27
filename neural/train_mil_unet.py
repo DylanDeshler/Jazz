@@ -415,7 +415,7 @@ def get_batch(split='train'):
     x = []
     labels = []
     for idx in idxs:
-        data = np.load(f'{idx}.npy', mmap_mode='r').astype(np.float32)
+        data = np.load(f'/home/ubuntu/Data/MIL_labels/{idx}.npy', mmap_mode='r').astype(np.float32)
         start = np.random.randint(0, len(data) - n_samples)
         x.append(data[start:start+n_samples, 0])
         labels.append(data[start:start+n_samples, 1:])
