@@ -270,13 +270,13 @@ negative_thresholds = {
 positive_thresholds = np.array([positive_thresholds[i] for i in range(len(mlb.classes_))])
 negative_thresholds = np.array([negative_thresholds[i] for i in range(len(mlb.classes_))])
 
-# from concurrent.futures import ThreadPoolExecutor
-# import threading
+from concurrent.futures import ThreadPoolExecutor
+import threading
 
-# # 1. Thread-local storage: 
-# # Opening an H5 file has overhead. We want each worker thread to open the 
-# # file EXACTLY ONCE and keep it open in the background for future batches.
-# thread_local = threading.local()
+# 1. Thread-local storage: 
+# Opening an H5 file has overhead. We want each worker thread to open the 
+# file EXACTLY ONCE and keep it open in the background for future batches.
+thread_local = threading.local()
 
 # def get_h5_file(path):
 #     if not hasattr(thread_local, "h5_file"):
@@ -284,38 +284,26 @@ negative_thresholds = np.array([negative_thresholds[i] for i in range(len(mlb.cl
 #         thread_local.h5_file = h5py.File(path, 'r', swmr=True, libver='latest')
 #     return thread_local.h5_file
 
-# # 2. The Worker Function (Runs in parallel)
-# def fetch_single_sample(idx, n_samples, pos_thresh, neg_thresh):
-#     h5_file = get_h5_file('/home/ubuntu/Data/MIL_labels.h5')
-#     dset = h5_file[str(idx)]
-    
-#     # Calculate the random start BEFORE reading any data
-#     total_len = dset.shape[0]
-#     start = np.random.randint(0, total_len - n_samples)
-    
-#     # DIRECT DISK SLICING: We only load the exact n_samples we need into RAM.
-#     # This prevents the disk from reading the whole 30 second song.
-#     chunk = dset[start : start + n_samples].astype(np.float32)
-#     wav = chunk[:, 0]
-#     labels = chunk[:, 1:]
-    
-#     # VECTORIZED THRESHOLDING: 
-#     # Instead of a Python for-loop, we do this across the entire matrix at C-speed.
-#     # Initialize a new array with our default "-1" (Ignore) state
-#     new_labels = np.full_like(labels, -1.0)
-    
-#     # NumPy broadcasting allows us to compare the 2D labels against the 1D thresholds instantly
-#     pos_mask = labels > pos_thresh
-#     neg_mask = labels < neg_thresh
-    
-#     new_labels[pos_mask] = 1.0
-#     new_labels[neg_mask] = 0.0
-    
-#     return wav, new_labels
+# 2. The Worker Function (Runs in parallel)
+def fetch_single_sample(idx, n_samples, pos_thresh, neg_thresh):
+    data = np.load(f'/home/ubuntu/Data/MIL_labels/{idx}.npy', mmap_mode='r')
+    start = np.random.randint(0, len(data) - n_samples)
+    wav = data[start:start+n_samples, 0]
+    labels = data[start:start+n_samples, 1:]
 
-# # 3. The Global Thread Pool
-# # Create this ONCE outside of your function.
-# executor = ThreadPoolExecutor(max_workers=16)
+    inst = np.full_like(np.asarray(labels), -1)
+    
+    pos_mask = labels > positive_thresholds
+    neg_mask = labels < negative_thresholds
+    
+    inst[pos_mask] = 1.0
+    inst[neg_mask] = 0.0
+        
+    return wav, inst
+
+# 3. The Global Thread Pool
+# Create this ONCE outside of your function.
+executor = ThreadPoolExecutor(max_workers=16)
 
 # import queue
 # import threading
@@ -382,54 +370,54 @@ negative_thresholds = np.array([negative_thresholds[i] for i in range(len(mlb.cl
     
 #     return x, inst
 
-# def get_batch(split='train'):
-#     if split == 'train':
-#         idxs = np.random.choice(train_idx, batch_size, p=train_durations).tolist()
-#     else:
-#         idxs = np.random.choice(test_idx, batch_size, p=test_durations).tolist()
-    
-#     # 4. Multithreaded Mapping
-#     # This fires off all `batch_size` requests simultaneously.
-#     # The main thread waits here until all workers finish grabbing their samples.
-#     results = list(executor.map(
-#         lambda idx: fetch_single_sample(idx, n_samples, positive_thresholds, negative_thresholds), 
-#         idxs
-#     ))
-    
-#     # Unpack the results
-#     x = [res[0] for res in results]
-#     inst = [res[1] for res in results]
-    
-#     # Convert to Tensors and shoot to GPU
-#     x = torch.from_numpy(np.asarray(x)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-#     inst = torch.from_numpy(np.asarray(inst)).pin_memory().to(device, non_blocking=True)
-    
-#     return x, inst
-
 def get_batch(split='train'):
     if split == 'train':
         idxs = np.random.choice(train_idx, batch_size, p=train_durations).tolist()
     else:
         idxs = np.random.choice(test_idx, batch_size, p=test_durations).tolist()
     
-    x = []
-    labels = []
-    for idx in idxs:
-        data = np.load(f'/home/ubuntu/Data/MIL_labels/{idx}.npy', mmap_mode='r')
-        start = np.random.randint(0, len(data) - n_samples)
-        x.append(data[start:start+n_samples, 0])
-        labels.append(data[start:start+n_samples, 1:])
+    # 4. Multithreaded Mapping
+    # This fires off all `batch_size` requests simultaneously.
+    # The main thread waits here until all workers finish grabbing their samples.
+    results = list(executor.map(
+        lambda idx: fetch_single_sample(idx, n_samples, positive_thresholds, negative_thresholds), 
+        idxs
+    ))
     
-    inst = np.full_like(np.asarray(labels), -1)
+    # Unpack the results
+    x = [res[0] for res in results]
+    inst = [res[1] for res in results]
     
-    pos_mask = labels > positive_thresholds
-    neg_mask = labels < negative_thresholds
-    
-    inst[pos_mask] = 1.0
-    inst[neg_mask] = 0.0
-    
+    # Convert to Tensors and shoot to GPU
     x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-    inst = torch.from_numpy(inst.astype(np.float32)).pin_memory().to(device, non_blocking=True)
+    inst = torch.from_numpy(np.asarray(inst).astype(np.float32)).pin_memory().to(device, non_blocking=True)
+    
+    return x, inst
+
+# def get_batch(split='train'):
+#     if split == 'train':
+#         idxs = np.random.choice(train_idx, batch_size, p=train_durations).tolist()
+#     else:
+#         idxs = np.random.choice(test_idx, batch_size, p=test_durations).tolist()
+    
+#     x = []
+#     labels = []
+#     for idx in idxs:
+#         data = np.load(f'/home/ubuntu/Data/MIL_labels/{idx}.npy', mmap_mode='r')
+#         start = np.random.randint(0, len(data) - n_samples)
+#         x.append(data[start:start+n_samples, 0])
+#         labels.append(data[start:start+n_samples, 1:])
+    
+#     inst = np.full_like(np.asarray(labels), -1)
+    
+#     pos_mask = labels > positive_thresholds
+#     neg_mask = labels < negative_thresholds
+    
+#     inst[pos_mask] = 1.0
+#     inst[neg_mask] = 0.0
+    
+#     x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+#     inst = torch.from_numpy(inst.astype(np.float32)).pin_memory().to(device, non_blocking=True)
     
     return x, inst
 
