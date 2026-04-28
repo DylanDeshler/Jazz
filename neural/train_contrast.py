@@ -269,7 +269,7 @@ durations = np.asarray([len(wav) for wav in wavs])
 train_durations = durations[train_idx] / np.sum(durations[train_idx])
 test_durations = durations[test_idx] / np.sum(durations[test_idx])
 
-def get_batch(split='train'):
+def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
         idxs = np.random.choice(train_idx, batch_size // 2, p=train_durations, replace=False).tolist()
     else:
