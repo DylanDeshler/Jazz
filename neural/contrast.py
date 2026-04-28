@@ -413,6 +413,12 @@ class Transformer(nn.Module):
         elif isinstance(module, nn.Embedding):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
+        # nn.init.zeros_(self.fc.weight)
+        # zero out c_proj weights in all blocks
+        for block in self.blocks:
+            nn.init.zeros_(block.attn.proj)
+            nn.init.zeros_(block.mlp.w3)
+
     def info_nce_loss(self, features):
         # labels = torch.cat([torch.arange(self.args.batch_size) for i in range(self.args.n_views)], dim=0)
         labels = torch.arange(len(features) // 2).repeat_interleave(2, dim=0)
