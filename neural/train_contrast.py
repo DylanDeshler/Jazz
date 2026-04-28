@@ -129,26 +129,162 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
-file_offsets = np.memmap('/home/dylan.d/research/music/Jazz/file_offsets.bin', dtype=np.int64, mode='r', shape=(32939, 4))
-n_files = len(file_offsets)
+# file_offsets = np.memmap('/home/dylan.d/research/music/Jazz/file_offsets.bin', dtype=np.int64, mode='r', shape=(32939, 4))
+# n_files = len(file_offsets)
 
-def sample_non_overlapping(start_fraction, end_fraction):
-    pos = np.random.choice(np.arange(int(n_files * start_fraction), int(n_files * end_fraction)), size=(batch_size // 2,), replace=False)
+# def sample_non_overlapping(start_fraction, end_fraction):
+#     pos = np.random.choice(np.arange(int(n_files * start_fraction), int(n_files * end_fraction)), size=(batch_size // 2,), replace=False)
     
-    starts = np.repeat(file_offsets[pos, 0], 2)
-    lengths = np.repeat(file_offsets[pos, 1], 2)
-    idxs = np.concatenate([np.random.randint(start, start + length - n_samples, size=(1,)) for start, length in zip(starts, lengths)], axis=0)
-    return idxs
+#     starts = np.repeat(file_offsets[pos, 0], 2)
+#     lengths = np.repeat(file_offsets[pos, 1], 2)
+#     idxs = np.concatenate([np.random.randint(start, start + length - n_samples, size=(1,)) for start, length in zip(starts, lengths)], axis=0)
+#     return idxs
 
-def get_batch(split='train', batch_size=batch_size):
-    data = np.memmap("/home/dylan.d/research/music/Jazz/wavs_16khz.bin", dtype=np.float32, mode='r')
+# def get_batch(split='train', batch_size=batch_size):
+#     data = np.memmap("/home/dylan.d/research/music/Jazz/wavs_16khz.bin", dtype=np.float32, mode='r')
     
+#     if split == 'train':
+#         idxs = sample_non_overlapping(0, 0.98)
+#     else:
+#         idxs = sample_non_overlapping(0.98, 1)
+    
+#     x = torch.from_numpy(np.stack([data[idx:idx+n_samples] for idx in idxs], axis=0).astype(np.float32)).unsqueeze(1)[:batch_size].pin_memory().to(device, non_blocking=True)
+#     return x
+
+import pandas as pd
+from collections import defaultdict
+from sklearn.preprocessing import MultiLabelBinarizer
+
+bpm_bins = torch.arange(40, 300, 5, dtype=torch.float32)
+year_bins = torch.arange(1900, 1980, 5, dtype=torch.float32)
+bpm_sigma, year_sigma = 5, 2.5
+
+# cards = pickle.load(open('/home/dylan.d/research/music/Jazz/JazzSet.0.9.pkl', "rb"))
+cards = pickle.load(open('/home/ubuntu/base/Data/JazzSet.0.9.pkl', "rb"))
+cards = [card for card in cards if card]
+
+years = []
+labels = []
+people = []
+instruments = []
+artists = []
+urls = []
+for card in cards:
+    urls.append(card['URLS'][0]['FILE'].split('/')[-2].split('.')[0])
+    years.append(card['DATE']['YEAR'])
+    labels.append(card['RECORD']['LABEL'])
+    people.append(list(card['PERSONNEL']['PEOPLE'].keys()))
+    instruments.append(list(card['PERSONNEL']['INSTRUMENTS'].keys()))
+    artists.append(card['ARTIST'])
+
+url_map = {url: i for i, url in enumerate(urls)}
+
+# Record labels
+record_label_names = set(list(pd.DataFrame(labels, columns=['LABEL']).value_counts(normalize=True).reset_index()['LABEL'].iloc[:25]))
+record_label_names = [label if label in record_label_names else 'Other' for label in labels]
+mlb = MultiLabelBinarizer().fit(record_label_names)
+record_labels = mlb.transform(record_label_names)
+record_labels = torch.from_numpy(record_labels)
+
+# Instruments
+# instrument_map_df = pd.read_csv('/home/dylan.d/research/music/Jazz/instrument_mapping.csv')
+instrument_map_df = pd.read_csv('/home/ubuntu/base/Data/instrument_mapping.csv')
+instrument_map_df = instrument_map_df.apply(lambda col: col.astype(str).str.lower())
+instrument_map = {row['Abbreviation']: row['Consolidated_Category'] for i, row in instrument_map_df.iterrows()}
+instrument_categories = set(list(instrument_map.values()))
+
+instrument_labels = defaultdict(list)
+for instrument_list in instruments:
+    categories = {instrument_map[l.lower()] for l in instrument_list if l in instrument_map}
+    for cat in instrument_categories:
+        if cat in categories:
+            instrument_labels[cat].append(True)
+        else:
+            instrument_labels[cat].append(False)
+
+props = pd.DataFrame(instrument_labels, columns=list(instrument_categories)).sum(0)
+instrument_categories = {cat for cat in instrument_categories if props[cat] >= 1000}
+
+instrument_labels = []
+for instrument_list in instruments:
+    categories = {instrument_map[l.lower()] for l in instrument_list if l in instrument_map}
+    categories = categories.intersection(instrument_categories)
+    instrument_labels.append(list(filter(None, categories)))
+
+mlb = MultiLabelBinarizer().fit(instrument_labels)
+instrument_labels = mlb.transform(instrument_labels)
+instrument_labels = torch.from_numpy(instrument_labels)
+
+import json
+import glob
+import librosa
+# all data
+# paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
+# paths = glob.glob('/home/ubuntu/Data/wavs/*')
+# 2 std BPM data
+# paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
+# paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in paths]
+
+paths = glob.glob('/home/ubuntu/Data/measures/*')
+with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
+    beat_paths = json.load(f)
+paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
+print(len(paths))
+wavs = []
+
+from sklearn.model_selection import StratifiedGroupKFold
+kf = StratifiedGroupKFold(n_splits=20, shuffle=True, random_state=0)
+
+valid_idxs = []
+for path in paths:
+    url = path.split('/')[-1].split('.')[0]
+    valid_idxs.append(url_map[url])
+
+year_keys = [(year // 10) * 10 for year in years]
+strat_key = [f'{year}_{record}' for i, (year, record) in enumerate(zip(year_keys, record_label_names)) if i in valid_idxs]
+artists = [artist for i, artist in enumerate(artists) if i in valid_idxs]
+
+df = pd.DataFrame(strat_key, columns=['key'])
+key_counts = df.value_counts()
+rare_keys = key_counts[key_counts < 2].index
+df.loc[df['key'].isin(rare_keys), 'key'] = 'rare_combo'
+train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], df['key'], artists))
+
+import concurrent.futures
+from multiprocessing import cpu_count
+wavs = [None] * len(paths)
+
+with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
+    future_to_index = {
+        executor.submit(lambda x: librosa.load(x, sr=sample_rate)[0], path): i 
+        for i, path in enumerate(paths)
+    }
+    
+    for future in tqdm(concurrent.futures.as_completed(future_to_index), desc='Loading wav files', total=len(paths)):
+        original_index = future_to_index[future]
+        wav = future.result()
+        wavs[original_index] = wav
+
+durations = np.asarray([len(wav) for wav in wavs])
+train_durations = durations[train_idx] / np.sum(durations[train_idx])
+test_durations = durations[test_idx] / np.sum(durations[test_idx])
+
+def get_batch(split='train'):
     if split == 'train':
-        idxs = sample_non_overlapping(0, 0.98)
+        idxs = np.random.choice(train_idx, batch_size // 2, p=train_durations, replace=False).tolist()
     else:
-        idxs = sample_non_overlapping(0.98, 1)
+        idxs = np.random.choice(test_idx, batch_size // 2, p=test_durations, replace=False).tolist()
     
-    x = torch.from_numpy(np.stack([data[idx:idx+n_samples] for idx in idxs], axis=0).astype(np.float32)).unsqueeze(1)[:batch_size].pin_memory().to(device, non_blocking=True)
+    x = []
+    for idx in idxs:
+        wav = wavs[idx]
+        
+        start = np.random.randint(len(wav) - n_samples * 2)
+        x.append(wav[start:start+n_samples])
+        start = np.random.randint(start, len(wav) - n_samples)
+        x.append(wav[start:start+n_samples])
+        
+    x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
     return x
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
