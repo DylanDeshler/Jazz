@@ -416,8 +416,8 @@ class Transformer(nn.Module):
         # nn.init.zeros_(self.fc.weight)
         # zero out c_proj weights in all blocks
         for block in self.blocks:
-            nn.init.zeros_(block.attn.proj)
-            nn.init.zeros_(block.mlp.w3)
+            nn.init.zeros_(block.attn.proj.weight)
+            nn.init.zeros_(block.mlp.w3.weight)
 
     def info_nce_loss(self, features):
         # labels = torch.cat([torch.arange(self.args.batch_size) for i in range(self.args.n_views)], dim=0)
