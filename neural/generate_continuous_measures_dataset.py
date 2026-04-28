@@ -25,9 +25,9 @@ n_samples = 24576
 TARGET_SIG = 4
 total_write_batches = 48
 
-out_prefix = 'low_large_24576_subset_adapter'
+out_prefix = 'low_large_24576_subset_adapter_longtrain'
 
-ckpt_path = os.path.join('tokenizer_low_large_24576_subset', 'ckpt.pt')
+ckpt_path = os.path.join('tokenizer_low_large_24576_subset_longtrain', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 tokenizer_args = checkpoint['model_args']
 vae_embed_dim = tokenizer_args['dimension']
@@ -44,7 +44,7 @@ model.eval()
 model = torch.compile(model)
 encoder_ratios = math.prod(model.encoder.ratios)
 
-ckpt_path = os.path.join('tokenizer_adapter_low_large_24576_subset', 'ckpt.pt')
+ckpt_path = os.path.join('tokenizer_adapter_low_large_24576_subset_longtrain', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 adapter_args = checkpoint['model_args']
 adapter = InvertibleAdapter(**adapter_args).to(device)
@@ -114,7 +114,7 @@ def parse_beat_file(beat_path):
     
     return beat_data
 
-if False:
+if True:
 
     test = False
 
