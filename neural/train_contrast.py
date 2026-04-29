@@ -74,13 +74,13 @@ time_length = 32
 frequency_length = 12
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 1000000 # total number of training iterations
+max_iters = 100000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
-decay_lr = False # whether to decay the learning rate
+decay_lr = True # whether to decay the learning rate
 warmup_iters = 5000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
@@ -128,28 +128,6 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 # note: float16 data type will automatically use a GradScaler
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
-
-# file_offsets = np.memmap('/home/dylan.d/research/music/Jazz/file_offsets.bin', dtype=np.int64, mode='r', shape=(32939, 4))
-# n_files = len(file_offsets)
-
-# def sample_non_overlapping(start_fraction, end_fraction):
-#     pos = np.random.choice(np.arange(int(n_files * start_fraction), int(n_files * end_fraction)), size=(batch_size // 2,), replace=False)
-    
-#     starts = np.repeat(file_offsets[pos, 0], 2)
-#     lengths = np.repeat(file_offsets[pos, 1], 2)
-#     idxs = np.concatenate([np.random.randint(start, start + length - n_samples, size=(1,)) for start, length in zip(starts, lengths)], axis=0)
-#     return idxs
-
-# def get_batch(split='train', batch_size=batch_size):
-#     data = np.memmap("/home/dylan.d/research/music/Jazz/wavs_16khz.bin", dtype=np.float32, mode='r')
-    
-#     if split == 'train':
-#         idxs = sample_non_overlapping(0, 0.98)
-#     else:
-#         idxs = sample_non_overlapping(0.98, 1)
-    
-#     x = torch.from_numpy(np.stack([data[idx:idx+n_samples] for idx in idxs], axis=0).astype(np.float32)).unsqueeze(1)[:batch_size].pin_memory().to(device, non_blocking=True)
-#     return x
 
 import pandas as pd
 from collections import defaultdict
