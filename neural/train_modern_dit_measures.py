@@ -393,6 +393,12 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
+        if iter_num % sample_interval == 0 and master_process:
+            model.eval()
+            with ctx:
+                save_samples(iter_num)
+            model.train()
+            
         losses = estimate_loss()
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         
@@ -431,12 +437,6 @@ while True:
                 'tokens': tokens_trained,
             }
             torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
-        
-        if iter_num % sample_interval == 0 and master_process:
-            model.eval()
-            with ctx:
-                save_samples(iter_num)
-            model.train()
     
     if eval_only:
         break
