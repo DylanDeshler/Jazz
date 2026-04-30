@@ -95,9 +95,7 @@ with torch.no_grad():
         start_stops = [(i*n_samples, (i+1)*n_samples) for i in range(math.ceil(len(wav) / n_samples))]
         starts, stops = zip(*start_stops)
         
-        x = [np.pad(wav[start:stop], (0, n_samples - (stop - start))) for start, stop in start_stops]
-        for w in x:
-            print(w.shape)
+        x = [np.pad(wav[i*n_samples:(i+1)*n_samples], (0, n_samples - len(wav[i*n_samples:(i+1)*n_samples]))) for i in range(math.ceil(len(wav) / n_samples))]
         x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
         styles = []
