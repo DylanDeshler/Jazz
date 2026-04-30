@@ -18,7 +18,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # ==============================================================================
 batch_size = 128
 rate = 16000
-total_write_batches = 48
+total_write_batches = 8
 n_samples = 16383 * 2
 
 out_prefix = 'contrast_learntmep_instance_2s'
