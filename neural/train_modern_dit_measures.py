@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from diffusion_forcing import UnconditionalModernDiT_large as net
+from diffusion_forcing import StyleConditionalModernDiT_large as net
 from dito import DiToV5 as Tokenizer
 from adapter import InvertibleAdapter
 import soundfile as sf
@@ -41,7 +41,7 @@ import pyrubberband as pyrb
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'UnconditionalModernDiT_large_24576_subset_adapter_32chunks'
+out_dir = 'StyleConditionalModernDiT_large_24576_subset_adapter_longtrain_32chunks'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -130,23 +130,26 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
-        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_train.bin', dtype=np.float32, mode='r', shape=(3941406, spatial_window, vae_embed_dim))
-        meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_bpm_train.bin', dtype=np.float32, mode='r')
+        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_train.bin', dtype=np.float32, mode='r', shape=(3941406, spatial_window, vae_embed_dim))
+        style = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_train.bin', dtype=np.float32, mode='r', shape=(3941406, style_dim))
+        meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_bpm_train.bin', dtype=np.float32, mode='r', shape=())
     else:
-        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_val.bin', dtype=np.float32, mode='r', shape=(88303, spatial_window, vae_embed_dim))
-        meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_bpm_val.bin', dtype=np.float32, mode='r')
+        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_val.bin', dtype=np.float32, mode='r', shape=(88303, spatial_window, vae_embed_dim))
+        style = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_val.bin', dtype=np.float32, mode='r', shape=(88303, style_dim))
+        meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_bpm_val.bin', dtype=np.float32, mode='r', shape=())
     
     idxs = torch.randint(len(data) - n_chunks, (batch_size,))    
     x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    style = torch.from_numpy(np.stack([style[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     meta = torch.from_numpy(np.stack([meta[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
 
-    return x, meta
+    return x, style, meta
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
 best_val_loss = 1e9
 
-ckpt_path = os.path.join('tokenizer_low_large_24576_subset', 'ckpt.pt')
+ckpt_path = os.path.join('tokenizer_low_large_24576_subset_longtrain', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 tokenizer_args = checkpoint['model_args']
 
@@ -163,7 +166,7 @@ tokenizer.eval()
 del state_dict
 encoder_ratios = math.prod(tokenizer.encoder.ratios)
 
-ckpt_path = os.path.join('tokenizer_adapter_low_large_24576_subset', 'ckpt.pt')
+ckpt_path = os.path.join('tokenizer_adapter_low_large_24576_subset_longtrain', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 adapter_args = checkpoint['model_args']
 
@@ -241,9 +244,9 @@ def estimate_loss():
     for i, split in enumerate(['train', 'val']):
         losses = torch.zeros(eval_iters)
         for k in tqdm(range(eval_iters)):
-            X, _ = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
+            X, C, _ = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
-                loss = model(X)
+                loss = model(X, C)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -270,8 +273,8 @@ def save_samples(step):
     
     n_steps = 50
     n_samples = 20
-    x, bpm = get_batch('val')
-    x, bpm = x[:n_samples], bpm[:n_samples]
+    x, c, bpm = get_batch('val')
+    x, c, bpm = x[:n_samples], c[:n_samples], bpm[:n_samples]
     
     with ctx:
         y = model.generate(x.shape, n_steps=n_steps)
@@ -308,7 +311,7 @@ if wandb_log and master_process:
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
-X, _ = get_batch('train') # fetch the very first batch
+X, C, _ = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
@@ -388,10 +391,10 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            loss = model(X)
+            loss = model(X, C)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
-        X, _ = get_batch('train')
+        X, C, _ = get_batch('train')
         # backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
     # clip the gradient
