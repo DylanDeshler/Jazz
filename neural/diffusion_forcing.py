@@ -850,6 +850,7 @@ class StyleConditionalModernDiT(nn.Module):
                  mlp_ratio=4,
                  gradient_checkpointing=False,
                  patch_size=1,
+                 use_null_token=False,
                  **kwargs,
                  ):
         super().__init__()
@@ -857,10 +858,14 @@ class StyleConditionalModernDiT(nn.Module):
         self.gradient_checkpointing = gradient_checkpointing
         max_input_size = spatial_window * n_chunks
         self.patch_size = patch_size
+        self.use_null_token = use_null_token
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
         self.x_embedder = Patcher(in_channels, hidden_size, patch_size=patch_size)
         self.fuse_conditioning = SwiGLUMlp(hidden_size + style_dim, int(2 / 3 * mlp_ratio * hidden_size), hidden_size, bias=False)
+        
+        if self.use_null_token:
+            self.null_token = nn.Parameter(torch.randn(style_dim) / style_dim ** 0.5)
         
         self.t_block = nn.Sequential(
             nn.SiLU(),
