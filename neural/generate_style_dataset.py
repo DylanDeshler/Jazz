@@ -18,7 +18,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # ==============================================================================
 batch_size = 128
 rate = 16000
-total_write_batches = 8
+total_write_batches = 48
 n_samples = 16383 * 2
 
 out_prefix = 'contrast_learntmep_instance_2s'
@@ -140,6 +140,7 @@ with torch.no_grad():
             print(f'Writing batch {write_idx}...')
             
             all_styles_arr = np.concatenate(all_styles, axis=0)
+            print(all_styles_arr.shape)
             filename_styles = os.path.join(os.path.dirname(__file__), f'{out_prefix}_style_{str(write_idx).zfill(2)}.bin')
             arr_styles = np.memmap(filename_styles, dtype=np.float32, mode='w+', shape=all_styles_arr.shape)
             arr_styles[:] = all_styles_arr
