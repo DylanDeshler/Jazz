@@ -1,44 +1,34 @@
 import os
 import math
-from contextlib import nullcontext
-from tqdm import tqdm
-
+import json
 import numpy as np
-from numpy.lib.stride_tricks import sliding_window_view
 import torch
-
-import essentia.standard as es
+import soundfile as sf
 import librosa
-from scipy.signal import medfilt
+import glob
+from tqdm import tqdm
+import concurrent.futures
+from multiprocessing import cpu_count
+from contrast import Transformer
 
-from contrast import Transformer as net
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-device = 'cuda'
-dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto 
-device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
-# note: float16 data type will automatically use a GradScaler
-ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
-ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
+# ==============================================================================
+# CONFIGURATION
+# ==============================================================================
+batch_size = 128
+rate = 16000
+total_write_batches = 48
+n_samples = 16383 * 2
 
-batch_size = 1024
+out_prefix = 'contrast_learntmep_instance_2s'
+style_embed_dim = 768
 
-ckpt_path = os.path.join('contrast_learntmep_instance', 'ckpt.pt')
+ckpt_path = os.path.join('contrast_learntmep_instance_2s', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
-model_args = checkpoint['model_args']
-
-hidden_size = model_args['hidden_size']
-sample_rate = model_args['sample_rate']
-window_samples = 163830
-time_length = 32
-frequency_length = 64
-n_fft = 1024
-hop_length = 500
-n_windows = sample_rate // hop_length
-
-model_args['time_length'] = time_length
-model_args['frequency_length'] = frequency_length
-
-model = net(**model_args).to(device)
+tokenizer_args = checkpoint['model_args']
+vae_embed_dim = tokenizer_args['dimension']
+model = Transformer(**tokenizer_args).to(device)
 state_dict = checkpoint['model']
 # fix the keys of the state dictionary :(
 # honestly no idea how checkpoints sometimes get this prefix, have to debug more
@@ -50,250 +40,166 @@ model.load_state_dict(state_dict)
 model.eval()
 model = torch.compile(model)
 
-def extract_centered_style_windows(audio, hop_samples=16000, window_samples=163830):
-    """
-    Extracts perfectly centered style windows using exact sample counts 
-    to align STFT bins with the 1 Hz (16,000 sample) latent frames.
-    
-    Args:
-        audio (np.ndarray): 1D array of raw audio samples.
-        hop_samples (int): Hop length in samples (16000 for 1Hz at 16kHz).
-        window_samples (int): Exact window length in samples (163830 for STFT alignment).
-        
-    Returns:
-        np.ndarray: 2D array of shape (num_frames, window_samples)
-    """
-    # 1. Determine the total number of 1Hz latent frames we need to match
-    # np.ceil ensures we get a frame even for the final fractional second of audio
-    num_frames = int(np.ceil(len(audio) / hop_samples))
-    
-    # 2. Calculate exact padding needed for centering
-    # Pad = (Style_Window - Latent_Window) / 2
-    # For 163830 and 16000, this naturally evaluates to exactly 73915
-    pad_left = (window_samples - hop_samples) // 2
-    
-    # Calculate the absolute total length the array *must* be to extract all frames
-    required_length = (num_frames - 1) * hop_samples + window_samples
-    
-    # Right pad is whatever is leftover to reach the required length safely
-    pad_right = max(0, required_length - (len(audio) + pad_left))
-    
-    # 3. Pad the audio array with 0s (silence)
-    padded_audio = np.pad(audio, (pad_left, pad_right), mode='constant', constant_values=0.0)
-    
-    # 4. Extract the windows using insanely fast NumPy stride tricks
-    view = sliding_window_view(padded_audio, window_shape=window_samples)
-    
-    # Slice the view to jump strictly by our latent hop_length
-    windows = view[::hop_samples]
-    
-    # Force memory contiguity before sending to your Contrastive Style Model
-    return np.ascontiguousarray(windows)
+# Gather paths using the same filtering logic as the original script
+paths = glob.glob('/home/ubuntu/Data/measures/*')
+with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
+    beat_paths = json.load(f)
+paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
+print(f"Total valid files: {len(paths)}")
 
-def get_key_essentia(audio_path):
-    # 1. Load audio natively (resamples to 44.1kHz automatically)
-    audio = es.MonoLoader(filename=audio_path, sampleRate=44100)()
-    
-    # 2. Initialize the Key Extractor
-    # 'temperley' is generally the most robust profile for Jazz/Acoustic
-    key_extractor = es.KeyExtractor(profileType='temperley')
-    
-    # 3. Extract!
-    key, scale, strength = key_extractor(audio)
-    
-    # Returns e.g., "C", "minor", 0.85
-    return f"{key} {scale}", strength
+wavs = [None] * len(paths)
 
-def extract_local_keys(audio, window_sec=15.0, hop_sec=1.0, sr=44100):
-    """
-    Slides a 15-second window across the audio to track key modulations.
-    """
+# Load wavs concurrently
+with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
+    future_to_index = {
+        executor.submit(lambda x: librosa.load(x, sr=rate)[0], path): i 
+        for i, path in enumerate(paths)
+    }
     
-    # Calculate samples
-    window_samples = int(window_sec * sr)
-    hop_samples = int(hop_sec * sr)
-    total_samples = len(audio)
-    
-    # Initialize the Essentia extractor once for speed
-    key_extractor = es.KeyExtractor(profileType='temperley')
-    
-    local_keys = []
-    timestamps = []
-    
-    # 2. Slide the window across the audio
-    for start_sample in range(0, total_samples - window_samples + 1, hop_samples):
-        # Extract the chunk
-        chunk = audio[start_sample : start_sample + window_samples]
-        
-        # 3. Predict the "Global" key of this specific 15s chunk
-        key, scale, strength = key_extractor(chunk)
-        
-        # Calculate the center time of this window
-        center_time_sec = (start_sample + (window_samples / 2)) / sr
-        
-        local_keys.append(f"{key} {scale}")
-        timestamps.append(center_time_sec)
-        
-    return timestamps, local_keys
+    for future in tqdm(concurrent.futures.as_completed(future_to_index), desc='Loading wav files', total=len(paths)):
+        original_index = future_to_index[future]
+        wav = future.result()
+        wavs[original_index] = wav
 
-def smooth_key_timeline(local_keys, smoothing_window=15):
-    """
-    Applies a median filter to remove rapid, erroneous key fluctuations.
-    smoothing_window must be an odd integer (e.g., 15 seconds).
-    """
-    # 1. Map string labels to integer IDs
-    unique_keys = list(dict.fromkeys(local_keys))
-    key_to_id = {k: i for i, k in enumerate(unique_keys)}
-    id_to_key = {i: k for k, i in key_to_id.items()}
-    
-    y_vals = np.array([key_to_id[k] for k in local_keys])
-    
-    # 2. Apply the Median Filter (forces the algorithm to "commit" to a key)
-    smoothed_y = medfilt(y_vals, kernel_size=smoothing_window).astype(int)
-    
-    # 3. Convert back to string labels
-    smoothed_keys = [id_to_key[y] for y in smoothed_y]
-    
-    return smoothed_keys
+def parse_beat_file(beat_path):
+    beat_data = []
+    with open(beat_path, 'r') as f:
+        for line in f:
+            parts = line.strip().split()
+            if len(parts) >= 1:
+                try:
+                    ts = float(parts[0])
+                    bn = 0 
+                    if len(parts) >= 2:
+                        try:
+                            bn = int(float(parts[1]))
+                            if bn > 0:
+                                bn = ((bn - 1) % 4) + 1
+                        except ValueError:
+                            pass
+                    
+                    beat_data.append({'time': ts, 'beat': bn})
+                except ValueError:
+                    continue
+    return beat_data
 
-def create_conditioned_chromagram(smoothed_keys, harmonic_rms, sr=16000, hop_length=512):
-    """
-    Upsamples a 1Hz key timeline to match the STFT frame rate and 
-    synthesizes a dynamic 12D chromagram modulated by RMS.
-    
-    Args:
-        smoothed_keys: List of string keys (e.g., ['C major', 'C major', ...]) 1 per sec.
-        harmonic_rms: 1D torch Tensor of shape (num_frames,) containing HPSS Harmonic RMS.
-        sr: Sample rate used for your STFT.
-        hop_length: STFT hop length (e.g., 512).
-        
-    Returns:
-        dynamic_chroma: Tensor of shape (num_frames, 12) ready for the DiT.
-    """
-    num_frames = harmonic_rms.shape[0]
-    
-    # 1. Krumhansl-Schmuckler Profiles
-    maj_profile = torch.tensor([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
-    min_profile = torch.tensor([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
-    
-    maj_profile = (maj_profile - maj_profile.min()) / (maj_profile.max() - maj_profile.min())
-    min_profile = (min_profile - min_profile.min()) / (min_profile.max() - min_profile.min())
-    
-    maj_profile = maj_profile ** 2
-    min_profile = min_profile ** 2
+write_idx = 0
+write_paths = []
+all_styles = []
 
-    pitch_map = {'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 
-                 'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 
-                 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11}
-    
-    # 2. Pre-compute the 12D vector for every second in our smoothed timeline
-    key_vectors = []
-    for key_str in smoothed_keys:
-        parts = key_str.strip().split()
-        root = parts[0]
-        mode = parts[1].lower()
-        
-        base_profile = maj_profile if mode == 'major' else min_profile
-        shift = pitch_map[root]
-        
-        # Roll the 12D vector so the root note aligns correctly
-        profile = torch.roll(base_profile, shifts=shift)
-        key_vectors.append(profile)
-        
-    # Shape: (Num_Seconds, 12)
-    key_vectors = torch.stack(key_vectors).to(harmonic_rms.device)
-    
-    # 3. Upsample to Frame Rate (Nearest Neighbor Interpolation)
-    # Calculate the exact time in seconds for every single STFT frame
-    frame_times_sec = torch.arange(num_frames, device=harmonic_rms.device) * (hop_length / sr)
-    
-    # Map the frame time to the correct index in our 1Hz keys list
-    # e.g., frame at 4.7s -> index 4
-    key_indices = torch.floor(frame_times_sec).long() 
-    
-    # Clamp to max index to safely handle the exact tail end of the audio file
-    key_indices = torch.clamp(key_indices, max=len(smoothed_keys) - 1)
-    
-    # Gather the 12D vectors for every frame. Shape becomes (num_frames, 12)
-    upsampled_chroma = key_vectors[key_indices]
-    
-    # 4. Modulate with the Harmonic RMS Envelope
-    # This turns the static blocks into a breathing, rhythmic conditioning signal
-    harmonic_rms = harmonic_rms.view(-1, 1) # Ensure shape is (num_frames, 1) for broadcasting
-    dynamic_chroma = upsampled_chroma * harmonic_rms
-    
-    return dynamic_chroma
-
-file_offsets = np.memmap('/home/dylan.d/research/music/Jazz/file_offsets.bin', dtype=np.int64, mode='r', shape=(32939, 4))
-n_files = len(file_offsets)
-
-data = np.memmap("/home/dylan.d/research/music/Jazz/wavs_16khz.bin", dtype=np.float32, mode='r')
-
-# N = 0
-# for i in tqdm(range(n_files)):
-#     start = file_offsets[i, 0]
-#     length = file_offsets[i, 1]
-#     n_seconds = length // sample_rate
-#     n_windows = sample_rate // hop_length
-#     n_frames = n_seconds * sample_rate // hop_length
-#     y = data[start:start+n_seconds*sample_rate].copy()
-    
-#     batch = extract_centered_style_windows(y, hop_samples=sample_rate, window_samples=window_samples)
-#     N += len(batch)
-
-N = 6381425
-print(f'Counted {N} segments')
-style_arr = np.memmap(f'/home/dylan.d/research/music/Jazz/style.bin', dtype=np.float16, mode='w+', shape=(N, hidden_size))
-key_chroma_arr = np.memmap(f'/home/dylan.d/research/music/Jazz/key_chroma.bin', dtype=np.float16, mode='w+', shape=(N, n_windows, 12))
-true_chroma_arr = np.memmap(f'/home/dylan.d/research/music/Jazz/true_chroma.bin', dtype=np.float16, mode='w+', shape=(N, n_windows, 12))
-rms_arr = np.memmap(f'/home/dylan.d/research/music/Jazz/rms.bin', dtype=np.float16, mode='w+', shape=(N, n_windows))
-spectral_centroid_arr = np.memmap(f'/home/dylan.d/research/music/Jazz/spectral_centroid.bin', dtype=np.float16, mode='w+', shape=(N, n_windows))
-onset_strength_arr = np.memmap(f'/home/dylan.d/research/music/Jazz/onset_strength.bin', dtype=np.float16, mode='w+', shape=(N, n_windows))
-zcr_arr = np.memmap(f'/home/dylan.d/research/music/Jazz/zcr.bin', dtype=np.float16, mode='w+', shape=(N, n_windows))
-
-cur_i = 0
 with torch.no_grad():
-    for i in tqdm(range(n_files)):
-        start = file_offsets[i, 0]
-        length = file_offsets[i, 1]
-        n_seconds = length // sample_rate
-        n_frames = n_seconds * sample_rate // hop_length
-        y = data[start:start+n_seconds*sample_rate].copy()
+    for idx, wav in enumerate(tqdm(wavs, desc="Extracting Styles")):    
+        beat_path = os.path.join('/home/ubuntu/Data/beats', os.path.basename(paths[idx]))
+        beat_data = parse_beat_file(beat_path)
+        downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
         
-        # Compute latents
-        batch = extract_centered_style_windows(y, hop_samples=sample_rate, window_samples=window_samples)
-        batch = torch.from_numpy(batch).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-        with ctx:
-            out = model(batch, features_only=True)
+        start_stops = [(i*n_samples, (i+1)*n_samples) for i in range(math.ceil(len(wav) / n_samples))]
+        starts, stops = zip(*start_stops)
         
-        # Compute features
-        rms = librosa.feature.rms(y=y, frame_length=n_fft, hop_length=hop_length)[0][:n_frames].reshape(n_seconds, n_windows)
-        spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sample_rate, n_fft=n_fft, hop_length=hop_length)[0][:n_frames].reshape(n_seconds, n_windows)
-        onset_strength = librosa.onset.onset_strength(y=y, sr=sample_rate, hop_length=hop_length)[:n_frames].reshape(n_seconds, n_windows)
-        zcr = librosa.feature.zero_crossing_rate(y, frame_length=n_fft, hop_length=hop_length)[0][:n_frames].reshape(n_seconds, n_windows)
+        x = [np.pad(wav[start:stop], (0, n_samples - (stop - start))) for start, stop in start_stops]
+        x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
         
-        timestamps, keys = extract_local_keys(data[start:start+length].copy(), window_sec=15.0, hop_sec=1.0, sr=sample_rate)[:n_frames]
-        keys = smooth_key_timeline(keys, smoothing_window=15)
-        key_chromagram = create_conditioned_chromagram(keys, torch.from_numpy(rms.flatten()), sr=sample_rate).numpy()[:n_frames].reshape(n_seconds, n_windows, 12)
-        true_chromagram = librosa.feature.chroma_cqt(y=data[start:start+length].copy(), sr=sample_rate, hop_length=500).T[:n_frames].reshape(n_seconds, n_windows, 12)
+        styles = []
+        for i in range(math.ceil(len(x) / batch_size)):
+            style = model(x[i*batch_size:(i+1)*batch_size], features_only=True).cpu().numpy()
+            styles.append(style)
+        styles = torch.cat(styles, axis=0).cpu().numpy()
         
-        print(batch.shape, rms.shape, key_chromagram.shape, true_chromagram.shape, spectral_centroid.shape, onset_strength.shape, zcr.shape)
+        assert len(start_stops) == len(styles)
         
-        # Write
-        style_arr[cur_i:cur_i + n_seconds] = out.float().cpu().detach().numpy().astype(np.float16)
-        key_chroma_arr[cur_i:cur_i + n_seconds] = key_chromagram.astype(np.float16)
-        true_chroma_arr[cur_i:cur_i + n_seconds] = true_chromagram.astype(np.float16)
-        rms_arr[cur_i:cur_i + n_seconds] = rms.astype(np.float16)
-        spectral_centroid_arr[cur_i:cur_i + n_seconds] = spectral_centroid.astype(np.float16)
-        onset_strength_arr[cur_i:cur_i + n_seconds] = onset_strength.astype(np.float16)
-        zcr_arr[cur_i:cur_i + n_seconds] = zcr.astype(np.float16)
-        
-        cur_i += len(batch)
+        for i in range(len(downbeat_indices) - 1):    
+            start_idx = downbeat_indices[i]
+            end_idx = downbeat_indices[i+1]
+            
+            t_start = beat_data[start_idx]['time']
+            t_end = beat_data[end_idx]['time']
+            
+            frame_start = int(t_start * rate)
+            frame_end = int(t_end * rate)
+            
+            if frame_end > len(wav):
+                break
+            
+            weights = {}
+            for j, (start, stop) in enumerate(start_stops):
+                overlap_start = max(start, frame_start)
+                overlap_end = min(stop, frame_end)
+                
+                if overlap_start < overlap_end:
+                    weights[j] = overlap_end - overlap_start
+            
+            if not weights:
+                continue
+            
+            style = np.zeros_like(styles[0])
+            for k, v in weights.items():
+                style += styles[k] * v / sum(list(weights.values()))
+            
+            all_styles.append(style)
 
-style_arr.flush()
-key_chroma_arr.flush()
-true_chroma_arr.flush()
-rms_arr.flush()
-spectral_centroid_arr.flush()
-onset_strength_arr.flush()
-zcr_arr.flush()
+        if (idx + 1) % (len(paths) // total_write_batches) == 0:
+            print(f'Writing batch {write_idx}...')
+            
+            all_styles_arr = np.concatenate(all_styles, axis=0)
+            filename_styles = os.path.join(os.path.dirname(__file__), f'{out_prefix}_style_{str(write_idx).zfill(2)}.bin')
+            arr_styles = np.memmap(filename_styles, dtype=np.float32, mode='w+', shape=all_styles_arr.shape)
+            arr_styles[:] = all_styles_arr
+            arr_styles.flush()
+
+            write_paths.append((filename_styles, len(all_styles_arr)))
+            write_idx += 1
+            all_styles = []
+
+# Write the remaining trailing batch
+if len(all_styles) > 0:
+    print(f'Writing batch {write_idx}...')
+    all_styles_arr = np.concatenate(all_styles, axis=0)
+    filename_styles = os.path.join(os.path.dirname(__file__), f'{out_prefix}_style_{str(write_idx).zfill(2)}.bin')
+    arr_styles = np.memmap(filename_styles, dtype=np.float32, mode='w+', shape=all_styles_arr.shape)
+    arr_styles[:] = all_styles_arr
+    arr_styles.flush()
+
+    write_paths.append((filename_styles, len(all_styles_arr)))
+    write_idx += 1
+    all_styles = []
+
+# ==============================================================================
+# COMPILE FINAL TRAIN/VAL BIN FILES
+# ==============================================================================
+print("Compiling final train and val datasets...")
+dtype = np.float32
+
+# Verify paths and shapes
+compiled_write_paths = []
+paths_to_check = [f'{out_prefix}_style_{str(i).zfill(2)}.bin' for i in range(total_write_batches + 1)]
+for path in paths_to_check:
+    if not os.path.exists(path): continue
+    data = np.memmap(path, dtype=dtype, mode='r')
+    # Reshape to 2D array: (length, style_embed_dim)
+    data = data.reshape((-1, style_embed_dim))
+    compiled_write_paths.append((path, data.shape))
+
+train_length = np.sum([shape[0] for path, shape in compiled_write_paths[:-2]])
+val_length = np.sum([shape[0] for path, shape in compiled_write_paths[-2:]])
+
+# Write Train
+arr_style_train = np.memmap(f'{out_prefix}_style_train.bin', dtype=dtype, mode='w+', shape=(train_length, style_embed_dim))
+cur_train = 0
+for path, shape in compiled_write_paths[:-2]:
+    data = np.memmap(path, dtype=dtype, mode='r', shape=shape)
+    arr_style_train[cur_train:cur_train+shape[0]] = data
+    cur_train += shape[0]
+arr_style_train.flush()
+
+# Write Val
+arr_style_val = np.memmap(f'{out_prefix}_style_val.bin', dtype=dtype, mode='w+', shape=(val_length, style_embed_dim))
+cur_val = 0
+for path, shape in compiled_write_paths[-2:]:
+    data = np.memmap(path, dtype=dtype, mode='r', shape=shape)
+    arr_style_val[cur_val:cur_val+shape[0]] = data
+    cur_val += shape[0]
+arr_style_val.flush()
+
+print(f"Train array shape: {arr_style_train.shape}")
+print(f"Val array shape: {arr_style_val.shape}")
+print("Style dataset generation complete!")
