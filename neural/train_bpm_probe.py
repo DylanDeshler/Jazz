@@ -36,7 +36,7 @@ from fad import BPMProbe as net
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'tokenizer_low_measures_fix_subset_BPMProbe_small'
+out_dir = 'tokenizer_low_measures_fix_subset_longtrain_BPMProbe_small'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -46,7 +46,7 @@ eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = False # disabled by default
+wandb_log = True # disabled by default
 wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
@@ -55,7 +55,7 @@ gradient_accumulation_steps = 1
 batch_size = 256
 # model
 spatial_window = 48
-n_chunks = 15
+n_chunks = 32
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
 # adamw optimizer
@@ -118,11 +118,11 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 # poor man's data loader
 def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
-        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_train.bin', dtype=np.float32, mode='r', shape=(3941406, spatial_window, vae_embed_dim))
-        meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_bpm_train.bin', dtype=np.float32, mode='r')
+        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_train.bin', dtype=np.float32, mode='r', shape=(3941406, spatial_window, vae_embed_dim))
+        meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_bpm_train.bin', dtype=np.float32, mode='r')
     else:
-        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_val.bin', dtype=np.float32, mode='r', shape=(88303, spatial_window, vae_embed_dim))
-        meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_bpm_val.bin', dtype=np.float32, mode='r')
+        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_val.bin', dtype=np.float32, mode='r', shape=(88303, spatial_window, vae_embed_dim))
+        meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_bpm_val.bin', dtype=np.float32, mode='r')
     
     idxs = torch.randint(len(data) - n_chunks, (batch_size,))    
     x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
