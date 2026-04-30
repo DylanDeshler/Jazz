@@ -294,7 +294,7 @@ def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', win
         mean_bpm = bpm_tensor.mean(dim=1, keepdim=True)
         return mean_bpm.expand_as(bpm_tensor)
     
-    bpm_np = bpm_tensor.cpu().detach().numpy()
+    bpm_np = bpm_tensor.float().cpu().detach().numpy()
     smoothed = np.zeros_like(bpm_np)
     
     for i in range(bpm_np.shape[0]):
@@ -314,8 +314,8 @@ def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', win
 def predict_measures(gen_shape, c, n_steps, method='median', window_size=3):
     with ctx:
         y = model.generate(gen_shape, c, n_steps=n_steps)
+        bpm = probe(y)
     
-    bpm = probe(y)
     bpm = smooth_bpm_predictions(bpm, method=method, window_size=window_size)
     seconds_per_beat = 60.0 / bpm
     measure_duration_sec = seconds_per_beat * TARGET_SIG
