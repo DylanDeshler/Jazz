@@ -102,7 +102,7 @@ with torch.no_grad():
         for i in range(math.ceil(len(x) / batch_size)):
             style = model(x[i*batch_size:(i+1)*batch_size], features_only=True).cpu().numpy()
             styles.append(style)
-        styles = np.stack(styles, axis=0)
+        styles = np.concatenate(styles, axis=0)
         
         assert len(start_stops) == len(styles), f'{len(start_stops)} != {styles.shape}'
         
@@ -139,7 +139,7 @@ with torch.no_grad():
         if (idx + 1) % (len(paths) // total_write_batches) == 0:
             print(f'Writing batch {write_idx}...')
             
-            all_styles_arr = np.concatenate(all_styles, axis=0)
+            all_styles_arr = np.stack(all_styles, axis=0)
             print(all_styles_arr.shape)
             filename_styles = os.path.join(os.path.dirname(__file__), f'{out_prefix}_style_{str(write_idx).zfill(2)}.bin')
             arr_styles = np.memmap(filename_styles, dtype=np.float32, mode='w+', shape=all_styles_arr.shape)
@@ -153,7 +153,7 @@ with torch.no_grad():
 # Write the remaining trailing batch
 if len(all_styles) > 0:
     print(f'Writing batch {write_idx}...')
-    all_styles_arr = np.concatenate(all_styles, axis=0)
+    all_styles_arr = np.stack(all_styles, axis=0)
     filename_styles = os.path.join(os.path.dirname(__file__), f'{out_prefix}_style_{str(write_idx).zfill(2)}.bin')
     arr_styles = np.memmap(filename_styles, dtype=np.float32, mode='w+', shape=all_styles_arr.shape)
     arr_styles[:] = all_styles_arr
