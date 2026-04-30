@@ -27,7 +27,6 @@ style_embed_dim = 768
 ckpt_path = os.path.join('contrast_learntmep_instance_2s', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 tokenizer_args = checkpoint['model_args']
-vae_embed_dim = tokenizer_args['dimension']
 model = Transformer(**tokenizer_args).to(device)
 state_dict = checkpoint['model']
 # fix the keys of the state dictionary :(
