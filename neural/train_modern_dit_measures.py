@@ -429,11 +429,11 @@ while True:
             }
             torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
         
-        if iter_num % sample_interval == 0 and master_process:
-            model.eval()
-            with ctx:
-                save_samples(iter_num)
-            model.train()
+        # if iter_num % sample_interval == 0 and master_process:
+        #     model.eval()
+        #     with ctx:
+        #         save_samples(iter_num)
+        #     model.train()
     
     if eval_only:
         break
