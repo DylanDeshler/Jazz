@@ -24,6 +24,7 @@ from contextlib import nullcontext
 from tqdm import tqdm
 from torchinfo import summary
 
+from scipy.signal import medfilt
 import numpy as np
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -33,6 +34,7 @@ from einops import rearrange
 from diffusion_forcing import StyleConditionalModernDiT_large as net
 from dito import DiToV5 as Tokenizer
 from adapter import InvertibleAdapter
+from fad import BPMProbe
 import soundfile as sf
 
 import torch
@@ -42,10 +44,10 @@ import pyrubberband as pyrb
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
 out_dir = 'StyleConditionalModernDiT_large_24576_subset_adapter_longtrain_32chunks'
-eval_interval = 5000
-sample_interval = 5000
+eval_interval = 2500
+sample_interval = 2500
 log_interval = 100
-save_interval = 5000
+save_interval = 2500
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
@@ -183,6 +185,21 @@ adapter.eval()
 del state_dict
 max_adapter_len = adapter.max_seq_len
 
+ckpt_path = os.path.join('tokenizer_low_measures_fix_subset_longtrain_BPMProbe_small', 'ckpt.pt')
+checkpoint = torch.load(ckpt_path, map_location=device)
+probe_args = checkpoint['model_args']
+
+probe = BPMProbe(**probe_args).to(device)
+state_dict = checkpoint['model']
+# fix the keys of the state dictionary :(
+# honestly no idea how checkpoints sometimes get this prefix, have to debug more
+unwanted_prefix = '_orig_mod.'
+for k,v in list(state_dict.items()):
+    if k.startswith(unwanted_prefix):
+        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+probe.load_state_dict(state_dict)
+probe.eval()
+
 model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, spatial_window=spatial_window, use_null_token=use_null_token, gradient_checkpointing=gradient_checkpointing, patch_size=patch_size)
 
 if init_from == 'scratch':
@@ -266,19 +283,40 @@ def get_lr(it):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
 
+def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', window_size: int = 3) -> torch.Tensor:
+    """
+    Smooths the instantaneous BPM predictions across the chunk dimension.
+    bpm_tensor: shape (Batch, Chunks)
+    method: One of median, global, moving_average
+    """
+    if method == 'global':
+        # Collapse the sequence to the mean tempo per batch item
+        mean_bpm = bpm_tensor.mean(dim=1, keepdim=True)
+        return mean_bpm.expand_as(bpm_tensor)
+    
+    bpm_np = bpm_tensor.cpu().detach().numpy()
+    smoothed = np.zeros_like(bpm_np)
+    
+    for i in range(bpm_np.shape[0]):
+        if method == 'median':
+            # medfilt requires odd window sizes
+            smoothed[i] = medfilt(bpm_np[i], kernel_size=window_size)
+            
+        elif method == 'moving_average':
+            kernel = np.ones(window_size) / window_size
+            # Pad edges so the sequence length stays 15
+            padded = np.pad(bpm_np[i], (window_size//2, window_size//2), mode='edge')
+            smoothed[i] = np.convolve(padded, kernel, mode='valid')
+            
+    return torch.from_numpy(smoothed).to(bpm_tensor.device)
+
 @torch.no_grad()
-def save_samples(step):
-    batch_dir = os.path.join(out_dir, str(step))
-    os.makedirs(batch_dir, exist_ok=True)
-    
-    n_steps = 50
-    n_samples = 20
-    x, c, bpm = get_batch('val')
-    x, c, bpm = x[:n_samples], c[:n_samples], bpm[:n_samples]
-    
+def predict_measures(gen_shape, c, n_steps, method='median', window_size=3):
     with ctx:
-        y = model.generate(x.shape, c, n_steps=n_steps)
+        y = model.generate(gen_shape, c, n_steps=n_steps)
     
+    bpm = probe(y)
+    bpm = smooth_bpm_predictions(bpm, method=method, window_size=window_size)
     seconds_per_beat = 60.0 / bpm
     measure_duration_sec = seconds_per_beat * TARGET_SIG
     
@@ -290,19 +328,38 @@ def save_samples(step):
     indices = torch.arange(max_latent_len, device=device).view(1, 1, -1)
     lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
     mask = indices < lengths
-    mask = mask.view(n_samples * n_chunks, max_latent_len)
-    shape = (n_samples * n_chunks, 1, max_latent_len)
+    mask = mask.view(batch_size * n_chunks, max_latent_len)
+    shape = (batch_size * n_chunks, 1, max_latent_len)
         
     with ctx:
-        y = y.transpose(2, 3).view(n_samples * n_chunks, vae_embed_dim, spatial_window)
+        y = y.transpose(2, 3).view(batch_size * n_chunks, vae_embed_dim, spatial_window)
         y = adapter.decode(y, shape, mask=mask)
-        y = tokenizer.decode(y, shape=(1, max_len), n_steps=n_steps)
+        y = tokenizer.decode(y, shape=(1, max_len), n_steps=n_steps, noise=None)
     
-    target_samples = target_samples.cpu().detach().numpy()
+    target_samples = target_samples.flatten().cpu().detach().numpy()
     y = y.squeeze().cpu().detach().numpy()
+    
+    y = [np.concatenate([y_[:min(int(samples), max_len)] for y_, samples in zip(y[i*n_chunks:(i+1)*n_chunks], target_samples[i])], axis=0).astype(np.float32) for i in range(len(gen_shape))]
+    
+    return y
+
+@torch.no_grad()
+def save_samples(step):
+    batch_dir = os.path.join(out_dir, str(step))
+    os.makedirs(batch_dir, exist_ok=True)
+    
+    n_steps = 50
+    n_samples = 20
+    x, c, bpm = get_batch('val')
+    x, c, bpm = x[:n_samples], c[:n_samples], bpm[:n_samples]
+    
+    y = predict_measures(x.shape, c, n_steps, method='median', window_size=3)
+    
     for i in range(n_samples):
-        this_y = np.concatenate([y_[:min(int(samples), max_len)] for y_, samples in zip(y[i*n_chunks:(i+1)*n_chunks], target_samples[i])], axis=0)
+        # this_y = np.concatenate([y_[:min(int(samples), max_len)] for y_, samples in zip(y[i*n_chunks:(i+1)*n_chunks], target_samples[i])], axis=0)
         
+        this_y = y[i]
+        print(this_y.shape)
         sf.write(os.path.join(batch_dir, f'{i}.wav'), this_y.flatten(), 16000)
 
 # logging
@@ -335,12 +392,6 @@ while True:
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-        
-        if iter_num % sample_interval == 0 and master_process:
-            model.eval()
-            with ctx:
-                save_samples(iter_num)
-            model.train()
         
         if wandb_log and not (init_from == 'resume' and local_iter_num == 0):
             wandb.log({
@@ -377,6 +428,12 @@ while True:
                 'tokens': tokens_trained,
             }
             torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
+        
+        if iter_num % sample_interval == 0 and master_process:
+            model.eval()
+            with ctx:
+                save_samples(iter_num)
+            model.train()
     
     if eval_only:
         break
