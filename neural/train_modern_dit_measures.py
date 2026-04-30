@@ -324,15 +324,15 @@ def predict_measures(gen_shape, c, n_steps, method='median', window_size=3):
     max_len = min(target_samples.max().item(), encoder_ratios * (max_adapter_len - 1))
     max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
     max_latent_len = max_len // encoder_ratios
-    
+    print(y.shape, bpm.shape, target_samples.shape, max_len, max_latent_len)
     indices = torch.arange(max_latent_len, device=device).view(1, 1, -1)
     lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
     mask = indices < lengths
-    mask = mask.view(batch_size * n_chunks, max_latent_len)
-    shape = (batch_size * n_chunks, 1, max_latent_len)
+    mask = mask.view(gen_shape[0] * n_chunks, max_latent_len)
+    shape = (gen_shape[0] * n_chunks, 1, max_latent_len)
         
     with ctx:
-        y = y.transpose(2, 3).view(batch_size * n_chunks, vae_embed_dim, spatial_window)
+        y = y.transpose(2, 3).view(gen_shape[0] * n_chunks, vae_embed_dim, spatial_window)
         y = adapter.decode(y, shape, mask=mask)
         y = tokenizer.decode(y, shape=(1, max_len), n_steps=n_steps, noise=None)
     
