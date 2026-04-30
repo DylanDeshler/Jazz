@@ -330,10 +330,12 @@ def predict_measures(gen_shape, c, n_steps, method='median', window_size=3):
     mask = indices < lengths
     mask = mask.view(gen_shape[0] * n_chunks, max_latent_len)
     shape = (gen_shape[0] * n_chunks, 1, max_latent_len)
+    print(y.shape, shape)
         
     with ctx:
         y = y.transpose(2, 3).view(gen_shape[0] * n_chunks, vae_embed_dim, spatial_window)
         y = adapter.decode(y, shape, mask=mask)
+        print(y.shape)
         y = tokenizer.decode(y, shape=(1, max_len), n_steps=n_steps, noise=None)
     
     target_samples = target_samples.flatten().cpu().detach().numpy()
