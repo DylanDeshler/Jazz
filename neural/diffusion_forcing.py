@@ -918,9 +918,9 @@ class StyleConditionalModernDiT(nn.Module):
         t = self.t_embedder(t.flatten()).view(B, T, -1)
         
         if self.use_null_token:
-            actions = token_drop(actions, self.null_token.unsqueeze(0), self.training, p_uncond=0.1, p_full=0.8, p_ind_low=0.1, p_ind_high=0.5)
+            c = token_drop(c, self.null_token.unsqueeze(0), self.training, p_uncond=0.1, p_full=0.8, p_ind_low=0.1, p_ind_high=0.5)
             if unconditional_mask is not None:
-                actions = torch.where(unconditional_mask, self.null_token.unsqueeze(0), actions)
+                c = torch.where(unconditional_mask, self.null_token.unsqueeze(0), c)
         
         t = torch.cat([t, c], dim=-1)
         t = self.fuse_conditioning(t)
