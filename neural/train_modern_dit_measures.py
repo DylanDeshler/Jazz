@@ -324,7 +324,7 @@ def predict_measures(gen_shape, c, n_steps, method='median', window_size=3):
     max_len = min(target_samples.max().item(), encoder_ratios * (max_adapter_len - 1))
     max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
     max_latent_len = max_len // encoder_ratios
-    print(y.shape, bpm.shape, target_samples.shape, max_len, max_latent_len)
+    
     indices = torch.arange(max_latent_len, device=device).view(1, 1, -1)
     lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
     mask = indices < lengths
