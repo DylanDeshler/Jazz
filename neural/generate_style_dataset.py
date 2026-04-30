@@ -104,7 +104,7 @@ with torch.no_grad():
             styles.append(style)
         styles = np.stack(styles, axis=0)
         
-        assert len(start_stops) == len(styles)
+        assert len(start_stops) == len(styles), f'{len(start_stops)} != {styles.shape}'
         
         for i in range(len(downbeat_indices) - 1):    
             start_idx = downbeat_indices[i]
