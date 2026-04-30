@@ -102,7 +102,7 @@ with torch.no_grad():
         for i in range(math.ceil(len(x) / batch_size)):
             style = model(x[i*batch_size:(i+1)*batch_size], features_only=True).cpu().numpy()
             styles.append(style)
-        styles = np.concatenate(styles, axis=0)
+        styles = np.stack(styles, axis=0)
         
         assert len(start_stops) == len(styles)
         
