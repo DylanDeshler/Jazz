@@ -317,7 +317,6 @@ def predict_measures(gen_shape, c, n_steps, method='median', window_size=3):
         bpm = probe(y)
     
     bpm = smooth_bpm_predictions(bpm, method=method, window_size=window_size)
-    print(y.shape, bpm.shape)
     seconds_per_beat = 60.0 / bpm
     measure_duration_sec = seconds_per_beat * TARGET_SIG
     
@@ -340,10 +339,6 @@ def predict_measures(gen_shape, c, n_steps, method='median', window_size=3):
     target_samples = target_samples.flatten().cpu().detach().numpy()
     y = y.squeeze().cpu().detach().numpy()
     
-    print(gen_shape, target_samples.shape)
-    y2 = np.concatenate([y_[:min(int(samples), max_len)] for y_, samples in zip(y, target_samples)], axis=0)
-    print(y2.shape)
-    
     target_samples = target_samples.reshape(gen_shape[0], n_chunks)
     y = [np.concatenate([y_[:min(int(samples), max_len)] for y_, samples in zip(y[i*n_chunks:(i+1)*n_chunks], target_samples[i])], axis=0).astype(np.float32) for i in range(gen_shape[0])]
     
@@ -362,11 +357,7 @@ def save_samples(step):
     y = predict_measures(x.shape, c, n_steps, method='median', window_size=3)
     
     for i in range(n_samples):
-        # this_y = np.concatenate([y_[:min(int(samples), max_len)] for y_, samples in zip(y[i*n_chunks:(i+1)*n_chunks], target_samples[i])], axis=0)
-        
-        this_y = y[i]
-        print(this_y.shape)
-        sf.write(os.path.join(batch_dir, f'{i}.wav'), this_y.flatten(), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}.wav'), y[i].flatten(), 16000)
 
 # logging
 if wandb_log and master_process:
