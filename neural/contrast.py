@@ -425,8 +425,6 @@ class Transformer(nn.Module):
         labels = (labels.unsqueeze(0) == labels.unsqueeze(1)).float()
         labels = labels.to(features.device)
 
-        features = F.normalize(features, dim=1)
-
         similarity_matrix = torch.matmul(features, features.T)
         # assert similarity_matrix.shape == (
         #     self.args.n_views * self.args.batch_size, self.args.n_views * self.args.batch_size)
@@ -482,16 +480,18 @@ class Transformer(nn.Module):
         
         x = self.pool_norm(x)
         x = self.pool(x.mean(1, keepdims=True), x).squeeze(1)
-        features = x.clone().detach()
-        
-        if features_only:
-            return features
         
         x = self.mlp_norm(x)
         x = self.mlp(x)
         
         x = self.fc_norm(x)
         x = self.fc(x)
+        
+        features = x.clone().detach()
+        features = F.normalize(features, dim=1)
+        
+        if features_only:
+            return features
         
         logits, labels, sim = self.info_nce_loss(x)
         loss = self.criterion(logits, labels)
