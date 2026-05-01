@@ -313,7 +313,7 @@ def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', win
 @torch.no_grad()
 def predict_measures(gen_shape, c, n_steps, method='median', window_size=3):
     with ctx:
-        y = model.generate(gen_shape, c, n_steps=n_steps)
+        y = model.generate(gen_shape, torch.ones_like(c).bool(), n_steps=n_steps)
         bpm = probe(y)
     
     bpm = smooth_bpm_predictions(bpm, method=method, window_size=window_size)
