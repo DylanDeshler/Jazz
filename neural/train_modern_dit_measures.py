@@ -51,7 +51,7 @@ save_interval = 2500
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir
@@ -313,7 +313,7 @@ def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', win
 @torch.no_grad()
 def predict_measures(gen_shape, c, n_steps, method='median', window_size=3):
     with ctx:
-        y = model.generate(gen_shape, torch.ones_like(c).bool(), n_steps=n_steps)
+        y = model.generate(gen_shape, c, n_steps=n_steps)
         bpm = probe(y)
     
     bpm = smooth_bpm_predictions(bpm, method=method, window_size=window_size)
