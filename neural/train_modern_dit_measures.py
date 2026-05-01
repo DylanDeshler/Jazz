@@ -339,7 +339,8 @@ def predict_measures(gen_shape, c, n_steps, method='median', window_size=3):
     target_samples = target_samples.flatten().cpu().detach().numpy()
     y = y.squeeze().cpu().detach().numpy()
     
-    y = [np.concatenate([y_[:min(int(samples), max_len)] for y_, samples in zip(y[i*n_chunks:(i+1)*n_chunks], target_samples[i])], axis=0).astype(np.float32) for i in range(len(gen_shape))]
+    print(gen_shape)
+    y = [np.concatenate([y_[:min(int(samples), max_len)] for y_, samples in zip(y[i*n_chunks:(i+1)*n_chunks], target_samples[i])], axis=0).astype(np.float32) for i in range(gen_shape[0])]
     
     return y
 
