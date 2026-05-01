@@ -862,7 +862,7 @@ class StyleConditionalModernDiT(nn.Module):
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
         self.x_embedder = Patcher(in_channels, hidden_size, patch_size=patch_size)
-        self.c_embeddiner = nn.Sequential(nn.Linear(style_dim, 16), nn.SiLU())
+        self.c_embedder = nn.Sequential(nn.Linear(style_dim, 16), nn.SiLU())
         self.fuse_conditioning = SwiGLUMlp(hidden_size + 16, int(2 / 3 * mlp_ratio * hidden_size), hidden_size, bias=False)
         
         if self.use_null_token:
@@ -917,6 +917,7 @@ class StyleConditionalModernDiT(nn.Module):
         x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
         
         t = self.t_embedder(t.flatten()).view(B, T, -1)
+        c = self.c_embedder(c)
         
         if self.use_null_token:
             c = token_drop(c, self.null_token.unsqueeze(0), self.training, p_uncond=0.1, p_full=0.8, p_ind_low=0.1, p_ind_high=0.5)
