@@ -314,7 +314,7 @@ def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', win
 def predict_measures(gen_shape, c, n_steps, guidance=1, method='median', window_size=3):
     with ctx:
         net_kwargs = {'c': c}
-        uncond_net_kwargs = {'c': c, 'unconditional_mask': torch.ones(c.shape[0], c.shape[1], 16).bool()}
+        uncond_net_kwargs = {'c': c, 'unconditional_mask': torch.ones(c.shape[0], c.shape[1], 16).to(device).bool()}
         y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=None)
         
         bpm = probe(y)
