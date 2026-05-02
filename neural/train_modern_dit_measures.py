@@ -51,7 +51,7 @@ save_interval = 2500
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir
@@ -314,7 +314,7 @@ def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', win
 def predict_measures(gen_shape, c, n_steps, guidance=1, method='median', window_size=3):
     with ctx:
         net_kwargs = {'c': c}
-        uncond_net_kwargs = {'c': c, 'unconditional_mask': torch.ones(c.shape[0], c.shape[1], 16).to(device).bool()}
+        uncond_net_kwargs = {'c': c, 'unconditional_mask': torch.ones(c.shape[0], c.shape[1], 1).to(device).bool()}
         y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=None)
         
         bpm = probe(y)
@@ -357,10 +357,12 @@ def save_samples(step):
     x, c, bpm = get_batch('val')
     x, c, bpm = x[:n_samples], c[:n_samples], bpm[:n_samples]
     
-    y = predict_measures(x.shape, c, n_steps, guidance=5.0, method='median', window_size=3)
+    y_cfg = predict_measures(x.shape, c, n_steps, guidance=5.0, method='median', window_size=3)
+    y = predict_measures(x.shape, c, n_steps, guidance=1.0, method='median', window_size=3)
     
     for i in range(n_samples):
         sf.write(os.path.join(batch_dir, f'{i}.wav'), y[i].flatten(), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_cfg.wav'), y_cfg[i].flatten(), 16000)
 
 # logging
 if wandb_log and master_process:
