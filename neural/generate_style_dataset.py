@@ -21,10 +21,10 @@ rate = 16000
 total_write_batches = 48
 n_samples = 16383 * 10
 
-out_prefix = 'contrast_learntmep_instance_10s'
+out_prefix = 'contrast_learntmep_instance_2s'
 style_embed_dim = 128
 
-ckpt_path = os.path.join('contrast_learntmep_instance_10s', 'ckpt.pt')
+ckpt_path = os.path.join(out_prefix, 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 tokenizer_args = checkpoint['model_args']
 model = Transformer(**tokenizer_args).to(device)

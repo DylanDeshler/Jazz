@@ -41,7 +41,7 @@ import matplotlib.patches as mpatches
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'contrast_learntmep_instance_10s'
+out_dir = 'contrast_learntmep_instance_2s'
 eval_interval = 10000
 sample_interval = 10000
 log_interval = 100
@@ -59,7 +59,7 @@ dataset = ''
 gradient_accumulation_steps = 1
 batch_size = 1024
 # model
-n_samples = 16383 * 10
+n_samples = 16383 * 2
 depth = 12
 hidden_size = 768
 proj_size = 128
@@ -436,9 +436,6 @@ def evaluate_latent_space(iter_num, k=1, sample_rate=16000):
     # ------------------------------------------------------------------
     # Part A: KNN Accuracy (Instance Discrimination)
     # ------------------------------------------------------------------
-    
-    # Normalize embeddings
-    embeddings = F.normalize(embeddings, dim=1)
     
     # Query (View 1) vs Key (View 2)
     queries = embeddings[0::2]
