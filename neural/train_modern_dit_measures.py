@@ -371,7 +371,7 @@ def save_samples(step):
 if wandb_log and master_process:
     import wandb
     if init_from == 'resume':
-        wandb.init(project=wandb_project, name=wandb_run_name, id='1r839mbn', config=config)
+        wandb.init(project=wandb_project, name=wandb_run_name, id='jg3sruzi', config=config)
     else:
         wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
