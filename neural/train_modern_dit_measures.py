@@ -31,7 +31,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from diffusion_forcing import StyleConditionalModernDiT_large as net
+from diffusion_forcing import StyleConditionalModernDiT_smedium as net
 from dito import DiToV5 as Tokenizer
 from adapter import InvertibleAdapter
 from fad import BPMProbe
@@ -43,7 +43,7 @@ import pyrubberband as pyrb
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'StyleConditionalModernDiT_large_24576_subset_adapter_longtrain_32chunks'
+out_dir = 'StyleConditionalModernDiT_smedium_24576_subset_adapter_longtrain_32chunks'
 eval_interval = 2500
 sample_interval = 2500
 log_interval = 100

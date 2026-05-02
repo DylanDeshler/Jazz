@@ -992,6 +992,9 @@ def StyleConditionalModernDiT_large(**kwargs):
 def StyleConditionalModernDiT_medium(**kwargs):
     return StyleConditionalModernDiTWrapper(depth=24, hidden_size=1024, num_heads=16, **kwargs)
 
+def StyleConditionalModernDiT_smedium(**kwargs):
+    return StyleConditionalModernDiTWrapper(depth=20, hidden_size=768, num_heads=12, **kwargs)
+
 def StyleConditionalModernDiT_small(**kwargs):
     return StyleConditionalModernDiTWrapper(depth=16, hidden_size=1024, num_heads=16, **kwargs)
 
