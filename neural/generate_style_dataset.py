@@ -135,7 +135,7 @@ with torch.no_grad():
             for k, v in weights.items():
                 style += styles[k] * v / sum(list(weights.values()))
             
-            all_styles.append(F.normalize(style, dim=1).cpu().numpy())
+            all_styles.append(F.normalize(style, dim=0).cpu().numpy())  # 1d vector
 
         if (idx + 1) % (len(paths) // total_write_batches) == 0:
             print(f'Writing batch {write_idx}...')
