@@ -131,7 +131,7 @@ with torch.no_grad():
             if not weights:
                 continue
             
-            style = np.zeros_like(styles[0])
+            style = torch.zeros_like(styles[0])
             for k, v in weights.items():
                 style += styles[k] * v / sum(list(weights.values()))
             
