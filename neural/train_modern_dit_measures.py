@@ -339,7 +339,6 @@ def predict_measures(gen_shape, c, n_steps, guidance=1, gen_noise=None, decoder_
     with ctx:
         y = y.transpose(2, 3).view(gen_shape[0] * n_chunks, vae_embed_dim, spatial_window)
         y = adapter.decode(y, shape, mask=mask)
-        print(decoder_noise.shape, (y.shape[0], 1, max_len))
         y = tokenizer.decode(y, shape=(1, max_len), n_steps=n_steps, noise=decoder_noise[:, :, :max_len] if decoder_noise is not None else None)
     
     target_samples = target_samples.flatten().cpu().detach().numpy()
