@@ -313,8 +313,9 @@ def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', win
     return torch.from_numpy(smoothed).to(bpm_tensor.device)
 
 @torch.no_grad()
-def predict_measures(gen_shape, c, n_steps, guidance=1, noise=None, method='median', window_size=3):
+def predict_measures(gen_shape, c, n_steps, guidance=1, method='median', window_size=3):
     with ctx:
+        noise = torch.randn(gen_shape).to(device)
         net_kwargs = {'c': c}
         uncond_net_kwargs = {'c': c, 'unconditional_mask': torch.ones(*c.shape[:-1], 1).to(device).bool()}
         y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=noise)
@@ -339,7 +340,8 @@ def predict_measures(gen_shape, c, n_steps, guidance=1, noise=None, method='medi
     with ctx:
         y = y.transpose(2, 3).view(gen_shape[0] * n_chunks, vae_embed_dim, spatial_window)
         y = adapter.decode(y, shape, mask=mask)
-        y = tokenizer.decode(y, shape=(1, max_len), n_steps=n_steps, noise=None)
+        noise = torch.randn(y.shape[0], 1, max_len).to(device)
+        y = tokenizer.decode(y, shape=(1, max_len), n_steps=n_steps, noise=noise)
     
     target_samples = target_samples.flatten().cpu().detach().numpy()
     y = y.squeeze().cpu().detach().numpy()
