@@ -101,9 +101,9 @@ with torch.no_grad():
         
         styles = []
         for i in range(math.ceil(len(x) / batch_size)):
-            style = model(x[i*batch_size:(i+1)*batch_size], features_only=True).cpu().numpy()
+            style = model(x[i*batch_size:(i+1)*batch_size], features_only=True)
             styles.append(style)
-        styles = np.concatenate(styles, axis=0)
+        styles = torch.cat(styles, dim=0)
         
         assert len(start_stops) == len(styles), f'{len(start_stops)} != {styles.shape}'
         
@@ -135,8 +135,7 @@ with torch.no_grad():
             for k, v in weights.items():
                 style += styles[k] * v / sum(list(weights.values()))
             
-            print(style.shape)
-            all_styles.append(F.normalize(style, dim=1))
+            all_styles.append(F.normalize(style, dim=1).cpu().numpy())
 
         if (idx + 1) % (len(paths) // total_write_batches) == 0:
             print(f'Writing batch {write_idx}...')
