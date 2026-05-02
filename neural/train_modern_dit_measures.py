@@ -361,7 +361,7 @@ def save_samples(step):
     x, c, bpm = x[:n_samples], c[:n_samples], bpm[:n_samples]
     
     gen_noise = torch.randn(x.shape).to(device)
-    decoder_noise = torch.randn(n_samples * n_chunks, 1, max_adapter_len).to(device)
+    decoder_noise = torch.randn(n_samples * n_chunks, 1, encoder_ratios * (max_adapter_len - 1)).to(device)
     y_cfg = predict_measures(x.shape, c, n_steps, guidance=5.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
     y = predict_measures(x.shape, c, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
     
