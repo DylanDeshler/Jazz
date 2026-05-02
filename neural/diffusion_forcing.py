@@ -75,11 +75,11 @@ class FM:
         if net_kwargs is None:
             net_kwargs = {}
         
-        pred = net(x_t, t=t * self.timescale, **net_kwargs)
         if guidance != 1.0:
             assert uncond_net_kwargs is not None
             uncond_pred = net(x_t, t=t * self.timescale, **uncond_net_kwargs)
-            pred = uncond_pred + guidance * (pred - uncond_pred)
+            cond_pred = net(x_t, t=t * self.timescale, **net_kwargs)
+            pred = uncond_pred + guidance * (cond_pred - uncond_pred)
         
         # if guidance != 1.0:
         #     assert uncond_net_kwargs is not None
@@ -862,11 +862,10 @@ class StyleConditionalModernDiT(nn.Module):
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
         self.x_embedder = Patcher(in_channels, hidden_size, patch_size=patch_size)
-        self.c_embedder = nn.Sequential(nn.Linear(style_dim, 16), nn.SiLU())
-        self.fuse_conditioning = SwiGLUMlp(hidden_size + 16, int(2 / 3 * mlp_ratio * hidden_size), hidden_size, bias=False)
+        self.fuse_conditioning = SwiGLUMlp(hidden_size + style_dim, int(2 / 3 * mlp_ratio * hidden_size), hidden_size, bias=False)
         
         if self.use_null_token:
-            self.null_token = nn.Parameter(torch.randn(16) / 16 ** 0.5)
+            self.null_token = nn.Parameter(torch.randn(style_dim) / style_dim ** 0.5)
         
         self.t_block = nn.Sequential(
             nn.SiLU(),
@@ -917,7 +916,6 @@ class StyleConditionalModernDiT(nn.Module):
         x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
         
         t = self.t_embedder(t.flatten()).view(B, T, -1)
-        c = self.c_embedder(c)
         
         if self.use_null_token:
             c = token_drop(c, self.null_token.unsqueeze(0), self.training, p_uncond=0.1, p_full=0.8, p_ind_low=0.1, p_ind_high=0.5)
@@ -958,8 +956,8 @@ class StyleConditionalModernDiTWrapper(nn.Module):
     def forward(self, x, c, t=None):
         return self.diffusion.loss(self.net, x, t=t, net_kwargs={'c': c})
     
-    def generate(self, shape, c, unconditional_mask=None, n_steps=50, uncond_net_kwargs=None, guidance=1.0, noise=None):
-        return self.sampler.sample(self.net, shape, n_steps=n_steps, net_kwargs={'c': c, 'unconditional_mask': unconditional_mask}, uncond_net_kwargs=uncond_net_kwargs, guidance=guidance, noise=noise)
+    def generate(self, shape, net_kwargs=None, uncond_net_kwargs=None, n_steps=50, guidance=1.0, noise=None):
+        return self.sampler.sample(self.net, shape, n_steps=n_steps, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, guidance=guidance, noise=noise)
 
 def ModernDiT_large(**kwargs):
     return ModernDiTWrapper(depth=28, hidden_size=1152, num_heads=16, **kwargs)

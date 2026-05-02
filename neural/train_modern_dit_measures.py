@@ -51,7 +51,7 @@ save_interval = 2500
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir
@@ -311,9 +311,12 @@ def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', win
     return torch.from_numpy(smoothed).to(bpm_tensor.device)
 
 @torch.no_grad()
-def predict_measures(gen_shape, c, n_steps, method='median', window_size=3):
+def predict_measures(gen_shape, c, n_steps, guidance=1, method='median', window_size=3):
     with ctx:
-        y = model.generate(gen_shape, c, n_steps=n_steps)
+        net_kwargs = {'c': c}
+        uncond_net_kwargs = {'unconditional_mask': torch.ones_like(c).bool()}
+        y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=None)
+        
         bpm = probe(y)
     
     bpm = smooth_bpm_predictions(bpm, method=method, window_size=window_size)
@@ -354,7 +357,7 @@ def save_samples(step):
     x, c, bpm = get_batch('val')
     x, c, bpm = x[:n_samples], c[:n_samples], bpm[:n_samples]
     
-    y = predict_measures(x.shape, c, n_steps, method='median', window_size=3)
+    y = predict_measures(x.shape, c, n_steps, guidance=5.0, method='median', window_size=3)
     
     for i in range(n_samples):
         sf.write(os.path.join(batch_dir, f'{i}.wav'), y[i].flatten(), 16000)
@@ -363,7 +366,7 @@ def save_samples(step):
 if wandb_log and master_process:
     import wandb
     if init_from == 'resume':
-        wandb.init(project=wandb_project, name=wandb_run_name, id='53p8suv1', config=config)
+        wandb.init(project=wandb_project, name=wandb_run_name, id='1r839mbn', config=config)
     else:
         wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
