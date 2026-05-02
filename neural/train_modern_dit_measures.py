@@ -313,12 +313,11 @@ def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', win
     return torch.from_numpy(smoothed).to(bpm_tensor.device)
 
 @torch.no_grad()
-def predict_measures(gen_shape, c, n_steps, guidance=1, method='median', window_size=3):
+def predict_measures(gen_shape, c, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3):
     with ctx:
-        noise = torch.randn(gen_shape).to(device)
         net_kwargs = {'c': c}
         uncond_net_kwargs = {'c': c, 'unconditional_mask': torch.ones(*c.shape[:-1], 1).to(device).bool()}
-        y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=noise)
+        y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise)
         
         bpm = probe(y)
     
@@ -340,8 +339,7 @@ def predict_measures(gen_shape, c, n_steps, guidance=1, method='median', window_
     with ctx:
         y = y.transpose(2, 3).view(gen_shape[0] * n_chunks, vae_embed_dim, spatial_window)
         y = adapter.decode(y, shape, mask=mask)
-        noise = torch.randn(y.shape[0], 1, max_len).to(device)
-        y = tokenizer.decode(y, shape=(1, max_len), n_steps=n_steps, noise=noise)
+        y = tokenizer.decode(y, shape=(1, max_len), n_steps=n_steps, noise=decoder_noise[:, :, :max_len] if decoder_noise is not None else None)
     
     target_samples = target_samples.flatten().cpu().detach().numpy()
     y = y.squeeze().cpu().detach().numpy()
@@ -361,9 +359,10 @@ def save_samples(step):
     x, c, bpm = get_batch('val')
     x, c, bpm = x[:n_samples], c[:n_samples], bpm[:n_samples]
     
-    noise = torch.randn(x.shape).to(device)
-    y_cfg = predict_measures(x.shape, c, n_steps, guidance=5.0, noise=noise, method='median', window_size=3)
-    y = predict_measures(x.shape, c, n_steps, guidance=1.0, noise=noise, method='median', window_size=3)
+    gen_noise = torch.randn(x.shape).to(device)
+    decoder_noise = torch.randn(max_adapter_len, 1, )
+    y_cfg = predict_measures(x.shape, c, n_steps, guidance=5.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
+    y = predict_measures(x.shape, c, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
     
     for i in range(n_samples):
         sf.write(os.path.join(batch_dir, f'{i}.wav'), y[i].flatten(), 16000)
