@@ -10,6 +10,7 @@ from tqdm import tqdm
 import concurrent.futures
 from multiprocessing import cpu_count
 from contrast import Transformer
+import torch.nn.functional as F
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -21,7 +22,7 @@ rate = 16000
 total_write_batches = 48
 n_samples = 16383 * 10
 
-out_prefix = 'contrast_learntmep_instance_2s'
+out_prefix = 'contrast_learntmep_instance_10s'
 style_embed_dim = 128
 
 ckpt_path = os.path.join(out_prefix, 'ckpt.pt')
@@ -134,7 +135,8 @@ with torch.no_grad():
             for k, v in weights.items():
                 style += styles[k] * v / sum(list(weights.values()))
             
-            all_styles.append(style)
+            print(style.shape)
+            all_styles.append(F.normalize(style, dim=1))
 
         if (idx + 1) % (len(paths) // total_write_batches) == 0:
             print(f'Writing batch {write_idx}...')
