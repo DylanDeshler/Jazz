@@ -311,11 +311,11 @@ def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', win
     return torch.from_numpy(smoothed).to(bpm_tensor.device)
 
 @torch.no_grad()
-def predict_measures(gen_shape, c, n_steps, guidance=1, method='median', window_size=3):
+def predict_measures(gen_shape, c, n_steps, guidance=1, noise=None, method='median', window_size=3):
     with ctx:
         net_kwargs = {'c': c}
         uncond_net_kwargs = {'c': c, 'unconditional_mask': torch.ones(*c.shape[:-1], 1).to(device).bool()}
-        y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=None)
+        y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=noise)
         
         bpm = probe(y)
     
@@ -357,8 +357,9 @@ def save_samples(step):
     x, c, bpm = get_batch('val')
     x, c, bpm = x[:n_samples], c[:n_samples], bpm[:n_samples]
     
-    y_cfg = predict_measures(x.shape, c, n_steps, guidance=5.0, method='median', window_size=3)
-    y = predict_measures(x.shape, c, n_steps, guidance=1.0, method='median', window_size=3)
+    noise = torch.randn(x.shape).to(device)
+    y_cfg = predict_measures(x.shape, c, n_steps, guidance=5.0, noise=noise, method='median', window_size=3)
+    y = predict_measures(x.shape, c, n_steps, guidance=1.0, noise=noise, method='median', window_size=3)
     
     for i in range(n_samples):
         sf.write(os.path.join(batch_dir, f'{i}.wav'), y[i].flatten(), 16000)
