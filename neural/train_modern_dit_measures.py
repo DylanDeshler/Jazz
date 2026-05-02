@@ -40,6 +40,8 @@ import soundfile as sf
 import torch
 import pyrubberband as pyrb
 
+# 0.898376
+
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
@@ -133,11 +135,11 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
         data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_train.bin', dtype=np.float32, mode='r', shape=(3941406, spatial_window, vae_embed_dim))
-        style = np.memmap('/home/ubuntu/Data/contrast_learntmep_instance_2s_style_train.bin', dtype=np.float32, mode='r', shape=(3941406, style_dim))
+        style = np.memmap('/home/ubuntu/Data/contrast_learntmep_instance_2s_style_128_train.bin', dtype=np.float32, mode='r', shape=(3941406, style_dim))
         meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_bpm_train.bin', dtype=np.float32, mode='r')
     else:
         data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_val.bin', dtype=np.float32, mode='r', shape=(88303, spatial_window, vae_embed_dim))
-        style = np.memmap('/home/ubuntu/Data/contrast_learntmep_instance_2s_style_val.bin', dtype=np.float32, mode='r', shape=(88303, style_dim))
+        style = np.memmap('/home/ubuntu/Data/contrast_learntmep_instance_2s_style_128_val.bin', dtype=np.float32, mode='r', shape=(88303, style_dim))
         meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_bpm_val.bin', dtype=np.float32, mode='r')
     
     idxs = torch.randint(len(data) - n_chunks, (batch_size,))    
