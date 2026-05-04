@@ -368,7 +368,12 @@ def save_samples(step):
         'chroma': chroma,
         'style': style
     }
-    unconditional_mask = {k: torch.ones(*v.shape[:-1], 1).to(device).bool() for k, v in net_kwargs.items()}
+    unconditional_mask = {
+        'bpm': torch.ones(*bpm.shape, 1).to(device).bool(),
+        'rms': torch.ones(*rms.shape, 1).to(device).bool(),
+        'chroma': torch.ones(*chroma.shape[:-1], 1).to(device).bool(),
+        'style': torch.ones(*style.shape[:-1], 1).to(device).bool(),
+    }
     uncond_net_kwargs = net_kwargs | {'unconditional_mask': unconditional_mask}
     
     y_cfg = predict_measures(x.shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=5.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
