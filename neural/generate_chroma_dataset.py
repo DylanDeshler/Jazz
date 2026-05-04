@@ -23,6 +23,7 @@ batch_size = 128
 rate = 16000
 n_samples = 24576
 hop_length = 1024 # average over time so large hop is fine
+n_fft = 4096
 TARGET_SIG = 4
 total_write_batches = 48
 
@@ -97,6 +98,7 @@ if True:
             downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
             
             chromas = []
+            chroma = librosa.feature.chroma_cqt(y=wav, sr=rate, hop_length=hop_length)
             for i in range(len(downbeat_indices) - 1):    
                 start_idx = downbeat_indices[i]
                 end_idx = downbeat_indices[i+1]
@@ -104,15 +106,19 @@ if True:
                 t_start = beat_data[start_idx]['time']
                 t_end = beat_data[end_idx]['time']
                 
-                frame_start = int(t_start * rate)
-                frame_end = int(t_end * rate)
+                frame_start = librosa.time_to_frames(t_start, sr=rate, hop_length=hop_length)
+                frame_end = librosa.time_to_frames(t_end, sr=rate, hop_length=hop_length)
                 
                 if frame_end > len(wav):
                     break
+                    
+                frame_end = min(frame_end, chroma.shape[1])
                 
-                chroma = librosa.feature.chroma_cqt(y=wav[frame_start:frame_end], sr=rate, hop_length=hop_length)
-                chromas.append(chroma.mean(1))
+                measure_chroma = chroma[:, frame_start:frame_end]
                 
+                if measure_chroma.shape[1] > 0:
+                    chromas.append(np.mean(measure_chroma, axis=1))
+            
             all_chromas.append(np.asarray(chromas))
             
             if (idx + 1) % (len(paths) // total_write_batches) == 0:
