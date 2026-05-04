@@ -590,7 +590,7 @@ if not EVAL_ITERATIVE:
     # y3_mu, y3_sigma = calculate_embd_statistics(np.concatenate(y3_embs, axis=0))
     y4_mu, y4_sigma = calculate_embd_statistics(np.concatenate(y4_embs, axis=0))
     y5_mu, y5_sigma = calculate_embd_statistics(np.concatenate(y5_embs, axis=0))
-    y6_mu, y6_sigma = calculate_embd_statistics(np.concatent(y6_embs, axis=0))
+    y6_mu, y6_sigma = calculate_embd_statistics(np.concatenate(y6_embs, axis=0))
     
     # y2_cross_mu, y2_cross_sigma = calculate_embd_statistics(np.concatenate(y2_cross_embs, axis=0))
     # y3_cross_mu, y3_cross_sigma = calculate_embd_statistics(np.concatenate(y3_cross_embs, axis=0))
