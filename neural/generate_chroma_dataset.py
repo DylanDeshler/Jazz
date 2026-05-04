@@ -122,7 +122,6 @@ if True:
                     chromas.append(np.mean(measure_chroma, axis=1))
                     rms.append(np.mean(measure_rms))
             
-            print(np.asarray(chromas).shape, np.asarray(rms).shape)
             all_chromas.append(np.asarray(chromas))
             all_rms.append(np.asarray(rms))
             
@@ -130,7 +129,7 @@ if True:
                 print(f'Writing batch {write_idx}...')
                 all_chromas = np.concatenate(all_chromas, axis=0)
                 all_rms = np.concatenate(all_rms, axis=0)
-                all_data = np.stack([all_chromas, all_rms], axis=1)
+                all_data = np.stack([all_chromas, all_rms[:, np.newaxis]], axis=1)
                 print(all_chromas.shape, all_rms.shape, all_data.shape)
                 filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_{str(write_idx).zfill(2)}.bin')
                 dtype = np.float32
@@ -148,7 +147,7 @@ if True:
     print(f'Writing batch {write_idx}...')
     all_chromas = np.concatenate(all_chromas, axis=0)
     all_rms = np.concatenate(all_rms, axis=0)
-    all_data = np.stack([all_chromas, all_rms], axis=1)
+    all_data = np.stack([all_chromas, all_rms[:, np.newaxis]], axis=1)
     print(all_chromas.shape, all_rms.shape, all_data.shape)
     filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_{str(write_idx).zfill(2)}.bin')
     dtype = np.float32
@@ -174,7 +173,7 @@ for path in paths:
 cur_idx = 0
 filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_train.bin')
 train_length = np.sum([shape[0] for path, shape in write_paths[:-2]])
-arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, 2))
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, 13))
 print(arr.shape)
 
 for path, shape in write_paths[:-2]:
@@ -189,7 +188,7 @@ for path, shape in write_paths[:-2]:
 cur_idx = 0
 filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_val.bin')
 val_length = np.sum([shape[0] for path, shape in write_paths[-2:]])
-arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length, 2))
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length, 13))
 print(arr.shape)
 
 for path, shape in write_paths[-2:]:
