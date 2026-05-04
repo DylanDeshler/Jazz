@@ -318,10 +318,8 @@ def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', win
     return torch.from_numpy(smoothed).to(bpm_tensor.device)
 
 @torch.no_grad()
-def predict_measures(gen_shape, c, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3):
+def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3):
     with ctx:
-        net_kwargs = {'c': c}
-        uncond_net_kwargs = {'c': c, 'unconditional_mask': torch.ones(*c.shape[:-1], 1).to(device).bool()}
         y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise)
         
         bpm = probe(y)
@@ -361,13 +359,21 @@ def save_samples(step):
     
     n_steps = 50
     n_samples = 10
-    x, c, bpm = get_batch('val')
-    x, c, bpm = x[:n_samples], c[:n_samples], bpm[:n_samples]
+    x, bpm, rms, chroma, style = get_batch('val', batch_size=n_samples)
     
     gen_noise = torch.randn(x.shape).to(device)
     decoder_noise = torch.randn(n_samples * n_chunks, 1, encoder_ratios * (max_adapter_len - 1)).to(device)
-    y_cfg = predict_measures(x.shape, c, n_steps, guidance=5.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
-    y = predict_measures(x.shape, c, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
+    net_kwargs = {
+        'bpm': bpm,
+        'rms': rms,
+        'chroma': chroma,
+        'style': style
+    }
+    unconditional_mask = {k: torch.ones(*v.shape[:-1], 1).to(device).bool() for k, v in net_kwargs.items()}
+    uncond_net_kwargs = net_kwargs | {'unconditional_mask': unconditional_mask}
+    
+    y_cfg = predict_measures(x.shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=5.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
+    y = predict_measures(x.shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
     
     for i in range(n_samples):
         sf.write(os.path.join(batch_dir, f'{i}.wav'), y[i].flatten(), 16000)
