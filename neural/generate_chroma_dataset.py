@@ -82,7 +82,7 @@ def parse_beat_file(beat_path):
     
     return beat_data
 
-if True:
+if False:
 
     test = False
 
@@ -166,7 +166,7 @@ write_paths = []
 paths = [f'{out_prefix}_{str(i).zfill(2)}.bin' for i in range(total_write_batches + 1)]
 for path in paths:
     data = np.memmap(path, dtype=np.float32, mode='r')
-    data = data.reshape(-1, 2)
+    data = data.reshape(-1, 13)
     write_paths.append((path, data.shape))
 
 # write to train.bin
