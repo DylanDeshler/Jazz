@@ -405,7 +405,7 @@ with torch.no_grad():
                 style_measure_dit,
                 tokenizer_long,
                 adapter_long,
-                probe_long,
+                probe,
                 gen_shape,
                 c=c,
                 n_steps=n_steps,
