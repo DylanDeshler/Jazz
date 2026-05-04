@@ -217,47 +217,8 @@ def crossfade_chunks(chunks: list, overlap_samples: int) -> np.ndarray:
         
     return out
 
-# def predict_measures(gen_shape, n_steps, gen_noise, method='median', window_size=3, overlap_samples=0):
-#     with ctx:
-#         y2 = measure_dit.generate(gen_shape, n_steps=n_steps, noise=gen_noise)
-    
-#     bpm = probe(y2)
-#     bpm = smooth_bpm_predictions(bpm, method=method, window_size=window_size)
-#     seconds_per_beat = 60.0 / bpm
-#     measure_duration_sec = seconds_per_beat * TARGET_SIG
-    
-#     target_samples = (measure_duration_sec * rate).long()
-#     max_len = min(target_samples.max().item(), encoder_ratios * (max_seq_len - 1))
-#     max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
-#     max_latent_len = max_len // encoder_ratios
-    
-#     indices = torch.arange(max_latent_len, device=device).view(1, 1, -1)
-#     lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
-#     mask = indices < lengths
-#     mask = mask.view(batch_size * n_chunks, max_latent_len)
-#     shape = (batch_size * n_chunks, 1, max_latent_len)
-        
-#     with ctx:
-#         y2 = y2.transpose(2, 3).view(batch_size * n_chunks, vae_embed_dim, spatial_window)
-#         y2 = adapter.decode(y2, shape, mask=mask)
-#         y2 = tokenizer.decode(y2, shape=(1, max_len), n_steps=n_steps, noise=None)
-    
-#     target_samples = target_samples.flatten().cpu().detach().numpy()
-#     y2 = y2.squeeze().cpu().detach().numpy()
-    
-#     if overlap_samples > 0:
-#         y2_cross = crossfade_chunks([y[:min(int(samples), max_len)] for y, samples in zip(y2, target_samples)], overlap_samples)
-#         y2_cross = torch.from_numpy(y2_cross.astype(np.float32)).to(device, non_blocking=True)
-    
-#     y2 = np.concatenate([y[:min(int(samples), max_len)] for y, samples in zip(y2, target_samples)], axis=0)
-#     y2 = torch.from_numpy(y2.astype(np.float32)).to(device, non_blocking=True)
-    
-#     if overlap_samples > 0:
-#         return y2, y2_cross
-#     return y2
-
 @torch.no_grad()
-def predict_measures(model, gen_shape, c, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3, overlap_samples=0):
+def predict_measures(model, tokenizer, adapter, gen_shape, c, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3, overlap_samples=0):
     with ctx:
         if c is not None:
             net_kwargs = {'c': c}
@@ -309,6 +270,8 @@ tokenizer2 = load_model(os.path.join('tokenizer_low_large_24576', 'ckpt.pt'), To
 adapter = load_model(os.path.join('tokenizer_adapter_low_large_24576_subset', 'ckpt.pt'), Adapter)
 max_seq_len = adapter.max_seq_len
 probe = load_model(os.path.join('tokenizer_low_measures_fix_subset_BPMProbe', 'ckpt.pt'), BPMProbe)
+tokenizer_long = load_model(os.path.join('tokenizer_low_large_24576_subset_longtrain', 'ckpt.pt'), Tokenizer)
+adapter_long = load_model(os.path.join('tokenizer_adapter_low_large_24576_subset_longtrain', 'ckpt.pt'), Adapter)
 
 # DiTs
 import sys
@@ -423,6 +386,8 @@ with torch.no_grad():
             decoder_noise = torch.randn(batch_size * n_chunks, 1, encoder_ratios * (max_seq_len - 1)).to(device)
             y4 = predict_measures(
                 measure_dit, 
+                tokenizer,
+                adapter,
                 gen_shape, 
                 c=None, 
                 n_steps=n_steps, 
@@ -436,6 +401,8 @@ with torch.no_grad():
             c = torch.from_numpy(np.stack([styles[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
             y6 = predict_measures(
                 style_measure_dit,
+                tokenizer_long,
+                adapter_long,
                 gen_shape,
                 c=c,
                 n_steps=n_steps,
