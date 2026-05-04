@@ -1123,11 +1123,12 @@ class BpmRmsChromaStyleConditionalModernDiT(nn.Module):
         x = self.x_embedder(x)
         x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
         
+        print(t.shape, style.shape, chroma.shape, bpm.shape)
         t = self.t_embedder(t.flatten()).view(B, T, -1)
         style = self.style_embedder(style)
         chroma = self.chroma_embedder(chroma)
         rms = self.rms_embedder(rms)
-        bpm = self.bpm_embedder(bpm)
+        bpm = self.bpm_embedder(bpm.flatten()).view(B, T, -1)
         
         if self.use_null_token:
             signals = {'style': style, 'chroma': chroma, 'bpm': bpm, 'rms': rms}
