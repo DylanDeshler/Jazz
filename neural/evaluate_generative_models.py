@@ -218,7 +218,7 @@ def crossfade_chunks(chunks: list, overlap_samples: int) -> np.ndarray:
     return out
 
 @torch.no_grad()
-def predict_measures(model, tokenizer, adapter, gen_shape, c, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3, overlap_samples=0):
+def predict_measures(model, tokenizer, adapter, probe, gen_shape, c, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3, overlap_samples=0):
     with ctx:
         if c is not None:
             net_kwargs = {'c': c}
@@ -272,6 +272,7 @@ max_seq_len = adapter.max_seq_len
 probe = load_model(os.path.join('tokenizer_low_measures_fix_subset_BPMProbe', 'ckpt.pt'), BPMProbe)
 tokenizer_long = load_model(os.path.join('tokenizer_low_large_24576_subset_longtrain', 'ckpt.pt'), Tokenizer)
 adapter_long = load_model(os.path.join('tokenizer_adapter_low_large_24576_subset_longtrain', 'ckpt.pt'), Adapter)
+probe_long = load_model(os.path.join('tokenizer_low_measures_fix_subset_longtrain_BPMProbe_small', 'ckpt.pt'), BPMProbe)
 
 # DiTs
 import sys
@@ -388,6 +389,7 @@ with torch.no_grad():
                 measure_dit, 
                 tokenizer,
                 adapter,
+                probe,
                 gen_shape, 
                 c=None, 
                 n_steps=n_steps, 
@@ -403,6 +405,7 @@ with torch.no_grad():
                 style_measure_dit,
                 tokenizer_long,
                 adapter_long,
+                probe_long,
                 gen_shape,
                 c=c,
                 n_steps=n_steps,
