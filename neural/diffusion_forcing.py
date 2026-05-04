@@ -1178,7 +1178,7 @@ class BpmRmsChromaStyleConditionalModernDiTWrapper(nn.Module):
         self.sampler = FMEulerSampler(self.diffusion)
     
     def forward(self, x, bpm, rms, chroma, style, t=None):
-        return self.diffusion.loss(self.net, x, t=t, net_kwargs={'style': style, 'chroma': chroma, 'bpm': bpm})
+        return self.diffusion.loss(self.net, x, t=t, net_kwargs={'style': style, 'chroma': chroma, 'bpm': bpm, 'rms': rms})
     
     def generate(self, shape, net_kwargs=None, uncond_net_kwargs=None, n_steps=50, guidance=1.0, noise=None):
         return self.sampler.sample(self.net, shape, n_steps=n_steps, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, guidance=guidance, noise=noise)
