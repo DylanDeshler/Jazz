@@ -116,7 +116,7 @@ if True:
                 frame_end = min(frame_end, wav_chroma.shape[1])
                 
                 measure_chroma = wav_chroma[:, frame_start:frame_end]
-                measure_rms = wav_rms[:, frame_start:frame_end]
+                measure_rms = wav_rms[frame_start:frame_end]
                 
                 if measure_chroma.shape[1] > 0:
                     chromas.append(np.mean(measure_chroma, axis=1))
