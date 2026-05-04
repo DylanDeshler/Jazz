@@ -579,7 +579,8 @@ def multi_token_drop(
         
         # Evaluate which tokens to drop
         # sample_specific_drop_rates broadcasts from (B, 1) to (B, T) naturally
-        mask_token_drop = token_noise < sample_specific_drop_rates.squeeze(-1) if sample_specific_drop_rates.dim() > 1 else token_noise < sample_specific_drop_rates
+        # mask_token_drop = token_noise < sample_specific_drop_rates.squeeze(-1) if sample_specific_drop_rates.dim() > 1 else token_noise < sample_specific_drop_rates
+        mask_token_drop = token_noise < sample_specific_drop_rates
         
         # --- COMBINE ALL MASKS ---
         # Final mask shape needs to be (B, T, 1) to broadcast over the channel dimension
