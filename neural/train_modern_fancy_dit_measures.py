@@ -41,8 +41,6 @@ import soundfile as sf
 import torch
 import pyrubberband as pyrb
 
-# 0.898376
-
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
@@ -220,6 +218,7 @@ elif init_from == 'resume':
     ckpt_path = os.path.join(out_dir, 'ckpt.pt')
     checkpoint = torch.load(ckpt_path, map_location=device)
     model_args = checkpoint['model_args']
+    model_args['gradient_checkpointing'] = gradient_checkpointing
 
     model = net(**model_args)
     state_dict = checkpoint['model']
