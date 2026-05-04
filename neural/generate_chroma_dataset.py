@@ -111,8 +111,7 @@ if True:
                     break
                 
                 chroma = librosa.feature.chroma_cqt(y=wav[frame_start:frame_end], sr=rate, hop_length=hop_length)
-                print(chroma.shape)
-                chromas.append(chroma.mean(0))
+                chromas.append(chroma.mean(1))
                 
             all_chromas.append(np.asarray(chromas))
             
