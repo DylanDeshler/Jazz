@@ -1123,7 +1123,6 @@ class BpmRmsChromaStyleConditionalModernDiT(nn.Module):
         x = self.x_embedder(x)
         x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
         
-        print(t.shape, style.shape, chroma.shape, bpm.shape, rms.shape)
         t = self.t_embedder(t.flatten()).view(B, T, -1)
         style = self.style_embedder(style)
         chroma = self.chroma_embedder(chroma)
@@ -1146,7 +1145,6 @@ class BpmRmsChromaStyleConditionalModernDiT(nn.Module):
                 bpm = torch.where(unconditional_mask['bpm'], self.null_bpm, bpm)
                 rms = torch.where(unconditional_mask['rms'], self.null_rms, rms)
         
-        print(t.shape, style.shape, chroma.shape, bpm.shape, rms.shape)
         t = t + style + chroma + rms + bpm
         # t = torch.cat([t, style, chroma, bpm], dim=-1)
         t = self.fuse_conditioning(t)
