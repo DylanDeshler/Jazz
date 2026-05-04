@@ -46,7 +46,7 @@ import pyrubberband as pyrb
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'BpmRmsChromaStyleConditionalModernDiT_large_24576_subset_adapter_longtrain_32chunks'
+out_dir = 'BpmRmsChromaStyleConditionalModernDiT_smedium_24576_subset_adapter_longtrain_32chunks'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -54,7 +54,7 @@ save_interval = 5000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir
@@ -67,7 +67,7 @@ TARGET_SIG = 4
 TARGET_BPM = 60 * TARGET_SIG / (24576 / 16000)
 # model
 patch_size = 2
-gradient_checkpointing = True
+gradient_checkpointing = False
 spatial_window = 48
 n_chunks = 32
 max_seq_len = spatial_window * n_chunks
@@ -387,7 +387,7 @@ def save_samples(step):
 if wandb_log and master_process:
     import wandb
     if init_from == 'resume':
-        wandb.init(project=wandb_project, name=wandb_run_name, id='vibscpta', config=config)
+        wandb.init(project=wandb_project, name=wandb_run_name, id='17dflkx8', config=config)
     else:
         wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
