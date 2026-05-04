@@ -32,7 +32,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from diffusion_forcing import BpmRmsChromaStyleConditionalModernDiT_smedium as net
+from diffusion_forcing import BpmRmsChromaStyleConditionalModernDiT_large as net
 from dito import DiToV5 as Tokenizer
 from adapter import InvertibleAdapter
 from fad import BPMProbe
@@ -46,11 +46,11 @@ import pyrubberband as pyrb
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'BpmRmsChromaStyleConditionalModernDiT_smedium_24576_subset_adapter_longtrain_32chunks'
-eval_interval = 2500
-sample_interval = 2500
+out_dir = 'BpmRmsChromaStyleConditionalModernDiT_large_24576_subset_adapter_longtrain_32chunks'
+eval_interval = 5000
+sample_interval = 5000
 log_interval = 100
-save_interval = 2500
+save_interval = 5000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
