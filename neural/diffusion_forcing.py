@@ -1169,7 +1169,7 @@ class BpmRmsChromaStyleConditionalModernDiT(nn.Module):
         
         return x
 
-class BpmRmsChromaStyleConditionalModernDiTWrappper(nn.Module):
+class BpmRmsChromaStyleConditionalModernDiTWrapper(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
         self.net = BpmRmsChromaStyleConditionalModernDiT(**kwargs)
@@ -1224,3 +1224,18 @@ def StyleConditionalModernDiT_small(**kwargs):
 
 def StyleConditionalModernDiT_tiny(**kwargs):
     return StyleConditionalModernDiTWrapper(depth=16, hidden_size=768, num_heads=12, **kwargs)
+
+def BpmRmsChromaStyleConditionalModernDiT_large(**kwargs):
+    return BpmRmsChromaStyleConditionalModernDiTWrapper(depth=28, hidden_size=1152, num_heads=16, **kwargs)
+
+def BpmRmsChromaStyleConditionalModernDiT_medium(**kwargs):
+    return BpmRmsChromaStyleConditionalModernDiTWrapper(depth=24, hidden_size=1024, num_heads=16, **kwargs)
+
+def BpmRmsChromaStyleConditionalModernDiT_smedium(**kwargs):
+    return BpmRmsChromaStyleConditionalModernDiTWrapper(depth=20, hidden_size=768, num_heads=12, **kwargs)
+
+def BpmRmsChromaStyleConditionalModernDiT_small(**kwargs):
+    return BpmRmsChromaStyleConditionalModernDiTWrapper(depth=16, hidden_size=1024, num_heads=16, **kwargs)
+
+def BpmRmsChromaStyleConditionalModernDiT_tiny(**kwargs):
+    return BpmRmsChromaStyleConditionalModernDiTWrapper(depth=16, hidden_size=768, num_heads=12, **kwargs)
