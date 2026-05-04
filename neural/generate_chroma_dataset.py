@@ -99,7 +99,7 @@ if True:
             
             chromas, rms = [], []
             wav_chroma = librosa.feature.chroma_cqt(y=wav, sr=rate, hop_length=hop_length)
-            wav_rms = librosa.feature.rms(y=wav, sr=rate, hop_length=hop_length, aggregate=None)
+            wav_rms = librosa.feature.rms(y=wav, hop_length=hop_length)[0]
             for i in range(len(downbeat_indices) - 1):    
                 start_idx = downbeat_indices[i]
                 end_idx = downbeat_indices[i+1]
