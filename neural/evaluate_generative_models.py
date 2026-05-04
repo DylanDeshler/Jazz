@@ -419,10 +419,12 @@ with torch.no_grad():
             # y3, y3_cross = predict_measures(gen_shape, n_steps, gen_noise, method='moving_average', window_size=3, overlap_samples=overlap_samples)
             # y4, y4_cross = predict_measures(gen_shape, n_steps, gen_noise, method='median', window_size=3, overlap_samples=overlap_samples)
             
-            y4 = predict_measures(measure_dit, gen_shape, None, n_steps, gen_noise, method='median', window_size=3)
+            gen_noise = torch.randn(gen_shape).to(device)
+            decoder_noise = torch.randn(batch_size * n_chunks, 1, encoder_ratios * (max_seq_len - 1)).to(device)
+            y4 = predict_measures(measure_dit, gen_shape, None, n_steps, guidance=1, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
             idxs = np.random.randint(len(styles) - n_chunks, size=(batch_size,))
             c = torch.from_numpy(np.stack([styles[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-            y6 = predict_measures(style_measure_dit, gen_shape, c, n_steps, gen_noise, method='median', window_size=3)
+            y6 = predict_measures(style_measure_dit, gen_shape, c, n_steps, guidance=5, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
             
             x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
             
