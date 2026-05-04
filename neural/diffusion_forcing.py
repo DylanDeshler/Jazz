@@ -514,6 +514,84 @@ def token_drop(labels, null_token, training, p_uncond=0.1, p_full=0.3, p_ind_low
     
     return torch.where(final_mask, null_token, labels)
 
+def multi_token_drop(
+    signals: dict, 
+    null_tokens: dict, 
+    training: bool, 
+    p_joint_uncond=0.1, 
+    p_joint_full=0.2, 
+    p_ind_uncond=0.1, 
+    p_ind_low=0.1, 
+    p_ind_high=0.5
+):
+    """
+    Applies hierarchical CFG dropping across multiple conditioning signals.
+    
+    Hierarchy:
+    1. Joint Uncond (p_joint_uncond): Drops ALL signals for the batch item.
+    2. Joint Full (p_joint_full): Keeps ALL signals perfectly intact.
+    3. Independent Mode: For remaining batch items, each signal independently decides:
+       a) Independent Uncond (p_ind_uncond): Drop this specific signal entirely.
+       b) Partial Token Drop: Drop individual tokens within this signal sequence.
+       
+    Args:
+        signals: Dict of input tensors, e.g., {'chroma': (B, T, C), 'bpm': (B, T, C)}
+        null_tokens: Dict of learnable null vectors, e.g., {'chroma': (1, C)}
+        training: Boolean flag
+    """
+    if not training:
+        return signals
+    
+    # Extract batch size and device from the first signal
+    first_key = list(signals.keys())[0]
+    B = signals[first_key].shape[0]
+    device = signals[first_key].device
+    
+    # For a (B, T, C) tensor, this creates a shape of (B, 1)
+    batch_rand_shape = (B,) + (1,) * (signals[first_key].ndim - 2)
+    
+    # --- LEVEL 1: SYNCHRONIZED JOINT MASKS ---
+    # These masks are shared across ALL signals to maintain the joint distribution
+    batch_rand = torch.rand(batch_rand_shape, device=device)
+    
+    mask_joint_uncond = batch_rand < p_joint_uncond
+    mask_joint_full = batch_rand >= (1.0 - p_joint_full)
+    mask_independent_mode = ~(mask_joint_uncond | mask_joint_full)
+    
+    output_signals = {}
+    
+    # --- LEVEL 2: INDEPENDENT MASKS ---
+    for key, labels in signals.items():
+        null_t = null_tokens[key].to(labels.dtype)
+        
+        # 1. Independent Unconditional Drop (Drop the entire sequence for this specific signal)
+        ind_rand = torch.rand(batch_rand_shape, device=device)
+        mask_ind_uncond = mask_independent_mode & (ind_rand < p_ind_uncond)
+        
+        # 2. Token-Level Drop (Only happens if we are in independent mode AND didn't drop the whole signal)
+        mask_token_mode = mask_independent_mode & ~mask_ind_uncond
+        
+        # Randomize drop sparsity per batch item
+        sample_specific_drop_rates = torch.rand(batch_rand_shape, device=device) * (p_ind_high - p_ind_low) + p_ind_low
+        
+        # Generate noise for every token in the sequence -> (B, T)
+        token_noise = torch.rand(labels.shape[:-1], device=device)
+        
+        # Evaluate which tokens to drop
+        # sample_specific_drop_rates broadcasts from (B, 1) to (B, T) naturally
+        mask_token_drop = token_noise < sample_specific_drop_rates.squeeze(-1) if sample_specific_drop_rates.dim() > 1 else token_noise < sample_specific_drop_rates
+        
+        # --- COMBINE ALL MASKS ---
+        # Final mask shape needs to be (B, T, 1) to broadcast over the channel dimension
+        final_mask = mask_joint_uncond.unsqueeze(-1) | \
+                     mask_ind_uncond.unsqueeze(-1) | \
+                     (mask_token_mode.unsqueeze(-1) & mask_token_drop.unsqueeze(-1))
+        
+        # Apply the mask: Replace dropped tokens with the specific null token for this signal
+        output_signals[key] = torch.where(final_mask, null_t, labels)
+        
+    return output_signals
+
 class ConvBlock1d(nn.Module):
     def __init__(
         self,
@@ -957,6 +1035,150 @@ class StyleConditionalModernDiTWrapper(nn.Module):
     
     def forward(self, x, c, t=None):
         return self.diffusion.loss(self.net, x, t=t, net_kwargs={'c': c})
+    
+    def generate(self, shape, net_kwargs=None, uncond_net_kwargs=None, n_steps=50, guidance=1.0, noise=None):
+        return self.sampler.sample(self.net, shape, n_steps=n_steps, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, guidance=guidance, noise=noise)
+
+class BpmRmsChromaStyleConditionalModernDiT(nn.Module):
+    def __init__(self,
+                 in_channels,
+                 hidden_size,
+                 spatial_window,
+                 n_chunks,
+                 style_dim,
+                 num_heads=12,
+                 depth=12,
+                 mlp_ratio=4,
+                 gradient_checkpointing=False,
+                 patch_size=1,
+                 use_null_token=False,
+                 **kwargs,
+                 ):
+        super().__init__()
+        self.spatial_window = spatial_window
+        self.gradient_checkpointing = gradient_checkpointing
+        max_input_size = spatial_window * n_chunks
+        self.patch_size = patch_size
+        self.use_null_token = use_null_token
+        
+        self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
+        self.x_embedder = Patcher(in_channels, hidden_size, patch_size=patch_size)
+        self.style_embedder = nn.Linear(style_dim, hidden_size, bias=True)
+        self.chroma_embedder = nn.Linear(12, hidden_size, bias=True)
+        self.rms_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
+        self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
+        self.fuse_conditioning = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), hidden_size, bias=False)
+        
+        if self.use_null_token:
+            self.null_style = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
+            self.null_chroma = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
+            self.null_rms = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
+            self.null_bpm = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
+        
+        self.t_block = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(hidden_size, hidden_size * 6, bias=True),
+        )
+        
+        self.blocks = nn.ModuleList([
+            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+        ])
+
+        self.norm = RMSNorm(hidden_size)
+        self.final_layer_scale_shift_table = nn.Parameter(
+            torch.randn(2, hidden_size) / hidden_size ** 0.5,
+        )
+        self.fc = nn.Linear(hidden_size, in_channels * patch_size, bias=False)
+        
+        self.initialize_weights()
+        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
+    
+    def initialize_weights(self):
+        self.apply(self._init_weights)
+        # zero out classifier weights
+        nn.init.zeros_(self.fc.weight)
+        nn.init.zeros_(self.t_block[-1].weight)
+        nn.init.zeros_(self.t_block[-1].bias)
+        # zero out c_proj weights in all blocks
+        for block in self.blocks:
+            nn.init.zeros_(block.mlp.w3.weight)
+            nn.init.zeros_(block.attn.proj.weight)
+    
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            # https://arxiv.org/pdf/2310.17813
+            fan_out = module.weight.size(0)
+            fan_in = module.weight.size(1)
+            std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
+            nn.init.normal_(module.weight, mean=0.0, std=std)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
+    
+    def forward(self, x, t, bpm, rms, chroma, style, unconditional_mask=None):
+        B, T, N, C = x.shape
+        
+        x = rearrange(x, 'b t n c -> (b t) c n')
+        x = self.x_embedder(x)
+        x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
+        
+        t = self.t_embedder(t.flatten()).view(B, T, -1)
+        style = self.style_embedder(style)
+        chroma = self.chroma_embedder(chroma)
+        rms = self.rms_embedder(rms)
+        bpm = self.bpm_embedder(bpm)
+        
+        if self.use_null_token:
+            signals = {'style': style, 'chroma': chroma, 'bpm': bpm, 'rms': rms}
+            null_tokens = {'style': self.null_style, 'chroma': self.null_chroma, 'bpm': self.null_bpm, 'rms': self.null_rms}
+            signals = multi_token_drop(signals, null_tokens, self.training, p_ind_uncond=0.1, p_joint_full=0.8, p_ind_low=0.1, p_ind_high=0.5)
+            style = signals['style']
+            chroma = signals['chroma']
+            bpm = signals['bpm']
+            rms = signals['rms']
+            
+            if unconditional_mask is not None:
+                # c = torch.where(unconditional_mask, self.null_token.unsqueeze(0), c)
+                style = torch.where(unconditional_mask['style'], self.null_style, style)
+                chroma = torch.where(unconditional_mask['chroma'], self.null_chroma, chroma)
+                bpm = torch.where(unconditional_mask['bpm'], self.null_bpm, bpm)
+                rms = torch.where(unconditional_mask['rms'], self.null_rms, rms)
+        
+        t = t + style + chroma + rms + bpm
+        # t = torch.cat([t, style, chroma, bpm], dim=-1)
+        t = self.fuse_conditioning(t)
+        t0 = self.t_block(t)
+        
+        freqs_cis = self.freqs_cis[:x.shape[1]]
+        
+        for block in self.blocks:
+            if self.gradient_checkpointing and self.training:
+                x = checkpoint(block, x, t0, freqs_cis=freqs_cis, use_reentrant=False)
+            else:
+                x = block(x, t0, freqs_cis=freqs_cis)
+        
+        # SAM Audio does not use a non-linearity on t here
+        shift, scale = (self.final_layer_scale_shift_table[None, None] + F.silu(t[:, :, None])).chunk(
+            2, dim=2
+        )
+        x = rearrange(x, 'b (t n) c -> b t n c', t=T, n=N // self.patch_size)
+        x = modulate(self.norm(x), shift.expand(-1, -1, N // self.patch_size, -1), scale.expand(-1, -1, N // self.patch_size, -1))
+        x = self.fc(x)
+        x = rearrange(x, 'b t n (p c) -> b t (n p) c', p=self.patch_size, c=C)
+        
+        return x
+
+class BpmRmsChromaStyleConditionalModernDiTWrappper(nn.Module):
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.net = BpmRmsChromaStyleConditionalModernDiT(**kwargs)
+        
+        self.diffusion = FM(timescale=1000.0)
+        self.sampler = FMEulerSampler(self.diffusion)
+    
+    def forward(self, x, bpm, rms, chroma, style, t=None):
+        return self.diffusion.loss(self.net, x, t=t, net_kwargs={'style': style, 'chroma': chroma, 'bpm': bpm})
     
     def generate(self, shape, net_kwargs=None, uncond_net_kwargs=None, n_steps=50, guidance=1.0, noise=None):
         return self.sampler.sample(self.net, shape, n_steps=n_steps, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, guidance=guidance, noise=noise)
