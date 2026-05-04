@@ -268,7 +268,7 @@ def predict_measures(model, gen_shape, c, n_steps, guidance=1, gen_noise=None, d
         
         bpm = probe(y)
     
-    bpm = smooth_bpm_predictions(bpm, method=method, window_size=window_size)
+    bpm = smooth_bpm_predictions(bpm.float(), method=method, window_size=window_size)
     seconds_per_beat = 60.0 / bpm
     measure_duration_sec = seconds_per_beat * TARGET_SIG
     
