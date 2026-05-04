@@ -122,6 +122,7 @@ if True:
                     chromas.append(np.mean(measure_chroma, axis=1))
                     rms.append(np.mean(measure_rms))
             
+            print(np.asarray(chromas).shape, np.asarray(rms).shape)
             all_chromas.append(np.asarray(chromas))
             all_rms.append(np.asarray(rms))
             
