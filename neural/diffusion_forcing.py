@@ -1066,8 +1066,8 @@ class BpmRmsChromaStyleConditionalModernDiT(nn.Module):
         self.x_embedder = Patcher(in_channels, hidden_size, patch_size=patch_size)
         self.style_embedder = nn.Linear(style_dim, hidden_size, bias=True)
         self.chroma_embedder = nn.Linear(12, hidden_size, bias=True)
-        self.rms_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
-        self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
+        self.rms_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True, max_period=10)
+        self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True, max_period=10)
         self.measure_embedder = nn.Embedding(n_chunks, hidden_size)
         
         self.fuse_conditioning = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), hidden_size, bias=False)
@@ -1131,6 +1131,9 @@ class BpmRmsChromaStyleConditionalModernDiT(nn.Module):
         x = x + measure_embs
         x = rearrange(x, 'b t n c -> b (t n) c', b=B, t=T)
         
+        rms = (rms - 0.09749302) / 0.047287412
+        bpm = (bpm - 207.87946) / 141.18713
+        
         t = self.t_embedder(t.flatten()).view(B, T, -1)
         style = self.style_embedder(style)
         chroma = self.chroma_embedder(chroma)
@@ -1147,14 +1150,12 @@ class BpmRmsChromaStyleConditionalModernDiT(nn.Module):
             rms = signals['rms']
             
             if unconditional_mask is not None:
-                # c = torch.where(unconditional_mask, self.null_token.unsqueeze(0), c)
                 style = torch.where(unconditional_mask['style'], self.null_style, style)
                 chroma = torch.where(unconditional_mask['chroma'], self.null_chroma, chroma)
                 bpm = torch.where(unconditional_mask['bpm'], self.null_bpm, bpm)
                 rms = torch.where(unconditional_mask['rms'], self.null_rms, rms)
         
         t = t + style + chroma + rms + bpm
-        # t = torch.cat([t, style, chroma, bpm], dim=-1)
         t = self.fuse_conditioning(t)
         t0 = self.t_block(t)
         
