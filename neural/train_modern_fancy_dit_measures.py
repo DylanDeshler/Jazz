@@ -322,8 +322,7 @@ def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance
     with ctx:
         y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise)
         
-        bpm = probe(y)
-    
+    bpm = net_kwargs['bpm'].cpu().detach().numpy()
     bpm = smooth_bpm_predictions(bpm, method=method, window_size=window_size)
     seconds_per_beat = 60.0 / bpm
     measure_duration_sec = seconds_per_beat * TARGET_SIG
