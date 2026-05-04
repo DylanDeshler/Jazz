@@ -129,7 +129,7 @@ if True:
                 print(f'Writing batch {write_idx}...')
                 all_chromas = np.concatenate(all_chromas, axis=0)
                 all_rms = np.concatenate(all_rms, axis=0)
-                all_data = np.stack([all_chromas, all_rms[:, np.newaxis]], axis=1)
+                all_data = np.concatenate([all_chromas, all_rms[:, np.newaxis]], axis=1)
                 print(all_chromas.shape, all_rms.shape, all_data.shape)
                 filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_{str(write_idx).zfill(2)}.bin')
                 dtype = np.float32
@@ -147,7 +147,7 @@ if True:
     print(f'Writing batch {write_idx}...')
     all_chromas = np.concatenate(all_chromas, axis=0)
     all_rms = np.concatenate(all_rms, axis=0)
-    all_data = np.stack([all_chromas, all_rms[:, np.newaxis]], axis=1)
+    all_data = np.concatenate([all_chromas, all_rms[:, np.newaxis]], axis=1)
     print(all_chromas.shape, all_rms.shape, all_data.shape)
     filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_{str(write_idx).zfill(2)}.bin')
     dtype = np.float32
