@@ -1127,7 +1127,7 @@ class BpmRmsChromaStyleConditionalModernDiT(nn.Module):
         t = self.t_embedder(t.flatten()).view(B, T, -1)
         style = self.style_embedder(style)
         chroma = self.chroma_embedder(chroma)
-        rms = self.rms_embedder(rms)
+        rms = self.rms_embedder(rms.flatten()).view(B, T, -1)
         bpm = self.bpm_embedder(bpm.flatten()).view(B, T, -1)
         
         if self.use_null_token:

@@ -149,8 +149,8 @@ def get_batch(split='train', batch_size=batch_size):
     x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     style = torch.from_numpy(np.stack([style[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     chroma = torch.from_numpy(np.stack([chroma_rms[idx:idx+n_chunks, :12] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    rms = torch.from_numpy(np.stack([chroma_rms[idx:idx+n_chunks, [-1]] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    bpm = torch.from_numpy(np.stack([meta[idx:idx+n_chunks] for idx in idxs], axis=0)).unsqueeze(-1).pin_memory().to(device, non_blocking=True)
+    rms = torch.from_numpy(np.stack([chroma_rms[idx:idx+n_chunks, -1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    bpm = torch.from_numpy(np.stack([meta[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
 
     return x, bpm, rms, chroma, style
 
