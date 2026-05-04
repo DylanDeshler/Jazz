@@ -1068,6 +1068,8 @@ class BpmRmsChromaStyleConditionalModernDiT(nn.Module):
         self.chroma_embedder = nn.Linear(12, hidden_size, bias=True)
         self.rms_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
         self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
+        self.measure_embedder = nn.Embedding(n_chunks, hidden_size)
+        
         self.fuse_conditioning = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), hidden_size, bias=False)
         
         if self.use_null_token:
@@ -1122,7 +1124,12 @@ class BpmRmsChromaStyleConditionalModernDiT(nn.Module):
         
         x = rearrange(x, 'b t n c -> (b t) c n')
         x = self.x_embedder(x)
-        x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
+        
+        x = rearrange(x, '(b t) c n -> b t n c', b=B, t=T)
+        measure_ids = torch.arange(T, device=x.device)
+        measure_embs = self.measure_embedder(measure_ids).unsqueeze(1)
+        x = x + measure_embs
+        x = rearrange(x, 'b t n c -> b (t n) c', b=B, t=T)
         
         t = self.t_embedder(t.flatten()).view(B, T, -1)
         style = self.style_embedder(style)
