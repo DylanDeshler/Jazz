@@ -150,9 +150,8 @@ def get_batch(split='train', batch_size=batch_size):
     style = torch.from_numpy(np.stack([style[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     chroma = torch.from_numpy(np.stack([chroma_rms[idx:idx+n_chunks, :12] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     rms = torch.from_numpy(np.stack([chroma_rms[idx:idx+n_chunks, [-1]] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    bpm = torch.from_numpy(np.stack([meta[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    bpm = torch.from_numpy(np.stack([meta[idx:idx+n_chunks] for idx in idxs], axis=0)).unsqueeze(-1).pin_memory().to(device, non_blocking=True)
 
-    print(x.shape, style.shape, chroma.shape, rms.shape, bpm.shape)
     return x, bpm, rms, chroma, style
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
