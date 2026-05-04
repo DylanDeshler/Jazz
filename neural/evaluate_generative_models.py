@@ -312,8 +312,9 @@ probe = load_model(os.path.join('tokenizer_low_measures_fix_subset_BPMProbe', 'c
 
 # DiTs
 import sys
+n_paths = int(sys.argv[1])
 try:
-    checkpoint_step = f'_{int(sys.argv[1])}'
+    checkpoint_step = f'_{int(sys.argv[2])}'
 except:
     checkpoint_step = ''
 base_dit = load_model(os.path.join('UnconditionalModernDiT_smedium_24576_subset_32chunks', f'ckpt{checkpoint_step}.pt'), DiT)
@@ -338,7 +339,7 @@ beat_paths = [os.path.join('/home/ubuntu/Data/beats', path) for path in beat_pat
 
 measure_paths = glob.glob('/home/ubuntu/Data/wavs/*')
 measure_paths = measure_paths[-int(len(measure_paths) * 2/48):] # test set
-idxs = np.random.choice(np.arange(len(measure_paths)), size=32, replace=False)
+idxs = np.random.choice(np.arange(len(measure_paths)), size=n_paths, replace=False)
 n_steps = 32
 batch_size = 4
 EVAL_ITERATIVE = False
