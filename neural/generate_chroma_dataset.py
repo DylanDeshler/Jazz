@@ -22,11 +22,11 @@ device = torch.device('cuda')
 batch_size = 128
 rate = 16000
 n_samples = 24576
-hop_length = 2048 # average over time so large hop is fine
+hop_length = 1024 # average over time so large hop is fine
 TARGET_SIG = 4
 total_write_batches = 48
 
-out_prefix = 'low_large_24576_subset_chroma'
+out_prefix = 'low_large_24576_subset_chroma_rms'
 
 paths = glob.glob('/home/ubuntu/Data/measures/*')
 with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
@@ -90,14 +90,16 @@ if True:
     write_paths = []
 
     all_chromas = []
+    all_rms = []
     with torch.no_grad():
         for idx, wav in enumerate(tqdm(wavs)):
             beat_path = os.path.join('/home/ubuntu/Data/beats', os.path.basename(paths[idx]))
             beat_data = parse_beat_file(beat_path)
             downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
             
-            chromas = []
-            chroma = librosa.feature.chroma_cqt(y=wav, sr=rate, hop_length=hop_length)
+            chromas, rms = [], []
+            wav_chroma = librosa.feature.chroma_cqt(y=wav, sr=rate, hop_length=hop_length)
+            wav_rms = librosa.feature.rms(y=wav, sr=rate, hop_length=hop_length, aggregate=None)
             for i in range(len(downbeat_indices) - 1):    
                 start_idx = downbeat_indices[i]
                 end_idx = downbeat_indices[i+1]
@@ -111,43 +113,52 @@ if True:
                 if frame_end > len(wav):
                     break
                     
-                frame_end = min(frame_end, chroma.shape[1])
+                frame_end = min(frame_end, wav_chroma.shape[1])
                 
-                measure_chroma = chroma[:, frame_start:frame_end]
+                measure_chroma = wav_chroma[:, frame_start:frame_end]
+                measure_rms = wav_rms[:, frame_start:frame_end]
                 
                 if measure_chroma.shape[1] > 0:
                     chromas.append(np.mean(measure_chroma, axis=1))
+                    rms.append(np.mean(measure_rms))
             
             all_chromas.append(np.asarray(chromas))
+            all_rms.append(np.asarray(rms))
             
             if (idx + 1) % (len(paths) // total_write_batches) == 0:
                 print(f'Writing batch {write_idx}...')
                 all_chromas = np.concatenate(all_chromas, axis=0)
-                print(all_chromas.shape)
+                all_rms = np.concatenate(all_rms, axis=0)
+                print(all_chromas.shape, all_rms.shape)
+                all_data = np.stack([all_chromas, all_rms], axis=1)
                 filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_{str(write_idx).zfill(2)}.bin')
                 dtype = np.float32
-                arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_chromas.shape)
-                arr[:] = all_chromas
+                arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_data.shape)
+                arr[:] = all_data
                 arr.flush()
                 
 
                 write_idx += 1
-                write_paths.append((filename, len(all_chromas)))
+                write_paths.append((filename, len(all_data)))
                 all_chromas = []
+                all_rms = []
     
     # write the remaining batch
     print(f'Writing batch {write_idx}...')
-    all_codes = np.concatenate(all_chromas, axis=0)
-    print(all_chromas.shape)
+    all_chromas = np.concatenate(all_chromas, axis=0)
+    all_rms = np.concatenate(all_rms, axis=0)
+    print(all_chromas.shape, all_rms.shape)
+    all_data = np.stack([all_chromas, all_rms], axis=1)
     filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_{str(write_idx).zfill(2)}.bin')
     dtype = np.float32
-    arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_chromas.shape)
-    arr[:] = all_chromas
+    arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_data.shape)
+    arr[:] = all_data
     arr.flush()
 
     write_idx += 1
-    write_paths.append((filename, len(all_chromas)))
+    write_paths.append((filename, len(all_data)))
     all_chromas = []
+    all_rms = []
 
 ## get token write paths
 dtype = np.float32
@@ -155,13 +166,14 @@ write_paths = []
 paths = [f'{out_prefix}_{str(i).zfill(2)}.bin' for i in range(total_write_batches + 1)]
 for path in paths:
     data = np.memmap(path, dtype=np.float32, mode='r')
+    data = data.reshape(-1, 2)
     write_paths.append((path, data.shape))
 
 # write to train.bin
 cur_idx = 0
 filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_train.bin')
 train_length = np.sum([shape[0] for path, shape in write_paths[:-2]])
-arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length,))
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, 2))
 print(arr.shape)
 
 for path, shape in write_paths[:-2]:
@@ -176,7 +188,7 @@ for path, shape in write_paths[:-2]:
 cur_idx = 0
 filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_val.bin')
 val_length = np.sum([shape[0] for path, shape in write_paths[-2:]])
-arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length,))
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length, 2))
 print(arr.shape)
 
 for path, shape in write_paths[-2:]:
