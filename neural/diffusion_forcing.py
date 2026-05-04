@@ -1132,7 +1132,7 @@ class BpmRmsChromaStyleConditionalModernDiT(nn.Module):
         x = rearrange(x, 'b t n c -> b (t n) c', b=B, t=T)
         
         rms = (rms - 0.09749302) / 0.047287412
-        bpm = (bpm - 207.87946) / 141.18713
+        bpm = (bpm - 187.5) / (226.4151001 - 144.57830811)  # IQR
         
         t = self.t_embedder(t.flatten()).view(B, T, -1)
         style = self.style_embedder(style)
