@@ -22,6 +22,7 @@ device = torch.device('cuda')
 batch_size = 128
 rate = 16000
 n_samples = 24576
+hop_length = 1024 # average over time so large hop is fine
 TARGET_SIG = 4
 total_write_batches = 48
 
