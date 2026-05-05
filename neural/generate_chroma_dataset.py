@@ -160,7 +160,7 @@ if True:
                         chroma, 
                         [rms_low, rms_mid, rms_high, density, zcr], 
                         mfcc
-                    ], axis=1))
+                    ], axis=0))
             
             all_data.append(np.asarray(data))
             
