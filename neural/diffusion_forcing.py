@@ -1587,11 +1587,11 @@ class MetaConditionalModernDiT(nn.Module):
         mcff_mean = torch.tensor([
             113.30053, -17.395779, 27.279049, -11.116686, 3.1354604, -9.138969,
             -2.866072, -7.1674404, -1.6265253, -5.047512, -1.7705443, -5.0958815
-        ])
+        ]).to(x.device)
         mfcc_std = torch.tensor([
             38.435783, 28.687775, 18.932358, 14.646409, 13.498735, 10.035576,
             9.510887, 8.25433, 8.212691, 7.155225, 7.3324447, 6.5340915
-        ])
+        ]).to(x.device)
         mfcc = (mfcc - mcff_mean) / mfcc_std
         
         t = self.t_embedder(t.flatten()).view(B, T, -1)
