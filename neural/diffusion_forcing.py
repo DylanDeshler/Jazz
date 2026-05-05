@@ -1515,7 +1515,7 @@ class MetaConditionalModernDiT(nn.Module):
         # self.zcr_embedder = nn.Sequential(nn.Linear(1, hidden_size, bias=True), SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), bias=False))
         self.measure_embedder = nn.Embedding(n_chunks, hidden_size)
         
-        self.fuse_conditioning = SwiGLUMlp(hidden_size * 2, int(2 / 3 * mlp_ratio * hidden_size * 2), hidden_size, bias=False)
+        self.fuse_conditioning = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), hidden_size, bias=False)
         
         if self.use_null_token:
             self.null_style = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
@@ -1672,8 +1672,8 @@ class MetaConditionalModernDiT(nn.Module):
                 density = torch.where(unconditional_mask['density'], self.null_density, density)
                 zcr = torch.where(unconditional_mask['zcr'], self.null_zcr, zcr)
         
-        c = style + chroma + rms_low + rms_mid + rms_high + mfcc + density + zcr + bpm
-        t = torch.cat([t, c], dim=-1)
+        x =  x + style + chroma + rms_low + rms_mid + rms_high + mfcc + density + zcr + bpm
+        # t = torch.cat([t, c], dim=-1)
         t = self.fuse_conditioning(t)
         t0 = self.t_block(t)
         
