@@ -23,6 +23,7 @@ batch_size = 128
 rate = 16000
 n_samples = 24576
 hop_length = 1024 # average over time so large hop is fine
+n_fft = 2048
 TARGET_SIG = 4
 total_write_batches = 48
 
@@ -99,7 +100,6 @@ if True:
             data = []
             wav_chroma = librosa.feature.chroma_cqt(y=wav, sr=rate, hop_length=hop_length)
             # wav_rms = librosa.feature.rms(y=wav, hop_length=hop_length)[0]
-            n_fft = max(4096, hop_length) 
             stft_mag = np.abs(librosa.stft(wav, n_fft=n_fft, hop_length=hop_length))
             freqs = librosa.fft_frequencies(sr=rate, n_fft=n_fft)
             
