@@ -1601,13 +1601,20 @@ class MetaConditionalModernDiT(nn.Module):
         t = self.t_embedder(t.flatten()).view(B, T, -1)
         style = self.style_embedder(style)
         chroma = self.chroma_embedder(chroma)
-        rms_low = self.rms_embedder(rms_low.flatten()).view(B, T, -1)
-        rms_mid = self.rms_embedder(rms_mid.flatten()).view(B, T, -1)
-        rms_high = self.rms_embedder(rms_high.flatten()).view(B, T, -1)
-        bpm = self.bpm_embedder(bpm.flatten()).view(B, T, -1)
+        # rms_low = self.rms_embedder(rms_low.flatten()).view(B, T, -1)
+        # rms_mid = self.rms_embedder(rms_mid.flatten()).view(B, T, -1)
+        # rms_high = self.rms_embedder(rms_high.flatten()).view(B, T, -1)
+        # bpm = self.bpm_embedder(bpm.flatten()).view(B, T, -1)
         mfcc = self.mfcc_embedder(mfcc)
-        density = self.density_embedder(density.flatten()).view(B, T, -1)
-        zcr = self.zcr_embedder(zcr.flatten()).view(B, T, -1)
+        # density = self.density_embedder(density.flatten()).view(B, T, -1)
+        # zcr = self.zcr_embedder(zcr.flatten()).view(B, T, -1)
+        
+        rms_low = self.rms_embedder(rms_low)
+        rms_mid = self.rms_embedder(rms_mid)
+        rms_high = self.rms_embedder(rms_high)
+        bpm = self.bpm_embedder(bpm)
+        density = self.density_embedder(density)
+        zcr = self.zcr_embedder(zcr)
         
         if self.use_null_token:
             signals = {
