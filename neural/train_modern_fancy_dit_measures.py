@@ -321,8 +321,11 @@ def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance
     with ctx:
         y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise)
         
-    bpm = net_kwargs['bpm']
-    bpm = smooth_bpm_predictions(bpm, method=method, window_size=window_size)
+    if isinstance(net_kwargs, list):
+        bpm = net_kwargs[0]['bpm']
+    else:
+        bpm = net_kwargs['bpm']
+    # bpm = smooth_bpm_predictions(bpm, method=method, window_size=window_size)
     seconds_per_beat = 60.0 / bpm
     measure_duration_sec = seconds_per_beat * TARGET_SIG
     
@@ -350,6 +353,38 @@ def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance
     
     return y
 
+# @torch.no_grad()
+# def save_samples(step):
+#     batch_dir = os.path.join(out_dir, str(step))
+#     os.makedirs(batch_dir, exist_ok=True)
+    
+#     n_steps = 50
+#     n_samples = 10
+#     x, bpm, rms, chroma, style = get_batch('val', batch_size=n_samples)
+    
+#     gen_noise = torch.randn(x.shape).to(device)
+#     decoder_noise = torch.randn(n_samples * n_chunks, 1, encoder_ratios * (max_adapter_len - 1)).to(device)
+#     net_kwargs = {
+#         'bpm': bpm,
+#         'rms': rms,
+#         'chroma': chroma,
+#         'style': style
+#     }
+#     unconditional_mask = {
+#         'bpm': torch.ones(*bpm.shape, 1).to(device).bool(),
+#         'rms': torch.ones(*rms.shape, 1).to(device).bool(),
+#         'chroma': torch.ones(*chroma.shape[:-1], 1).to(device).bool(),
+#         'style': torch.ones(*style.shape[:-1], 1).to(device).bool(),
+#     }
+#     uncond_net_kwargs = net_kwargs | {'unconditional_mask': unconditional_mask}
+    
+#     y_cfg = predict_measures(x.shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=5.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
+#     y = predict_measures(x.shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
+    
+#     for i in range(n_samples):
+#         sf.write(os.path.join(batch_dir, f'{i}.wav'), y[i].flatten(), 16000)
+#         sf.write(os.path.join(batch_dir, f'{i}_cfg.wav'), y_cfg[i].flatten(), 16000)
+
 @torch.no_grad()
 def save_samples(step):
     batch_dir = os.path.join(out_dir, str(step))
@@ -361,21 +396,30 @@ def save_samples(step):
     
     gen_noise = torch.randn(x.shape).to(device)
     decoder_noise = torch.randn(n_samples * n_chunks, 1, encoder_ratios * (max_adapter_len - 1)).to(device)
-    net_kwargs = {
-        'bpm': bpm,
-        'rms': rms,
-        'chroma': chroma,
-        'style': style
-    }
+    
     unconditional_mask = {
         'bpm': torch.ones(*bpm.shape, 1).to(device).bool(),
         'rms': torch.ones(*rms.shape, 1).to(device).bool(),
         'chroma': torch.ones(*chroma.shape[:-1], 1).to(device).bool(),
         'style': torch.ones(*style.shape[:-1], 1).to(device).bool(),
     }
+    net_kwargs = {
+        'bpm': bpm,
+        'rms': rms,
+        'chroma': chroma,
+        'style': style,
+    }
+    
+    cfg_net_kwargs = []
+    for k, v in unconditional_mask.items():
+        temp_mask = unconditional_mask.copy()
+        temp_mask[k] = ~v
+        cfg_net_kwargs.append(net_kwargs | {'unconditional_mask': temp_mask})
+    cfg_guidances = [2, 2, 3, 7]
+    
     uncond_net_kwargs = net_kwargs | {'unconditional_mask': unconditional_mask}
     
-    y_cfg = predict_measures(x.shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=5.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
+    y_cfg = predict_measures(x.shape, cfg_net_kwargs, uncond_net_kwargs, n_steps, guidance=cfg_guidances, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
     y = predict_measures(x.shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
     
     for i in range(n_samples):

@@ -8,6 +8,142 @@ from torch.utils.checkpoint import checkpoint
 import math
 from typing import Optional, List, Callable
 
+# class FM:
+    
+#     def __init__(self, sigma_min=1e-5, timescale=1.0):
+#         self.sigma_min = sigma_min
+#         self.prediction_type = None
+#         self.timescale = timescale
+    
+#     def alpha(self, t):
+#         return 1.0 - t
+    
+#     def sigma(self, t):
+#         return self.sigma_min + t * (1.0 - self.sigma_min)
+    
+#     def A(self, t):
+#         return 1.0
+    
+#     def B(self, t):
+#         return -(1.0 - self.sigma_min)
+    
+#     def get_betas(self, n_timesteps):
+#         return torch.zeros(n_timesteps) # Not VP and not supported
+    
+#     def add_noise(self, x, t, noise=None):
+#         noise = torch.randn_like(x) if noise is None else noise
+#         s = [x.shape[0], x.shape[1], x.shape[2], 1]
+#         x_t = self.alpha(t).view(*s) * x + self.sigma(t).view(*s) * noise
+#         return x_t, noise
+    
+#     def loss(self, net, x, t=None, net_kwargs=None, return_loss_unreduced=False, return_all=False):
+#         B, T, N, C = x.shape
+        
+#         if net_kwargs is None:
+#             net_kwargs = {}
+        
+#         if t is None:
+#             t = torch.rand(B, T, device=x.device)
+#             # t = torch.sigmoid(torch.randn(B, T, device=x.device)) # for logit normal
+#             repeat_t = t.unsqueeze(2).repeat(1, 1, N)
+#         x_t, noise = self.add_noise(x, repeat_t)
+        
+#         pred = net(x_t, t=t * self.timescale, **net_kwargs)
+        
+#         target = self.A(repeat_t) * x + self.B(repeat_t) * noise # -dxt/dt
+#         if return_loss_unreduced:
+#             loss = ((pred.float() - target.float()) ** 2).mean(dim=[1, 2])
+#             if return_all:
+#                 return loss, t, x_t, pred
+#             else:
+#                 return loss, t
+#         else:
+#             loss = ((pred.float() - target.float()) ** 2).mean()
+#             if return_all:
+#                 return loss, x_t, pred
+#             else:
+#                 return loss
+    
+#     def get_prediction(
+#         self,
+#         net,
+#         x_t,
+#         t,
+#         net_kwargs=None,
+#         uncond_net_kwargs=None,
+#         guidance=1.0,
+#     ):
+#         if net_kwargs is None:
+#             net_kwargs = {}
+        
+#         if guidance != 1.0:
+#             assert uncond_net_kwargs is not None
+#             uncond_pred = net(x_t, t=t * self.timescale, **uncond_net_kwargs)
+#             cond_pred = net(x_t, t=t * self.timescale, **net_kwargs)
+#             pred = uncond_pred + guidance * (cond_pred - uncond_pred)
+        
+#         # if guidance != 1.0:
+#         #     assert uncond_net_kwargs is not None
+            
+#         #     x_t = torch.cat([x_t, x_t], dim=0)
+#         #     t = torch.cat([t, t], dim=0)
+#         #     combined_kwargs = {}
+#         #     # we assume the keys match
+#         #     for k, v in net_kwargs.items():
+#         #         combined_kwargs[k] = torch.cat([v, uncond_net_kwargs[k]], dim=0)
+#         #     combined_pred = net(x_t, t=t * self.timescale, **combined_kwargs)
+#         #     pred, uncond_pred = combined_pred.chunk(2, dim=0)
+#         #     pred = uncond_pred + guidance * (pred - uncond_pred)
+#         else:
+#             pred = net(x_t, t=t * self.timescale, **net_kwargs)
+            
+#         return pred
+    
+#     def convert_sample_prediction(self, x_t, t, pred):
+#         M = torch.tensor([
+#             [self.alpha(t), self.sigma(t)],
+#             [self.A(t), self.B(t)],
+#         ], dtype=torch.float64)
+#         M_inv = torch.linalg.inv(M)
+#         sample_pred = M_inv[0, 0].item() * x_t + M_inv[0, 1].item() * pred
+#         return sample_pred
+
+# class FMEulerSampler:
+
+#     def __init__(self, diffusion):
+#         self.diffusion = diffusion
+
+#     def sample(
+#         self,
+#         net,
+#         shape,
+#         n_steps,
+#         net_kwargs=None,
+#         uncond_net_kwargs=None,
+#         guidance=1.0,
+#         noise=None,
+#     ):
+#         """
+#         Implements simple uniform noise sampling for bidirectional generation
+#         """
+#         device = next(net.parameters()).device
+#         x_t = torch.randn(shape, device=device) if noise is None else noise
+#         t_steps = torch.linspace(1, 0, n_steps + 1, device=device)
+
+#         with torch.no_grad():
+#             for i in range(n_steps):
+#                 t = t_steps[i].repeat(x_t.shape[0], x_t.shape[1])
+#                 neg_v = self.diffusion.get_prediction(
+#                     net,
+#                     x_t,
+#                     t,
+#                     net_kwargs=net_kwargs,
+#                     uncond_net_kwargs=uncond_net_kwargs,
+#                     guidance=guidance,
+#                 )
+#                 x_t = x_t + neg_v * (t_steps[i] - t_steps[i + 1])
+#         return x_t
+
 class FM:
     
     def __init__(self, sigma_min=1e-5, timescale=1.0):
@@ -71,30 +207,66 @@ class FM:
         net_kwargs=None,
         uncond_net_kwargs=None,
         guidance=1.0,
+        memory_efficient=False,
     ):
         if net_kwargs is None:
             net_kwargs = {}
-        
-        if guidance != 1.0:
-            assert uncond_net_kwargs is not None
-            uncond_pred = net(x_t, t=t * self.timescale, **uncond_net_kwargs)
-            cond_pred = net(x_t, t=t * self.timescale, **net_kwargs)
-            pred = uncond_pred + guidance * (cond_pred - uncond_pred)
-        
-        # if guidance != 1.0:
-        #     assert uncond_net_kwargs is not None
             
-        #     x_t = torch.cat([x_t, x_t], dim=0)
-        #     t = torch.cat([t, t], dim=0)
-        #     combined_kwargs = {}
-        #     # we assume the keys match
-        #     for k, v in net_kwargs.items():
-        #         combined_kwargs[k] = torch.cat([v, uncond_net_kwargs[k]], dim=0)
-        #     combined_pred = net(x_t, t=t * self.timescale, **combined_kwargs)
-        #     pred, uncond_pred = combined_pred.chunk(2, dim=0)
-        #     pred = uncond_pred + guidance * (pred - uncond_pred)
+        # Normalize inputs to lists to support Compositional CFG while maintaining backward compatibility
+        if isinstance(net_kwargs, dict):
+            net_kwargs_list = [net_kwargs]
+            guidance_list = [guidance]
         else:
-            pred = net(x_t, t=t * self.timescale, **net_kwargs)
+            net_kwargs_list = net_kwargs
+            guidance_list = guidance
+
+        # Check if CFG is actually active (any guidance != 1.0 or multiple conditions)
+        is_cfg = any(g != 1.0 for g in guidance_list) or len(net_kwargs_list) > 1
+
+        if is_cfg:
+            assert uncond_net_kwargs is not None, "uncond_net_kwargs must be provided when using guidance."
+            
+            if not memory_efficient:
+                # Parallel (Batched) Execution: Highest VRAM, fastest execution
+                n_passes = 1 + len(net_kwargs_list)
+                
+                # Repeat spatial/time inputs across the batch dimension
+                batched_x_t = torch.cat([x_t] * n_passes, dim=0)
+                batched_t = torch.cat([t] * n_passes, dim=0)
+                
+                combined_kwargs = {}
+                # We assume all kwargs dictionaries contain the exact same keys
+                for k in uncond_net_kwargs.keys():
+                    tensors_to_cat = [uncond_net_kwargs[k]]
+                    for kwargs in net_kwargs_list:
+                        tensors_to_cat.append(kwargs[k])
+                    combined_kwargs[k] = torch.cat(tensors_to_cat, dim=0)
+                
+                # Single massive forward pass
+                combined_pred = net(batched_x_t, t=batched_t * self.timescale, **combined_kwargs)
+                preds = combined_pred.chunk(n_passes, dim=0)
+                
+                uncond_pred = preds[0]
+                cond_preds = preds[1:]
+                
+                # Compositional CFG formula: uncond + w1*(c1 - uncond) + w2*(c2 - uncond) ...
+                pred = uncond_pred.clone()
+                for g, cp in zip(guidance_list, cond_preds):
+                    pred += g * (cp - uncond_pred)
+                    
+            else:
+                # Sequential Execution: Lowest VRAM, slower execution
+                uncond_pred = net(x_t, t=t * self.timescale, **uncond_net_kwargs)
+                pred = uncond_pred.clone()
+                
+                for kwargs, g in zip(net_kwargs_list, guidance_list):
+                    if g == 0.0:
+                        continue # Skip conditional pass entirely if its weight is 0
+                    cp = net(x_t, t=t * self.timescale, **kwargs)
+                    pred += g * (cp - uncond_pred)
+        else:
+            # Standard single pass (no CFG)
+            pred = net(x_t, t=t * self.timescale, **net_kwargs_list[0])
             
         return pred
     
@@ -121,9 +293,11 @@ class FMEulerSampler:
         uncond_net_kwargs=None,
         guidance=1.0,
         noise=None,
+        memory_efficient=False,
     ):
         """
         Implements simple uniform noise sampling for bidirectional generation
+        Supports Compositional CFG by passing lists to net_kwargs and guidance.
         """
         device = next(net.parameters()).device
         x_t = torch.randn(shape, device=device) if noise is None else noise
@@ -139,6 +313,7 @@ class FMEulerSampler:
                     net_kwargs=net_kwargs,
                     uncond_net_kwargs=uncond_net_kwargs,
                     guidance=guidance,
+                    memory_efficient=memory_efficient,
                 )
                 x_t = x_t + neg_v * (t_steps[i] - t_steps[i + 1])
         return x_t
