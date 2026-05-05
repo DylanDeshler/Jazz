@@ -199,6 +199,27 @@ class FM:
             else:
                 return loss
     
+    @staticmethod
+    def _concat_kwargs(kwarg_list, dim=0):
+        """
+        Recursively concatenates tensors in a list of identical-structure dictionaries.
+        Safely handles nested dictionaries like 'unconditional_mask'.
+        """
+        combined = {}
+        for k in kwarg_list[0].keys():
+            val = kwarg_list[0][k]
+            if isinstance(val, dict):
+                # Recurse for nested dicts (e.g., the unconditional_mask)
+                combined[k] = FM._concat_kwargs([kw[k] for kw in kwarg_list], dim=dim)
+            elif isinstance(val, torch.Tensor):
+                # Concatenate tensors along the batch dimension
+                combined[k] = torch.cat([kw[k] for kw in kwarg_list], dim=dim)
+            else:
+                # For non-tensors (e.g., bool flags or strings), assume they are 
+                # constant across the batch and just copy the first one.
+                combined[k] = val
+        return combined
+    
     def get_prediction(
         self,
         net,
@@ -212,7 +233,7 @@ class FM:
         if net_kwargs is None:
             net_kwargs = {}
             
-        # Normalize inputs to lists to support Compositional CFG while maintaining backward compatibility
+        # Normalize inputs to lists to support Compositional CFG
         if isinstance(net_kwargs, dict):
             net_kwargs_list = [net_kwargs]
             guidance_list = [guidance]
@@ -220,7 +241,7 @@ class FM:
             net_kwargs_list = net_kwargs
             guidance_list = guidance
 
-        # Check if CFG is actually active (any guidance != 1.0 or multiple conditions)
+        # Check if CFG is actually active
         is_cfg = any(g != 1.0 for g in guidance_list) or len(net_kwargs_list) > 1
 
         if is_cfg:
@@ -234,13 +255,9 @@ class FM:
                 batched_x_t = torch.cat([x_t] * n_passes, dim=0)
                 batched_t = torch.cat([t] * n_passes, dim=0)
                 
-                combined_kwargs = {}
-                # We assume all kwargs dictionaries contain the exact same keys
-                for k in uncond_net_kwargs.keys():
-                    tensors_to_cat = [uncond_net_kwargs[k]]
-                    for kwargs in net_kwargs_list:
-                        tensors_to_cat.append(kwargs[k])
-                    combined_kwargs[k] = torch.cat(tensors_to_cat, dim=0)
+                # Use recursive helper to concatenate nested mask dicts and tensors
+                list_to_cat = [uncond_net_kwargs] + net_kwargs_list
+                combined_kwargs = self._concat_kwargs(list_to_cat, dim=0)
                 
                 # Single massive forward pass
                 combined_pred = net(batched_x_t, t=batched_t * self.timescale, **combined_kwargs)
@@ -249,7 +266,7 @@ class FM:
                 uncond_pred = preds[0]
                 cond_preds = preds[1:]
                 
-                # Compositional CFG formula: uncond + w1*(c1 - uncond) + w2*(c2 - uncond) ...
+                # Compositional CFG formula
                 pred = uncond_pred.clone()
                 for g, cp in zip(guidance_list, cond_preds):
                     pred += g * (cp - uncond_pred)
@@ -261,7 +278,7 @@ class FM:
                 
                 for kwargs, g in zip(net_kwargs_list, guidance_list):
                     if g == 0.0:
-                        continue # Skip conditional pass entirely if its weight is 0
+                        continue # Skip conditional pass if weight is 0
                     cp = net(x_t, t=t * self.timescale, **kwargs)
                     pred += g * (cp - uncond_pred)
         else:
@@ -1364,7 +1381,7 @@ class BpmRmsChromaStyleConditionalModernDiTWrapper(nn.Module):
     def forward(self, x, bpm, rms, chroma, style, t=None):
         return self.diffusion.loss(self.net, x, t=t, net_kwargs={'style': style, 'chroma': chroma, 'bpm': bpm, 'rms': rms})
     
-    def generate(self, shape, net_kwargs=None, uncond_net_kwargs=None, n_steps=50, guidance=1.0, noise=None, memory_efficient=True):
+    def generate(self, shape, net_kwargs=None, uncond_net_kwargs=None, n_steps=50, guidance=1.0, noise=None, memory_efficient=False):
         return self.sampler.sample(self.net, shape, n_steps=n_steps, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, guidance=guidance, noise=noise, memory_efficient=memory_efficient)
 
 def ModernDiT_large(**kwargs):
