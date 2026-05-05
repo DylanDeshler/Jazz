@@ -1515,7 +1515,7 @@ class MetaConditionalModernDiT(nn.Module):
         # self.zcr_embedder = nn.Sequential(nn.Linear(1, hidden_size, bias=True), SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), bias=False))
         self.measure_embedder = nn.Embedding(n_chunks, hidden_size)
         
-        self.fuse_conditioning = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), hidden_size, bias=False)
+        self.fuse_conditioning = SwiGLUMlp(hidden_size * 2, int(2 / 3 * mlp_ratio * hidden_size * 2), hidden_size, bias=False)
         
         if self.use_null_token:
             self.null_style = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
@@ -1581,12 +1581,12 @@ class MetaConditionalModernDiT(nn.Module):
         x = x + measure_embs
         x = rearrange(x, 'b t n c -> b (t n) c', b=B, t=T)
         
-        rms_low = (rms_low - 6.2784767) / 4.1725345
-        rms_mid = (rms_mid - 3.2565875) / 1.7880434
-        rms_high = (rms_high - 0.26109472) / 0.3474748
-        density = (density - 2.5229013) / 1.230155
-        zcr = (zcr - 0.10766766) / 0.048143145
-        bpm = (bpm - 187.5) / (226.4151001 - 144.57830811)  # IQR
+        # rms_low = (rms_low - 6.2784767) / 4.1725345
+        # rms_mid = (rms_mid - 3.2565875) / 1.7880434
+        # rms_high = (rms_high - 0.26109472) / 0.3474748
+        # density = (density - 2.5229013) / 1.230155
+        # zcr = (zcr - 0.10766766) / 0.048143145
+        # bpm = (bpm - 187.5) / (226.4151001 - 144.57830811)  # IQR
         
         mcff_mean = torch.tensor([
             113.30053, -17.395779, 27.279049, -11.116686, 3.1354604, -9.138969,
@@ -1672,8 +1672,8 @@ class MetaConditionalModernDiT(nn.Module):
                 density = torch.where(unconditional_mask['density'], self.null_density, density)
                 zcr = torch.where(unconditional_mask['zcr'], self.null_zcr, zcr)
         
-        x =  x + style + chroma + rms_low + rms_mid + rms_high + mfcc + density + zcr + bpm
-        # t = torch.cat([t, c], dim=-1)
+        c = style + chroma + rms_low + rms_mid + rms_high + mfcc + density + zcr + bpm
+        t = torch.cat([t, c], dim=-1)
         t = self.fuse_conditioning(t)
         t0 = self.t_block(t)
         
