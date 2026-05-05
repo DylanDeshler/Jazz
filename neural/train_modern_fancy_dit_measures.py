@@ -32,7 +32,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from diffusion_forcing import BpmRmsChromaStyleConditionalModernDiT_smedium as net
+from diffusion_forcing import MetaConditionalModernDiT_smedium as net
 from dito import DiToV5 as Tokenizer
 from adapter import InvertibleAdapter
 from fad import BPMProbe
@@ -44,7 +44,7 @@ import pyrubberband as pyrb
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'BpmRmsChromaStyleConditionalModernDiT_smedium_24576_subset_adapter_longtrain_32chunks'
+out_dir = 'MetaConditionalModernDiT_smedium_24576_subset_adapter_longtrain_32chunks'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -52,7 +52,7 @@ save_interval = 5000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir
@@ -135,22 +135,27 @@ def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
         data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_train.bin', dtype=np.float32, mode='r', shape=(3941406, spatial_window, vae_embed_dim))
         style = np.memmap('/home/ubuntu/Data/contrast_learntmep_instance_10s_style_train.bin', dtype=np.float32, mode='r', shape=(3941406, style_dim))
-        chroma_rms = np.memmap('/home/ubuntu/Data/low_large_24576_subset_chroma_rms_train.bin', dtype=np.float32, mode='r', shape=(3941406, 13))
-        meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_bpm_train.bin', dtype=np.float32, mode='r')
+        meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_meta_train.bin', dtype=np.float32, mode='r', shape=(3941406, 29))
+        bpms = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_bpm_train.bin', dtype=np.float32, mode='r')
     else:
         data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_val.bin', dtype=np.float32, mode='r', shape=(88303, spatial_window, vae_embed_dim))
         style = np.memmap('/home/ubuntu/Data/contrast_learntmep_instance_10s_style_val.bin', dtype=np.float32, mode='r', shape=(88303, style_dim))
-        chroma_rms = np.memmap('/home/ubuntu/Data/low_large_24576_subset_chroma_rms_val.bin', dtype=np.float32, mode='r', shape=(88303, 13))
-        meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_bpm_val.bin', dtype=np.float32, mode='r')
+        meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_chroma_rms_val.bin', dtype=np.float32, mode='r', shape=(88303, 29))
+        bpms = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_bpm_val.bin', dtype=np.float32, mode='r')
     
     idxs = torch.randint(len(data) - n_chunks, (batch_size,))    
     x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     style = torch.from_numpy(np.stack([style[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    chroma = torch.from_numpy(np.stack([chroma_rms[idx:idx+n_chunks, :12] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    rms = torch.from_numpy(np.stack([chroma_rms[idx:idx+n_chunks, -1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    bpm = torch.from_numpy(np.stack([meta[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    chroma = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, :12] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    rms_low = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 12] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    rms_mid = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 13] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    rms_high = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 14] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    density = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 15] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    zcr = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 16] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    mfcc = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 17:] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    bpm = torch.from_numpy(np.stack([bpms[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
 
-    return x, bpm, rms, chroma, style
+    return x, bpm, rms_low, rms_mid, rms_high, density, zcr, mfcc, chroma, style
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
@@ -392,20 +397,30 @@ def save_samples(step):
     
     n_steps = 50
     n_samples = 10
-    x, bpm, rms, chroma, style = get_batch('val', batch_size=n_samples)
+    x, bpm, rms_low, rms_mid, rms_high, density, zcr, mfcc, chroma, style = get_batch('val', batch_size=n_samples)
     
     gen_noise = torch.randn(x.shape).to(device)
     decoder_noise = torch.randn(n_samples * n_chunks, 1, encoder_ratios * (max_adapter_len - 1)).to(device)
     
     unconditional_mask = {
         'bpm': torch.ones(*bpm.shape, 1).to(device).bool(),
-        'rms': torch.ones(*rms.shape, 1).to(device).bool(),
+        'rms_low': torch.ones(*rms_low.shape, 1).to(device).bool(),
+        'rms_mid': torch.ones(*rms_mid.shape, 1).to(device).bool(),
+        'rms_high': torch.ones(*rms_high.shape, 1).to(device).bool(),
+        'density': torch.ones(*density.shape, 1).to(device).bool(),
+        'zcr': torch.ones(*zcr.shape, 1).to(device).bool(),
+        'mfcc': torch.ones(*mfcc.shape[:-1], 1).to(device).bool(),
         'chroma': torch.ones(*chroma.shape[:-1], 1).to(device).bool(),
         'style': torch.ones(*style.shape[:-1], 1).to(device).bool(),
     }
     net_kwargs = {
         'bpm': bpm,
-        'rms': rms,
+        'rms_low': rms_low,
+        'rms_mid': rms_mid,
+        'rms_high': rms_high,
+        'density': density,
+        'zcr': zcr,
+        'mfcc': mfcc,
         'chroma': chroma,
         'style': style,
     }

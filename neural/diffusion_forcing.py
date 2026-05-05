@@ -706,81 +706,175 @@ def token_drop(labels, null_token, training, p_uncond=0.1, p_full=0.3, p_ind_low
     
     return torch.where(final_mask, null_token, labels)
 
+# def multi_token_drop(
+#     signals: dict, 
+#     null_tokens: dict, 
+#     training: bool, 
+#     p_joint_uncond=0.1, 
+#     p_joint_full=0.2, 
+#     p_ind_uncond=0.1, 
+#     p_ind_low=0.1, 
+#     p_ind_high=0.5
+# ):
+#     """
+#     Applies hierarchical CFG dropping across multiple conditioning signals.
+    
+#     Hierarchy:
+#     1. Joint Uncond (p_joint_uncond): Drops ALL signals for the batch item.
+#     2. Joint Full (p_joint_full): Keeps ALL signals perfectly intact.
+#     3. Independent Mode: For remaining batch items, each signal independently decides:
+#        a) Independent Uncond (p_ind_uncond): Drop this specific signal entirely.
+#        b) Partial Token Drop: Drop individual tokens within this signal sequence.
+       
+#     Args:
+#         signals: Dict of input tensors, e.g., {'chroma': (B, T, C), 'bpm': (B, T, C)}
+#         null_tokens: Dict of learnable null vectors, e.g., {'chroma': (1, C)}
+#         training: Boolean flag
+#     """
+#     if not training:
+#         return signals
+    
+#     # Extract batch size and device from the first signal
+#     first_key = list(signals.keys())[0]
+#     B = signals[first_key].shape[0]
+#     device = signals[first_key].device
+    
+#     # For a (B, T, C) tensor, this creates a shape of (B, 1)
+#     batch_rand_shape = (B,) + (1,) * (signals[first_key].ndim - 2)
+    
+#     # --- LEVEL 1: SYNCHRONIZED JOINT MASKS ---
+#     # These masks are shared across ALL signals to maintain the joint distribution
+#     batch_rand = torch.rand(batch_rand_shape, device=device)
+    
+#     mask_joint_uncond = batch_rand < p_joint_uncond
+#     mask_joint_full = batch_rand >= (1.0 - p_joint_full)
+#     mask_independent_mode = ~(mask_joint_uncond | mask_joint_full)
+    
+#     output_signals = {}
+    
+#     # --- LEVEL 2: INDEPENDENT MASKS ---
+#     for key, labels in signals.items():
+#         null_t = null_tokens[key].to(labels.dtype)
+        
+#         # 1. Independent Unconditional Drop (Drop the entire sequence for this specific signal)
+#         ind_rand = torch.rand(batch_rand_shape, device=device)
+#         mask_ind_uncond = mask_independent_mode & (ind_rand < p_ind_uncond)
+        
+#         # 2. Token-Level Drop (Only happens if we are in independent mode AND didn't drop the whole signal)
+#         mask_token_mode = mask_independent_mode & ~mask_ind_uncond
+        
+#         # Randomize drop sparsity per batch item
+#         sample_specific_drop_rates = torch.rand(batch_rand_shape, device=device) * (p_ind_high - p_ind_low) + p_ind_low
+        
+#         # Generate noise for every token in the sequence -> (B, T)
+#         token_noise = torch.rand(labels.shape[:-1], device=device)
+        
+#         # Evaluate which tokens to drop
+#         # sample_specific_drop_rates broadcasts from (B, 1) to (B, T) naturally
+#         # mask_token_drop = token_noise < sample_specific_drop_rates.squeeze(-1) if sample_specific_drop_rates.dim() > 1 else token_noise < sample_specific_drop_rates
+#         mask_token_drop = token_noise < sample_specific_drop_rates
+        
+#         # --- COMBINE ALL MASKS ---
+#         # Final mask shape needs to be (B, T, 1) to broadcast over the channel dimension
+#         final_mask = mask_joint_uncond.unsqueeze(-1) | \
+#                      mask_ind_uncond.unsqueeze(-1) | \
+#                      (mask_token_mode.unsqueeze(-1) & mask_token_drop.unsqueeze(-1))
+        
+#         # Apply the mask: Replace dropped tokens with the specific null token for this signal
+#         output_signals[key] = torch.where(final_mask, null_t, labels)
+        
+#     return output_signals
+
 def multi_token_drop(
     signals: dict, 
     null_tokens: dict, 
     training: bool, 
-    p_joint_uncond=0.1, 
-    p_joint_full=0.2, 
-    p_ind_uncond=0.1, 
-    p_ind_low=0.1, 
-    p_ind_high=0.5
+    p_joint_uncond=0.10, 
+    p_joint_full=0.40, 
+    p_one_hot=0.30,
+    p_ind_uncond=0.20, 
+    p_ind_low=0.05, 
+    p_ind_high=0.30
 ):
     """
-    Applies hierarchical CFG dropping across multiple conditioning signals.
+    Applies hierarchical CFG dropping optimized for Compositional CFG inference.
     
-    Hierarchy:
-    1. Joint Uncond (p_joint_uncond): Drops ALL signals for the batch item.
-    2. Joint Full (p_joint_full): Keeps ALL signals perfectly intact.
-    3. Independent Mode: For remaining batch items, each signal independently decides:
-       a) Independent Uncond (p_ind_uncond): Drop this specific signal entirely.
-       b) Partial Token Drop: Drop individual tokens within this signal sequence.
-       
-    Args:
-        signals: Dict of input tensors, e.g., {'chroma': (B, T, C), 'bpm': (B, T, C)}
-        null_tokens: Dict of learnable null vectors, e.g., {'chroma': (1, C)}
-        training: Boolean flag
+    Hierarchy (Batched Partitioning):
+    1. Joint Uncond (10%): Drops ALL signals.
+    2. Joint Full (40%): Keeps ALL signals pristine.
+    3. One-Hot Mode (30%): Keeps EXACTLY 1 signal, drops the rest.
+    4. Independent Mode (20%): Binomial dropping per signal, plus partial sequence drops.
     """
     if not training:
         return signals
     
-    # Extract batch size and device from the first signal
     first_key = list(signals.keys())[0]
     B = signals[first_key].shape[0]
     device = signals[first_key].device
+    num_signals = len(signals)
     
-    # For a (B, T, C) tensor, this creates a shape of (B, 1)
-    batch_rand_shape = (B,) + (1,) * (signals[first_key].ndim - 2)
+    # --- LEVEL 0: BATCH PARTITIONING ---
+    # Generate a single random float per batch item to route it to one of the 4 modes
+    batch_rand = torch.rand((B,), device=device)
     
-    # --- LEVEL 1: SYNCHRONIZED JOINT MASKS ---
-    # These masks are shared across ALL signals to maintain the joint distribution
-    batch_rand = torch.rand(batch_rand_shape, device=device)
+    limit_1 = p_joint_uncond
+    limit_2 = limit_1 + p_joint_full
+    limit_3 = limit_2 + p_one_hot
     
-    mask_joint_uncond = batch_rand < p_joint_uncond
-    mask_joint_full = batch_rand >= (1.0 - p_joint_full)
-    mask_independent_mode = ~(mask_joint_uncond | mask_joint_full)
+    mask_joint_uncond = batch_rand < limit_1
+    mask_joint_full   = (batch_rand >= limit_1) & (batch_rand < limit_2)
+    mask_one_hot      = (batch_rand >= limit_2) & (batch_rand < limit_3)
+    mask_independent  = batch_rand >= limit_3
+    
+    # Pre-calculate the "kept" index for the One-Hot slice of the batch
+    # Each batch item in this mode will randomly select one index (0 to num_signals-1) to keep
+    one_hot_keep_idx = torch.randint(0, num_signals, (B,), device=device)
     
     output_signals = {}
     
-    # --- LEVEL 2: INDEPENDENT MASKS ---
-    for key, labels in signals.items():
-        null_t = null_tokens[key].to(labels.dtype)
+    # --- PROCESS EACH SIGNAL ---
+    for idx, (key, labels) in enumerate(signals.items()):
+        null_t = null_tokens[key].to(labels.dtype).to(device)
+        T = labels.shape[1]
         
-        # 1. Independent Unconditional Drop (Drop the entire sequence for this specific signal)
-        ind_rand = torch.rand(batch_rand_shape, device=device)
-        mask_ind_uncond = mask_independent_mode & (ind_rand < p_ind_uncond)
+        # 1. One-Hot Drop Logic
+        # Drop the signal if we are in one-hot mode AND it was not the randomly selected index
+        is_not_the_kept_signal = (idx != one_hot_keep_idx)
+        mask_drop_one_hot = mask_one_hot & is_not_the_kept_signal
         
-        # 2. Token-Level Drop (Only happens if we are in independent mode AND didn't drop the whole signal)
-        mask_token_mode = mask_independent_mode & ~mask_ind_uncond
+        # 2. Independent Unconditional Drop Logic
+        # Calculate a 20% drop chance, applied ONLY if routed to independent mode
+        ind_rand = torch.rand((B,), device=device)
+        mask_ind_uncond = mask_independent & (ind_rand < p_ind_uncond)
         
-        # Randomize drop sparsity per batch item
-        sample_specific_drop_rates = torch.rand(batch_rand_shape, device=device) * (p_ind_high - p_ind_low) + p_ind_low
+        # Combine all sequence-level dropping scenarios into one 1D mask: Shape (B,)
+        full_drop_mask = mask_joint_uncond | mask_drop_one_hot | mask_ind_uncond
         
-        # Generate noise for every token in the sequence -> (B, T)
-        token_noise = torch.rand(labels.shape[:-1], device=device)
+        # 3. Token-Level Drop Logic
+        # Only applies to batch items in independent mode where the signal SURVIVED the un-cond drop
+        mask_token_mode = mask_independent & ~mask_ind_uncond
         
-        # Evaluate which tokens to drop
-        # sample_specific_drop_rates broadcasts from (B, 1) to (B, T) naturally
-        # mask_token_drop = token_noise < sample_specific_drop_rates.squeeze(-1) if sample_specific_drop_rates.dim() > 1 else token_noise < sample_specific_drop_rates
-        mask_token_drop = token_noise < sample_specific_drop_rates
+        # Determine how severe the sequence masking is per batch item
+        sample_drop_rates = torch.rand((B,), device=device) * (p_ind_high - p_ind_low) + p_ind_low
         
-        # --- COMBINE ALL MASKS ---
-        # Final mask shape needs to be (B, T, 1) to broadcast over the channel dimension
-        final_mask = mask_joint_uncond.unsqueeze(-1) | \
-                     mask_ind_uncond.unsqueeze(-1) | \
-                     (mask_token_mode.unsqueeze(-1) & mask_token_drop.unsqueeze(-1))
+        # Generate token-level noise and evaluate: Shape (B, T)
+        token_noise = torch.rand((B, T), device=device)
+        # Unsqueeze sample_drop_rates to (B, 1) so it broadcasts smoothly across the T dimension
+        mask_token_drop = token_noise < sample_drop_rates.unsqueeze(1)
         
-        # Apply the mask: Replace dropped tokens with the specific null token for this signal
+        # Apply the token mode gate
+        mask_token_drop = mask_token_mode.unsqueeze(1) & mask_token_drop
+        
+        # --- COMBINE MASKS & APPLY ---
+        # Broadcast the 1D full drop mask to 2D, then combine with token drops: Shape (B, T)
+        final_mask = full_drop_mask.unsqueeze(1) | mask_token_drop
+        
+        # Safely align dimensions for torch.where
+        # Expands (B, T) into (B, T, 1) or (B, T, 1, 1) based on target label shape
+        while final_mask.ndim < labels.ndim:
+            final_mask = final_mask.unsqueeze(-1)
+            
+        # Swap the dropped tokens for the learned null vectors
         output_signals[key] = torch.where(final_mask, null_t, labels)
         
     return output_signals
@@ -1384,6 +1478,249 @@ class BpmRmsChromaStyleConditionalModernDiTWrapper(nn.Module):
     def generate(self, shape, net_kwargs=None, uncond_net_kwargs=None, n_steps=50, guidance=1.0, noise=None, memory_efficient=False):
         return self.sampler.sample(self.net, shape, n_steps=n_steps, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, guidance=guidance, noise=noise, memory_efficient=memory_efficient)
 
+class MetaConditionalModernDiT(nn.Module):
+    def __init__(self,
+                 in_channels,
+                 hidden_size,
+                 spatial_window,
+                 n_chunks,
+                 style_dim,
+                 num_heads=12,
+                 depth=12,
+                 mlp_ratio=4,
+                 gradient_checkpointing=False,
+                 patch_size=1,
+                 use_null_token=False,
+                 **kwargs,
+                 ):
+        super().__init__()
+        self.spatial_window = spatial_window
+        self.gradient_checkpointing = gradient_checkpointing
+        max_input_size = spatial_window * n_chunks
+        self.patch_size = patch_size
+        self.use_null_token = use_null_token
+        
+        self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
+        self.x_embedder = Patcher(in_channels, hidden_size, patch_size=patch_size)
+        self.style_embedder = nn.Linear(style_dim, hidden_size, bias=True)
+        self.chroma_embedder = nn.Linear(12, hidden_size, bias=True)
+        self.rms_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True, max_period=10)
+        self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True, max_period=10)
+        self.mfcc_embedder = nn.Linear(12, hidden_size, bias=True)
+        self.density_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
+        self.zcr_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
+        self.measure_embedder = nn.Embedding(n_chunks, hidden_size)
+        
+        self.fuse_conditioning = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), hidden_size, bias=False)
+        
+        if self.use_null_token:
+            self.null_style = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
+            self.null_chroma = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
+            self.null_rms_low = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
+            self.null_rms_mid = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
+            self.null_rms_high = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
+            self.null_bpm = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
+            self.null_mfcc = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
+            self.null_density = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
+            self.null_zcr = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
+        
+        self.t_block = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(hidden_size, hidden_size * 6, bias=True),
+        )
+        
+        self.blocks = nn.ModuleList([
+            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+        ])
+
+        self.norm = RMSNorm(hidden_size)
+        self.final_layer_scale_shift_table = nn.Parameter(
+            torch.randn(2, hidden_size) / hidden_size ** 0.5,
+        )
+        self.fc = nn.Linear(hidden_size, in_channels * patch_size, bias=False)
+        
+        self.initialize_weights()
+        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
+    
+    def initialize_weights(self):
+        self.apply(self._init_weights)
+        # zero out classifier weights
+        nn.init.zeros_(self.fc.weight)
+        nn.init.zeros_(self.t_block[-1].weight)
+        nn.init.zeros_(self.t_block[-1].bias)
+        # zero out c_proj weights in all blocks
+        for block in self.blocks:
+            nn.init.zeros_(block.mlp.w3.weight)
+            nn.init.zeros_(block.attn.proj.weight)
+    
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            # https://arxiv.org/pdf/2310.17813
+            fan_out = module.weight.size(0)
+            fan_in = module.weight.size(1)
+            std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
+            nn.init.normal_(module.weight, mean=0.0, std=std)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
+    
+    def forward(self, x, t, bpm, rms_low, rms_mid, rms_high, density, zcr, mfcc, chroma, style, unconditional_mask=None):
+        B, T, N, C = x.shape
+        
+        x = rearrange(x, 'b t n c -> (b t) c n')
+        x = self.x_embedder(x)
+        
+        x = rearrange(x, '(b t) c n -> b t n c', b=B, t=T)
+        measure_ids = torch.arange(T, device=x.device)
+        measure_embs = self.measure_embedder(measure_ids).unsqueeze(1)
+        x = x + measure_embs
+        x = rearrange(x, 'b t n c -> b (t n) c', b=B, t=T)
+        
+        rms_low = (rms_low - 6.2784767) / 4.1725345
+        rms_mid = (rms_mid - 3.2565875) / 1.7880434
+        rms_high = (rms_high - 0.26109472) / 0.3474748
+        density = (density - 2.5229013) / 1.230155
+        zcr = (zcr - 0.10766766) / 0.048143145
+        bpm = (bpm - 187.5) / (226.4151001 - 144.57830811)  # IQR
+        
+        mcff_mean = torch.tensor([
+            113.30053, -17.395779, 27.279049, -11.116686, 3.1354604, -9.138969,
+            -2.866072, -7.1674404, -1.6265253, -5.047512, -1.7705443, -5.0958815
+        ])
+        mfcc_std = torch.tensor([
+            38.435783, 28.687775, 18.932358, 14.646409, 13.498735, 10.035576,
+            9.510887, 8.25433, 8.212691, 7.155225, 7.3324447, 6.5340915
+        ])
+        mfcc = (mfcc - mcff_mean) / mfcc_std
+        
+        t = self.t_embedder(t.flatten()).view(B, T, -1)
+        style = self.style_embedder(style)
+        chroma = self.chroma_embedder(chroma)
+        rms_low = self.rms_embedder(rms_low.flatten()).view(B, T, -1)
+        rms_mid = self.rms_embedder(rms_mid.flatten()).view(B, T, -1)
+        rms_high = self.rms_embedder(rms_high.flatten()).view(B, T, -1)
+        bpm = self.bpm_embedder(bpm.flatten()).view(B, T, -1)
+        mfcc = self.mfcc_embedder(mfcc)
+        density = self.density_embedder(density.flatten()).view(B, T, -1)
+        zcr = self.zcr_embedder(zcr.flatten()).view(B, T, -1)
+        
+        if self.use_null_token:
+            signals = {
+                'style': style,
+                'chroma': chroma,
+                'bpm': bpm,
+                'rms_low': rms_low,
+                'rms_mid': rms_mid,
+                'rms_high': rms_high,
+                'mfcc': mfcc,
+                'density': density,
+                'zcr': zcr
+            }
+            null_tokens = {
+                'style': self.null_style, 
+                'chroma': self.null_chroma, 
+                'bpm': self.null_bpm, 
+                'rms_low': self.null_rms_low, 
+                'rms_mid': self.null_rms_mid, 
+                'rms_high': self.null_rms_high, 
+                'mfcc': self.null_mfcc, 
+                'density': self.null_density, 
+                'zcr': self.null_zcr
+            }
+            signals = multi_token_drop(
+                signals, 
+                null_tokens, 
+                self.training,
+                p_joint_uncond=0.1, 
+                p_joint_full=0.5,
+                p_one_hot=0.3, 
+                p_ind_uncond=0.1, 
+                p_ind_low=0.05, 
+                p_ind_high=0.3
+            )
+            style = signals['style']
+            chroma = signals['chroma']
+            bpm = signals['bpm']
+            rms_low = signals['rms_low']
+            rms_mid = signals['rms_mid']
+            rms_high = signals['rms_high']
+            mfcc = signals['mfcc']
+            density = signals['density']
+            zcr = signals['zcr']
+            
+            if unconditional_mask is not None:
+                style = torch.where(unconditional_mask['style'], self.null_style, style)
+                chroma = torch.where(unconditional_mask['chroma'], self.null_chroma, chroma)
+                bpm = torch.where(unconditional_mask['bpm'], self.null_bpm, bpm)
+                rms_low = torch.where(unconditional_mask['rms_low'], self.null_rms_low, rms_low)
+                rms_mid = torch.where(unconditional_mask['rms_mid'], self.null_rms_mid, rms_mid)
+                rms_high = torch.where(unconditional_mask['rms_high'], self.null_rms_high, rms_high)
+                mfcc = torch.where(unconditional_mask['mfcc'], self.null_mfcc, mfcc)
+                density = torch.where(unconditional_mask['density'], self.null_density, density)
+                zcr = torch.where(unconditional_mask['zcr'], self.null_zcr, zcr)
+        
+        t = t + style + chroma + rms_low + rms_mid + rms_high + mfcc + density + zcr + bpm
+        t = self.fuse_conditioning(t)
+        t0 = self.t_block(t)
+        
+        freqs_cis = self.freqs_cis[:x.shape[1]]
+        
+        for block in self.blocks:
+            if self.gradient_checkpointing and self.training:
+                x = checkpoint(block, x, t0, freqs_cis=freqs_cis, use_reentrant=False)
+            else:
+                x = block(x, t0, freqs_cis=freqs_cis)
+        
+        # SAM Audio does not use a non-linearity on t here
+        shift, scale = (self.final_layer_scale_shift_table[None, None] + F.silu(t[:, :, None])).chunk(
+            2, dim=2
+        )
+        x = rearrange(x, 'b (t n) c -> b t n c', t=T, n=N // self.patch_size)
+        x = modulate(self.norm(x), shift.expand(-1, -1, N // self.patch_size, -1), scale.expand(-1, -1, N // self.patch_size, -1))
+        x = self.fc(x)
+        x = rearrange(x, 'b t n (p c) -> b t (n p) c', p=self.patch_size, c=C)
+        
+        return x
+
+class MetaConditionalModernDiTWrapper(nn.Module):
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.net = MetaConditionalModernDiT(**kwargs)
+        
+        self.diffusion = FM(timescale=1000.0)
+        self.sampler = FMEulerSampler(self.diffusion)
+    
+    def forward(self, x, bpm, rms_low, rms_mid, rms_high, density, zcr, mfcc, chroma, style, t=None):
+        return self.diffusion.loss(
+            self.net, 
+            x, 
+            t=t, 
+            net_kwargs={
+                'style': style, 
+                'chroma': chroma, 
+                'bpm': bpm, 
+                'rms_low': rms_low,
+                'rms_mid': rms_mid,
+                'rms_high': rms_high,
+                'density': density,
+                'zcr': zcr,
+                'mfcc': mfcc,
+            }
+        )
+    
+    def generate(self, shape, net_kwargs=None, uncond_net_kwargs=None, n_steps=50, guidance=1.0, noise=None, memory_efficient=False):
+        return self.sampler.sample(
+            self.net, 
+            shape, 
+            n_steps=n_steps, 
+            net_kwargs=net_kwargs, 
+            uncond_net_kwargs=uncond_net_kwargs, 
+            guidance=guidance, 
+            noise=noise, 
+            memory_efficient=memory_efficient
+        )
+
 def ModernDiT_large(**kwargs):
     return ModernDiTWrapper(depth=28, hidden_size=1152, num_heads=16, **kwargs)
 
@@ -1440,3 +1777,18 @@ def BpmRmsChromaStyleConditionalModernDiT_small(**kwargs):
 
 def BpmRmsChromaStyleConditionalModernDiT_tiny(**kwargs):
     return BpmRmsChromaStyleConditionalModernDiTWrapper(depth=16, hidden_size=768, num_heads=12, **kwargs)
+
+def MetaConditionalModernDiT_large(**kwargs):
+    return MetaConditionalModernDiTWrapper(depth=28, hidden_size=1152, num_heads=16, **kwargs)
+
+def MetaConditionalModernDiT_medium(**kwargs):
+    return MetaConditionalModernDiTWrapper(depth=24, hidden_size=1024, num_heads=16, **kwargs)
+
+def MetaConditionalModernDiT_smedium(**kwargs):
+    return MetaConditionalModernDiTWrapper(depth=20, hidden_size=768, num_heads=12, **kwargs)
+
+def MetaConditionalModernDiT_small(**kwargs):
+    return MetaConditionalModernDiTWrapper(depth=16, hidden_size=1024, num_heads=16, **kwargs)
+
+def MetaConditionalModernDiT_tiny(**kwargs):
+    return MetaConditionalModernDiTWrapper(depth=16, hidden_size=768, num_heads=12, **kwargs)
