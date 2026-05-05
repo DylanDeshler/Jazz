@@ -1609,12 +1609,12 @@ class MetaConditionalModernDiT(nn.Module):
         # density = self.density_embedder(density.flatten()).view(B, T, -1)
         # zcr = self.zcr_embedder(zcr.flatten()).view(B, T, -1)
         
-        rms_low = self.rms_embedder(rms_low)
-        rms_mid = self.rms_embedder(rms_mid)
-        rms_high = self.rms_embedder(rms_high)
-        bpm = self.bpm_embedder(bpm)
-        density = self.density_embedder(density)
-        zcr = self.zcr_embedder(zcr)
+        rms_low = self.rms_embedder(rms_low.unsqueeze(-1))
+        rms_mid = self.rms_embedder(rms_mid.unsqueeze(-1))
+        rms_high = self.rms_embedder(rms_high.unsqueeze(-1))
+        bpm = self.bpm_embedder(bpm.unsqueeze(-1))
+        density = self.density_embedder(density.unsqueeze(-1))
+        zcr = self.zcr_embedder(zcr.unsqueeze(-1))
         
         if self.use_null_token:
             signals = {
