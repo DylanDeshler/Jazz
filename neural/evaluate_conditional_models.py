@@ -468,7 +468,7 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps):
                 emb = fad.forward_features(y)
             embs.append(emb.cpu().detach().numpy())
 
-        y_mu, y_sigma = calculate_embd_statistics(np.concatenate(emb, axis=0))
+        y_mu, y_sigma = calculate_embd_statistics(np.concatenate(embs, axis=0))
         fad_score = calculate_frechet_distance(y_mu, y_sigma, real_mu, real_sigma)
 
         return np.mean(errors).item(), fad_score
