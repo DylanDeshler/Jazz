@@ -240,8 +240,11 @@ def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance
     shape = (gen_shape[0] * n_chunks, 1, max_latent_len)
         
     with ctx:
+        print(y.shape)
         y = y.transpose(2, 3).view(gen_shape[0] * n_chunks, vae_embed_dim, spatial_window)
+        print(y.shape)
         y = adapter.decode(y, shape, mask=mask)
+        print(y.shape)
         y = tokenizer.decode(y, shape=(1, max_len), n_steps=n_steps, noise=decoder_noise[:, :, :max_len] if decoder_noise is not None else None)
     
     target_samples = target_samples.flatten().cpu().detach().numpy()
