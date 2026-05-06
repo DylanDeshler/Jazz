@@ -350,7 +350,7 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps):
         
         cfg_guidances = list(scales.values())
         errors, embs = [], []
-        for batch in range(batch_size // micro_batch_size):
+        for micro_batch in range(batch_size // micro_batch_size):
             unconditional_mask = {
                 'bpm': torch.ones(*bpm.shape, 1).to(device).bool(),
                 'rms_low': torch.ones(*rms_low.shape, 1).to(device).bool(),
@@ -375,9 +375,9 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps):
             }
             
             for k, v in unconditional_mask.items():
-                unconditional_mask[k] = v[batch*micro_batch_size:(batch + 1)*micro_batch_size]
+                unconditional_mask[k] = v[micro_batch*micro_batch_size:(micro_batch + 1)*micro_batch_size]
             for k, v in net_kwargs.items():
-                net_kwargs[k] = v[batch*micro_batch_size:(batch + 1)*micro_batch_size]
+                net_kwargs[k] = v[micro_batch*micro_batch_size:(micro_batch + 1)*micro_batch_size]
             
             cfg_net_kwargs = []
             for k, v in unconditional_mask.items():
@@ -470,6 +470,9 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps):
             with ctx:
                 emb = fad.forward_features(y)
             embs.append(emb.cpu().detach().numpy())
+            
+            del y, y_tensor, emb, cfg_net_kwargs, uncond_net_kwargs, net_kwargs, unconditional_mask
+            torch.cuda.empty_cache()
 
         y_mu, y_sigma = calculate_embd_statistics(np.concatenate(embs, axis=0))
         fad_score = calculate_frechet_distance(y_mu, y_sigma, real_mu, real_sigma)
