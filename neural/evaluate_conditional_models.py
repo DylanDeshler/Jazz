@@ -451,8 +451,7 @@ def run_optuna_experiments(batch_size, n_steps):
         
         error /= len(y)
         
-        y = np.concatenate([np.concatenate(y_, axis=0) for y_ in y], axis=0)
-        print(y.shape)
+        y = torch.from_numpy(np.concatenate([np.concatenate(y_, axis=0) for y_ in y], axis=0).astype(np.float32)).to(device, non_blocking=True)
         y = drop_to_multiple(y, 16383 * 5)
             
         with ctx:
