@@ -430,7 +430,7 @@ def save_samples(step):
         temp_mask = unconditional_mask.copy()
         temp_mask[k] = ~v
         cfg_net_kwargs.append(net_kwargs | {'unconditional_mask': temp_mask})
-    cfg_guidances = [2, 2, 3, 7]
+    cfg_guidances = [2, 2, 2, 2, 1, 1, 4, 4, 7]
     
     uncond_net_kwargs = net_kwargs | {'unconditional_mask': unconditional_mask}
     

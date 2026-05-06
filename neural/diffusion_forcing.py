@@ -1722,7 +1722,7 @@ class MetaConditionalModernDiTWrapper(nn.Module):
             }
         )
     
-    def generate(self, shape, net_kwargs=None, uncond_net_kwargs=None, n_steps=50, guidance=1.0, noise=None, memory_efficient=False):
+    def generate(self, shape, net_kwargs=None, uncond_net_kwargs=None, n_steps=50, guidance=1.0, noise=None, memory_efficient=True):
         return self.sampler.sample(
             self.net, 
             shape, 
