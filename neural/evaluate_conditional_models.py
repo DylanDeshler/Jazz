@@ -349,15 +349,15 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps):
         errors, embs = [], []
         for batch in range(batch_size // micro_batch_size):
             unconditional_mask = {
-                'bpm': torch.ones(*bpm.shape, 1)[batch*micro_batch_size:(batch + 1)*micro_batch_size].to(device).bool(),
-                'rms_low': torch.ones(*rms_low.shape, 1)[batch*micro_batch_size:(batch + 1)*micro_batch_size].to(device).bool(),
-                'rms_mid': torch.ones(*rms_mid.shape, 1)[batch*micro_batch_size:(batch + 1)*micro_batch_size].to(device).bool(),
-                'rms_high': torch.ones(*rms_high.shape, 1)[batch*micro_batch_size:(batch + 1)*micro_batch_size].to(device).bool(),
-                'density': torch.ones(*density.shape, 1)[batch*micro_batch_size:(batch + 1)*micro_batch_size].to(device).bool(),
-                'zcr': torch.ones(*zcr.shape, 1)[batch*micro_batch_size:(batch + 1)*micro_batch_size].to(device).bool(),
-                'mfcc': torch.ones(*mfcc.shape[:-1], 1)[batch*micro_batch_size:(batch + 1)*micro_batch_size].to(device).bool(),
-                'chroma': torch.ones(*chroma.shape[:-1], 1)[batch*micro_batch_size:(batch + 1)*micro_batch_size].to(device).bool(),
-                'style': torch.ones(*style.shape[:-1], 1)[batch*micro_batch_size:(batch + 1)*micro_batch_size].to(device).bool(),
+                'bpm': torch.ones(*bpm.shape, 1).to(device).bool(),
+                'rms_low': torch.ones(*rms_low.shape, 1).to(device).bool(),
+                'rms_mid': torch.ones(*rms_mid.shape, 1).to(device).bool(),
+                'rms_high': torch.ones(*rms_high.shape, 1).to(device).bool(),
+                'density': torch.ones(*density.shape, 1).to(device).bool(),
+                'zcr': torch.ones(*zcr.shape, 1).to(device).bool(),
+                'mfcc': torch.ones(*mfcc.shape[:-1], 1).to(device).bool(),
+                'chroma': torch.ones(*chroma.shape[:-1], 1).to(device).bool(),
+                'style': torch.ones(*style.shape[:-1], 1).to(device).bool(),
             }
             net_kwargs = {
                 'bpm': bpm,
@@ -370,6 +370,11 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps):
                 'chroma': chroma,
                 'style': style,
             }
+            
+            for k, v in unconditional_mask.items():
+                unconditional_mask[k] = v[batch*micro_batch_size:(batch + 1)*micro_batch_size]
+            for k, v in net_kwargs.items():
+                net_kwargs[k] = v[batch*micro_batch_size:(batch + 1)*micro_batch_size]
             
             cfg_net_kwargs = []
             for k, v in unconditional_mask.items():
