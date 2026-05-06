@@ -359,7 +359,8 @@ def run_optuna_experiments(batch_size, n_steps):
         cfg_net_kwargs.append(net_kwargs | {'unconditional_mask': temp_mask})
         
         uncond_net_kwargs = net_kwargs | {'unconditional_mask': unconditional_mask}
-        
+    
+    @torch.no_grad()  
     def objective(trial, batch_size, n_steps):
         scales = {
             'bpm': trial.suggest_float('w_bpm', 0, 5),
@@ -385,7 +386,7 @@ def run_optuna_experiments(batch_size, n_steps):
             decoder_noise=decoder_noise, 
             method='median', 
             window_size=3,
-            memory_efficient=False
+            memory_efficient=True
         )
         
         error = 0
