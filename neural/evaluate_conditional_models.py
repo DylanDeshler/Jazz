@@ -458,9 +458,9 @@ def run_optuna_experiments(batch_size, n_steps):
             emb = fad.forward_features(y)
 
         y_mu, y_sigma = calculate_embd_statistics(emb.cpu().detach().numpy())
-        fad = calculate_frechet_distance(y_mu, y_sigma, real_mu, real_sigma)
+        fad_score = calculate_frechet_distance(y_mu, y_sigma, real_mu, real_sigma)
 
-        return error, fad
+        return error, fad_score
     
     study = optuna.create_study(
         study_name='cfg',
