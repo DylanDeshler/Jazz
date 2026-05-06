@@ -471,7 +471,7 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps):
                 emb = fad.forward_features(y)
             embs.append(emb.cpu().detach().numpy())
             
-            del y, y_tensor, emb, cfg_net_kwargs, uncond_net_kwargs, net_kwargs, unconditional_mask
+            del y, emb, cfg_net_kwargs, uncond_net_kwargs, net_kwargs, unconditional_mask
             torch.cuda.empty_cache()
 
         y_mu, y_sigma = calculate_embd_statistics(np.concatenate(embs, axis=0))
