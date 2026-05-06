@@ -351,33 +351,42 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps):
         cfg_guidances = list(scales.values())
         errors, embs = [], []
         for micro_batch in range(batch_size // micro_batch_size):
-            unconditional_mask = {
-                'bpm': torch.ones(*bpm.shape, 1).to(device).bool(),
-                'rms_low': torch.ones(*rms_low.shape, 1).to(device).bool(),
-                'rms_mid': torch.ones(*rms_mid.shape, 1).to(device).bool(),
-                'rms_high': torch.ones(*rms_high.shape, 1).to(device).bool(),
-                'density': torch.ones(*density.shape, 1).to(device).bool(),
-                'zcr': torch.ones(*zcr.shape, 1).to(device).bool(),
-                'mfcc': torch.ones(*mfcc.shape[:-1], 1).to(device).bool(),
-                'chroma': torch.ones(*chroma.shape[:-1], 1).to(device).bool(),
-                'style': torch.ones(*style.shape[:-1], 1).to(device).bool(),
-            }
+            start_idx = micro_batch * micro_batch_size
+            end_idx = start_idx + micro_batch_size
+            
+            mb_bpm = bpm[start_idx:end_idx]
+            mb_rms_low = rms_low[start_idx:end_idx]
+            mb_rms_mid = rms_mid[start_idx:end_idx]
+            mb_rms_high = rms_high[start_idx:end_idx]
+            mb_density = density[start_idx:end_idx]
+            mb_zcr = zcr[start_idx:end_idx]
+            mb_mfcc = mfcc[start_idx:end_idx]
+            mb_chroma = chroma[start_idx:end_idx]
+            mb_style = style[start_idx:end_idx]
+
             net_kwargs = {
-                'bpm': bpm,
-                'rms_low': rms_low,
-                'rms_mid': rms_mid,
-                'rms_high': rms_high,
-                'density': density,
-                'zcr': zcr,
-                'mfcc': mfcc,
-                'chroma': chroma,
-                'style': style,
+                'bpm': mb_bpm,
+                'rms_low': mb_rms_low,
+                'rms_mid': mb_rms_mid,
+                'rms_high': mb_rms_high,
+                'density': mb_density,
+                'zcr': mb_zcr,
+                'mfcc': mb_mfcc,
+                'chroma': mb_chroma,
+                'style': mb_style,
             }
             
-            for k, v in unconditional_mask.items():
-                unconditional_mask[k] = v[micro_batch*micro_batch_size:(micro_batch + 1)*micro_batch_size]
-            for k, v in net_kwargs.items():
-                net_kwargs[k] = v[micro_batch*micro_batch_size:(micro_batch + 1)*micro_batch_size]
+            unconditional_mask = {
+                'bpm': torch.ones(*mb_bpm.shape, 1, device=device, dtype=torch.bool),
+                'rms_low': torch.ones(*mb_rms_low.shape, 1, device=device, dtype=torch.bool),
+                'rms_mid': torch.ones(*mb_rms_mid.shape, 1, device=device, dtype=torch.bool),
+                'rms_high': torch.ones(*mb_rms_high.shape, 1, device=device, dtype=torch.bool),
+                'density': torch.ones(*mb_density.shape, 1, device=device, dtype=torch.bool),
+                'zcr': torch.ones(*mb_zcr.shape, 1, device=device, dtype=torch.bool),
+                'mfcc': torch.ones(*mb_mfcc.shape[:-1], 1, device=device, dtype=torch.bool),
+                'chroma': torch.ones(*mb_chroma.shape[:-1], 1, device=device, dtype=torch.bool),
+                'style': torch.ones(*mb_style.shape[:-1], 1, device=device, dtype=torch.bool),
+            }
             
             cfg_net_kwargs = []
             for k, v in unconditional_mask.items():
@@ -471,7 +480,11 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps):
                 emb = fad.forward_features(y)
             embs.append(emb.cpu().detach().numpy())
             
-            del y, emb, cfg_net_kwargs, uncond_net_kwargs, net_kwargs, unconditional_mask
+            del y, emb, temp_mask, measure_list
+            del cfg_net_kwargs, uncond_net_kwargs, net_kwargs, unconditional_mask
+            del mb_bpm, mb_rms_low, mb_rms_mid, mb_rms_high, mb_density, mb_zcr, mb_mfcc, mb_chroma, mb_style
+            import gc
+            gc.collect()
             torch.cuda.empty_cache()
 
         y_mu, y_sigma = calculate_embd_statistics(np.concatenate(embs, axis=0))
