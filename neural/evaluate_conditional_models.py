@@ -360,7 +360,7 @@ def run_optuna_experiments(batch_size, n_steps):
         
         uncond_net_kwargs = net_kwargs | {'unconditional_mask': unconditional_mask}
         
-    def objective(trial):
+    def objective(trial, batch_size, n_steps):
         scales = {
             'chroma': trial.suggest_float('w_chroma', 0, 5),
             'bpm': trial.suggest_float('w_bpm', 0, 5),
@@ -578,7 +578,7 @@ if __name__ == '__main__':
     
     # Route to the appropriate function
     if args.mode == "run_optuna_experiments":
-        run_optuna_experiments(args.n_steps, args.batch_size)
+        run_optuna_experiments(args.batch_size, args.n_steps)
     elif args.mode == "run_eval":
-        run_eval(args.n_steps, args.batch_size)
+        run_eval(args.batch_size, args.n_steps)
         
