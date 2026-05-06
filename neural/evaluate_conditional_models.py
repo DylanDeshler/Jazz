@@ -290,7 +290,9 @@ meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_meta_val.bin', dtype=
 bpms = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_bpm_val.bin', dtype=np.float32, mode='r')
 
 @torch.no_grad()
-def run_optuna_experiments(batch_size, n_steps):
+def run_optuna_experiments(batch_size, micro_batch_size, n_steps):
+    assert batch_size % micro_batch_size == 0
+    
     torch.manual_seed(0)
     np.random.seed(0)
     
@@ -325,9 +327,9 @@ def run_optuna_experiments(batch_size, n_steps):
     mfcc = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 17:] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     bpm = torch.from_numpy(np.stack([bpms[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     
-    gen_shape = (batch_size, n_chunks, spatial_window, vae_embed_dim)
+    gen_shape = (micro_batch_size, n_chunks, spatial_window, vae_embed_dim)
     gen_noise = torch.randn(gen_shape).to(device)
-    decoder_noise = torch.randn(batch_size * n_chunks, 1, encoder_ratios * (max_seq_len - 1)).to(device)
+    decoder_noise = torch.randn(micro_batch_size * n_chunks, 1, encoder_ratios * (max_seq_len - 1)).to(device)
     
     unconditional_mask = {
         'bpm': torch.ones(*bpm.shape, 1).to(device).bool(),
@@ -361,7 +363,7 @@ def run_optuna_experiments(batch_size, n_steps):
         uncond_net_kwargs = net_kwargs | {'unconditional_mask': unconditional_mask}
     
     @torch.no_grad()  
-    def objective(trial, batch_size, n_steps):
+    def objective(trial, batch_size, micro_batch_size, n_steps):
         scales = {
             'bpm': trial.suggest_float('w_bpm', 0, 5),
             'rms_low': trial.suggest_float('w_rms_low', 0, 5),
@@ -375,93 +377,96 @@ def run_optuna_experiments(batch_size, n_steps):
         }
         
         cfg_guidances = list(scales.values())
-        
-        y = predict_measures(
-            gen_shape, 
-            cfg_net_kwargs, 
-            uncond_net_kwargs, 
-            n_steps, 
-            guidance=cfg_guidances, 
-            gen_noise=gen_noise, 
-            decoder_noise=decoder_noise, 
-            method='median', 
-            window_size=3,
-            memory_efficient=True
-        )
-        
-        error = 0
-        for batch, measure_list in enumerate(y):
-            wav = np.concatenate(measure_list, axis=0)
-            wav_chroma = librosa.feature.chroma_cqt(y=wav, sr=rate, hop_length=hop_length)
-            stft_mag = np.abs(librosa.stft(wav, n_fft=n_fft, hop_length=hop_length))
-            freqs = librosa.fft_frequencies(sr=rate, n_fft=n_fft)
+        errors, embs = [], []
+        for batch in range(batch_size // micro_batch_size):
+            y = predict_measures(
+                gen_shape, 
+                cfg_net_kwargs, 
+                uncond_net_kwargs, 
+                n_steps, 
+                guidance=cfg_guidances, 
+                gen_noise=gen_noise, 
+                decoder_noise=decoder_noise, 
+                method='median', 
+                window_size=3,
+                memory_efficient=True
+            )
             
-            low_mask = (freqs < 250)
-            mid_mask = (freqs >= 250) & (freqs < 4000)
-            high_mask = (freqs >= 4000)
-            
-            wav_rms_low = np.sqrt(np.mean(stft_mag[low_mask, :]**2, axis=0))
-            wav_rms_mid = np.sqrt(np.mean(stft_mag[mid_mask, :]**2, axis=0))
-            wav_rms_high = np.sqrt(np.mean(stft_mag[high_mask, :]**2, axis=0))
-            
-            wav_onset_env = librosa.onset.onset_strength(y=wav, sr=rate, hop_length=hop_length)
-            wav_onset_frames = librosa.onset.onset_detect(onset_envelope=wav_onset_env, sr=rate, hop_length=hop_length)
-            wav_zcr = librosa.feature.zero_crossing_rate(wav, hop_length=hop_length)[0]
-            
-            # Extract 13 MFCCs, but strictly slice [1:13] to discard the 0th energy coefficient
-            wav_mfccs = librosa.feature.mfcc(y=wav, sr=rate, hop_length=hop_length, n_mfcc=13)[1:13, :]
-            
-            current_sample = 0
-            for i in range(len(measure_list) - 1):
-                t_start = current_sample / rate
-                t_end = (current_sample + len(measure_list[i])) / rate
-                current_sample += len(measure_list[i])
+            error = 0
+            for batch, measure_list in enumerate(y):
+                wav = np.concatenate(measure_list, axis=0)
+                wav_chroma = librosa.feature.chroma_cqt(y=wav, sr=rate, hop_length=hop_length)
+                stft_mag = np.abs(librosa.stft(wav, n_fft=n_fft, hop_length=hop_length))
+                freqs = librosa.fft_frequencies(sr=rate, n_fft=n_fft)
                 
-                frame_start = librosa.time_to_frames(t_start, sr=rate, hop_length=hop_length)
-                frame_end = librosa.time_to_frames(t_end, sr=rate, hop_length=hop_length)
+                low_mask = (freqs < 250)
+                mid_mask = (freqs >= 250) & (freqs < 4000)
+                high_mask = (freqs >= 4000)
                 
-                if frame_end > wav_chroma.shape[1]:
-                    break
+                wav_rms_low = np.sqrt(np.mean(stft_mag[low_mask, :]**2, axis=0))
+                wav_rms_mid = np.sqrt(np.mean(stft_mag[mid_mask, :]**2, axis=0))
+                wav_rms_high = np.sqrt(np.mean(stft_mag[high_mask, :]**2, axis=0))
+                
+                wav_onset_env = librosa.onset.onset_strength(y=wav, sr=rate, hop_length=hop_length)
+                wav_onset_frames = librosa.onset.onset_detect(onset_envelope=wav_onset_env, sr=rate, hop_length=hop_length)
+                wav_zcr = librosa.feature.zero_crossing_rate(wav, hop_length=hop_length)[0]
+                
+                # Extract 13 MFCCs, but strictly slice [1:13] to discard the 0th energy coefficient
+                wav_mfccs = librosa.feature.mfcc(y=wav, sr=rate, hop_length=hop_length, n_mfcc=13)[1:13, :]
+                
+                current_sample = 0
+                for i in range(len(measure_list) - 1):
+                    t_start = current_sample / rate
+                    t_end = (current_sample + len(measure_list[i])) / rate
+                    current_sample += len(measure_list[i])
                     
-                frame_end = min(frame_end, wav_chroma.shape[1])
-                
-                measure_chroma = wav_chroma[:, frame_start:frame_end]
-                
-                measure_rms_low = wav_rms_low[frame_start:frame_end]
-                measure_rms_mid = wav_rms_mid[frame_start:frame_end]
-                measure_rms_high = wav_rms_high[frame_start:frame_end]
-                
-                measure_zcr = wav_zcr[frame_start:frame_end]
-                
-                measure_mfcc = wav_mfccs[:, frame_start:frame_end]
-                
-                if measure_chroma.shape[1] > 0:
-                    chroma_error = mse(np.mean(measure_chroma, axis=1), chroma[batch, i].cpu().numpy())
-                    rms_low_error = mse(np.mean(measure_rms_low), rms_low[batch, i].cpu().numpy())
-                    rms_mid_error = mse(np.mean(measure_rms_mid), rms_mid[batch, i].cpu().numpy())
-                    rms_high_error = mse(np.mean(measure_rms_high), rms_high[batch, i].cpu().numpy())
+                    frame_start = librosa.time_to_frames(t_start, sr=rate, hop_length=hop_length)
+                    frame_end = librosa.time_to_frames(t_end, sr=rate, hop_length=hop_length)
                     
-                    onsets_in_measure = np.sum((wav_onset_frames >= frame_start) & (wav_onset_frames < frame_end))
-                    measure_duration_sec = (frame_end - frame_start) / (rate / hop_length)
-                    density_error = mse(onsets_in_measure / measure_duration_sec if measure_duration_sec > 0 else 0.0, density[batch, i].cpu().numpy())
+                    if frame_end > wav_chroma.shape[1]:
+                        break
+                        
+                    frame_end = min(frame_end, wav_chroma.shape[1])
                     
-                    zcr_error = mse(np.mean(measure_zcr), zcr[batch, i].cpu().numpy())
-                    mfcc_error = mse(np.mean(measure_mfcc, axis=1), mfcc[batch, i].cpu().numpy())
+                    measure_chroma = wav_chroma[:, frame_start:frame_end]
                     
-                    error += chroma_error + rms_low_error + rms_mid_error + rms_high_error + density_error + zcr_error + mfcc_error
-        
-        error /= len(y)
-        
-        y = torch.from_numpy(np.concatenate([np.concatenate(y_, axis=0) for y_ in y], axis=0).astype(np.float32)).to(device, non_blocking=True)
-        y = drop_to_multiple(y, 16383 * 5)
+                    measure_rms_low = wav_rms_low[frame_start:frame_end]
+                    measure_rms_mid = wav_rms_mid[frame_start:frame_end]
+                    measure_rms_high = wav_rms_high[frame_start:frame_end]
+                    
+                    measure_zcr = wav_zcr[frame_start:frame_end]
+                    
+                    measure_mfcc = wav_mfccs[:, frame_start:frame_end]
+                    
+                    if measure_chroma.shape[1] > 0:
+                        chroma_error = mse(np.mean(measure_chroma, axis=1), chroma[batch, i].cpu().numpy())
+                        rms_low_error = mse(np.mean(measure_rms_low), rms_low[batch, i].cpu().numpy())
+                        rms_mid_error = mse(np.mean(measure_rms_mid), rms_mid[batch, i].cpu().numpy())
+                        rms_high_error = mse(np.mean(measure_rms_high), rms_high[batch, i].cpu().numpy())
+                        
+                        onsets_in_measure = np.sum((wav_onset_frames >= frame_start) & (wav_onset_frames < frame_end))
+                        measure_duration_sec = (frame_end - frame_start) / (rate / hop_length)
+                        density_error = mse(onsets_in_measure / measure_duration_sec if measure_duration_sec > 0 else 0.0, density[batch, i].cpu().numpy())
+                        
+                        zcr_error = mse(np.mean(measure_zcr), zcr[batch, i].cpu().numpy())
+                        mfcc_error = mse(np.mean(measure_mfcc, axis=1), mfcc[batch, i].cpu().numpy())
+                        
+                        error += chroma_error + rms_low_error + rms_mid_error + rms_high_error + density_error + zcr_error + mfcc_error
             
-        with ctx:
-            emb = fad.forward_features(y)
+            error /= len(y)
+            errors.append(error)
+            
+            y = torch.from_numpy(np.concatenate([np.concatenate(y_, axis=0) for y_ in y], axis=0).astype(np.float32)).to(device, non_blocking=True)
+            y = drop_to_multiple(y, 16383 * 5)
+                
+            with ctx:
+                emb = fad.forward_features(y)
+            embs.append(emb.cpu().detach().numpy())
 
-        y_mu, y_sigma = calculate_embd_statistics(emb.cpu().detach().numpy())
+        y_mu, y_sigma = calculate_embd_statistics(np.concatenate(emb, axis=0))
         fad_score = calculate_frechet_distance(y_mu, y_sigma, real_mu, real_sigma)
 
-        return error, fad_score
+        return np.mean(errors).item(), fad_score
     
     study = optuna.create_study(
         study_name='cfg',
@@ -469,7 +474,7 @@ def run_optuna_experiments(batch_size, n_steps):
         directions=['minimize', 'minimize'],
         load_if_exists=True
     )
-    study.optimize(lambda trial: objective(trial, batch_size, n_steps), n_trials=100)
+    study.optimize(lambda trial: objective(trial, batch_size, micro_batch_size, n_steps), n_trials=100)
 
     best_trials = study.best_trials
     for t in best_trials:
@@ -576,12 +581,20 @@ if __name__ == '__main__':
         default=32, 
         help="Batch size for generating audio/FAD calculation (default: 32)"
     )
+    parser.add_argument(
+        "--micro_batch_size",
+        type=int,
+        default=None,
+        help="Batch size used for generation (defaults to batch_size)"
+    )
     
     args = parser.parse_args()
+    if args.micro_batch_size is None:
+        args.micro_batch_size = args.batch_size
     
     # Route to the appropriate function
     if args.mode == "run_optuna_experiments":
-        run_optuna_experiments(args.batch_size, args.n_steps)
+        run_optuna_experiments(args.batch_size, args.micro_batch_size, args.n_steps)
     elif args.mode == "run_eval":
-        run_eval(args.batch_size, args.n_steps)
+        run_eval(args.batch_size, args.micro_batch_size, args.n_steps)
         
