@@ -331,37 +331,6 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps):
     gen_noise = torch.randn(gen_shape).to(device)
     decoder_noise = torch.randn(micro_batch_size * n_chunks, 1, encoder_ratios * (max_seq_len - 1)).to(device)
     
-    unconditional_mask = {
-        'bpm': torch.ones(*bpm.shape, 1).to(device).bool(),
-        'rms_low': torch.ones(*rms_low.shape, 1).to(device).bool(),
-        'rms_mid': torch.ones(*rms_mid.shape, 1).to(device).bool(),
-        'rms_high': torch.ones(*rms_high.shape, 1).to(device).bool(),
-        'density': torch.ones(*density.shape, 1).to(device).bool(),
-        'zcr': torch.ones(*zcr.shape, 1).to(device).bool(),
-        'mfcc': torch.ones(*mfcc.shape[:-1], 1).to(device).bool(),
-        'chroma': torch.ones(*chroma.shape[:-1], 1).to(device).bool(),
-        'style': torch.ones(*style.shape[:-1], 1).to(device).bool(),
-    }
-    net_kwargs = {
-        'bpm': bpm,
-        'rms_low': rms_low,
-        'rms_mid': rms_mid,
-        'rms_high': rms_high,
-        'density': density,
-        'zcr': zcr,
-        'mfcc': mfcc,
-        'chroma': chroma,
-        'style': style,
-    }
-    
-    cfg_net_kwargs = []
-    for k, v in unconditional_mask.items():
-        temp_mask = unconditional_mask.copy()
-        temp_mask[k] = ~v
-        cfg_net_kwargs.append(net_kwargs | {'unconditional_mask': temp_mask})
-        
-        uncond_net_kwargs = net_kwargs | {'unconditional_mask': unconditional_mask}
-    
     @torch.no_grad()  
     def objective(trial, batch_size, micro_batch_size, n_steps):
         scales = {
@@ -379,6 +348,37 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps):
         cfg_guidances = list(scales.values())
         errors, embs = [], []
         for batch in range(batch_size // micro_batch_size):
+            unconditional_mask = {
+                'bpm': torch.ones(*bpm.shape, 1)[batch*micro_batch_size:(batch + 1)*micro_batch_size].to(device).bool(),
+                'rms_low': torch.ones(*rms_low.shape, 1)[batch*micro_batch_size:(batch + 1)*micro_batch_size].to(device).bool(),
+                'rms_mid': torch.ones(*rms_mid.shape, 1)[batch*micro_batch_size:(batch + 1)*micro_batch_size].to(device).bool(),
+                'rms_high': torch.ones(*rms_high.shape, 1)[batch*micro_batch_size:(batch + 1)*micro_batch_size].to(device).bool(),
+                'density': torch.ones(*density.shape, 1)[batch*micro_batch_size:(batch + 1)*micro_batch_size].to(device).bool(),
+                'zcr': torch.ones(*zcr.shape, 1)[batch*micro_batch_size:(batch + 1)*micro_batch_size].to(device).bool(),
+                'mfcc': torch.ones(*mfcc.shape[:-1], 1)[batch*micro_batch_size:(batch + 1)*micro_batch_size].to(device).bool(),
+                'chroma': torch.ones(*chroma.shape[:-1], 1)[batch*micro_batch_size:(batch + 1)*micro_batch_size].to(device).bool(),
+                'style': torch.ones(*style.shape[:-1], 1)[batch*micro_batch_size:(batch + 1)*micro_batch_size].to(device).bool(),
+            }
+            net_kwargs = {
+                'bpm': bpm,
+                'rms_low': rms_low,
+                'rms_mid': rms_mid,
+                'rms_high': rms_high,
+                'density': density,
+                'zcr': zcr,
+                'mfcc': mfcc,
+                'chroma': chroma,
+                'style': style,
+            }
+            
+            cfg_net_kwargs = []
+            for k, v in unconditional_mask.items():
+                temp_mask = unconditional_mask.copy()
+                temp_mask[k] = ~v
+                cfg_net_kwargs.append(net_kwargs | {'unconditional_mask': temp_mask})
+                
+                uncond_net_kwargs = net_kwargs | {'unconditional_mask': unconditional_mask}
+                
             y = predict_measures(
                 gen_shape, 
                 cfg_net_kwargs, 
