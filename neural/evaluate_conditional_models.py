@@ -216,9 +216,9 @@ def crossfade_chunks(chunks: list, overlap_samples: int) -> np.ndarray:
     return out
 
 @torch.no_grad()
-def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3):
+def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3, memory_efficient=False):
     with ctx:
-        y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise)
+        y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise, memory_efficient=memory_efficient)
         
     if isinstance(net_kwargs, list):
         bpm = net_kwargs[0]['bpm']
@@ -362,7 +362,6 @@ def run_optuna_experiments(batch_size, n_steps):
         
     def objective(trial, batch_size, n_steps):
         scales = {
-            'chroma': trial.suggest_float('w_chroma', 0, 5),
             'bpm': trial.suggest_float('w_bpm', 0, 5),
             'rms_low': trial.suggest_float('w_rms_low', 0, 5),
             'rms_mid': trial.suggest_float('w_rms_mid', 0, 5),
@@ -370,11 +369,11 @@ def run_optuna_experiments(batch_size, n_steps):
             'density': trial.suggest_float('w_density', 0, 5),
             'zcr': trial.suggest_float('w_zcr', 0, 5),
             'mfcc': trial.suggest_float('w_mfcc', 0, 5),
+            'chroma': trial.suggest_float('w_chroma', 0, 5),
             'style': trial.suggest_float('w_style', 0, 5)
         }
         
-        cfg_guidances = scales
-        print(cfg_guidances)
+        cfg_guidances = list(scales.values())
         
         y = predict_measures(
             gen_shape, 
@@ -385,7 +384,8 @@ def run_optuna_experiments(batch_size, n_steps):
             gen_noise=gen_noise, 
             decoder_noise=decoder_noise, 
             method='median', 
-            window_size=3
+            window_size=3,
+            memory_efficient=False
         )
         
         error = 0
