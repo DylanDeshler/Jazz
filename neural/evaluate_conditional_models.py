@@ -18,7 +18,7 @@ import optuna
 from dito import DiToV5 as Tokenizer
 from fad import MultiTaskFAD as FAD, BPMProbe
 from adapter import InvertibleAdapter as Adapter
-from diffusion_forcing import BpmRmsChromaStyleConditionalModernDiT_smedium as DiT
+from diffusion_forcing import MetaConditionalModernDiT_smedium as DiT
 
 rate = 16000
 n_samples = 24576
