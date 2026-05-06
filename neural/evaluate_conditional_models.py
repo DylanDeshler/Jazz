@@ -289,6 +289,7 @@ styles = np.memmap('/home/ubuntu/Data/contrast_learntmep_instance_10s_style_val.
 meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_meta_val.bin', dtype=np.float32, mode='r', shape=(88303, 29))
 bpms = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_bpm_val.bin', dtype=np.float32, mode='r')
 
+@torch.no_grad()
 def run_optuna_experiments(batch_size, n_steps):
     torch.manual_seed(0)
     np.random.seed(0)
@@ -451,6 +452,7 @@ def run_optuna_experiments(batch_size, n_steps):
         error /= len(y)
         
         y = np.concatenate([np.concatenate(y_, axis=0) for y_ in y], axis=0)
+        print(y.shape)
         y = drop_to_multiple(y, 16383 * 5)
             
         with ctx:
