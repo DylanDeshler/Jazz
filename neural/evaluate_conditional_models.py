@@ -306,7 +306,6 @@ def run_optuna_experiments(batch_size, n_steps):
         x.append(wav)
     
     x = torch.from_numpy(np.stack(x).astype(np.float32)).to(device, non_blocking=True)
-            
     x = drop_to_multiple(x, 16383 * 5)
     
     with ctx:
@@ -412,9 +411,11 @@ def run_optuna_experiments(batch_size, n_steps):
             # Extract 13 MFCCs, but strictly slice [1:13] to discard the 0th energy coefficient
             wav_mfccs = librosa.feature.mfcc(y=wav, sr=rate, hop_length=hop_length, n_mfcc=13)[1:13, :]
             
+            current_sample = 0
             for i in range(len(measure_list) - 1):
-                t_start = len(measure_list[i]) / rate
-                t_end = len(measure_list[i+1]) / rate
+                t_start = current_sample / rate
+                t_end = (current_sample + len(measure_list[i])) / rate
+                current_sample += len(measure_list[i])
                 
                 frame_start = librosa.time_to_frames(t_start, sr=rate, hop_length=hop_length)
                 frame_end = librosa.time_to_frames(t_end, sr=rate, hop_length=hop_length)
