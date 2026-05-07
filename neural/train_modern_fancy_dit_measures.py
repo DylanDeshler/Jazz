@@ -32,7 +32,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from diffusion_forcing import MetaConditionalModernDiT_smedium as net
+from diffusion_forcing import MetaConditionalModernDiT_large as net
 from dito import DiToV5 as Tokenizer
 from adapter import InvertibleAdapter
 from fad import BPMProbe
@@ -44,7 +44,7 @@ import pyrubberband as pyrb
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'MetaConditionalModernDiT_smedium_24576_subset_adapter_longtrain_32chunks'
+out_dir = 'MetaConditionalModernDiT_large_24576_subset_adapter_longtrain_32chunks'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -52,7 +52,7 @@ save_interval = 5000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir
@@ -65,7 +65,7 @@ TARGET_SIG = 4
 TARGET_BPM = 60 * TARGET_SIG / (24576 / 16000)
 # model
 patch_size = 2
-gradient_checkpointing = False
+gradient_checkpointing = True
 spatial_window = 48
 n_chunks = 32
 max_seq_len = spatial_window * n_chunks
@@ -322,9 +322,9 @@ def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', win
     return torch.from_numpy(smoothed).to(bpm_tensor.device)
 
 @torch.no_grad()
-def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3):
+def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3, memory_efficient=True):
     with ctx:
-        y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise)
+        y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise, memory_efficient=memory_efficient)
         
     if isinstance(net_kwargs, list):
         bpm = net_kwargs[0]['bpm']
@@ -357,38 +357,6 @@ def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance
     y = [np.concatenate([y_[:min(int(samples), max_len)] for y_, samples in zip(y[i*n_chunks:(i+1)*n_chunks], target_samples[i])], axis=0).astype(np.float32) for i in range(gen_shape[0])]
     
     return y
-
-# @torch.no_grad()
-# def save_samples(step):
-#     batch_dir = os.path.join(out_dir, str(step))
-#     os.makedirs(batch_dir, exist_ok=True)
-    
-#     n_steps = 50
-#     n_samples = 10
-#     x, bpm, rms, chroma, style = get_batch('val', batch_size=n_samples)
-    
-#     gen_noise = torch.randn(x.shape).to(device)
-#     decoder_noise = torch.randn(n_samples * n_chunks, 1, encoder_ratios * (max_adapter_len - 1)).to(device)
-#     net_kwargs = {
-#         'bpm': bpm,
-#         'rms': rms,
-#         'chroma': chroma,
-#         'style': style
-#     }
-#     unconditional_mask = {
-#         'bpm': torch.ones(*bpm.shape, 1).to(device).bool(),
-#         'rms': torch.ones(*rms.shape, 1).to(device).bool(),
-#         'chroma': torch.ones(*chroma.shape[:-1], 1).to(device).bool(),
-#         'style': torch.ones(*style.shape[:-1], 1).to(device).bool(),
-#     }
-#     uncond_net_kwargs = net_kwargs | {'unconditional_mask': unconditional_mask}
-    
-#     y_cfg = predict_measures(x.shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=5.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
-#     y = predict_measures(x.shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
-    
-#     for i in range(n_samples):
-#         sf.write(os.path.join(batch_dir, f'{i}.wav'), y[i].flatten(), 16000)
-#         sf.write(os.path.join(batch_dir, f'{i}_cfg.wav'), y_cfg[i].flatten(), 16000)
 
 @torch.no_grad()
 def save_samples(step):
