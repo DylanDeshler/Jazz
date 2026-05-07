@@ -240,11 +240,8 @@ def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance
     shape = (gen_shape[0] * n_chunks, 1, max_latent_len)
         
     with ctx:
-        print(y.shape)
         y = y.transpose(2, 3).view(gen_shape[0] * n_chunks, vae_embed_dim, spatial_window)
-        print(y.shape)
         y = adapter.decode(y, shape, mask=mask)
-        print(y.shape)
         y = tokenizer.decode(y, shape=(1, max_len), n_steps=n_steps, noise=decoder_noise[:, :, :max_len] if decoder_noise is not None else None)
     
     target_samples = target_samples.flatten().cpu().detach().numpy()
@@ -456,17 +453,17 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps):
                     measure_mfcc = wav_mfccs[:, frame_start:frame_end]
                     
                     if measure_chroma.shape[1] > 0:
-                        chroma_error = mse(np.mean(measure_chroma, axis=1), chroma[batch, i].cpu().numpy())
-                        rms_low_error = mse(np.mean(measure_rms_low), rms_low[batch, i].cpu().numpy())
-                        rms_mid_error = mse(np.mean(measure_rms_mid), rms_mid[batch, i].cpu().numpy())
-                        rms_high_error = mse(np.mean(measure_rms_high), rms_high[batch, i].cpu().numpy())
+                        chroma_error = mse(np.mean(measure_chroma, axis=1), chroma[start_idx+batch, i].cpu().numpy())
+                        rms_low_error = mse(np.mean(measure_rms_low), rms_low[start_idx+batch, i].cpu().numpy())
+                        rms_mid_error = mse(np.mean(measure_rms_mid), rms_mid[start_idx+batch, i].cpu().numpy())
+                        rms_high_error = mse(np.mean(measure_rms_high), rms_high[start_idx+batch, i].cpu().numpy())
                         
                         onsets_in_measure = np.sum((wav_onset_frames >= frame_start) & (wav_onset_frames < frame_end))
                         measure_duration_sec = (frame_end - frame_start) / (rate / hop_length)
-                        density_error = mse(onsets_in_measure / measure_duration_sec if measure_duration_sec > 0 else 0.0, density[batch, i].cpu().numpy())
+                        density_error = mse(onsets_in_measure / measure_duration_sec if measure_duration_sec > 0 else 0.0, density[start_idx+batch, i].cpu().numpy())
                         
-                        zcr_error = mse(np.mean(measure_zcr), zcr[batch, i].cpu().numpy())
-                        mfcc_error = mse(np.mean(measure_mfcc, axis=1), mfcc[batch, i].cpu().numpy())
+                        zcr_error = mse(np.mean(measure_zcr), zcr[start_idx+batch, i].cpu().numpy())
+                        mfcc_error = mse(np.mean(measure_mfcc, axis=1), mfcc[start_idx+batch, i].cpu().numpy())
                         
                         error += chroma_error + rms_low_error + rms_mid_error + rms_high_error + density_error + zcr_error + mfcc_error
             
