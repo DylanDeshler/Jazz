@@ -403,7 +403,7 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps):
                 decoder_noise=decoder_noise, 
                 method='median', 
                 window_size=3,
-                memory_efficient=True
+                memory_efficient=False
             )
             
             error = 0
