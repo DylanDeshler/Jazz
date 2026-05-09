@@ -398,7 +398,7 @@ def save_samples(step):
         temp_mask = unconditional_mask.copy()
         temp_mask[k] = ~v
         cfg_net_kwargs.append(net_kwargs | {'unconditional_mask': temp_mask})
-    cfg_guidances = [2, 2, 2, 2, 1, 1, 4, 4, 7]
+    cfg_guidances = list({'w_bpm': 3.710699914324043, 'w_rms_low': 4.028431549774051, 'w_rms_mid': 4.42472970788414, 'w_rms_high': 0.09824734544354286, 'w_density': 3.9796203268408687, 'w_zcr': 2.074415557615488, 'w_mfcc': 4.404573167810174, 'w_chroma': 4.81149841700109, 'w_style': 3.9142999037339976}.values())
     
     uncond_net_kwargs = net_kwargs | {'unconditional_mask': unconditional_mask}
     
