@@ -18,7 +18,7 @@ import optuna
 from dito import DiToV5 as Tokenizer
 from fad import MultiTaskFAD as FAD, BPMProbe
 from adapter import InvertibleAdapter as Adapter
-from diffusion_forcing import MetaConditionalModernDiT_smedium as DiT
+from diffusion_forcing import MetaConditionalModernDiT_large as DiT
 
 rate = 16000
 n_samples = 24576
@@ -261,7 +261,7 @@ encoder_ratios = math.prod(tokenizer.encoder.ratios)
 max_seq_len = adapter.max_seq_len
 
 # DiTs
-model = load_model(os.path.join('MetaConditionalModernDiT_smedium_24576_subset_adapter_longtrain_32chunks', 'ckpt.pt'), DiT)
+model = load_model(os.path.join('MetaConditionalModernDiT_large_24576_subset_adapter_longtrain_32chunks', 'ckpt.pt'), DiT)
 n_chunks = 32
 spatial_window = 48
 vae_embed_dim = 16
@@ -453,17 +453,17 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps):
                     measure_mfcc = wav_mfccs[:, frame_start:frame_end]
                     
                     if measure_chroma.shape[1] > 0:
-                        chroma_error = mse(np.mean(measure_chroma, axis=1), chroma[start_idx+batch, i].cpu().numpy())
-                        rms_low_error = mse(np.mean(measure_rms_low), rms_low[start_idx+batch, i].cpu().numpy())
-                        rms_mid_error = mse(np.mean(measure_rms_mid), rms_mid[start_idx+batch, i].cpu().numpy())
-                        rms_high_error = mse(np.mean(measure_rms_high), rms_high[start_idx+batch, i].cpu().numpy())
+                        chroma_error = mse(np.mean(measure_chroma, axis=1), mb_chroma[batch, i].cpu().numpy())
+                        rms_low_error = mse(np.mean(measure_rms_low), mb_rms_low[batch, i].cpu().numpy())
+                        rms_mid_error = mse(np.mean(measure_rms_mid), mb_rms_mid[batch, i].cpu().numpy())
+                        rms_high_error = mse(np.mean(measure_rms_high), mb_rms_high[batch, i].cpu().numpy())
                         
                         onsets_in_measure = np.sum((wav_onset_frames >= frame_start) & (wav_onset_frames < frame_end))
                         measure_duration_sec = (frame_end - frame_start) / (rate / hop_length)
-                        density_error = mse(onsets_in_measure / measure_duration_sec if measure_duration_sec > 0 else 0.0, density[start_idx+batch, i].cpu().numpy())
+                        density_error = mse(onsets_in_measure / measure_duration_sec if measure_duration_sec > 0 else 0.0, density[batch, i].cpu().numpy())
                         
-                        zcr_error = mse(np.mean(measure_zcr), zcr[start_idx+batch, i].cpu().numpy())
-                        mfcc_error = mse(np.mean(measure_mfcc, axis=1), mfcc[start_idx+batch, i].cpu().numpy())
+                        zcr_error = mse(np.mean(measure_zcr), mb_zcr[batch, i].cpu().numpy())
+                        mfcc_error = mse(np.mean(measure_mfcc, axis=1), mb_mfcc[batch, i].cpu().numpy())
                         
                         error += chroma_error + rms_low_error + rms_mid_error + rms_high_error + density_error + zcr_error + mfcc_error
             
