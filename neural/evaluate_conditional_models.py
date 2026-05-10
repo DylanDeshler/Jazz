@@ -289,8 +289,14 @@ styles = np.memmap('/home/ubuntu/Data/contrast_learntmep_instance_10s_style_val.
 meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_meta_val.bin', dtype=np.float32, mode='r', shape=(88303, 29))
 bpms = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_bpm_val.bin', dtype=np.float32, mode='r')
 
+# DSP Error: 10354.72, FAD: 46.39 | Scales: {'w_bpm': 3.9373842460434645, 'w_rms_low': 3.4393841207062614, 'w_rms_mid': 0.7827845665866684, 'w_rms_high': 1.0842041672977343, 'w_density': 3.618813544402218, 'w_zcr': 1.0507734375953, 'w_mfcc': 4.09447388787254, 'w_chroma': 3.4437712554227327, 'w_style': 1.839268747645621}
+# DSP Error: 9911.62, FAD: 47.15 | Scales: {'w_bpm': 2.9757548862211, 'w_rms_low': 1.6357210298917813, 'w_rms_mid': 1.1282261871766086, 'w_rms_high': 0.03202175277198516, 'w_density': 4.344732034109373, 'w_zcr': 0.25650236008780636, 'w_mfcc': 3.5936278524604393, 'w_chroma': 4.189428251806468, 'w_style': 0.022038777442222046}
+# DSP Error: 15889.04, FAD: 43.82 | Scales: {'w_bpm': 4.4264080009987, 'w_rms_low': 3.283656337130307, 'w_rms_mid': 3.707876645874035, 'w_rms_high': 2.4815314659351877, 'w_density': 1.1081407656234061, 'w_zcr': 1.0670885384460864, 'w_mfcc': 0.28568961916008273, 'w_chroma': 4.94783978080251, 'w_style': 2.754625245386409}
+# DSP Error: 10836.34, FAD: 46.19 | Scales: {'w_bpm': 3.710699914324043, 'w_rms_low': 3.2953789551401425, 'w_rms_mid': 1.9033044141510613, 'w_rms_high': 0.09824734544354286, 'w_density': 0.3520998684197113, 'w_zcr': 3.7219045152299524, 'w_mfcc': 4.4502983526041895, 'w_chroma': 4.81149841700109, 'w_style': 3.9142999037339976}
+# DSP Error: 11161.89, FAD: 44.40 | Scales: {'w_bpm': 3.710699914324043, 'w_rms_low': 4.028431549774051, 'w_rms_mid': 4.42472970788414, 'w_rms_high': 0.09824734544354286, 'w_density': 3.9796203268408687, 'w_zcr': 2.074415557615488, 'w_mfcc': 4.404573167810174, 'w_chroma': 4.81149841700109, 'w_style': 3.9142999037339976}
+
 @torch.no_grad()
-def run_optuna_experiments(batch_size, micro_batch_size, n_steps):
+def run_optuna_experiments(batch_size, micro_batch_size, n_steps, n_trials):
     assert batch_size % micro_batch_size == 0
     
     torch.manual_seed(0)
@@ -490,12 +496,12 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps):
         return np.mean(errors).item(), fad_score
     
     study = optuna.create_study(
-        study_name='cfg',
-        storage='sqlite:///cfg_optimization.db',
+        study_name=f'cfg_{batch_size}bs_{micro_batch_size}mbs_{n_steps}steps_{n_trials}trials',
+        storage=f'sqlite:///cfg_{batch_size}bs_{micro_batch_size}mbs_{n_steps}steps_{n_trials}trials_optimization.db',
         directions=['minimize', 'minimize'],
         load_if_exists=True
     )
-    study.optimize(lambda trial: objective(trial, batch_size, micro_batch_size, n_steps), n_trials=100)
+    study.optimize(lambda trial: objective(trial, batch_size, micro_batch_size, n_steps), n_trials=n_trials)
 
     best_trials = study.best_trials
     for t in best_trials:
@@ -608,6 +614,12 @@ if __name__ == '__main__':
         default=None,
         help="Batch size used for generation (defaults to batch_size)"
     )
+    parser.add_argument(
+        "--n_trials",
+        type=int,
+        default=100,
+        help="Number of optuna experiments to run (default: 100)"
+    )
     
     args = parser.parse_args()
     if args.micro_batch_size is None:
@@ -615,7 +627,7 @@ if __name__ == '__main__':
     
     # Route to the appropriate function
     if args.mode == "run_optuna_experiments":
-        run_optuna_experiments(args.batch_size, args.micro_batch_size, args.n_steps)
+        run_optuna_experiments(args.batch_size, args.micro_batch_size, args.n_steps, args.n_trials)
     elif args.mode == "run_eval":
         run_eval(args.batch_size, args.micro_batch_size, args.n_steps)
         
