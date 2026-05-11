@@ -1742,7 +1742,7 @@ class MetaConditionalModernDiTWrapper(nn.Module):
             }
         )
     
-    def generate(self, shape, net_kwargs=None, uncond_net_kwargs=None, n_steps=50, guidance=1.0, noise=None, memory_efficient=True):
+    def generate(self, shape, net_kwargs=None, uncond_net_kwargs=None, n_steps=50, guidance=1.0, noise=None, memory_efficient=True, rescale_phi=0):
         return self.sampler.sample(
             self.net, 
             shape, 
@@ -1751,7 +1751,8 @@ class MetaConditionalModernDiTWrapper(nn.Module):
             uncond_net_kwargs=uncond_net_kwargs, 
             guidance=guidance, 
             noise=noise, 
-            memory_efficient=memory_efficient
+            memory_efficient=memory_efficient,
+            rescale_phi=rescale_phi
         )
 
 def ModernDiT_large(**kwargs):
