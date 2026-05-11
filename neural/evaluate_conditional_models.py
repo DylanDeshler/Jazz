@@ -499,6 +499,7 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps, n_trials):
         y_mu, y_sigma = calculate_embd_statistics(np.concatenate(embs, axis=0))
         fad_score = calculate_frechet_distance(y_mu, y_sigma, real_mu, real_sigma)
 
+        print(style_errors)
         return np.mean(errors).item(), fad_score, np.mean(style_errors).item()
     
     study = optuna.create_study(
