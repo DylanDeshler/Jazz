@@ -217,9 +217,9 @@ def crossfade_chunks(chunks: list, overlap_samples: int) -> np.ndarray:
     return out
 
 @torch.no_grad()
-def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3, memory_efficient=False):
+def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3, memory_efficient=False, rescale_phi=0):
     with ctx:
-        y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise, memory_efficient=memory_efficient)
+        y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise, memory_efficient=memory_efficient, rescale_phi=rescale_phi)
         
     if isinstance(net_kwargs, list):
         bpm = net_kwargs[0]['bpm']
@@ -613,7 +613,8 @@ def run_eval(batch_size, micro_batch_size, n_steps):
             decoder_noise=decoder_noise, 
             method='median', 
             window_size=3,
-            memory_efficient=False
+            memory_efficient=False,
+            rescale_phi=0.7
         )
         
         sf.write(
