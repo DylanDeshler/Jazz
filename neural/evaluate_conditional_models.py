@@ -15,6 +15,7 @@ from contextlib import nullcontext
 import torch.nn.functional as F
 import optuna
 
+from contrast import Transformer as Contrast
 from dito import DiToV5 as Tokenizer
 from fad import MultiTaskFAD as FAD, BPMProbe
 from adapter import InvertibleAdapter as Adapter
@@ -268,6 +269,7 @@ vae_embed_dim = 16
 
 # Feature Extractors
 fad = load_model(os.path.join('FAD', 'ckpt.pt'), FAD)
+contrast = load_model(os.path.join('contrast_learntmep_instance_10s', 'ckpt.pt'), Contrast)
 
 # 4/4 with BPM in reasonable range
 measure_paths = glob.glob('/home/ubuntu/Data/measures/*')
@@ -317,9 +319,9 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps, n_trials):
     x = drop_to_multiple(x, 16383 * 5)
     
     with ctx:
-        emb = fad.forward_features(x)
+        fad_emb = fad.forward_features(x)
 
-    real_mu, real_sigma = calculate_embd_statistics(emb.cpu().detach().numpy())
+    real_mu, real_sigma = calculate_embd_statistics(fad_emb.cpu().detach().numpy())
     
     idxs = torch.randint(len(data) - n_chunks, (batch_size,))
     
@@ -352,7 +354,7 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps, n_trials):
         }
         
         cfg_guidances = list(scales.values())
-        errors, embs = [], []
+        errors, embs, style_errors = [], [], []
         for micro_batch in range(batch_size // micro_batch_size):
             start_idx = micro_batch * micro_batch_size
             end_idx = start_idx + micro_batch_size
@@ -481,9 +483,13 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps, n_trials):
                 
             with ctx:
                 emb = fad.forward_features(y)
+                style_emb = contrast(y, features_only=True)
             embs.append(emb.cpu().detach().numpy())
             
-            del y, emb, temp_mask, measure_list
+            sim = np.matmul(mb_style, style_emb.T)
+            style_errors.append(1 - (np.trace(sim) / mb_style.shape[0]))
+            
+            del y, emb, temp_mask, measure_list, style_emb
             del cfg_net_kwargs, uncond_net_kwargs, net_kwargs, unconditional_mask
             del mb_bpm, mb_rms_low, mb_rms_mid, mb_rms_high, mb_density, mb_zcr, mb_mfcc, mb_chroma, mb_style
             import gc
@@ -493,7 +499,7 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps, n_trials):
         y_mu, y_sigma = calculate_embd_statistics(np.concatenate(embs, axis=0))
         fad_score = calculate_frechet_distance(y_mu, y_sigma, real_mu, real_sigma)
 
-        return np.mean(errors).item(), fad_score
+        return np.mean(errors).item(), fad_score, np.mean(style_errors).item()
     
     study = optuna.create_study(
         study_name=f'cfg_{batch_size}bs_{micro_batch_size}mbs_{n_steps}steps_{n_trials}trials',
