@@ -486,6 +486,7 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps, n_trials):
                 style_emb = contrast(y, features_only=True)
             embs.append(emb.cpu().detach().numpy())
             
+            print(mb_style.shape, style_emb.shape)
             sim = np.matmul(mb_style.cpu().detach().numpy(), style_emb.cpu().detach().numpy().T)
             style_errors.append(1 - (np.trace(sim) / mb_style.shape[0]))
             
