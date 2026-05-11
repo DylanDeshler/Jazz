@@ -229,6 +229,7 @@ class FM:
         uncond_net_kwargs=None,
         guidance=1.0,
         memory_efficient=False,
+        rescale_phi=0.0,
     ):
         if net_kwargs is None:
             net_kwargs = {}
@@ -251,36 +252,55 @@ class FM:
                 # Parallel (Batched) Execution: Highest VRAM, fastest execution
                 n_passes = 1 + len(net_kwargs_list)
                 
-                # Repeat spatial/time inputs across the batch dimension
                 batched_x_t = torch.cat([x_t] * n_passes, dim=0)
                 batched_t = torch.cat([t] * n_passes, dim=0)
                 
-                # Use recursive helper to concatenate nested mask dicts and tensors
                 list_to_cat = [uncond_net_kwargs] + net_kwargs_list
                 combined_kwargs = self._concat_kwargs(list_to_cat, dim=0)
                 
-                # Single massive forward pass
                 combined_pred = net(batched_x_t, t=batched_t * self.timescale, **combined_kwargs)
                 preds = combined_pred.chunk(n_passes, dim=0)
                 
                 uncond_pred = preds[0]
                 cond_preds = preds[1:]
                 
-                # Compositional CFG formula
                 pred = uncond_pred.clone()
+                reference_pred = uncond_pred.clone() # Track unscaled base for rescaling
+                
                 for g, cp in zip(guidance_list, cond_preds):
-                    pred += g * (cp - uncond_pred)
+                    delta = cp - uncond_pred
+                    pred += g * delta
+                    reference_pred += delta # Unscaled (g=1.0) combination
                     
             else:
                 # Sequential Execution: Lowest VRAM, slower execution
                 uncond_pred = net(x_t, t=t * self.timescale, **uncond_net_kwargs)
                 pred = uncond_pred.clone()
+                reference_pred = uncond_pred.clone() # Track unscaled base for rescaling
                 
                 for kwargs, g in zip(net_kwargs_list, guidance_list):
                     if g == 0.0:
-                        continue # Skip conditional pass if weight is 0
+                        continue 
                     cp = net(x_t, t=t * self.timescale, **kwargs)
-                    pred += g * (cp - uncond_pred)
+                    delta = cp - uncond_pred
+                    pred += g * delta
+                    reference_pred += delta # Unscaled (g=1.0) combination
+            
+            # --- APPLY GUIDANCE RESCALING ---
+            if rescale_phi > 0.0:
+                # Calculate standard deviation across all non-batch dimensions
+                dims_to_reduce = tuple(range(1, pred.ndim))
+                
+                std_cfg = pred.std(dim=dims_to_reduce, keepdim=True)
+                std_ref = reference_pred.std(dim=dims_to_reduce, keepdim=True)
+                
+                # Scale the CFG prediction to match the variance of the unscaled reference
+                factor = std_ref / (std_cfg + 1e-8)
+                pred_rescaled = pred * factor
+                
+                # Blend based on phi
+                pred = rescale_phi * pred_rescaled + (1.0 - rescale_phi) * pred
+                
         else:
             # Standard single pass (no CFG)
             pred = net(x_t, t=t * self.timescale, **net_kwargs_list[0])
