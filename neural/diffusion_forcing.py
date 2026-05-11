@@ -230,30 +230,61 @@ class FM:
         guidance=1.0,
         memory_efficient=False,
         rescale_phi=0.0,
+        cfg_mode="independent",
     ):
         if net_kwargs is None:
             net_kwargs = {}
             
-        # Normalize inputs to lists to support Compositional CFG
+        # Normalize inputs to lists
         if isinstance(net_kwargs, dict):
             net_kwargs_list = [net_kwargs]
             guidance_list = [guidance]
         else:
             net_kwargs_list = net_kwargs
-            guidance_list = guidance
-            
-        guidance_list = [1.0 + (g - 1.0) * (0.5 * (1.0 - math.cos(math.pi * t[0, 0] / self.timescale))) for g in guidance_list]
+            guidance_list = guidance if isinstance(guidance, list) else [guidance] * len(net_kwargs_list)
 
-        # Check if CFG is actually active
         is_cfg = any(g != 1.0 for g in guidance_list) or len(net_kwargs_list) > 1
 
-        if is_cfg:
-            assert uncond_net_kwargs is not None, "uncond_net_kwargs must be provided when using guidance."
+        if not is_cfg:
+            # Standard single pass (no CFG)
+            return net(x_t, t=t * self.timescale, **net_kwargs_list[0])
+            
+        assert uncond_net_kwargs is not None, "uncond_net_kwargs must be provided when using guidance."
+
+        # ==========================================
+        # MODE 1: JOINT CFG (Single combined pass)
+        # ==========================================
+        if cfg_mode == "joint":
+            # 1. Merge all isolated conditions into one master kwargs dictionary
+            joint_kwargs = {}
+            for kw in net_kwargs_list:
+                joint_kwargs.update(kw)
+                
+            # 2. Pick a single guidance scale (defaults to the first one in the list)
+            g = guidance_list[0]
             
             if not memory_efficient:
-                # Parallel (Batched) Execution: Highest VRAM, fastest execution
-                n_passes = 1 + len(net_kwargs_list)
+                batched_x_t = torch.cat([x_t] * 2, dim=0)
+                batched_t = torch.cat([t] * 2, dim=0)
                 
+                combined_kwargs = self._concat_kwargs([uncond_net_kwargs, joint_kwargs], dim=0)
+                combined_pred = net(batched_x_t, t=batched_t * self.timescale, **combined_kwargs)
+                
+                uncond_pred, joint_pred = combined_pred.chunk(2, dim=0)
+            else:
+                uncond_pred = net(x_t, t=t * self.timescale, **uncond_net_kwargs)
+                joint_pred = net(x_t, t=t * self.timescale, **joint_kwargs)
+                
+            # Standard CFG Formula
+            pred = uncond_pred + g * (joint_pred - uncond_pred)
+            reference_pred = joint_pred # The reference is just the unscaled joint prediction
+            
+        # ==========================================
+        # MODE 2: INDEPENDENT CFG (Compositional)
+        # ==========================================
+        elif cfg_mode == "independent":
+            if not memory_efficient:
+                n_passes = 1 + len(net_kwargs_list)
                 batched_x_t = torch.cat([x_t] * n_passes, dim=0)
                 batched_t = torch.cat([t] * n_passes, dim=0)
                 
@@ -267,18 +298,16 @@ class FM:
                 cond_preds = preds[1:]
                 
                 pred = uncond_pred.clone()
-                reference_pred = uncond_pred.clone() # Track unscaled base for rescaling
+                reference_pred = uncond_pred.clone() 
                 
                 for g, cp in zip(guidance_list, cond_preds):
                     delta = cp - uncond_pred
                     pred += g * delta
-                    reference_pred += delta # Unscaled (g=1.0) combination
-                    
+                    reference_pred += delta 
             else:
-                # Sequential Execution: Lowest VRAM, slower execution
                 uncond_pred = net(x_t, t=t * self.timescale, **uncond_net_kwargs)
                 pred = uncond_pred.clone()
-                reference_pred = uncond_pred.clone() # Track unscaled base for rescaling
+                reference_pred = uncond_pred.clone()
                 
                 for kwargs, g in zip(net_kwargs_list, guidance_list):
                     if g == 0.0:
@@ -286,26 +315,23 @@ class FM:
                     cp = net(x_t, t=t * self.timescale, **kwargs)
                     delta = cp - uncond_pred
                     pred += g * delta
-                    reference_pred += delta # Unscaled (g=1.0) combination
-            
-            # --- APPLY GUIDANCE RESCALING ---
-            if rescale_phi > 0.0:
-                # Calculate standard deviation across all non-batch dimensions
-                dims_to_reduce = tuple(range(1, pred.ndim))
-                
-                std_cfg = pred.std(dim=dims_to_reduce, keepdim=True)
-                std_ref = reference_pred.std(dim=dims_to_reduce, keepdim=True)
-                
-                # Scale the CFG prediction to match the variance of the unscaled reference
-                factor = std_ref / (std_cfg + 1e-8)
-                pred_rescaled = pred * factor
-                
-                # Blend based on phi
-                pred = rescale_phi * pred_rescaled + (1.0 - rescale_phi) * pred
-                
+                    reference_pred += delta 
         else:
-            # Standard single pass (no CFG)
-            pred = net(x_t, t=t * self.timescale, **net_kwargs_list[0])
+            raise ValueError(f"Unknown cfg_mode: {cfg_mode}")
+
+        # ==========================================
+        # GUIDANCE RESCALING (Applies to both modes)
+        # ==========================================
+        if rescale_phi > 0.0:
+            dims_to_reduce = tuple(range(1, pred.ndim))
+            
+            std_cfg = pred.std(dim=dims_to_reduce, keepdim=True)
+            std_ref = reference_pred.std(dim=dims_to_reduce, keepdim=True)
+            
+            factor = std_ref / (std_cfg + 1e-8)
+            pred_rescaled = pred * factor
+            
+            pred = rescale_phi * pred_rescaled + (1.0 - rescale_phi) * pred
             
         return pred
     
@@ -333,7 +359,8 @@ class FMEulerSampler:
         guidance=1.0,
         noise=None,
         memory_efficient=False,
-        rescale_phi=0
+        rescale_phi=0,
+        cfg_mode="independent"
     ):
         """
         Implements simple uniform noise sampling for bidirectional generation
@@ -354,7 +381,8 @@ class FMEulerSampler:
                     uncond_net_kwargs=uncond_net_kwargs,
                     guidance=guidance,
                     memory_efficient=memory_efficient,
-                    rescale_phi=rescale_phi
+                    rescale_phi=rescale_phi,
+                    cfg_mode=cfg_mode
                 )
                 x_t = x_t + neg_v * (t_steps[i] - t_steps[i + 1])
         return x_t
@@ -1746,7 +1774,7 @@ class MetaConditionalModernDiTWrapper(nn.Module):
             }
         )
     
-    def generate(self, shape, net_kwargs=None, uncond_net_kwargs=None, n_steps=50, guidance=1.0, noise=None, memory_efficient=True, rescale_phi=0):
+    def generate(self, shape, net_kwargs=None, uncond_net_kwargs=None, n_steps=50, guidance=1.0, noise=None, memory_efficient=True, rescale_phi=0, cfg_mode="independent"):
         return self.sampler.sample(
             self.net, 
             shape, 
@@ -1756,7 +1784,8 @@ class MetaConditionalModernDiTWrapper(nn.Module):
             guidance=guidance, 
             noise=noise, 
             memory_efficient=memory_efficient,
-            rescale_phi=rescale_phi
+            rescale_phi=rescale_phi,
+            cfg_mode=cfg_mode
         )
 
 def ModernDiT_large(**kwargs):

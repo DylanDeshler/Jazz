@@ -217,9 +217,9 @@ def crossfade_chunks(chunks: list, overlap_samples: int) -> np.ndarray:
     return out
 
 @torch.no_grad()
-def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3, memory_efficient=False, rescale_phi=0):
+def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode="independent"):
     with ctx:
-        y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise, memory_efficient=memory_efficient, rescale_phi=rescale_phi)
+        y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise, memory_efficient=memory_efficient, rescale_phi=rescale_phi, cfg_mode=cfg_mode)
         
     if isinstance(net_kwargs, list):
         bpm = net_kwargs[0]['bpm']
@@ -554,8 +554,9 @@ def run_eval(batch_size, micro_batch_size, n_steps):
     
     scales = {'w_bpm': 1.0851264588839231, 'w_rms_low': 0.659259594828685, 'w_rms_mid': 3.448296776845229, 'w_rms_high': 0.4130761136569244, 'w_density': 4.437366136337984, 'w_zcr': 4.235012657009647, 'w_mfcc': 2.8912681805245666, 'w_chroma': 4.489133559225099, 'w_style': 1.3087819574454755}
     cfg_guidances = list(scales.values())
-    cfg_guidances = [2, 0.5, 1, 0.5, 2, 0.5, 2, 3, 5]
+    # cfg_guidances = [2, 0.5, 1, 0.5, 2, 0.5, 2, 3, 5]
     # cfg_guidances = [0, 0, 0, 0, 0, 0, 0, 0, 3]
+    cfg_guidances = [3]
     embs = []
     for micro_batch in tqdm(range(batch_size // micro_batch_size)):
         start_idx = micro_batch * micro_batch_size
@@ -614,7 +615,8 @@ def run_eval(batch_size, micro_batch_size, n_steps):
             method='median', 
             window_size=3,
             memory_efficient=False,
-            rescale_phi=0.7
+            rescale_phi=0.7,
+            cfg_mode="joint"
         )
         
         sf.write(
