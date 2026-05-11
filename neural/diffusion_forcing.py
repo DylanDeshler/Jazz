@@ -331,6 +331,7 @@ class FMEulerSampler:
         guidance=1.0,
         noise=None,
         memory_efficient=False,
+        rescale_phi=0
     ):
         """
         Implements simple uniform noise sampling for bidirectional generation
@@ -351,6 +352,7 @@ class FMEulerSampler:
                     uncond_net_kwargs=uncond_net_kwargs,
                     guidance=guidance,
                     memory_efficient=memory_efficient,
+                    rescale_phi=rescale_phi
                 )
                 x_t = x_t + neg_v * (t_steps[i] - t_steps[i + 1])
         return x_t
