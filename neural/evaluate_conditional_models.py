@@ -606,6 +606,13 @@ def run_eval(batch_size, micro_batch_size, n_steps):
             memory_efficient=False
         )
         
+        sf.write(
+            file=f'{micro_batch}.wav', 
+            data=np.concatenate(y[0], axis=0).flatten(), 
+            samplerate=rate,
+            subtype='PCM_16'
+        )
+        
         y = torch.from_numpy(np.concatenate([np.concatenate(y_, axis=0) for y_ in y], axis=0).astype(np.float32)).to(device, non_blocking=True)
         y = drop_to_multiple(y, 16383 * 5)
             
@@ -659,7 +666,6 @@ if __name__ == '__main__':
     if args.micro_batch_size is None:
         args.micro_batch_size = args.batch_size
     
-    # Route to the appropriate function
     if args.mode == "run_optuna_experiments":
         run_optuna_experiments(args.batch_size, args.micro_batch_size, args.n_steps, args.n_trials)
     elif args.mode == "run_eval":
