@@ -242,7 +242,7 @@ class FM:
             net_kwargs_list = net_kwargs
             guidance_list = guidance
             
-        guidance_list = [1.0 + (g - 1.0) * (0.5 * (1.0 - math.cos(math.pi * t / self.timescale))) for g in guidance_list]
+        guidance_list = [1.0 + (g - 1.0) * (0.5 * (1.0 - math.cos(math.pi * t[0, 0] / self.timescale))) for g in guidance_list]
 
         # Check if CFG is actually active
         is_cfg = any(g != 1.0 for g in guidance_list) or len(net_kwargs_list) > 1
