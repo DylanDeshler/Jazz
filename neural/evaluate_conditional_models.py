@@ -507,82 +507,116 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps, n_trials):
     for t in best_trials:
         print(f"DSP Error: {t.values[0]:.2f}, FAD: {t.values[1]:.2f} | Scales: {t.params}")
 
-def run_eval(batch_size, n_steps):
+@torch.no_grad()
+def run_eval(batch_size, micro_batch_size, n_steps):
     torch.manual_seed(0)
     np.random.seed(0)
     
-    idxs = np.random.choice(np.arange(len(measure_paths)), size=batch_size, replace=False)
+    x = []
+    path_idxs = np.random.choice(np.arange(len(measure_paths)), size=batch_size, replace=False)
+    for i in path_idxs:
+        wav, _ = librosa.load(measure_paths[i], sr=None)
+        start = np.random.randint(len(wav) - n_chunks * rate)
+        wav = wav[start:start + n_chunks * rate]
+        x.append(wav)
     
-    real_embs = []
-    y6_embs = []
-    with torch.no_grad():
-        for idx in tqdm(idxs):
-            measure_path = measure_paths[idx]
-            wav, _ = librosa.load(measure_path, sr=None)
-            wav = wav[:batch_size * n_chunks * rate]
-            x_raw = wav
-            
-            gen_shape = (batch_size, n_chunks, spatial_window, vae_embed_dim)
-            gen_noise = torch.randn(gen_shape).to(device)
-            decoder_noise = torch.randn(batch_size * n_chunks, 1, encoder_ratios * (max_seq_len - 1)).to(device)
-            
-            idxs = np.random.randint(len(styles) - n_chunks, size=(batch_size,))
-            style = torch.from_numpy(np.stack([styles[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-            chroma = torch.from_numpy(np.stack([chroma_rms[idx:idx+n_chunks, :12] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-            rms = torch.from_numpy(np.stack([chroma_rms[idx:idx+n_chunks, -1] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-            bpm = torch.from_numpy(np.stack([meta[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-            
-            unconditional_mask = {
-                'bpm': torch.ones(*bpm.shape, 1).to(device).bool(),
-                'rms': torch.ones(*rms.shape, 1).to(device).bool(),
-                'chroma': torch.ones(*chroma.shape[:-1], 1).to(device).bool(),
-                'style': torch.ones(*style.shape[:-1], 1).to(device).bool(),
-            }
-            net_kwargs = {
-                'bpm': bpm,
-                'rms': rms,
-                'chroma': chroma,
-                'style': style,
-            }
-            
-            cfg_net_kwargs = []
-            for k, v in unconditional_mask.items():
-                temp_mask = unconditional_mask.copy()
-                temp_mask[k] = ~v
-                cfg_net_kwargs.append(net_kwargs | {'unconditional_mask': temp_mask})
+    x = torch.from_numpy(np.stack(x).astype(np.float32)).to(device, non_blocking=True)
+    x = drop_to_multiple(x, 16383 * 5)
+    
+    with ctx:
+        emb = fad.forward_features(x)
+
+    real_mu, real_sigma = calculate_embd_statistics(emb.cpu().detach().numpy())
+    
+    idxs = torch.randint(len(data) - n_chunks, (batch_size,))
+    
+    style = torch.from_numpy(np.stack([styles[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    chroma = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, :12] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    rms_low = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 12] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    rms_mid = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 13] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    rms_high = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 14] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    density = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 15] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    zcr = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 16] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    mfcc = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 17:] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    bpm = torch.from_numpy(np.stack([bpms[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    
+    gen_shape = (micro_batch_size, n_chunks, spatial_window, vae_embed_dim)
+    gen_noise = torch.randn(gen_shape).to(device)
+    decoder_noise = torch.randn(micro_batch_size * n_chunks, 1, encoder_ratios * (max_seq_len - 1)).to(device)
+    
+    scales = {'w_bpm': 1.0851264588839231, 'w_rms_low': 0.659259594828685, 'w_rms_mid': 3.448296776845229, 'w_rms_high': 0.4130761136569244, 'w_density': 4.437366136337984, 'w_zcr': 4.235012657009647, 'w_mfcc': 2.8912681805245666, 'w_chroma': 4.489133559225099, 'w_style': 1.3087819574454755}
+    cfg_guidances = list(scales.values())
+    embs = []
+    for micro_batch in range(batch_size // micro_batch_size):
+        start_idx = micro_batch * micro_batch_size
+        end_idx = start_idx + micro_batch_size
+        
+        mb_bpm = bpm[start_idx:end_idx]
+        mb_rms_low = rms_low[start_idx:end_idx]
+        mb_rms_mid = rms_mid[start_idx:end_idx]
+        mb_rms_high = rms_high[start_idx:end_idx]
+        mb_density = density[start_idx:end_idx]
+        mb_zcr = zcr[start_idx:end_idx]
+        mb_mfcc = mfcc[start_idx:end_idx]
+        mb_chroma = chroma[start_idx:end_idx]
+        mb_style = style[start_idx:end_idx]
+
+        net_kwargs = {
+            'bpm': mb_bpm,
+            'rms_low': mb_rms_low,
+            'rms_mid': mb_rms_mid,
+            'rms_high': mb_rms_high,
+            'density': mb_density,
+            'zcr': mb_zcr,
+            'mfcc': mb_mfcc,
+            'chroma': mb_chroma,
+            'style': mb_style,
+        }
+        
+        unconditional_mask = {
+            'bpm': torch.ones(*mb_bpm.shape, 1, device=device, dtype=torch.bool),
+            'rms_low': torch.ones(*mb_rms_low.shape, 1, device=device, dtype=torch.bool),
+            'rms_mid': torch.ones(*mb_rms_mid.shape, 1, device=device, dtype=torch.bool),
+            'rms_high': torch.ones(*mb_rms_high.shape, 1, device=device, dtype=torch.bool),
+            'density': torch.ones(*mb_density.shape, 1, device=device, dtype=torch.bool),
+            'zcr': torch.ones(*mb_zcr.shape, 1, device=device, dtype=torch.bool),
+            'mfcc': torch.ones(*mb_mfcc.shape[:-1], 1, device=device, dtype=torch.bool),
+            'chroma': torch.ones(*mb_chroma.shape[:-1], 1, device=device, dtype=torch.bool),
+            'style': torch.ones(*mb_style.shape[:-1], 1, device=device, dtype=torch.bool),
+        }
+        
+        cfg_net_kwargs = []
+        for k, v in unconditional_mask.items():
+            temp_mask = unconditional_mask.copy()
+            temp_mask[k] = ~v
+            cfg_net_kwargs.append(net_kwargs | {'unconditional_mask': temp_mask})
             
             uncond_net_kwargs = net_kwargs | {'unconditional_mask': unconditional_mask}
             
-            cfg_guidances = [2, 2, 3, 7]
-            y_cfg = predict_measures(
-                gen_shape, 
-                cfg_net_kwargs, 
-                uncond_net_kwargs, 
-                n_steps, 
-                guidance=cfg_guidances, 
-                gen_noise=gen_noise, 
-                decoder_noise=decoder_noise, 
-                method='median', 
-                window_size=3
-            )
+        y = predict_measures(
+            gen_shape, 
+            cfg_net_kwargs, 
+            uncond_net_kwargs, 
+            n_steps, 
+            guidance=cfg_guidances, 
+            gen_noise=gen_noise, 
+            decoder_noise=decoder_noise, 
+            method='median', 
+            window_size=3,
+            memory_efficient=False
+        )
+        
+        y = torch.from_numpy(np.concatenate([np.concatenate(y_, axis=0) for y_ in y], axis=0).astype(np.float32)).to(device, non_blocking=True)
+        y = drop_to_multiple(y, 16383 * 5)
             
-            x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
-            
-            x = drop_to_multiple(x, 16383 * 5)
-            y6 = drop_to_multiple(y6, 16383 * 5)
-            
-            with ctx:
-                real_emb = fad.forward_features(x)
-                y6_emb = fad.forward_features(y6)
-            
-            real_embs.append(real_emb.cpu().detach().numpy())
-            y6_embs.append(y6_emb.cpu().detach().numpy())
+        with ctx:
+            emb = fad.forward_features(y)
+        embs.append(emb.cpu().detach().numpy())
 
-    real_mu, real_sigma = calculate_embd_statistics(np.concatenate(real_embs, axis=0))
-    y6_mu, y6_sigma = calculate_embd_statistics(np.concatenate(y6_embs, axis=0))
-    y6_fad = calculate_frechet_distance(y6_mu, y6_sigma, real_mu, real_sigma)
+    y_mu, y_sigma = calculate_embd_statistics(np.concatenate(embs, axis=0))
+    fad_score = calculate_frechet_distance(y_mu, y_sigma, real_mu, real_sigma)
 
-    print('Style Measure (Median BPM) -> Real Samples FAD: ', y6_fad)
+    print('FAD: ', fad_score)
 
 if __name__ == '__main__':
     import sys
