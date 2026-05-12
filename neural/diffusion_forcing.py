@@ -179,7 +179,10 @@ class FM:
             net_kwargs = {}
         
         if t is None:
+            # uniform
             t = torch.rand(B, T, device=x.device)
+            # logit normal
+            t = torch.sigmoid(t)
             repeat_t = t.unsqueeze(2).repeat(1, 1, N)
         x_t, noise = self.add_noise(x, repeat_t)
         
@@ -1917,12 +1920,19 @@ class MetaConditionalModernDiTV2(nn.Module):
             zcr = signals['zcr']
             
             if unconditional_mask is not None:
-                style = torch.where(unconditional_mask['style'], null_tokens['style'], style)
-                chroma = torch.where(unconditional_mask['chroma'], null_tokens['chroma'], chroma)
-                bpm = torch.where(unconditional_mask['bpm'], null_tokens['bpm'], bpm)
-                rms = torch.where(unconditional_mask['rms'], null_tokens['rms'], rms)
-                density = torch.where(unconditional_mask['density'], null_tokens['density'], density)
-                zcr = torch.where(unconditional_mask['zcr'], null_tokens['zcr'], zcr)
+                def apply_uncond_mask(mask_1d, null_t, target_t):
+                    # Safely align dimensions for torch.where
+                    mask = mask_1d
+                    while mask.ndim < target_t.ndim:
+                        mask = mask.unsqueeze(-1)
+                    return torch.where(mask, null_t, target_t)
+                
+                style = apply_uncond_mask(torch.where(unconditional_mask['style'], null_tokens['style'], style))
+                chroma = apply_uncond_mask(torch.where(unconditional_mask['chroma'], null_tokens['chroma'], chroma))
+                bpm = apply_uncond_mask(torch.where(unconditional_mask['bpm'], null_tokens['bpm'], bpm))
+                rms = apply_uncond_mask(torch.where(unconditional_mask['rms'], null_tokens['rms'], rms))
+                density = apply_uncond_mask(torch.where(unconditional_mask['density'], null_tokens['density'], density))
+                zcr = apply_uncond_mask(torch.where(unconditional_mask['zcr'], null_tokens['zcr'], zcr))
         
         c = torch.cat([chroma, rms, density, zcr], dim=-1)
         c = c.unsqueeze(2).repeat(1, 1, N, 1)
