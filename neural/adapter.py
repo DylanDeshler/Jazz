@@ -329,6 +329,25 @@ class SequenceDecoder(nn.Module):
                 
         self.initialize_weights()
     
+    def create_optimizer_groups(self, weight_decay=1e-2, lr=1e-4):
+        decay = []
+        no_decay = []
+        
+        for name, param in self.named_parameters():
+            if not param.requires_grad:
+                continue
+                
+            if param.ndim < 2 or 'embed' in name or 'measure_embedder' in name:
+                no_decay.append(param)
+            else:
+                decay.append(param)
+                
+        optim_groups = [
+            {"params": decay, "weight_decay": weight_decay, "lr": lr},
+            {"params": no_decay, "weight_decay": 0.0, "lr": lr},
+        ]
+        return optim_groups
+    
     def initialize_weights(self):
         self.apply(self._init_weights)
         # zero out classifier weights
