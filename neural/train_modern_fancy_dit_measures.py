@@ -433,7 +433,7 @@ running_mfu = -1.0
 ema = EMAModel(model)
 
 # optimizer
-optimizer = torch.optim.AdamW(model.create_optimizer_groups(weight_decay=weight_decay, lr=learning_rate), betas=(beta1, beta2))
+optimizer = torch.optim.AdamW(model.net.create_optimizer_groups(weight_decay=weight_decay, lr=learning_rate), betas=(beta1, beta2))
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
 checkpoint = None # free up memory
