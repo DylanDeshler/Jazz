@@ -1864,7 +1864,8 @@ class MetaConditionalModernDiTV2(nn.Module):
         self.final_layer_scale_shift_table = nn.Parameter(
             torch.randn(2, hidden_size) / hidden_size ** 0.5,
         )
-        self.fc = nn.Linear(hidden_size, in_channels * patch_size, bias=True)
+        self.fc = nn.Linear(hidden_size, in_channels * patch_size, bias=False)
+        self.bias = nn.Parameter(torch.zeros(in_channels * patch_size))
         
         self.initialize_weights()
         self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
@@ -2000,7 +2001,7 @@ class MetaConditionalModernDiTV2(nn.Module):
         )
         x = rearrange(x, 'b (t n) c -> b t n c', t=T, n=N // self.patch_size)
         x = modulate(self.norm(x), shift.expand(-1, -1, N // self.patch_size, -1), scale.expand(-1, -1, N // self.patch_size, -1))
-        x = self.fc(x)
+        x = self.fc(x) + self.bias
         x = rearrange(x, 'b t n (p c) -> b t (n p) c', p=self.patch_size, c=C)
         
         return x
