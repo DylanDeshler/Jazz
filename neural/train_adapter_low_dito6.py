@@ -82,7 +82,7 @@ backend = 'gloo' # 'nccl', 'gloo', etc.
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
-# torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.benchmark = True
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 # exec(open('configurator.py').read()) # overrides from command line or config file
@@ -323,189 +323,53 @@ def slice_random_measure(beat_path):
     
     return frame_start, frame_end
 
-from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
+from concurrent.futures import ThreadPoolExecutor
 
-class JazzDataset(Dataset):
-    def __init__(self, indices):
-        self.indices = indices
-
-    def __len__(self):
-        return len(self.indices)
-
-    def __getitem__(self, idx):
-        global_idx = self.indices[idx]
-        path = paths[global_idx]
+def fetch_single_sample(idx):
+    beat_path = os.path.join('/home/ubuntu/Data/beats', os.path.basename(paths[idx]))
+    
+    tries = 0
+    frame_start, frame_end = slice_random_measure(beat_path)
+    
+    while frame_end - frame_start >= max_seq_len * encoder_ratios:
+        frame_start, frame_end = slice_random_measure(beat_path)
+        tries += 1
         
-        tries = 0
-        frame_start, frame_end = slice_random_measure(path)
-        while frame_end - frame_start >= max_seq_len * encoder_ratios:
-            frame_start, frame_end = slice_random_measure(path)
-            tries += 1
-            if tries > 5:
-                frame_end = frame_start + math.floor(encoder_ratios * max_seq_len) - 100
-                break
-                
-        # Read only the required chunk
-        wav, _ = sf.read(path, start=frame_start, frames=frame_end - frame_start, dtype='float32')
-        return wav
+        if tries > 5:
+            frame_end = frame_start + math.floor(encoder_ratios * max_seq_len) - 100
+            break
+    
+    wav, _ = sf.read(paths[idx], start=frame_start, frames=frame_end - frame_start, dtype='float32')
+    return wav
 
-def collate_fn(batch):
-    lengths = [len(x) for x in batch]
+executor = ThreadPoolExecutor(max_workers=16)
+
+def get_batch(split='train', batch_size=batch_size):
+    if split == 'train':
+        idxs = np.random.choice(train_idx, batch_size, p=train_durations).tolist()
+    else:
+        idxs = np.random.choice(test_idx, batch_size, p=test_durations).tolist()
+    
+    x = list(executor.map(
+        lambda idx: fetch_single_sample(idx), 
+        idxs
+    ))
+    
+    lengths = [len(x_) for x_ in x]
     max_len = min(max(lengths), encoder_ratios * (max_seq_len - 1))
     max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
 
     indices = torch.arange(max_len).unsqueeze(0)
-    lengths_tensor = torch.tensor(lengths).unsqueeze(1)
-    sample_mask = (indices < lengths_tensor)
+    lengths = torch.from_numpy(np.asarray(lengths)).unsqueeze(1)
+    sample_mask = (indices < lengths).to(device)
 
-    indices_latent = torch.arange(max_len // encoder_ratios).unsqueeze(0)
-    lengths_latent = (lengths_tensor + encoder_ratios - 1) // encoder_ratios
-    latent_mask = (indices_latent < lengths_latent)
+    indices = torch.arange(max_len // encoder_ratios).unsqueeze(0)
+    lengths = (lengths + encoder_ratios - 1) // encoder_ratios
+    latent_mask = (indices < lengths).to(device)
     
-    # Pad and stack
-    x_padded = np.stack([np.pad(x[:max_len], (0, max_len - len(x[:max_len]))) for x in batch], axis=0)
-    x = torch.from_numpy(x_padded.astype(np.float32)).unsqueeze(1)
+    x = torch.from_numpy(np.stack([np.pad(x_[:max_len], (0, max_len - len(x_[:max_len]))) for x_ in x], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
     
     return x, latent_mask, sample_mask
-
-train_dataset = JazzDataset(train_idx)
-train_sampler = WeightedRandomSampler(weights=train_durations, num_samples=len(train_idx), replacement=True)
-
-val_dataset = JazzDataset(test_idx)
-val_sampler = WeightedRandomSampler(weights=test_durations, num_samples=len(test_idx), replacement=True)
-
-def worker_init_fn(worker_id):
-    # Completely disable multithreading inside the dataloader processes
-    os.environ['OPENBLAS_NUM_THREADS'] = '1'
-    os.environ['NUMEXPR_NUM_THREADS'] = '1'
-    os.environ['OMP_NUM_THREADS'] = '1'
-    os.environ['MKL_NUM_THREADS'] = '1'
-    
-    # Ensure each worker has a unique NumPy seed, otherwise they might 
-    # generate the same "random" augmentations/slices
-    np.random.seed(np.random.get_state()[1][0] + worker_id)
-
-train_loader = DataLoader(
-    train_dataset, 
-    batch_size=batch_size, 
-    sampler=train_sampler, 
-    num_workers=16,
-    collate_fn=collate_fn,
-    pin_memory=True,
-    drop_last=True,
-    worker_init_fn=worker_init_fn,
-    prefetch_factor=10
-)
-
-val_loader = DataLoader(
-    val_dataset, 
-    batch_size=batch_size, 
-    sampler=val_sampler, 
-    num_workers=16,
-    collate_fn=collate_fn,
-    pin_memory=True,
-    drop_last=True,
-    worker_init_fn=worker_init_fn,
-    prefetch_factor=10
-)
-
-def get_infinite_batches(dataloader):
-    while True:
-        for batch in dataloader:
-            yield batch
-
-train_iterator = iter(get_infinite_batches(train_loader))
-val_iterator = iter(get_infinite_batches(val_loader))
-
-# from concurrent.futures import ThreadPoolExecutor
-
-# def fetch_single_sample(idx):
-#     beat_path = os.path.join('/home/ubuntu/Data/beats', os.path.basename(paths[idx]))
-    
-#     tries = 0
-#     frame_start, frame_end = slice_random_measure(beat_path)
-    
-#     # Calculate the frames BEFORE loading the audio
-#     while frame_end - frame_start >= max_seq_len * encoder_ratios:
-#         frame_start, frame_end = slice_random_measure(beat_path)
-#         tries += 1
-        
-#         if tries > 5:
-#             frame_end = frame_start + math.floor(encoder_ratios * max_seq_len) - 100
-#             break
-    
-#     # Read ONLY the required frames directly from disk
-#     wav, _ = sf.read(paths[idx], start=frame_start, frames=frame_end - frame_start, dtype='float32')
-#     return wav
-
-# executor = ThreadPoolExecutor(max_workers=16)
-
-# def get_batch(split='train', batch_size=batch_size):
-#     if split == 'train':
-#         idxs = np.random.choice(train_idx, batch_size, p=train_durations).tolist()
-#     else:
-#         idxs = np.random.choice(test_idx, batch_size, p=test_durations).tolist()
-    
-#     x = list(executor.map(
-#         lambda idx: fetch_single_sample(idx), 
-#         idxs
-#     ))
-    
-#     lengths = [len(x_) for x_ in x]
-#     max_len = min(max(lengths), encoder_ratios * (max_seq_len - 1))
-#     max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
-
-#     indices = torch.arange(max_len).unsqueeze(0)
-#     lengths = torch.from_numpy(np.asarray(lengths)).unsqueeze(1)
-#     sample_mask = (indices < lengths).to(device)
-
-#     indices = torch.arange(max_len // encoder_ratios).unsqueeze(0)
-#     lengths = (lengths + encoder_ratios - 1) // encoder_ratios
-#     latent_mask = (indices < lengths).to(device)
-    
-#     x = torch.from_numpy(np.stack([np.pad(x_[:max_len], (0, max_len - len(x_[:max_len]))) for x_ in x], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-    
-#     return x, latent_mask, sample_mask
-
-# def get_batch(split='train', batch_size=batch_size):
-#     if split == 'train':
-#         idxs = np.random.choice(train_idx, batch_size, p=train_durations).tolist()
-#     else:
-#         idxs = np.random.choice(test_idx, batch_size, p=test_durations).tolist()
-    
-#     x = []
-#     for idx in idxs:
-#         # wav = wavs[idx]
-#         wav = librosa.load(paths[idx], sr=None)[0]
-#         beat_path = os.path.join('/home/ubuntu/Data/beats', os.path.basename(paths[idx]))
-        
-#         tries = 0
-#         frame_start, frame_end = slice_random_measure(beat_path)
-#         while frame_end - frame_end >= max_seq_len * encoder_ratios:
-#             frame_start, frame_end = slice_random_measure(beat_path)
-#             tries += 1
-            
-#             if tries > 5:
-#                 frame_end = frame_start + math.floor(encoder_ratios * max_seq_len) - 100
-#                 break
-        
-#         x.append(wav[frame_start:frame_end])
-    
-#     lengths = [len(x_) for x_ in x]
-#     max_len = min(max(lengths), encoder_ratios * (max_seq_len - 1))
-#     max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
-
-#     indices = torch.arange(max_len).unsqueeze(0)
-#     lengths = torch.from_numpy(np.asarray(lengths)).unsqueeze(1)
-#     sample_mask = (indices < lengths).to(device)
-
-#     indices = torch.arange(max_len // encoder_ratios).unsqueeze(0)
-#     lengths = (lengths + encoder_ratios - 1) // encoder_ratios
-#     latent_mask = (indices < lengths).to(device)
-    
-#     x = torch.from_numpy(np.stack([np.pad(x_[:max_len], (0, max_len - len(x_[:max_len]))) for x_ in x], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
-    
-#     return x, latent_mask, sample_mask
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
@@ -576,14 +440,7 @@ def estimate_loss():
     for split in ['train', 'val']:
         losses = torch.zeros(eval_iters)
         for k in tqdm(range(eval_iters)):
-            # X, latent_mask, sample_mask = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
-            if split == 'train':
-                X, latent_mask, sample_mask = next(train_iterator)
-            else:
-                X, latent_mask, sample_mask = next(val_iterator)
-            X = X.to(device, non_blocking=True)
-            latent_mask = latent_mask.to(device, non_blocking=True)
-            sample_mask = sample_mask.to(device, non_blocking=True)
+            X, latent_mask, sample_mask = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
                 with torch.no_grad():
                     _, z = tokenizer.encode(X)
@@ -639,12 +496,7 @@ if eval_only:
     import sys
     sys.exit()
 
-# X, latent_mask, sample_mask = get_batch('train') # fetch the very first batch
-X, latent_mask, sample_mask = next(train_iterator)
-X = X.to(device, non_blocking=True)
-latent_mask = latent_mask.to(device, non_blocking=True)
-sample_mask = sample_mask.to(device, non_blocking=True)
-
+X, latent_mask, sample_mask = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
@@ -660,11 +512,7 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     # if iter_num % eval_interval == 0 and master_process:
-    #     # X, latent_mask, sample_mask = get_batch('test')
-    #     X, latent_mask, sample_mask = next(val_iterator)
-    #     X = X.to(device, non_blocking=True)
-    #     latent_mask = latent_mask.to(device, non_blocking=True)
-    #     sample_mask = sample_mask.to(device, non_blocking=True)
+    #     X, latent_mask, sample_mask = get_batch('test')
     #     model.eval()
     #     with ctx:
     #         with torch.no_grad():
@@ -730,11 +578,7 @@ while True:
             loss = tokenizer.diffusion.loss(tokenizer.unet, X, t, net_kwargs={'z_dec': z}, mask=sample_mask)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
-        # X, latent_mask, sample_mask = get_batch('train')
-        X, latent_mask, sample_mask = next(train_iterator)
-        X = X.to(device, non_blocking=True)
-        latent_mask = latent_mask.to(device, non_blocking=True)
-        sample_mask = sample_mask.to(device, non_blocking=True)
+        X, latent_mask, sample_mask = get_batch('train')
         # backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
     # clip the gradient
