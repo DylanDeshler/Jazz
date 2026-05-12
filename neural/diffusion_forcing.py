@@ -172,6 +172,22 @@ class FM:
         s = [x.shape[0], x.shape[1], x.shape[2], 1]
         x_t = self.alpha(t).view(*s) * x + self.sigma(t).view(*s) * noise
         return x_t, noise
+
+    @torch.compiler.disable
+    def get_ot_noise(self, x: torch.Tensor, noise: torch.Tensor):
+        B = x.shape[0]
+        
+        x_flat = x.view(B, -1).detach()
+        noise_flat = noise.view(B, -1).detach()
+        
+        cost_matrix = torch.cdist(noise_flat, x_flat, p=2)
+        cost_matrix_np = cost_matrix.cpu().numpy()
+        
+        _, col_ind = linear_sum_assignment(cost_matrix_np)
+        
+        col_ind_tensor = torch.from_numpy(col_ind).to(device=x.device, dtype=torch.long)
+        
+        return noise[col_ind_tensor]
     
     def loss(self, net, x, t=None, net_kwargs=None, return_loss_unreduced=False, return_all=False):
         B, T, N, C = x.shape
@@ -187,16 +203,7 @@ class FM:
             repeat_t = t.unsqueeze(2).repeat(1, 1, N)
         
         noise = torch.randn_like(x)
-        
-        # Optimal Transport Alignment
-        x_flat = x.view(B, -1)
-        noise_flat = noise.view(B, -1)
-        
-        cost_matrix = torch.cdist(noise_flat, x_flat, p=2)
-        _, col_ind = linear_sum_assignment(cost_matrix.detach().cpu().numpy())
-        col_ind_tensor = torch.tensor(col_ind, dtype=torch.long, device=x.device)
-        
-        noise = noise[col_ind_tensor]
+        noise = self.get_ot_noise(x, noise)
         
         x_t, noise = self.add_noise(x, repeat_t, noise=noise)
         
