@@ -1597,6 +1597,14 @@ class MetaConditionalModernDiT(nn.Module):
         
         self.initialize_weights()
         self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
+        self.register_buffer('mcff_mean', torch.tensor([
+            113.30053, -17.395779, 27.279049, -11.116686, 3.1354604, -9.138969,
+            -2.866072, -7.1674404, -1.6265253, -5.047512, -1.7705443, -5.0958815
+        ]))
+        self.register_buffer('mfcc_std', torch.tensor([
+            38.435783, 28.687775, 18.932358, 14.646409, 13.498735, 10.035576,
+            9.510887, 8.25433, 8.212691, 7.155225, 7.3324447, 6.5340915
+        ]))
     
     def initialize_weights(self):
         self.apply(self._init_weights)
@@ -1640,15 +1648,7 @@ class MetaConditionalModernDiT(nn.Module):
         # zcr = (zcr - 0.10766766) / 0.048143145
         # bpm = (bpm - 187.5) / (226.4151001 - 144.57830811)  # IQR
         
-        mcff_mean = torch.tensor([
-            113.30053, -17.395779, 27.279049, -11.116686, 3.1354604, -9.138969,
-            -2.866072, -7.1674404, -1.6265253, -5.047512, -1.7705443, -5.0958815
-        ]).to(x.device)
-        mfcc_std = torch.tensor([
-            38.435783, 28.687775, 18.932358, 14.646409, 13.498735, 10.035576,
-            9.510887, 8.25433, 8.212691, 7.155225, 7.3324447, 6.5340915
-        ]).to(x.device)
-        mfcc = (mfcc - mcff_mean) / mfcc_std
+        mfcc = (mfcc - self.mcff_mean) / self.mfcc_std
         
         t = self.t_embedder(t.flatten()).view(B, T, -1)
         style = self.style_embedder(style)
@@ -1788,6 +1788,214 @@ class MetaConditionalModernDiTWrapper(nn.Module):
             cfg_mode=cfg_mode
         )
 
+class MetaConditionalModernDiTV2(nn.Module):
+    def __init__(self,
+                 in_channels,
+                 hidden_size,
+                 spatial_window,
+                 n_chunks,
+                 style_dim,
+                 num_heads=12,
+                 depth=12,
+                 mlp_ratio=4,
+                 gradient_checkpointing=False,
+                 patch_size=1,
+                 use_null_token=False,
+                 **kwargs,
+                 ):
+        super().__init__()
+        self.spatial_window = spatial_window
+        self.gradient_checkpointing = gradient_checkpointing
+        max_input_size = spatial_window * n_chunks
+        self.patch_size = patch_size
+        self.use_null_token = use_null_token
+        
+        self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
+        self.x_embedder = Patcher(in_channels + 15, hidden_size, patch_size=patch_size)
+        self.style_embedder = nn.Linear(style_dim, hidden_size, bias=True)
+        self.bpm_embedder = nn.Embedding(350, hidden_size)
+        self.measure_embedder = nn.Embedding(n_chunks, hidden_size)
+        
+        self.fuse_conditioning = SwiGLUMlp(hidden_size * 3, int(2 / 3 * mlp_ratio * hidden_size * 3), hidden_size, bias=False)
+        
+        if self.use_null_token:
+            self.null_style = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
+            self.null_bpm = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
+        
+        self.t_block = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(hidden_size, hidden_size * 6, bias=True),
+        )
+        
+        self.blocks = nn.ModuleList([
+            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+        ])
+
+        self.norm = RMSNorm(hidden_size)
+        self.final_layer_scale_shift_table = nn.Parameter(
+            torch.randn(2, hidden_size) / hidden_size ** 0.5,
+        )
+        self.fc = nn.Linear(hidden_size, in_channels * patch_size, bias=False)
+        
+        self.initialize_weights()
+        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
+        self.register_buffer('chroma_mean', torch.tensor([
+            0.45533183, 0.39680213, 0.44615716, 0.42044115, 0.40855545, 0.45450154, 0.3971631, 0.496346, 0.44164586, 0.4416672, 0.44793198, 0.39493898
+        ]))
+        self.register_buffer('chroma_std', torch.tensor([
+            0.18241853, 0.16477719, 0.18014704, 0.18011539, 0.1677363, 0.18919244, 0.16196373, 0.19185093, 0.18003348, 0.1768027, 0.18706752, 0.1618064
+        ]))
+    
+    def initialize_weights(self):
+        self.apply(self._init_weights)
+        # zero out classifier weights
+        nn.init.zeros_(self.fc.weight)
+        nn.init.zeros_(self.t_block[-1].weight)
+        nn.init.zeros_(self.t_block[-1].bias)
+        # zero out c_proj weights in all blocks
+        for block in self.blocks:
+            nn.init.zeros_(block.mlp.w3.weight)
+            nn.init.zeros_(block.attn.proj.weight)
+    
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            # https://arxiv.org/pdf/2310.17813
+            fan_out = module.weight.size(0)
+            fan_in = module.weight.size(1)
+            std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
+            nn.init.normal_(module.weight, mean=0.0, std=std)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
+    
+    def forward(self, x, t, bpm, rms, density, zcr, chroma, style, unconditional_mask=None):
+        B, T, N, C = x.shape
+        
+        rms = (rms - 3.2653894) / 3.597796
+        density = (density - 2.5229013) / 1.230155
+        zcr = (zcr - 0.10766766) / 0.048143145
+        chroma = (chroma - self.chroma_mean) / self.chroma_std
+        
+        t = self.t_embedder(t.flatten()).view(B, T, -1)
+        style = self.style_embedder(style)
+        bpm = self.bpm_embedder(torch.clamp(torch.round(bpm), min=0, max=349).long())
+        
+        if self.use_null_token:
+            signals = {
+                'style': style,
+                'chroma': chroma,
+                'bpm': bpm,
+                'rms': rms,
+                'density': density,
+                'zcr': zcr
+            }
+            null_tokens = {
+                'style': self.null_style, 
+                'bpm': self.null_bpm, 
+                'chroma': torch.zeros_like(chroma[0, 0]), 
+                'rms': torch.zeros_like(rms[0, 0]), 
+                'density': torch.zeros_like(density[0, 0]), 
+                'zcr': torch.zeros_like(zcr[0, 0])
+            }
+            signals = multi_token_drop(
+                signals, 
+                null_tokens, 
+                self.training,
+                p_joint_uncond=0.1, 
+                p_joint_full=0.6,
+                p_one_hot=0.2, 
+                p_ind_uncond=0.1, 
+                p_ind_low=0.05, 
+                p_ind_high=0.3
+            )
+            style = signals['style']
+            chroma = signals['chroma']
+            bpm = signals['bpm']
+            rms = signals['rms']
+            density = signals['density']
+            zcr = signals['zcr']
+            
+            if unconditional_mask is not None:
+                style = torch.where(unconditional_mask['style'], self.null_style, style)
+                chroma = torch.where(unconditional_mask['chroma'], self.null_chroma, chroma)
+                bpm = torch.where(unconditional_mask['bpm'], self.null_bpm, bpm)
+                rms = torch.where(unconditional_mask['rms'], self.null_rms, rms)
+                density = torch.where(unconditional_mask['density'], self.null_density, density)
+                zcr = torch.where(unconditional_mask['zcr'], self.null_zcr, zcr)
+        
+        c = torch.cat([chroma, rms, density, zcr], dim=-1)
+        c = c.unsqueeze(2).repeat(1, 1, N, 1)
+        x = torch.cat([x, c], dim=-1)
+        x = rearrange(x, 'b t n c -> (b t) c n')
+        x = self.x_embedder(x)
+        
+        x = rearrange(x, '(b t) c n -> b t n c', b=B, t=T)
+        measure_ids = torch.arange(T, device=x.device)
+        measure_embs = self.measure_embedder(measure_ids).unsqueeze(1)
+        x = x + measure_embs
+        x = rearrange(x, 'b t n c -> b (t n) c', b=B, t=T)
+        
+        t = torch.cat([t, style, bpm], dim=-1)
+        t = self.fuse_conditioning(t)
+        t0 = self.t_block(t)
+        
+        freqs_cis = self.freqs_cis[:x.shape[1]]
+        
+        for block in self.blocks:
+            if self.gradient_checkpointing and self.training:
+                x = checkpoint(block, x, t0, freqs_cis=freqs_cis, use_reentrant=False)
+            else:
+                x = block(x, t0, freqs_cis=freqs_cis)
+        
+        # SAM Audio does not use a non-linearity on t here
+        shift, scale = (self.final_layer_scale_shift_table[None, None] + F.silu(t[:, :, None])).chunk(
+            2, dim=2
+        )
+        x = rearrange(x, 'b (t n) c -> b t n c', t=T, n=N // self.patch_size)
+        x = modulate(self.norm(x), shift.expand(-1, -1, N // self.patch_size, -1), scale.expand(-1, -1, N // self.patch_size, -1))
+        x = self.fc(x)
+        x = rearrange(x, 'b t n (p c) -> b t (n p) c', p=self.patch_size, c=C)
+        
+        return x
+
+class MetaConditionalModernDiTV2Wrapper(nn.Module):
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.net = MetaConditionalModernDiTV2(**kwargs)
+        
+        self.diffusion = FM(timescale=1000.0)
+        self.sampler = FMEulerSampler(self.diffusion)
+    
+    def forward(self, x, bpm, rms, density, zcr, chroma, style, t=None):
+        return self.diffusion.loss(
+            self.net, 
+            x, 
+            t=t, 
+            net_kwargs={
+                'style': style, 
+                'chroma': chroma, 
+                'bpm': bpm, 
+                'rms': rms,
+                'density': density,
+                'zcr': zcr,
+            }
+        )
+    
+    def generate(self, shape, net_kwargs=None, uncond_net_kwargs=None, n_steps=50, guidance=1.0, noise=None, memory_efficient=True, rescale_phi=0, cfg_mode="independent"):
+        return self.sampler.sample(
+            self.net, 
+            shape, 
+            n_steps=n_steps, 
+            net_kwargs=net_kwargs, 
+            uncond_net_kwargs=uncond_net_kwargs, 
+            guidance=guidance, 
+            noise=noise, 
+            memory_efficient=memory_efficient,
+            rescale_phi=rescale_phi,
+            cfg_mode=cfg_mode
+        )
+
 def ModernDiT_large(**kwargs):
     return ModernDiTWrapper(depth=28, hidden_size=1152, num_heads=16, **kwargs)
 
@@ -1859,3 +2067,18 @@ def MetaConditionalModernDiT_small(**kwargs):
 
 def MetaConditionalModernDiT_tiny(**kwargs):
     return MetaConditionalModernDiTWrapper(depth=16, hidden_size=768, num_heads=12, **kwargs)
+
+def MetaConditionalModernDiTV2_large(**kwargs):
+    return MetaConditionalModernDiTV2Wrapper(depth=28, hidden_size=1152, num_heads=16, **kwargs)
+
+def MetaConditionalModernDiTV2_medium(**kwargs):
+    return MetaConditionalModernDiTV2Wrapper(depth=24, hidden_size=1024, num_heads=16, **kwargs)
+
+def MetaConditionalModernDiTV2_smedium(**kwargs):
+    return MetaConditionalModernDiTV2Wrapper(depth=20, hidden_size=768, num_heads=12, **kwargs)
+
+def MetaConditionalModernDiTV2_small(**kwargs):
+    return MetaConditionalModernDiTV2Wrapper(depth=16, hidden_size=1024, num_heads=16, **kwargs)
+
+def MetaConditionalModernDiTV2_tiny(**kwargs):
+    return MetaConditionalModernDiTV2Wrapper(depth=16, hidden_size=768, num_heads=12, **kwargs)
