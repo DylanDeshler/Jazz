@@ -568,7 +568,7 @@ while True:
         with ctx:
             # with torch.no_grad():
             #     _, z = tokenizer.encode(X)
-            z = torch.randn_like(latent_mask).to(device)
+            z = torch.randn(*latent_mask.shape).to(device)
             t = torch.rand(z.shape[0], device=z.device)
             z = model(z, latent_mask)
             loss = tokenizer.diffusion.loss(tokenizer.unet, X, t, net_kwargs={'z_dec': z}, mask=sample_mask)
