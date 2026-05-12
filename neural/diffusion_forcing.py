@@ -1946,7 +1946,7 @@ class MetaConditionalModernDiTV2(nn.Module):
                 
                 print(unconditional_mask['rms'].shape, scalar_zero.shape, rms.shape, null_tokens['rms'].shape)
                 # chroma = torch.where(unconditional_mask['chroma'], scalar_zero, chroma)
-                rms = torch.where(unconditional_mask['rms'], torch.zeros(1, device=rms.device), rms)
+                rms = torch.where(unconditional_mask['rms'].squeeze(), torch.zeros(1, device=rms.device), rms)
                 density = torch.where(unconditional_mask['density'], scalar_zero, density)
                 zcr = torch.where(unconditional_mask['zcr'], scalar_zero, zcr)
         
@@ -1962,8 +1962,10 @@ class MetaConditionalModernDiTV2(nn.Module):
         x = x + measure_embs
         x = rearrange(x, 'b t n c -> b (t n) c', b=B, t=T)
         
-        t = torch.cat([t, style, bpm], dim=-1)
-        t = self.fuse_conditioning(t)
+        print(t.mean(), style.mean(), bpm.mean())
+        t = t + style + bpm
+        # t = torch.cat([t, style, bpm], dim=-1)
+        # t = self.fuse_conditioning(t)
         t0 = self.t_block(t)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
