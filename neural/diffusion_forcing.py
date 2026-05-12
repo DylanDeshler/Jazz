@@ -1940,11 +1940,11 @@ class MetaConditionalModernDiTV2(nn.Module):
                 
                 scalar_zero = torch.tensor(0.0, device=x.device, dtype=x.dtype)
                 
+                print(unconditional_mask['style'].shape, null_tokens['style'].shape, style.shape)
                 style = torch.where(unconditional_mask['style'], null_tokens['style'], style)
                 bpm = torch.where(unconditional_mask['bpm'], null_tokens['bpm'], bpm)
                 
                 print(unconditional_mask['rms'].shape, scalar_zero.shape, rms.shape, null_tokens['rms'].shape)
-                print(unconditional_mask['style'].shape, null_tokens['style'].shape, style.shape)
                 # chroma = torch.where(unconditional_mask['chroma'], scalar_zero, chroma)
                 rms = torch.where(unconditional_mask['rms'], torch.zeros(1, device=rms.device), rms)
                 density = torch.where(unconditional_mask['density'], scalar_zero, density)
