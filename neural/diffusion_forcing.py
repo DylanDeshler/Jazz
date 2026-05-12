@@ -965,6 +965,7 @@ class ConvBlock1d(nn.Module):
         stride: int = 1,
         dilation: int = 1,
         num_groups: int = 8,
+        bias: bool = True,
     ) -> None:
         super().__init__()
 
@@ -978,7 +979,8 @@ class ConvBlock1d(nn.Module):
             kernel_size=kernel_size,
             stride=stride,
             dilation=dilation,
-            padding=kernel_size//2
+            padding=kernel_size//2,
+            bias=bias
         )
 
     def forward(
@@ -999,6 +1001,7 @@ class ResnetBlock1d(nn.Module):
         stride: int = 1,
         dilation: int = 1,
         num_groups: int = 8,
+        bias: bool = True,
     ) -> None:
         super().__init__()
 
@@ -1009,6 +1012,7 @@ class ResnetBlock1d(nn.Module):
             stride=stride, 
             dilation=dilation,
             num_groups=num_groups,
+            bias=bias
         )
 
         self.block2 = ConvBlock1d(
@@ -1018,6 +1022,7 @@ class ResnetBlock1d(nn.Module):
             stride=1,
             dilation=dilation,
             num_groups=num_groups,
+            bias=BpmRmsChromaStyleConditionalModernDiT_smedium
         )
 
         if in_channels != out_channels or stride != 1:
@@ -1025,7 +1030,8 @@ class ResnetBlock1d(nn.Module):
                 in_channels=in_channels, 
                 out_channels=out_channels, 
                 kernel_size=1, 
-                stride=stride
+                stride=stride,
+                bias=bias
             )
         else:
             self.to_out = nn.Identity()
@@ -1041,6 +1047,7 @@ class Patcher(torch.nn.Module):
         in_channels: int,
         out_channels: int,
         patch_size: int = 2,
+        bias: bool = True,
     ):
         super().__init__()
         self.patch_size = patch_size
@@ -1050,6 +1057,7 @@ class Patcher(torch.nn.Module):
             out_channels=out_channels,
             stride=patch_size,
             num_groups=1,
+            bias=bias
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -1835,7 +1843,7 @@ class MetaConditionalModernDiTV2(nn.Module):
         self.use_null_token = use_null_token
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
-        self.x_embedder = Patcher(in_channels + 15, hidden_size, patch_size=patch_size)
+        self.x_embedder = Patcher(in_channels + 15, hidden_size, patch_size=patch_size, bias=False)
         self.style_embedder = nn.Linear(style_dim, hidden_size, bias=True)
         self.bpm_embedder = nn.Embedding(350, hidden_size)
         
