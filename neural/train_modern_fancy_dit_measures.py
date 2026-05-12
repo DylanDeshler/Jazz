@@ -363,7 +363,7 @@ def save_samples(step):
     os.makedirs(batch_dir, exist_ok=True)
     
     n_steps = 50
-    n_samples = 5
+    n_samples = 10
     x, bpm, rms, density, zcr, chroma, style = get_batch('val', batch_size=n_samples)
     
     gen_noise = torch.randn(x.shape).to(device)
