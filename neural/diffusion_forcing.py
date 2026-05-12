@@ -1843,7 +1843,7 @@ class MetaConditionalModernDiTV2(nn.Module):
         self.use_null_token = use_null_token
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
-        self.x_embedder = Patcher(in_channels + 15, hidden_size, patch_size=patch_size, bias=False)
+        self.x_embedder = Patcher(in_channels + 15, hidden_size, patch_size=patch_size, bias=True)
         self.style_embedder = nn.Linear(style_dim, hidden_size, bias=True)
         self.bpm_embedder = nn.Embedding(350, hidden_size)
         
@@ -1864,7 +1864,7 @@ class MetaConditionalModernDiTV2(nn.Module):
         self.final_layer_scale_shift_table = nn.Parameter(
             torch.randn(2, hidden_size) / hidden_size ** 0.5,
         )
-        self.fc = nn.Linear(hidden_size, in_channels * patch_size, bias=False)
+        self.fc = nn.Linear(hidden_size, in_channels * patch_size, bias=True)
         
         self.initialize_weights()
         self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
