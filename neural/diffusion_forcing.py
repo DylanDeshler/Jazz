@@ -1921,18 +1921,22 @@ class MetaConditionalModernDiTV2(nn.Module):
             
             if unconditional_mask is not None:
                 def apply_uncond_mask(mask_1d, null_t, target_t):
-                    # Safely align dimensions for torch.where
-                    mask = mask_1d
-                    while mask.ndim < target_t.ndim:
+                    mask = mask_1d.view(-1)
+                    
+                    for _ in range(target_t.ndim - 1):
                         mask = mask.unsqueeze(-1)
+                        
                     return torch.where(mask, null_t, target_t)
                 
+                scalar_zero = torch.tensor(0.0, device=x.device, dtype=x.dtype)
+                
                 style = apply_uncond_mask(unconditional_mask['style'], null_tokens['style'], style)
-                chroma = apply_uncond_mask(unconditional_mask['chroma'], null_tokens['chroma'], chroma)
                 bpm = apply_uncond_mask(unconditional_mask['bpm'], null_tokens['bpm'], bpm)
-                rms = apply_uncond_mask(unconditional_mask['rms'], null_tokens['rms'], rms)
-                density = apply_uncond_mask(unconditional_mask['density'], null_tokens['density'], density)
-                zcr = apply_uncond_mask(unconditional_mask['zcr'], null_tokens['zcr'], zcr)
+                
+                chroma = apply_uncond_mask(unconditional_mask['chroma'], scalar_zero, chroma)
+                rms = apply_uncond_mask(unconditional_mask['rms'], scalar_zero, rms)
+                density = apply_uncond_mask(unconditional_mask['density'], scalar_zero, density)
+                zcr = apply_uncond_mask(unconditional_mask['zcr'], scalar_zero, zcr)
         
         c = torch.cat([chroma, rms, density, zcr], dim=-1)
         c = c.unsqueeze(2).repeat(1, 1, N, 1)
