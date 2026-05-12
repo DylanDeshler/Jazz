@@ -374,6 +374,17 @@ train_sampler = WeightedRandomSampler(weights=train_durations, num_samples=len(t
 val_dataset = JazzDataset(test_idx)
 val_sampler = WeightedRandomSampler(weights=test_durations, num_samples=len(test_idx), replacement=True)
 
+def worker_init_fn(worker_id):
+    # Completely disable multithreading inside the dataloader processes
+    os.environ['OPENBLAS_NUM_THREADS'] = '1'
+    os.environ['NUMEXPR_NUM_THREADS'] = '1'
+    os.environ['OMP_NUM_THREADS'] = '1'
+    os.environ['MKL_NUM_THREADS'] = '1'
+    
+    # Ensure each worker has a unique NumPy seed, otherwise they might 
+    # generate the same "random" augmentations/slices
+    np.random.seed(np.random.get_state()[1][0] + worker_id)
+
 train_loader = DataLoader(
     train_dataset, 
     batch_size=batch_size, 
@@ -381,7 +392,9 @@ train_loader = DataLoader(
     num_workers=16,
     collate_fn=collate_fn,
     pin_memory=True,
-    drop_last=True
+    drop_last=True,
+    worker_init_fn=worker_init_fn,
+    prefetch_factor=10
 )
 
 val_loader = DataLoader(
@@ -391,7 +404,9 @@ val_loader = DataLoader(
     num_workers=16,
     collate_fn=collate_fn,
     pin_memory=True,
-    drop_last=True
+    drop_last=True,
+    worker_init_fn=worker_init_fn,
+    prefetch_factor=10
 )
 
 def get_infinite_batches(dataloader):
@@ -644,59 +659,59 @@ while True:
     tokens_trained += batch_size * gradient_accumulation_steps
 
     # evaluate the loss on train/val sets and write checkpoints
-    if iter_num % eval_interval == 0 and master_process:
-        # X, latent_mask, sample_mask = get_batch('test')
-        X, latent_mask, sample_mask = next(val_iterator)
-        X = X.to(device, non_blocking=True)
-        latent_mask = latent_mask.to(device, non_blocking=True)
-        sample_mask = sample_mask.to(device, non_blocking=True)
-        model.eval()
-        with ctx:
-            with torch.no_grad():
-                _, z = tokenizer.encode(X)
-                z = model(z, latent_mask)
-                logits = tokenizer.decode(z, shape=X.shape, n_steps=100) * sample_mask.unsqueeze(1)
-        model.train()
-        save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
-        losses = estimate_loss()
-        print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-        if wandb_log:
-            wandb.log({
-                "iter": iter_num,
-                "train/loss": losses['train'],
-                "val/loss": losses['val'],
-                "lr": lr,
-                "mfu": running_mfu*100, # convert to percentage
-                "tokens": tokens_trained,
-            })
-        if iter_num > 0 and losses['val'] < best_val_loss:
-            best_val_loss = losses['val']
-            checkpoint = {
-                'model': raw_model.state_dict(),
-                'optimizer': optimizer.state_dict(),
-                'model_args': model_args,
-                'iter_num': iter_num,
-                'val_loss': best_val_loss,
-                'best_val_loss': best_val_loss,
-                'config': config,
-                'tokens': tokens_trained,
-            }
-            torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
-        if iter_num > 0 and always_save_checkpoint:
-            checkpoint = {
-                'model': raw_model.state_dict(),
-                'optimizer': optimizer.state_dict(),
-                'model_args': model_args,
-                'iter_num': iter_num,
-                'val_loss': losses['val'],
-                'best_val_loss': best_val_loss,
-                'config': config,
-                'tokens': tokens_trained,
-            }
-            torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
+    # if iter_num % eval_interval == 0 and master_process:
+    #     # X, latent_mask, sample_mask = get_batch('test')
+    #     X, latent_mask, sample_mask = next(val_iterator)
+    #     X = X.to(device, non_blocking=True)
+    #     latent_mask = latent_mask.to(device, non_blocking=True)
+    #     sample_mask = sample_mask.to(device, non_blocking=True)
+    #     model.eval()
+    #     with ctx:
+    #         with torch.no_grad():
+    #             _, z = tokenizer.encode(X)
+    #             z = model(z, latent_mask)
+    #             logits = tokenizer.decode(z, shape=X.shape, n_steps=100) * sample_mask.unsqueeze(1)
+    #     model.train()
+    #     save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
+    #     losses = estimate_loss()
+    #     print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+    #     if wandb_log:
+    #         wandb.log({
+    #             "iter": iter_num,
+    #             "train/loss": losses['train'],
+    #             "val/loss": losses['val'],
+    #             "lr": lr,
+    #             "mfu": running_mfu*100, # convert to percentage
+    #             "tokens": tokens_trained,
+    #         })
+    #     if iter_num > 0 and losses['val'] < best_val_loss:
+    #         best_val_loss = losses['val']
+    #         checkpoint = {
+    #             'model': raw_model.state_dict(),
+    #             'optimizer': optimizer.state_dict(),
+    #             'model_args': model_args,
+    #             'iter_num': iter_num,
+    #             'val_loss': best_val_loss,
+    #             'best_val_loss': best_val_loss,
+    #             'config': config,
+    #             'tokens': tokens_trained,
+    #         }
+    #         torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+    #     if iter_num > 0 and always_save_checkpoint:
+    #         checkpoint = {
+    #             'model': raw_model.state_dict(),
+    #             'optimizer': optimizer.state_dict(),
+    #             'model_args': model_args,
+    #             'iter_num': iter_num,
+    #             'val_loss': losses['val'],
+    #             'best_val_loss': best_val_loss,
+    #             'config': config,
+    #             'tokens': tokens_trained,
+    #         }
+    #         torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
 
-    if iter_num == 0 and eval_only:
-        break
+    # if iter_num == 0 and eval_only:
+    #     break
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
