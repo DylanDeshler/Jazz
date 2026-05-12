@@ -686,10 +686,10 @@ class SwiGLUMlp(nn.Module):
 class DiTBlock(nn.Module):
     def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
         super().__init__()
-        self.norm1 = RMSNorm(hidden_size)
-        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=False, proj_bias=False, **block_kwargs)
-        self.norm2 = RMSNorm(hidden_size)
-        self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), bias=False)
+        self.norm1 = nn.LayerNorm(hidden_size)
+        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=False, proj_bias=True, **block_kwargs)
+        self.norm2 = nn.LayerNorm(hidden_size)
+        self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), bias=True)
         self.scale_shift_table = nn.Parameter(
             torch.randn(6, hidden_size) / hidden_size ** 0.5,
         )
@@ -1081,11 +1081,11 @@ class ModernDiT(nn.Module):
         self.use_null_token = use_null_token
         max_input_size = spatial_window * n_chunks
         
-        self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
-        self.bpm_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True, max_period=1000)
+        self.t_embedder = TimestepEmbedder(hidden_size, bias=True, swiglu=True)
+        self.bpm_embedder = TimestepEmbedder(hidden_size, bias=True, swiglu=True, max_period=1000)
         self.x_embedder = Patcher(in_channels, hidden_size)
         
-        self.fuse_conditioning = SwiGLUMlp(hidden_size + style_dim, int(2 / 3 * mlp_ratio * hidden_size), hidden_size, bias=False)
+        self.fuse_conditioning = SwiGLUMlp(hidden_size + style_dim, int(2 / 3 * mlp_ratio * hidden_size), hidden_size, bias=True)
         
         if self.use_null_token:
             self.null_token = nn.Parameter(torch.randn(style_dim) / style_dim ** 0.5)
@@ -1099,7 +1099,7 @@ class ModernDiT(nn.Module):
             DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
 
-        self.norm = RMSNorm(hidden_size)
+        self.norm = nn.LayerNorm(hidden_size)
         self.final_layer_scale_shift_table = nn.Parameter(
             torch.randn(2, hidden_size) / hidden_size ** 0.5,
         )
