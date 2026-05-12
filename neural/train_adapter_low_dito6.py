@@ -47,7 +47,7 @@ eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = False # disabled by default
+wandb_log = True # disabled by default
 wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
@@ -66,13 +66,13 @@ enocder_depth = 4
 decoder_depth = 2
 # adamw optimizer
 learning_rate = 1e-5 # max learning rate
-max_iters = 100000 # total number of training iterations
+max_iters = 1000000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.999
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
-decay_lr = True # whether to decay the learning rate
+decay_lr = False # whether to decay the learning rate
 warmup_iters = 5000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
@@ -542,54 +542,54 @@ while True:
     tokens_trained += batch_size * gradient_accumulation_steps
 
     # evaluate the loss on train/val sets and write checkpoints
-    # if iter_num % eval_interval == 0 and master_process:
-    #     X, latent_mask, sample_mask = get_batch('test')
-    #     model.eval()
-    #     with ctx:
-    #         _, z = tokenizer.encode(X)
-    #         z = model(z, latent_mask)
-    #         logits = tokenizer.decode(z, shape=X.shape, n_steps=100) * sample_mask.unsqueeze(1)
-    #     model.train()
-    #     save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
-    #     losses = estimate_loss()
-    #     print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-    #     if wandb_log:
-    #         wandb.log({
-    #             "iter": iter_num,
-    #             "train/loss": losses['train'],
-    #             "val/loss": losses['val'],
-    #             "lr": lr,
-    #             "mfu": running_mfu*100, # convert to percentage
-    #             "tokens": tokens_trained,
-    #         })
-    #     if iter_num > 0 and losses['val'] < best_val_loss:
-    #         best_val_loss = losses['val']
-    #         checkpoint = {
-    #             'model': raw_model.state_dict(),
-    #             'optimizer': optimizer.state_dict(),
-    #             'model_args': model_args,
-    #             'iter_num': iter_num,
-    #             'val_loss': best_val_loss,
-    #             'best_val_loss': best_val_loss,
-    #             'config': config,
-    #             'tokens': tokens_trained,
-    #         }
-    #         torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
-    #     if iter_num > 0 and always_save_checkpoint:
-    #         checkpoint = {
-    #             'model': raw_model.state_dict(),
-    #             'optimizer': optimizer.state_dict(),
-    #             'model_args': model_args,
-    #             'iter_num': iter_num,
-    #             'val_loss': losses['val'],
-    #             'best_val_loss': best_val_loss,
-    #             'config': config,
-    #             'tokens': tokens_trained,
-    #         }
-    #         torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
+    if iter_num % eval_interval == 0 and master_process:
+        X, latent_mask, sample_mask = get_batch('test')
+        model.eval()
+        with ctx:
+            _, z = tokenizer.encode(X)
+            z = model(z, latent_mask)
+            logits = tokenizer.decode(z, shape=X.shape, n_steps=100) * sample_mask.unsqueeze(1)
+        model.train()
+        save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
+        losses = estimate_loss()
+        print(f"step {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+        if wandb_log:
+            wandb.log({
+                "iter": iter_num,
+                "train/loss": losses['train'],
+                "val/loss": losses['val'],
+                "lr": lr,
+                "mfu": running_mfu*100, # convert to percentage
+                "tokens": tokens_trained,
+            })
+        if iter_num > 0 and losses['val'] < best_val_loss:
+            best_val_loss = losses['val']
+            checkpoint = {
+                'model': raw_model.state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'model_args': model_args,
+                'iter_num': iter_num,
+                'val_loss': best_val_loss,
+                'best_val_loss': best_val_loss,
+                'config': config,
+                'tokens': tokens_trained,
+            }
+            torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+        if iter_num > 0 and always_save_checkpoint:
+            checkpoint = {
+                'model': raw_model.state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'model_args': model_args,
+                'iter_num': iter_num,
+                'val_loss': losses['val'],
+                'best_val_loss': best_val_loss,
+                'config': config,
+                'tokens': tokens_trained,
+            }
+            torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
 
-    # if iter_num == 0 and eval_only:
-    #     break
+    if iter_num == 0 and eval_only:
+        break
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
