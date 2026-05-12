@@ -324,22 +324,22 @@ def get_batch(split='train', batch_size=batch_size):
     
     x = []
     for idx in idxs:
-        # wav = wavs[idx]
-        wav = librosa.load(paths[idx], sr=None)[0]
-        beat_path = os.path.join('/home/ubuntu/Data/beats', os.path.basename(paths[idx]))
+        # # wav = wavs[idx]
+        # wav = librosa.load(paths[idx], sr=None)[0]
+        # beat_path = os.path.join('/home/ubuntu/Data/beats', os.path.basename(paths[idx]))
         
-        tries = 0
-        frame_start, frame_end = slice_random_measure(beat_path)
-        while frame_end - frame_end >= max_seq_len * encoder_ratios:
-            frame_start, frame_end = slice_random_measure(beat_path)
-            tries += 1
-            print(f'Retrying {tries}')
+        # tries = 0
+        # frame_start, frame_end = slice_random_measure(beat_path)
+        # while frame_end - frame_end >= max_seq_len * encoder_ratios:
+        #     frame_start, frame_end = slice_random_measure(beat_path)
+        #     tries += 1
             
-            if tries > 5:
-                frame_end = frame_start + math.floor(encoder_ratios * max_seq_len) - 100
-                break
+        #     if tries > 5:
+        #         frame_end = frame_start + math.floor(encoder_ratios * max_seq_len) - 100
+        #         break
         
-        x.append(wav[frame_start:frame_end])
+        # x.append(wav[frame_start:frame_end])
+        x.append(np.random.randn(max_seq_len * encoder_ratios))
     
     lengths = [len(x_) for x_ in x]
     max_len = min(max(lengths), encoder_ratios * (max_seq_len - 1))
@@ -402,8 +402,7 @@ summary(model)
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 
 # optimizer
-# optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
-optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+optimizer = torch.optim.AdamW(model.create_optimizer_groups(weight_decay=weight_decay, lr=learning_rate), betas=(beta1, beta2))
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
 checkpoint = None # free up memory
