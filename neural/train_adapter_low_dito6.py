@@ -501,8 +501,8 @@ while True:
         model.eval()
         with ctx:
             _, z = tokenizer.encode(X)
-            z = model(z, latent_mask) * sample_mask.unsqueeze(1)
-            logits = tokenizer.decode(z, shape=X.shape, n_steps=100)
+            z = model(z, latent_mask)
+            logits = tokenizer.decode(z, shape=X.shape, n_steps=100) * sample_mask.unsqueeze(1)
         model.train()
         save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
         losses = estimate_loss()
