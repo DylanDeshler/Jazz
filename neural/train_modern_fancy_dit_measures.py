@@ -321,21 +321,20 @@ def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', win
             
     return torch.from_numpy(smoothed).to(bpm_tensor.device)
 
-@torch.no_grad()
-def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3, memory_efficient=True):
+def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode="independent"):
     with ctx:
-        y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise, memory_efficient=memory_efficient)
+        y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise, memory_efficient=memory_efficient, rescale_phi=rescale_phi, cfg_mode=cfg_mode)
         
     if isinstance(net_kwargs, list):
         bpm = net_kwargs[0]['bpm']
     else:
         bpm = net_kwargs['bpm']
-    # bpm = smooth_bpm_predictions(bpm, method=method, window_size=window_size)
+    
     seconds_per_beat = 60.0 / bpm
     measure_duration_sec = seconds_per_beat * TARGET_SIG
     
     target_samples = (measure_duration_sec * 16000).long()
-    max_len = min(target_samples.max().item(), encoder_ratios * (max_adapter_len - 1))
+    max_len = min(target_samples.max().item(), encoder_ratios * (max_seq_len - 1))
     max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
     max_latent_len = max_len // encoder_ratios
     
@@ -392,11 +391,12 @@ def save_samples(step):
         temp_mask = unconditional_mask.copy()
         temp_mask[k] = ~v
         cfg_net_kwargs.append(net_kwargs | {'unconditional_mask': temp_mask})
-    cfg_guidances = list({'w_bpm': 3.710699914324043, 'w_rms': 2.028431549774051, 'w_density': 3.9796203268408687, 'w_zcr': 2.074415557615488, 'w_chroma': 4.81149841700109, 'w_style': 3.9142999037339976}.values())
+    # cfg_guidances = list({'w_bpm': 3.710699914324043, 'w_rms': 2.028431549774051, 'w_density': 3.9796203268408687, 'w_zcr': 2.074415557615488, 'w_chroma': 4.81149841700109, 'w_style': 3.9142999037339976}.values())
+    cfg_guidances = [4] * len(unconditional_mask)
     
     uncond_net_kwargs = net_kwargs | {'unconditional_mask': unconditional_mask}
     
-    y_cfg = predict_measures(x.shape, cfg_net_kwargs, uncond_net_kwargs, n_steps, guidance=cfg_guidances, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
+    y_cfg = predict_measures(x.shape, cfg_net_kwargs, uncond_net_kwargs, n_steps, guidance=cfg_guidances, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode="joint")
     y = predict_measures(x.shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
     
     for i in range(n_samples):

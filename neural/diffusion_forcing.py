@@ -1817,7 +1817,6 @@ class MetaConditionalModernDiTV2(nn.Module):
         self.x_embedder = Patcher(in_channels + 15, hidden_size, patch_size=patch_size)
         self.style_embedder = nn.Linear(style_dim, hidden_size, bias=True)
         self.bpm_embedder = nn.Embedding(350, hidden_size)
-        self.measure_embedder = nn.Embedding(n_chunks, hidden_size)
         
         if self.use_null_token:
             self.null_style = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
@@ -1931,14 +1930,10 @@ class MetaConditionalModernDiTV2(nn.Module):
         c = torch.cat([chroma, rms.unsqueeze(-1), density.unsqueeze(-1), zcr.unsqueeze(-1)], dim=-1)
         c = c.unsqueeze(2).repeat(1, 1, N, 1)
         x = torch.cat([x, c], dim=-1)
+        
         x = rearrange(x, 'b t n c -> (b t) c n')
         x = self.x_embedder(x)
-        
-        x = rearrange(x, '(b t) c n -> b t n c', b=B, t=T)
-        measure_ids = torch.arange(T, device=x.device)
-        measure_embs = self.measure_embedder(measure_ids).unsqueeze(1)
-        x = x + measure_embs
-        x = rearrange(x, 'b t n c -> b (t n) c', b=B, t=T)
+        x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
         
         t = t + style + bpm
         t0 = self.t_block(t)
