@@ -323,7 +323,7 @@ def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', win
 def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode="independent"):
     with ctx:
         y = ema.ema_model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise, memory_efficient=memory_efficient, rescale_phi=rescale_phi, cfg_mode=cfg_mode)
-    print(y.shape)
+    
     if isinstance(net_kwargs, list):
         bpm = net_kwargs[0]['bpm']
     else:
@@ -345,7 +345,6 @@ def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance
         
     with ctx:
         y = y.transpose(2, 3).view(gen_shape[0] * n_chunks, vae_embed_dim, spatial_window)
-        print(y.shape, shape, mask.shape)
         y = adapter.decode(y, shape, mask=mask)
         y = tokenizer.decode(y, shape=(1, max_len), n_steps=n_steps, noise=decoder_noise[:, :, :max_len] if decoder_noise is not None else None)
     
