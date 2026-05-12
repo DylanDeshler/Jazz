@@ -1883,6 +1883,7 @@ class MetaConditionalModernDiTV2(nn.Module):
         t = self.t_embedder(t.flatten()).view(B, T, -1)
         style = self.style_embedder(style)
         bpm = self.bpm_embedder(torch.clamp(torch.round(bpm), min=0, max=349).long())
+        print(chroma.shape, rms.shape, density.shape, zcr.shape)
         
         if self.use_null_token:
             signals = {
@@ -1940,16 +1941,17 @@ class MetaConditionalModernDiTV2(nn.Module):
                 
                 scalar_zero = torch.tensor(0.0, device=x.device, dtype=x.dtype)
                 
-                print(unconditional_mask['style'].shape, null_tokens['style'].shape, style.shape)
+                # print(unconditional_mask['style'].shape, null_tokens['style'].shape, style.shape)
                 style = torch.where(unconditional_mask['style'], null_tokens['style'], style)
                 bpm = torch.where(unconditional_mask['bpm'], null_tokens['bpm'], bpm)
                 
-                print(unconditional_mask['rms'].shape, scalar_zero.shape, rms.shape, null_tokens['rms'].shape)
-                # chroma = torch.where(unconditional_mask['chroma'], scalar_zero, chroma)
+                # print(unconditional_mask['rms'].shape, scalar_zero.shape, rms.shape, null_tokens['rms'].shape)
+                chroma = torch.where(unconditional_mask['chroma'], scalar_zero, chroma)
                 rms = torch.where(unconditional_mask['rms'].squeeze(), torch.zeros(1, device=rms.device), rms)
                 density = torch.where(unconditional_mask['density'].squeeze(), scalar_zero, density)
                 zcr = torch.where(unconditional_mask['zcr'].squeeze(), scalar_zero, zcr)
         
+        print(chroma.shape, rms.shape, density.shape, zcr.shape)
         c = torch.cat([chroma, rms, density, zcr], dim=-1)
         c = c.unsqueeze(2).repeat(1, 1, N, 1)
         x = torch.cat([x, c], dim=-1)
