@@ -39,7 +39,7 @@ import glob
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'tokenizer_adapter_low_large_24576_subset_longtrain'
+out_dir = 'tokenizer_adapter_low_large_24576_subset_longtrain_v2'
 eval_interval = 2500
 log_interval = 100
 eval_iters = 300
@@ -47,26 +47,26 @@ eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = True # disabled by default
+wandb_log = False # disabled by default
 wandb_project = out_dir #'zinc20++'
 wandb_run_name = 'llama' + str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 6 # used to simulate larger batch sizes
-batch_size = 24 # if gradient_accumulation_steps > 1, this is the micro-batch size
+gradient_accumulation_steps = 1 # used to simulate larger batch sizes
+batch_size = 64 # if gradient_accumulation_steps > 1, this is the micro-batch size
 # model
 rate = 16000
 n_samples = 24576
 in_dim = 16
-n_queries = 48
+n_queries = 64
 max_seq_len = 128
 hidden_dim = 512
 num_heads = 8
 enocder_depth = 4
 decoder_depth = 2
 # adamw optimizer
-learning_rate = 1e-4 # max learning rate
-max_iters = 50000 # total number of training iterations
+learning_rate = 1e-5 # max learning rate
+max_iters = 100000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.999
@@ -272,24 +272,32 @@ rare_keys = key_counts[key_counts < 2].index
 df.loc[df['key'].isin(rare_keys), 'key'] = 'rare_combo'
 train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], df['key'], artists))
 
-import concurrent.futures
-from multiprocessing import cpu_count
-wavs = [None] * len(paths)
+# import concurrent.futures
+# from multiprocessing import cpu_count
+# wavs = [None] * len(paths)
 
-with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
-    future_to_index = {
-        executor.submit(lambda x: librosa.load(x, sr=rate)[0], path): i 
-        for i, path in enumerate(paths)
-    }
+# with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
+#     future_to_index = {
+#         executor.submit(lambda x: librosa.load(x, sr=rate)[0], path): i 
+#         for i, path in enumerate(paths)
+#     }
     
-    for future in tqdm(concurrent.futures.as_completed(future_to_index), desc='Loading wav files', total=len(paths)):
-        original_index = future_to_index[future]
-        wav = future.result()
-        wavs[original_index] = wav
+#     for future in tqdm(concurrent.futures.as_completed(future_to_index), desc='Loading wav files', total=len(paths)):
+#         original_index = future_to_index[future]
+#         wav = future.result()
+#         wavs[original_index] = wav
 
-durations = np.asarray([len(wav) for wav in wavs])
+# durations = np.asarray([len(wav) for wav in wavs])
+# train_durations = durations[train_idx] / np.sum(durations[train_idx])
+# test_durations = durations[test_idx] / np.sum(durations[test_idx])
+
+durations = []
+for path in tqdm(paths):
+    durations.append(sf.info(path).duration)
+durations = np.asarray(durations)
 train_durations = durations[train_idx] / np.sum(durations[train_idx])
 test_durations = durations[test_idx] / np.sum(durations[test_idx])
+del durations
 
 def slice_random_measure(beat_path):
     beat_data = parse_beat_file(beat_path)
@@ -316,7 +324,8 @@ def get_batch(split='train', batch_size=batch_size):
     
     x = []
     for idx in idxs:
-        wav = wavs[idx]
+        # wav = wavs[idx]
+        wav = librosa.load(paths[idx], sr=None)[0]
         beat_path = os.path.join('/home/ubuntu/Data/beats', os.path.basename(paths[idx]))
         
         tries = 0
@@ -492,7 +501,7 @@ while True:
         model.eval()
         with ctx:
             _, z = tokenizer.encode(X)
-            z = model(z, latent_mask)
+            z = model(z, latent_mask) * sample_mask.unsqueeze(1)
             logits = tokenizer.decode(z, shape=X.shape, n_steps=100)
         model.train()
         save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
