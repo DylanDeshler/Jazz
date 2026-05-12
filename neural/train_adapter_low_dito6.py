@@ -45,7 +45,7 @@ log_interval = 100
 eval_iters = 300
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir #'zinc20++'
@@ -319,12 +319,13 @@ def slice_random_measure(beat_path):
 from concurrent.futures import ThreadPoolExecutor
 
 def fetch_single_sample(idx):
-    wav = librosa.load(paths[idx], sr=None)[0]
     beat_path = os.path.join('/home/ubuntu/Data/beats', os.path.basename(paths[idx]))
     
     tries = 0
     frame_start, frame_end = slice_random_measure(beat_path)
-    while frame_end - frame_end >= max_seq_len * encoder_ratios:
+    
+    # Calculate the frames BEFORE loading the audio
+    while frame_end - frame_start >= max_seq_len * encoder_ratios:
         frame_start, frame_end = slice_random_measure(beat_path)
         tries += 1
         
@@ -332,7 +333,9 @@ def fetch_single_sample(idx):
             frame_end = frame_start + math.floor(encoder_ratios * max_seq_len) - 100
             break
     
-    return wav[frame_start:frame_end]
+    # Read ONLY the required frames directly from disk
+    wav, _ = sf.read(paths[idx], start=frame_start, frames=frame_end - frame_start, dtype='float32')
+    return wav
 
 executor = ThreadPoolExecutor(max_workers=16)
 
@@ -474,7 +477,8 @@ def estimate_loss():
         for k in tqdm(range(eval_iters)):
             X, latent_mask, sample_mask = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
-                _, z = tokenizer.encode(X)
+                with torch.no_grad():
+                    _, z = tokenizer.encode(X)
                 t = torch.rand(z.shape[0], device=z.device)
                 z = model(z, latent_mask)
                 loss = tokenizer.diffusion.loss(tokenizer.unet, X, t, net_kwargs={'z_dec': z}, mask=sample_mask)
@@ -546,9 +550,10 @@ while True:
         X, latent_mask, sample_mask = get_batch('test')
         model.eval()
         with ctx:
-            _, z = tokenizer.encode(X)
-            z = model(z, latent_mask)
-            logits = tokenizer.decode(z, shape=X.shape, n_steps=100) * sample_mask.unsqueeze(1)
+            with torch.no_grad():
+                _, z = tokenizer.encode(X)
+                z = model(z, latent_mask)
+                logits = tokenizer.decode(z, shape=X.shape, n_steps=100) * sample_mask.unsqueeze(1)
         model.train()
         save_samples(X.cpu().detach().float().numpy(), logits.cpu().detach().float().numpy(), iter_num)
         losses = estimate_loss()
@@ -601,7 +606,8 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            _, z = tokenizer.encode(X)
+            with torch.no_grad():
+                _, z = tokenizer.encode(X)
             t = torch.rand(z.shape[0], device=z.device)
             z = model(z, latent_mask)
             loss = tokenizer.diffusion.loss(tokenizer.unet, X, t, net_kwargs={'z_dec': z}, mask=sample_mask)
