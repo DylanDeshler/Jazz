@@ -1867,6 +1867,25 @@ class MetaConditionalModernDiTV2(nn.Module):
             0.18241853, 0.16477719, 0.18014704, 0.18011539, 0.1677363, 0.18919244, 0.16196373, 0.19185093, 0.18003348, 0.1768027, 0.18706752, 0.1618064
         ]))
     
+    def create_optimizer_groups(self, weight_decay=1e-2, lr=1e-4):
+        decay = []
+        no_decay = []
+        
+        for name, param in self.named_parameters():
+            if not param.requires_grad:
+                continue
+                
+            if param.ndim < 2 or 'embed' in name or 'measure_embedder' in name:
+                no_decay.append(param)
+            else:
+                decay.append(param)
+                
+        optim_groups = [
+            {"params": decay, "weight_decay": weight_decay, "lr": lr},
+            {"params": no_decay, "weight_decay": 0.0, "lr": lr},
+        ]
+        return optim_groups
+    
     def initialize_weights(self):
         self.apply(self._init_weights)
         # zero out classifier weights

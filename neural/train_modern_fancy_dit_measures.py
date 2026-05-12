@@ -20,6 +20,7 @@ $ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=1 --master_addr=123.456.123
 import os
 import time
 import math
+import copy
 import pickle
 from contextlib import nullcontext
 from tqdm import tqdm
@@ -268,16 +269,14 @@ if ddp:
 @torch.no_grad()
 def estimate_loss():
     out = {}
-    model.eval()
     for i, split in enumerate(['train', 'val']):
         losses = torch.zeros(eval_iters)
         for k in tqdm(range(eval_iters)):
             X = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
-                loss = model(*X)
+                loss = ema.ema_model(*X)
             losses[k] = loss.item()
         out[split] = losses.mean()
-    model.train()
     return out
 
 # learning rate decay scheduler (cosine with warmup)
@@ -323,7 +322,7 @@ def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', win
 
 def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode="independent"):
     with ctx:
-        y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise, memory_efficient=memory_efficient, rescale_phi=rescale_phi, cfg_mode=cfg_mode)
+        y = ema.ema_model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise, memory_efficient=memory_efficient, rescale_phi=rescale_phi, cfg_mode=cfg_mode)
         
     if isinstance(net_kwargs, list):
         bpm = net_kwargs[0]['bpm']
@@ -403,6 +402,20 @@ def save_samples(step):
         sf.write(os.path.join(batch_dir, f'{i}.wav'), y[i].flatten(), 16000)
         sf.write(os.path.join(batch_dir, f'{i}_cfg.wav'), y_cfg[i].flatten(), 16000)
 
+class EMAModel:
+    def __init__(self, model, decay=0.9999):
+        self.decay = decay
+        self.ema_model = copy.deepcopy(model).eval()
+        self.ema_model.requires_grad_(False)
+        
+    @torch.no_grad()
+    def update(self, model, step):
+        current_decay = min(self.decay, (1 + step) / (10 + step))
+        
+        for ema_param, model_param in zip(self.ema_model.parameters(), model.parameters()):
+            if model_param.requires_grad:
+                ema_param.data.mul_(current_decay).add_(model_param.data, alpha=1.0 - current_decay)
+
 # logging
 if wandb_log and master_process:
     import wandb
@@ -417,9 +430,10 @@ t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
+ema = EMAModel(model)
 
 # optimizer
-optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, betas=(beta1, beta2))
+optimizer = torch.optim.AdamW(model.create_optimizer_groups(weight_decay=weight_decay, lr=learning_rate), betas=(beta1, beta2))
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
 checkpoint = None # free up memory
@@ -435,10 +449,8 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         if iter_num % sample_interval == 0 and master_process:
-            model.eval()
             with ctx:
                 save_samples(iter_num)
-            model.train()
             
         losses = estimate_loss()
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
@@ -463,6 +475,7 @@ while True:
                 'best_val_loss': best_val_loss,
                 'config': config,
                 'tokens': tokens_trained,
+                'ema': ema.ema_model.state_dict(),
             }
             torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
             print(f"saving new best checkpoint to {out_dir}")
@@ -476,6 +489,7 @@ while True:
                 'best_val_loss': best_val_loss,
                 'config': config,
                 'tokens': tokens_trained,
+                'ema': ema.ema_model.state_dict(),
             }
             torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
     
@@ -507,6 +521,7 @@ while True:
     scaler.update()
     # flush the gradients as soon as we can, no need for this memory anymore
     optimizer.zero_grad(set_to_none=True)
+    ema.update(model, iter_num)
 
     # timing and logging
     t1 = time.time()
