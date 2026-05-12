@@ -1921,12 +1921,22 @@ class MetaConditionalModernDiTV2(nn.Module):
             
             if unconditional_mask is not None:
                 def apply_uncond_mask(mask_1d, null_t, target_t):
-                    mask = mask_1d.view(-1)
-                    
-                    for _ in range(target_t.ndim - 1):
+                    # 1. Ensure mask is flat 1D
+                    mask = mask_1d.view(-1) 
+                    B_mask = mask.shape[0]
+                    B_target = target_t.shape[0]
+
+                    # 2. Handle the Diffusion Forcing Flattening (B -> B*T)
+                    if B_target != B_mask and B_target % B_mask == 0:
+                        # Repeat the mask for each chunk in the sequence
+                        repeat_factor = B_target // B_mask
+                        mask = mask.repeat_interleave(repeat_factor)
+
+                    # 3. Align trailing dimensions for broadcasting
+                    while mask.ndim < target_t.ndim:
                         mask = mask.unsqueeze(-1)
                         
-                    return torch.where(mask, null_t, target_t)
+                    return torch.where(mask, null_t, target_t
                 
                 scalar_zero = torch.tensor(0.0, device=x.device, dtype=x.dtype)
                 
