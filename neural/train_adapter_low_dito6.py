@@ -123,7 +123,7 @@ ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torc
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 ## Load tokenizer
-ckpt_path = os.path.join(out_dir, 'ckpt.pt').replace('_adapter_', '_')
+ckpt_path = os.path.join('tokenizer_adapter_low_large_24576_subset_longtrain', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 tokeinzer_args = checkpoint['model_args']
 
