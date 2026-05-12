@@ -1936,7 +1936,7 @@ class MetaConditionalModernDiTV2(nn.Module):
                     while mask.ndim < target_t.ndim:
                         mask = mask.unsqueeze(-1)
                         
-                    return torch.where(mask, null_t, target_t
+                    return torch.where(mask, null_t, target_t)
                 
                 scalar_zero = torch.tensor(0.0, device=x.device, dtype=x.dtype)
                 
