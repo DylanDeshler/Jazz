@@ -566,9 +566,9 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            with torch.no_grad():
-                _, z = tokenizer.encode(X)
-                print(z.shape)
+            # with torch.no_grad():
+            #     _, z = tokenizer.encode(X)
+            z = torch.randn(batch_size, 16, 90).to(device)
             t = torch.rand(z.shape[0], device=z.device)
             z = model(z, latent_mask)
             loss = tokenizer.diffusion.loss(tokenizer.unet, X, t, net_kwargs={'z_dec': z}, mask=sample_mask)
