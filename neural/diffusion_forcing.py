@@ -1819,8 +1819,6 @@ class MetaConditionalModernDiTV2(nn.Module):
         self.bpm_embedder = nn.Embedding(350, hidden_size)
         self.measure_embedder = nn.Embedding(n_chunks, hidden_size)
         
-        self.fuse_conditioning = SwiGLUMlp(hidden_size * 3, int(2 / 3 * mlp_ratio * hidden_size * 3), hidden_size, bias=False)
-        
         if self.use_null_token:
             self.null_style = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
             self.null_bpm = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
@@ -1883,7 +1881,6 @@ class MetaConditionalModernDiTV2(nn.Module):
         t = self.t_embedder(t.flatten()).view(B, T, -1)
         style = self.style_embedder(style)
         bpm = self.bpm_embedder(torch.clamp(torch.round(bpm), min=0, max=349).long())
-        print(chroma.shape, rms.shape, density.shape, zcr.shape)
         
         if self.use_null_token:
             signals = {
@@ -1951,7 +1948,6 @@ class MetaConditionalModernDiTV2(nn.Module):
                 density = torch.where(unconditional_mask['density'].squeeze(), scalar_zero, density)
                 zcr = torch.where(unconditional_mask['zcr'].squeeze(), scalar_zero, zcr)
         
-        print(chroma.shape, rms.shape, density.shape, zcr.shape)
         c = torch.cat([chroma, rms.unsqueeze(-1), density.unsqueeze(-1), zcr.unsqueeze(-1)], dim=-1)
         c = c.unsqueeze(2).repeat(1, 1, N, 1)
         x = torch.cat([x, c], dim=-1)
@@ -1964,7 +1960,7 @@ class MetaConditionalModernDiTV2(nn.Module):
         x = x + measure_embs
         x = rearrange(x, 'b t n c -> b (t n) c', b=B, t=T)
         
-        print(t.mean(), style.mean(), bpm.mean())
+        print(t.mean(), t.std(), style.mean(), style.std(), bpm.mean(), bpm.std())
         t = t + style + bpm
         # t = torch.cat([t, style, bpm], dim=-1)
         # t = self.fuse_conditioning(t)
