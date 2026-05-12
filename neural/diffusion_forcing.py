@@ -7,6 +7,7 @@ from torch.utils.checkpoint import checkpoint
 
 import math
 from typing import Optional, List, Callable
+from scipy.optimize import linear_sum_assignment
 
 # class FM:
     
@@ -180,11 +181,24 @@ class FM:
         
         if t is None:
             # uniform
-            t = torch.rand(B, T, device=x.device)
+            # t = torch.rand(B, T, device=x.device)
             # logit normal
-            t = torch.sigmoid(t)
+            t = torch.sigmoid(torch.randn(B, T, device=x.device))
             repeat_t = t.unsqueeze(2).repeat(1, 1, N)
-        x_t, noise = self.add_noise(x, repeat_t)
+        
+        noise = torch.randn_like(x)
+        
+        # Optimal Transport Alignment
+        x_flat = x.view(B, -1)
+        noise_flat = noise.view(B, -1)
+        
+        cost_matrix = torch.cdist(noise_flat, x_flat, p=2)
+        _, col_ind = linear_sum_assignment(cost_matrix.detach().cpu().numpy())
+        col_ind_tensor = torch.tensor(col_ind, dtype=torch.long, device=x.device)
+        
+        noise = noise[col_ind_tensor]
+        
+        x_t, noise = self.add_noise(x, repeat_t, noise=noise)
         
         pred = net(x_t, t=t * self.timescale, **net_kwargs)
         
