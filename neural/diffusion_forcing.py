@@ -2001,10 +2001,10 @@ class MetaConditionalModernDiTV2(nn.Module):
         )
         x = rearrange(x, 'b (t n) c -> b t n c', t=T, n=N // self.patch_size)
         x = modulate(self.norm(x), shift.expand(-1, -1, N // self.patch_size, -1), scale.expand(-1, -1, N // self.patch_size, -1))
-        x = self.fc(x)
+        x = self.fc(x.contiguous())
         x = rearrange(x.contiguous(), 'b t n (p c) -> b t (n p) c', p=self.patch_size, c=C)
         
-        return x
+        return x.contiguous()
 
 class MetaConditionalModernDiTV2Wrapper(nn.Module):
     def __init__(self, **kwargs):
