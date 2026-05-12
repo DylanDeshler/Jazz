@@ -329,25 +329,6 @@ class SequenceDecoder(nn.Module):
                 
         self.initialize_weights()
     
-    def create_optimizer_groups(self, weight_decay=1e-2, lr=1e-4):
-        decay = []
-        no_decay = []
-        
-        for name, param in self.named_parameters():
-            if not param.requires_grad:
-                continue
-                
-            if param.ndim < 2 or 'embed' in name or 'measure_embedder' in name:
-                no_decay.append(param)
-            else:
-                decay.append(param)
-                
-        optim_groups = [
-            {"params": decay, "weight_decay": weight_decay, "lr": lr},
-            {"params": no_decay, "weight_decay": 0.0, "lr": lr},
-        ]
-        return optim_groups
-    
     def initialize_weights(self):
         self.apply(self._init_weights)
         # zero out classifier weights
@@ -400,6 +381,25 @@ class InvertibleAdapter(nn.Module):
         self.decoder = SequenceDecoder(
             in_dim, max_seq_len, hidden_dim, num_heads, decoder_depth, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, proj_bias=proj_bias
         )
+    
+    def create_optimizer_groups(self, weight_decay=1e-2, lr=1e-4):
+        decay = []
+        no_decay = []
+        
+        for name, param in self.named_parameters():
+            if not param.requires_grad:
+                continue
+                
+            if param.ndim < 2 or 'embed' in name or 'measure_embedder' in name:
+                no_decay.append(param)
+            else:
+                decay.append(param)
+                
+        optim_groups = [
+            {"params": decay, "weight_decay": weight_decay, "lr": lr},
+            {"params": no_decay, "weight_decay": 0.0, "lr": lr},
+        ]
+        return optim_groups
     
     def encode(self, x, mask=None):
         return self.encoder(x, mask=mask), x.shape
