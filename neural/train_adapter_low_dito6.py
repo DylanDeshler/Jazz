@@ -378,7 +378,7 @@ train_loader = DataLoader(
     train_dataset, 
     batch_size=batch_size, 
     sampler=train_sampler, 
-    num_workers=8,
+    num_workers=16,
     collate_fn=collate_fn,
     pin_memory=True,
     drop_last=True
@@ -388,7 +388,7 @@ val_loader = DataLoader(
     val_dataset, 
     batch_size=batch_size, 
     sampler=val_sampler, 
-    num_workers=8,
+    num_workers=16,
     collate_fn=collate_fn,
     pin_memory=True,
     drop_last=True
