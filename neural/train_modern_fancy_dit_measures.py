@@ -365,30 +365,24 @@ def save_samples(step):
     
     n_steps = 50
     n_samples = 5
-    x, bpm, rms_low, rms_mid, rms_high, density, zcr, mfcc, chroma, style = get_batch('val', batch_size=n_samples)
+    x, bpm, rms, density, zcr, chroma, style = get_batch('val', batch_size=n_samples)
     
     gen_noise = torch.randn(x.shape).to(device)
     decoder_noise = torch.randn(n_samples * n_chunks, 1, encoder_ratios * (max_adapter_len - 1)).to(device)
     
     unconditional_mask = {
         'bpm': torch.ones(*bpm.shape, 1).to(device).bool(),
-        'rms_low': torch.ones(*rms_low.shape, 1).to(device).bool(),
-        'rms_mid': torch.ones(*rms_mid.shape, 1).to(device).bool(),
-        'rms_high': torch.ones(*rms_high.shape, 1).to(device).bool(),
+        'rms': torch.ones(*rms.shape, 1).to(device).bool(),
         'density': torch.ones(*density.shape, 1).to(device).bool(),
         'zcr': torch.ones(*zcr.shape, 1).to(device).bool(),
-        'mfcc': torch.ones(*mfcc.shape[:-1], 1).to(device).bool(),
         'chroma': torch.ones(*chroma.shape[:-1], 1).to(device).bool(),
         'style': torch.ones(*style.shape[:-1], 1).to(device).bool(),
     }
     net_kwargs = {
         'bpm': bpm,
-        'rms_low': rms_low,
-        'rms_mid': rms_mid,
-        'rms_high': rms_high,
+        'rms': rms,
         'density': density,
         'zcr': zcr,
-        'mfcc': mfcc,
         'chroma': chroma,
         'style': style,
     }
@@ -398,7 +392,7 @@ def save_samples(step):
         temp_mask = unconditional_mask.copy()
         temp_mask[k] = ~v
         cfg_net_kwargs.append(net_kwargs | {'unconditional_mask': temp_mask})
-    cfg_guidances = list({'w_bpm': 3.710699914324043, 'w_rms_low': 4.028431549774051, 'w_rms_mid': 4.42472970788414, 'w_rms_high': 0.09824734544354286, 'w_density': 3.9796203268408687, 'w_zcr': 2.074415557615488, 'w_mfcc': 4.404573167810174, 'w_chroma': 4.81149841700109, 'w_style': 3.9142999037339976}.values())
+    cfg_guidances = list({'w_bpm': 3.710699914324043, 'w_rms': 2.028431549774051, 'w_density': 3.9796203268408687, 'w_zcr': 2.074415557615488, 'w_chroma': 4.81149841700109, 'w_style': 3.9142999037339976}.values())
     
     uncond_net_kwargs = net_kwargs | {'unconditional_mask': unconditional_mask}
     
