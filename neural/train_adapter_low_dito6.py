@@ -316,30 +316,36 @@ def slice_random_measure(beat_path):
     
     return frame_start, frame_end
 
+from concurrent.futures import ThreadPoolExecutor
+
+def fetch_single_sample(idx):
+    wav = librosa.load(paths[idx], sr=None)[0]
+    beat_path = os.path.join('/home/ubuntu/Data/beats', os.path.basename(paths[idx]))
+    
+    tries = 0
+    frame_start, frame_end = slice_random_measure(beat_path)
+    while frame_end - frame_end >= max_seq_len * encoder_ratios:
+        frame_start, frame_end = slice_random_measure(beat_path)
+        tries += 1
+        
+        if tries > 5:
+            frame_end = frame_start + math.floor(encoder_ratios * max_seq_len) - 100
+            break
+    
+    return wav[frame_start:frame_end]
+
+executor = ThreadPoolExecutor(max_workers=16)
+
 def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
         idxs = np.random.choice(train_idx, batch_size, p=train_durations).tolist()
     else:
         idxs = np.random.choice(test_idx, batch_size, p=test_durations).tolist()
     
-    x = []
-    for idx in idxs:
-        # # wav = wavs[idx]
-        # wav = librosa.load(paths[idx], sr=None)[0]
-        # beat_path = os.path.join('/home/ubuntu/Data/beats', os.path.basename(paths[idx]))
-        
-        # tries = 0
-        # frame_start, frame_end = slice_random_measure(beat_path)
-        # while frame_end - frame_end >= max_seq_len * encoder_ratios:
-        #     frame_start, frame_end = slice_random_measure(beat_path)
-        #     tries += 1
-            
-        #     if tries > 5:
-        #         frame_end = frame_start + math.floor(encoder_ratios * max_seq_len) - 100
-        #         break
-        
-        # x.append(wav[frame_start:frame_end])
-        x.append(np.random.randn(max_seq_len * encoder_ratios))
+    x = list(executor.map(
+        lambda idx: fetch_single_sample(idx), 
+        idxs
+    ))
     
     lengths = [len(x_) for x_ in x]
     max_len = min(max(lengths), encoder_ratios * (max_seq_len - 1))
@@ -356,6 +362,46 @@ def get_batch(split='train', batch_size=batch_size):
     x = torch.from_numpy(np.stack([np.pad(x_[:max_len], (0, max_len - len(x_[:max_len]))) for x_ in x], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
     
     return x, latent_mask, sample_mask
+
+# def get_batch(split='train', batch_size=batch_size):
+#     if split == 'train':
+#         idxs = np.random.choice(train_idx, batch_size, p=train_durations).tolist()
+#     else:
+#         idxs = np.random.choice(test_idx, batch_size, p=test_durations).tolist()
+    
+#     x = []
+#     for idx in idxs:
+#         # wav = wavs[idx]
+#         wav = librosa.load(paths[idx], sr=None)[0]
+#         beat_path = os.path.join('/home/ubuntu/Data/beats', os.path.basename(paths[idx]))
+        
+#         tries = 0
+#         frame_start, frame_end = slice_random_measure(beat_path)
+#         while frame_end - frame_end >= max_seq_len * encoder_ratios:
+#             frame_start, frame_end = slice_random_measure(beat_path)
+#             tries += 1
+            
+#             if tries > 5:
+#                 frame_end = frame_start + math.floor(encoder_ratios * max_seq_len) - 100
+#                 break
+        
+#         x.append(wav[frame_start:frame_end])
+    
+#     lengths = [len(x_) for x_ in x]
+#     max_len = min(max(lengths), encoder_ratios * (max_seq_len - 1))
+#     max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
+
+#     indices = torch.arange(max_len).unsqueeze(0)
+#     lengths = torch.from_numpy(np.asarray(lengths)).unsqueeze(1)
+#     sample_mask = (indices < lengths).to(device)
+
+#     indices = torch.arange(max_len // encoder_ratios).unsqueeze(0)
+#     lengths = (lengths + encoder_ratios - 1) // encoder_ratios
+#     latent_mask = (indices < lengths).to(device)
+    
+#     x = torch.from_numpy(np.stack([np.pad(x_[:max_len], (0, max_len - len(x_[:max_len]))) for x_ in x], axis=0).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
+    
+#     return x, latent_mask, sample_mask
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
