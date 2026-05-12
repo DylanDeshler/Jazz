@@ -1927,12 +1927,12 @@ class MetaConditionalModernDiTV2(nn.Module):
                         mask = mask.unsqueeze(-1)
                     return torch.where(mask, null_t, target_t)
                 
-                style = apply_uncond_mask(torch.where(unconditional_mask['style'], null_tokens['style'], style))
-                chroma = apply_uncond_mask(torch.where(unconditional_mask['chroma'], null_tokens['chroma'], chroma))
-                bpm = apply_uncond_mask(torch.where(unconditional_mask['bpm'], null_tokens['bpm'], bpm))
-                rms = apply_uncond_mask(torch.where(unconditional_mask['rms'], null_tokens['rms'], rms))
-                density = apply_uncond_mask(torch.where(unconditional_mask['density'], null_tokens['density'], density))
-                zcr = apply_uncond_mask(torch.where(unconditional_mask['zcr'], null_tokens['zcr'], zcr))
+                style = apply_uncond_mask(unconditional_mask['style'], null_tokens['style'], style)
+                chroma = apply_uncond_mask(unconditional_mask['chroma'], null_tokens['chroma'], chroma)
+                bpm = apply_uncond_mask(unconditional_mask['bpm'], null_tokens['bpm'], bpm)
+                rms = apply_uncond_mask(unconditional_mask['rms'], null_tokens['rms'], rms)
+                density = apply_uncond_mask(unconditional_mask['density'], null_tokens['density'], density)
+                zcr = apply_uncond_mask(unconditional_mask['zcr'], null_tokens['zcr'], zcr)
         
         c = torch.cat([chroma, rms, density, zcr], dim=-1)
         c = c.unsqueeze(2).repeat(1, 1, N, 1)
