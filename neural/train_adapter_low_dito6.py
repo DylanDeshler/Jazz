@@ -27,6 +27,7 @@ from torchinfo import summary
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
@@ -439,9 +440,8 @@ def estimate_loss():
             with ctx:
                 with torch.no_grad():
                     _, z = tokenizer.encode(X)
-                t = torch.rand(z.shape[0], device=z.device)
-                z = model(z, latent_mask)
-                loss = tokenizer.diffusion.loss(tokenizer.unet, X, t, net_kwargs={'z_dec': z}, mask=sample_mask)
+                z_hat = model(z, latent_mask)
+                loss = F.mse_loss(z.detach(), z_hat)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -566,13 +566,10 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            # with torch.no_grad():
-            #     _, z = tokenizer.encode(X)
-            #     print(X.shape, z.shape, latent_mask.shape, sample_mask.shape)
-            z = torch.randn(*latent_mask.shape).unsqueeze(1).repeat(1, 16, 1).to(device)
-            t = torch.rand(z.shape[0], device=z.device)
-            z = model(z, latent_mask)
-            loss = tokenizer.diffusion.loss(tokenizer.unet, X, t, net_kwargs={'z_dec': z}, mask=sample_mask)
+            with torch.no_grad():
+                _, z = tokenizer.encode(X)
+            z_hat = model(z, latent_mask)
+            loss = F.mse_loss(z.detach(), z_hat)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, latent_mask, sample_mask = get_batch('train')
