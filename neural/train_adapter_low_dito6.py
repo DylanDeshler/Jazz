@@ -136,7 +136,7 @@ for k,v in list(state_dict.items()):
     if k.startswith(unwanted_prefix):
         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
 tokenizer.load_state_dict(state_dict)
-tokenizer.requires_grad = False
+tokenizer.requires_grad_(False)
 tokenizer.eval()
 del checkpoint
 encoder_ratios = math.prod(tokenizer.encoder.ratios)
@@ -333,6 +333,7 @@ def get_batch(split='train', batch_size=batch_size):
         while frame_end - frame_end >= max_seq_len * encoder_ratios:
             frame_start, frame_end = slice_random_measure(beat_path)
             tries += 1
+            print(f'Retrying {tries}')
             
             if tries > 5:
                 frame_end = frame_start + math.floor(encoder_ratios * max_seq_len) - 100
