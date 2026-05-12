@@ -519,7 +519,7 @@ if wandb_log and master_process:
     if init_from == 'scratch':
         wandb.init(project=wandb_project, name=wandb_run_name, config=config)
     elif init_from == 'resume':
-        wandb.init(project=wandb_project, name=wandb_run_name, config=config, id='6epdpb5n', resume='must')
+        wandb.init(project=wandb_project, name=wandb_run_name, config=config, id='9n72rvya', resume='must')
 
 # training loop
 
