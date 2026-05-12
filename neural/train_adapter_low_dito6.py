@@ -82,7 +82,6 @@ backend = 'gloo' # 'nccl', 'gloo', etc.
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
-torch.backends.cudnn.benchmark = True
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 # exec(open('configurator.py').read()) # overrides from command line or config file
@@ -300,14 +299,8 @@ train_durations = durations[train_idx] / np.sum(durations[train_idx])
 test_durations = durations[test_idx] / np.sum(durations[test_idx])
 del durations
 
-print("Caching beat data into memory...")
-beat_cache = {}
-for path in tqdm(paths):
-    beat_path = os.path.join('/home/ubuntu/Data/beats', os.path.basename(path))
-    beat_cache[path] = parse_beat_file(beat_path)
-
 def slice_random_measure(beat_path):
-    beat_data = beat_cache[beat_path]
+    beat_data = parse_beat_file(beat_path)
     downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
     
     start = np.random.randint(len(downbeat_indices) - 1)
