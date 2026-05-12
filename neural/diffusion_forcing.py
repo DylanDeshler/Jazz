@@ -1917,12 +1917,12 @@ class MetaConditionalModernDiTV2(nn.Module):
             zcr = signals['zcr']
             
             if unconditional_mask is not None:
-                style = torch.where(unconditional_mask['style'], self.null_style, style)
-                chroma = torch.where(unconditional_mask['chroma'], self.null_chroma, chroma)
-                bpm = torch.where(unconditional_mask['bpm'], self.null_bpm, bpm)
-                rms = torch.where(unconditional_mask['rms'], self.null_rms, rms)
-                density = torch.where(unconditional_mask['density'], self.null_density, density)
-                zcr = torch.where(unconditional_mask['zcr'], self.null_zcr, zcr)
+                style = torch.where(unconditional_mask['style'], null_tokens['style'], style)
+                chroma = torch.where(unconditional_mask['chroma'], null_tokens['chroma'], chroma)
+                bpm = torch.where(unconditional_mask['bpm'], null_tokens['bpm'], bpm)
+                rms = torch.where(unconditional_mask['rms'], null_tokens['rms'], rms)
+                density = torch.where(unconditional_mask['density'], null_tokens['density'], density)
+                zcr = torch.where(unconditional_mask['zcr'], null_tokens['zcr'], zcr)
         
         c = torch.cat([chroma, rms, density, zcr], dim=-1)
         c = c.unsqueeze(2).repeat(1, 1, N, 1)
