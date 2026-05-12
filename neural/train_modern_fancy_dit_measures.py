@@ -407,6 +407,7 @@ class EMAModel:
         self.decay = decay
         self.ema_model = copy.deepcopy(model).eval()
         self.ema_model.requires_grad_(False)
+        self.ema_model = torch.compile(self.ema_model)
         
     @torch.no_grad()
     def update(self, model, step):
