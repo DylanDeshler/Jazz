@@ -1918,33 +1918,13 @@ class MetaConditionalModernDiTV2(nn.Module):
             zcr = signals['zcr']
             
             if unconditional_mask is not None:
-                def apply_uncond_mask(mask_1d, null_t, target_t):
-                    # 1. Ensure mask is flat 1D
-                    mask = mask_1d.view(-1) 
-                    B_mask = mask.shape[0]
-                    B_target = target_t.shape[0]
-
-                    # 2. Handle the Diffusion Forcing Flattening (B -> B*T)
-                    if B_target != B_mask and B_target % B_mask == 0:
-                        # Repeat the mask for each chunk in the sequence
-                        repeat_factor = B_target // B_mask
-                        mask = mask.repeat_interleave(repeat_factor)
-
-                    # 3. Align trailing dimensions for broadcasting
-                    while mask.ndim < target_t.ndim:
-                        mask = mask.unsqueeze(-1)
-                        
-                    return torch.where(mask, null_t, target_t)
-                
                 scalar_zero = torch.tensor(0.0, device=x.device, dtype=x.dtype)
                 
-                # print(unconditional_mask['style'].shape, null_tokens['style'].shape, style.shape)
                 style = torch.where(unconditional_mask['style'], null_tokens['style'], style)
                 bpm = torch.where(unconditional_mask['bpm'], null_tokens['bpm'], bpm)
                 
-                # print(unconditional_mask['rms'].shape, scalar_zero.shape, rms.shape, null_tokens['rms'].shape)
                 chroma = torch.where(unconditional_mask['chroma'], scalar_zero, chroma)
-                rms = torch.where(unconditional_mask['rms'].squeeze(), torch.zeros(1, device=rms.device), rms)
+                rms = torch.where(unconditional_mask['rms'].squeeze(), scalar_zero, rms)
                 density = torch.where(unconditional_mask['density'].squeeze(), scalar_zero, density)
                 zcr = torch.where(unconditional_mask['zcr'].squeeze(), scalar_zero, zcr)
         
@@ -1960,10 +1940,7 @@ class MetaConditionalModernDiTV2(nn.Module):
         x = x + measure_embs
         x = rearrange(x, 'b t n c -> b (t n) c', b=B, t=T)
         
-        print(t.mean(), t.std(), style.mean(), style.std(), bpm.mean(), bpm.std())
         t = t + style + bpm
-        # t = torch.cat([t, style, bpm], dim=-1)
-        # t = self.fuse_conditioning(t)
         t0 = self.t_block(t)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
