@@ -1952,7 +1952,7 @@ class MetaConditionalModernDiTV2(nn.Module):
                 zcr = torch.where(unconditional_mask['zcr'].squeeze(), scalar_zero, zcr)
         
         print(chroma.shape, rms.shape, density.shape, zcr.shape)
-        c = torch.cat([chroma, rms, density, zcr], dim=-1)
+        c = torch.cat([chroma, rms.unsqueeze(-1), density.unsqueeze(-1), zcr.unsqueeze(-1)], dim=-1)
         c = c.unsqueeze(2).repeat(1, 1, N, 1)
         x = torch.cat([x, c], dim=-1)
         x = rearrange(x, 'b t n c -> (b t) c n')
