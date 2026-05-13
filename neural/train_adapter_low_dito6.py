@@ -61,9 +61,9 @@ n_samples = 24576
 in_dim = 16
 n_queries = 48
 max_seq_len = 128
-hidden_dim = 512
-num_heads = 8
-enocder_depth = 4
+hidden_dim = 768
+num_heads = 12
+enocder_depth = 6
 decoder_depth = 2
 # adamw optimizer
 learning_rate = 1e-5 # max learning rate
@@ -73,7 +73,7 @@ beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
-decay_lr = True # whether to decay the learning rate
+decay_lr = False # whether to decay the learning rate
 warmup_iters = 5000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
