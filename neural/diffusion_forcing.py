@@ -1889,6 +1889,7 @@ class MetaConditionalModernDiTV2(nn.Module):
     def set_training_stage(self, stage):
         assert stage in [1, 2], f'Stage must be 1 or 2 but got {stage}'
         
+        self.stage = stage
         if self.stage == 1:
             for param in self.local_embedder.parameters():
                 param.requires_grad = False
