@@ -441,7 +441,8 @@ def estimate_loss():
                 with torch.no_grad():
                     _, z = tokenizer.encode(X)
                 z_hat = model(z, latent_mask)
-                loss = F.mse_loss(z.detach(), z_hat)
+                # loss = F.mse_loss(z.detach(), z_hat)
+                loss = 1.0 - F.cosine_similarity(z_hat, z.detach(), dim=-1).mean()
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -569,7 +570,8 @@ while True:
             with torch.no_grad():
                 _, z = tokenizer.encode(X)
             z_hat = model(z, latent_mask)
-            loss = F.mse_loss(z.detach(), z_hat)
+            # loss = F.mse_loss(z.detach(), z_hat)
+            loss = 1.0 - F.cosine_similarity(z_hat, z.detach(), dim=-1).mean()
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, latent_mask, sample_mask = get_batch('train')
