@@ -61,16 +61,16 @@ n_samples = 24576
 in_dim = 16
 n_queries = 64
 max_seq_len = 128
-hidden_dim = 512
-num_heads = 8
-enocder_depth = 4
+hidden_dim = 768
+num_heads = 12
+enocder_depth = 6
 decoder_depth = 2
 # adamw optimizer
 learning_rate = 1e-5 # max learning rate
 max_iters = 1000000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
-beta2 = 0.999
+beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
 decay_lr = False # whether to decay the learning rate
