@@ -1833,6 +1833,7 @@ class MetaConditionalModernDiTV2(nn.Module):
                  gradient_checkpointing=False,
                  patch_size=1,
                  use_null_token=False,
+                 stage=1,
                  **kwargs,
                  ):
         super().__init__()
@@ -1843,7 +1844,8 @@ class MetaConditionalModernDiTV2(nn.Module):
         self.use_null_token = use_null_token
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
-        self.x_embedder = Patcher(in_channels + 15, hidden_size, patch_size=patch_size, bias=True)
+        self.x_embedder = Patcher(in_channels, hidden_size, patch_size=patch_size, bias=True)
+        self.local_embedder = Patcher(15, hidden_size, patch_size=patch_size, bias=True)
         self.style_embedder = nn.Linear(style_dim, hidden_size, bias=True)
         self.bpm_embedder = nn.Embedding(350, hidden_size)
         
@@ -1875,6 +1877,24 @@ class MetaConditionalModernDiTV2(nn.Module):
         self.register_buffer('chroma_std', torch.tensor([
             0.18241853, 0.16477719, 0.18014704, 0.18011539, 0.1677363, 0.18919244, 0.16196373, 0.19185093, 0.18003348, 0.1768027, 0.18706752, 0.1618064
         ]))
+        self.register_buffer('rms_mean', torch.tensor([3.2653894]))
+        self.register_buffer('rms_std', torch.tensor([3.597796]))
+        self.register_buffer('density_mean', torch.tensor([2.5229013]))
+        self.register_buffer('density_std', torch.tensor([1.230155]))
+        self.register_buffer('zcr_mean', torch.tensor([0.10766766]))
+        self.register_buffer('zcr_std', torch.tensor([0.048143145]))
+        
+        self.set_training_stage(stage)
+    
+    def set_training_stage(self, stage):
+        assert stage in [1, 2], f'Stage must be 1 or 2 but got {stage}'
+        
+        if self.stage == 1:
+            for param in self.local_embedder.parameters():
+                param.requires_grad = False
+        elif self.stage == 2:
+            for param in self.local_embedder.parameters():
+                param.requires_grad = True
     
     def create_optimizer_groups(self, weight_decay=1e-2, lr=1e-4):
         decay = []
@@ -1884,7 +1904,7 @@ class MetaConditionalModernDiTV2(nn.Module):
             if not param.requires_grad:
                 continue
                 
-            if param.ndim < 2 or 'embed' in name or 'measure_embedder' in name:
+            if param.ndim < 2 or name == 'bpm_embedder.weight':
                 no_decay.append(param)
             else:
                 decay.append(param)
@@ -1919,11 +1939,12 @@ class MetaConditionalModernDiTV2(nn.Module):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
     def forward(self, x, t, bpm, rms, density, zcr, chroma, style, unconditional_mask=None):
+        assert self.stage in [1, 2], f'Stage must be 1 or 2 but got {self.stage}'
         B, T, N, C = x.shape
         
-        rms = (rms - 3.2653894) / 3.597796
-        density = (density - 2.5229013) / 1.230155
-        zcr = (zcr - 0.10766766) / 0.048143145
+        rms = (rms - self.rms_mean) / self.rms_std
+        density = (density - self.density_mean) / self.density_std
+        zcr = (zcr - self.zcr_mean) / self.zcr_std
         chroma = (chroma - self.chroma_mean) / self.chroma_std
         
         t = self.t_embedder(t.flatten()).view(B, T, -1)
@@ -1947,17 +1968,31 @@ class MetaConditionalModernDiTV2(nn.Module):
                 'density': torch.zeros_like(density[0, 0]), 
                 'zcr': torch.zeros_like(zcr[0, 0])
             }
-            signals = multi_token_drop(
-                signals, 
-                null_tokens, 
-                self.training,
-                p_joint_uncond=0.1, 
-                p_joint_full=0.6,
-                p_one_hot=0.2, 
-                p_ind_uncond=0.1, 
-                p_ind_low=0.05, 
-                p_ind_high=0.3
-            )
+            if self.stage == 1:
+                signals = multi_token_drop(
+                    signals, 
+                    null_tokens, 
+                    self.training,
+                    p_joint_uncond=0.1, 
+                    p_joint_full=0.9,
+                    p_one_hot=0, 
+                    p_ind_uncond=0, 
+                    p_ind_low=0, 
+                    p_ind_high=0
+                )
+            if self.stage == 2:
+                signals = multi_token_drop(
+                    signals, 
+                    null_tokens, 
+                    self.training,
+                    p_joint_uncond=0.1, 
+                    p_joint_full=0.1,
+                    p_one_hot=0.5, 
+                    p_ind_uncond=0.1, 
+                    p_ind_low=0.05, 
+                    p_ind_high=0.3
+                )
+            
             style = signals['style']
             chroma = signals['chroma']
             bpm = signals['bpm']
@@ -1976,12 +2011,15 @@ class MetaConditionalModernDiTV2(nn.Module):
                 density = torch.where(unconditional_mask['density'].squeeze(), scalar_zero, density)
                 zcr = torch.where(unconditional_mask['zcr'].squeeze(), scalar_zero, zcr)
         
-        c = torch.cat([chroma, rms.unsqueeze(-1), density.unsqueeze(-1), zcr.unsqueeze(-1)], dim=-1)
-        c = c.unsqueeze(2).repeat(1, 1, N, 1)
-        x = torch.cat([x, c], dim=-1)
-        
         x = rearrange(x, 'b t n c -> (b t) c n')
         x = self.x_embedder(x)
+        
+        if self.stage == 2:
+            c = torch.cat([chroma, rms.unsqueeze(-1), density.unsqueeze(-1), zcr.unsqueeze(-1)], dim=-1)
+            c = c.unsqueeze(2).repeat(1, 1, N, 1)
+            c = rearrange(x, 'b t n c -> (b t) c n')
+            c = self.local_embedder(c)
+            x = x + c
         x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
         
         t = t + style + bpm

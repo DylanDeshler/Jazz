@@ -45,7 +45,7 @@ import pyrubberband as pyrb
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'MetaConditionalModernDiTV2_smedium_24576_subset_adapter_longtrain_24chunks'
+out_dir = 'Stage1_MetaConditionalModernDiTV2_smedium_24576_subset_adapter_longtrain_24chunks'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -65,6 +65,7 @@ batch_size = 128
 TARGET_SIG = 4
 TARGET_BPM = 60 * TARGET_SIG / (24576 / 16000)
 # model
+stage = 1
 patch_size = 2
 gradient_checkpointing = False
 spatial_window = 64
@@ -211,7 +212,7 @@ for k,v in list(state_dict.items()):
 probe.load_state_dict(state_dict)
 probe.eval()
 
-model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, spatial_window=spatial_window, use_null_token=use_null_token, gradient_checkpointing=gradient_checkpointing, patch_size=patch_size)
+model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, spatial_window=spatial_window, use_null_token=use_null_token, gradient_checkpointing=gradient_checkpointing, patch_size=patch_size, stage=stage)
 
 if init_from == 'scratch':
     # init a new model from scratch
