@@ -59,6 +59,7 @@ adapter.load_state_dict(state_dict)
 adapter.eval()
 adapter = torch.compile(adapter)
 max_seq_len = adapter.max_seq_len
+n_queries = adapter_args['n_queries']
 
 paths = glob.glob('/home/ubuntu/Data/measures/*')
 with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
@@ -114,7 +115,7 @@ def parse_beat_file(beat_path):
     
     return beat_data
 
-if True:
+if False:
 
     test = False
 
@@ -219,14 +220,14 @@ write_paths = []
 paths = [f'{out_prefix}_{str(i).zfill(2)}.bin' for i in range(total_write_batches + 1)]
 for path in paths:
     data = np.memmap(path, dtype=np.float32, mode='r')
-    data = data.reshape((-1, n_samples // encoder_ratios, vae_embed_dim))
+    data = data.reshape((-1, n_queries, vae_embed_dim))
     write_paths.append((path, data.shape))
 
 # write tokens to train.bin
 cur_idx = 0
 filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_train.bin')
 train_length = np.sum([shape[0] for path, shape in write_paths[:-2]])
-arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, n_samples // encoder_ratios, vae_embed_dim))
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, n_queries, vae_embed_dim))
 print(arr.shape)
 
 for path, shape in write_paths[:-2]:
@@ -241,7 +242,7 @@ for path, shape in write_paths[:-2]:
 cur_idx = 0
 filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_val.bin')
 val_length = np.sum([shape[0] for path, shape in write_paths[-2:]])
-arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length, n_samples // encoder_ratios, vae_embed_dim))
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length, n_queries, vae_embed_dim))
 print(arr.shape)
 
 for path, shape in write_paths[-2:]:
