@@ -468,6 +468,21 @@ def apply_rotary_emb(x, freqs_cis):
     # x_out2 is now (bs, seqlen, n_heads, head_dim), e.g. (4, 8, 32, 128)
     return x_out2.type_as(x)
 
+class DropPath(nn.Module):
+    """Stochastic Depth: Randomly drops paths (blocks) per sample during training."""
+    def __init__(self, drop_prob=0.0):
+        super().__init__()
+        self.drop_prob = drop_prob
+
+    def forward(self, x):
+        if self.drop_prob == 0. or not self.training:
+            return x
+        keep_prob = 1 - self.drop_prob
+        shape = (x.shape[0],) + (1,) * (x.ndim - 1)
+        random_tensor = keep_prob + torch.rand(shape, dtype=x.dtype, device=x.device)
+        random_tensor.floor_()
+        return x.div(keep_prob) * random_tensor
+
 class TimestepEmbedder(nn.Module):
     """
     Embeds scalar timesteps into vector representations.
@@ -684,7 +699,7 @@ class SwiGLUMlp(nn.Module):
         return self.w3(hidden)
 
 class DiTBlock(nn.Module):
-    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, drop_path=0, **block_kwargs):
         super().__init__()
         self.norm1 = nn.LayerNorm(hidden_size)
         self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=False, proj_bias=True, **block_kwargs)
@@ -693,6 +708,7 @@ class DiTBlock(nn.Module):
         self.scale_shift_table = nn.Parameter(
             torch.randn(6, hidden_size) / hidden_size ** 0.5,
         )
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
     
     def forward(self, x, t, freqs_cis=None, attn_mask=None):
         """
@@ -714,8 +730,8 @@ class DiTBlock(nn.Module):
         
         # ugly but memory saving...
         x = rearrange(x, 'b (t n) c -> b t n c', t=T, n=N)
-        x = x + gate_msa * rearrange(self.attn(rearrange(modulate(self.norm1(x), shift_msa, scale_msa), 'b t n c -> b (t n) c'), freqs_cis=freqs_cis, attn_mask=attn_mask), 'b (t n) c -> b t n c', t=T, n=N)
-        x = x + gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
+        x = x + self.drop_path(gate_msa * rearrange(self.attn(rearrange(modulate(self.norm1(x), shift_msa, scale_msa), 'b t n c -> b (t n) c'), freqs_cis=freqs_cis, attn_mask=attn_mask), 'b (t n) c -> b t n c', t=T, n=N))
+        x = x + self.drop_path(gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp)))
         x = rearrange(x, 'b t n c -> b (t n) c')
         return x
 
@@ -1834,6 +1850,7 @@ class MetaConditionalModernDiTV2(nn.Module):
                  patch_size=1,
                  use_null_token=False,
                  stage=1,
+                 drop_path_rate=0.1,
                  **kwargs,
                  ):
         super().__init__()
@@ -1858,8 +1875,9 @@ class MetaConditionalModernDiTV2(nn.Module):
             nn.Linear(hidden_size, hidden_size * 6, bias=True),
         )
         
+        dp_rates=[x.item() for x in torch.linspace(0, drop_path_rate, depth)] 
         self.blocks = nn.ModuleList([
-            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio, drop_path=dp_rates[i]) for i in range(depth)
         ])
 
         self.norm = RMSNorm(hidden_size)
@@ -1869,7 +1887,6 @@ class MetaConditionalModernDiTV2(nn.Module):
         self.fc = nn.Linear(hidden_size, in_channels * patch_size, bias=False)
         self.bias = nn.Parameter(torch.zeros(in_channels * patch_size))
         
-        self.initialize_weights()
         self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
         self.register_buffer('chroma_mean', torch.tensor([
             0.45533183, 0.39680213, 0.44615716, 0.42044115, 0.40855545, 0.45450154, 0.3971631, 0.496346, 0.44164586, 0.4416672, 0.44793198, 0.39493898
@@ -1884,6 +1901,7 @@ class MetaConditionalModernDiTV2(nn.Module):
         self.register_buffer('zcr_mean', torch.tensor([0.10766766]))
         self.register_buffer('zcr_std', torch.tensor([0.048143145]))
         
+        self.initialize_weights()
         self.set_training_stage(stage)
     
     def set_training_stage(self, stage):
@@ -1981,7 +1999,7 @@ class MetaConditionalModernDiTV2(nn.Module):
                     p_ind_low=0, 
                     p_ind_high=0
                 )
-            if self.stage == 2:
+            elif self.stage == 2:
                 signals = multi_token_drop(
                     signals, 
                     null_tokens, 

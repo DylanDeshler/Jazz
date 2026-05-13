@@ -76,6 +76,7 @@ n_style_embeddings = 256
 style_dim = 128
 use_null_token = True
 cut_seconds = 1
+drop_path_rate = 0.1
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
@@ -212,7 +213,7 @@ for k,v in list(state_dict.items()):
 probe.load_state_dict(state_dict)
 probe.eval()
 
-model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, spatial_window=spatial_window, use_null_token=use_null_token, gradient_checkpointing=gradient_checkpointing, patch_size=patch_size, stage=stage)
+model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, spatial_window=spatial_window, use_null_token=use_null_token, gradient_checkpointing=gradient_checkpointing, patch_size=patch_size, stage=stage, drop_path_rate=drop_path_rate)
 
 if init_from == 'scratch':
     # init a new model from scratch
