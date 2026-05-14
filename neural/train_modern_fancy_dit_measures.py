@@ -439,6 +439,7 @@ ema = EMAModel(model)
 optimizer = torch.optim.AdamW(model.net.create_optimizer_groups(weight_decay=weight_decay, lr=learning_rate), betas=(beta1, beta2))
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
+    ema.ema_model.load_state_dict(checkpoint['ema'])
 checkpoint = None # free up memory
 while True:
 
