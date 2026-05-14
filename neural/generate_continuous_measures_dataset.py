@@ -163,7 +163,7 @@ if True:
                 _, codes = model.encode(batch[i*batch_size:(i+1)*batch_size])
                 codes, shape = adapter.encode(codes, mask=latent_mask[i*batch_size:(i+1)*batch_size])
                 
-                codes = adapter.decode(x, shape, mask=latent_mask[i*batch_size:(i+1)*batch_size])
+                codes = adapter.decode(codes, shape, mask=latent_mask[i*batch_size:(i+1)*batch_size])
                 logits = model.decode(codes, shape=batch[i*batch_size:(i+1)*batch_size].shape, n_steps=50)
                 sf.write('test.wav', logits[0].cpu().detach().float().numpy(), rate)
                 
