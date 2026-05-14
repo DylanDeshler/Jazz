@@ -181,7 +181,7 @@ tokenizer.eval()
 del state_dict
 encoder_ratios = math.prod(tokenizer.encoder.ratios)
 
-ckpt_path = os.path.join('tokenizer_adapter_low_large_24576_subset_longtrain', 'ckpt.pt')
+ckpt_path = os.path.join('tokenizer_adapter_low_large_24576_subset_longtrain_v2', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 adapter_args = checkpoint['model_args']
 
@@ -197,21 +197,6 @@ adapter.load_state_dict(state_dict)
 adapter.eval()
 del state_dict
 max_adapter_len = adapter.max_seq_len
-
-ckpt_path = os.path.join('tokenizer_low_measures_fix_subset_longtrain_BPMProbe_small', 'ckpt.pt')
-checkpoint = torch.load(ckpt_path, map_location=device)
-probe_args = checkpoint['model_args']
-
-probe = BPMProbe(**probe_args).to(device)
-state_dict = checkpoint['model']
-# fix the keys of the state dictionary :(
-# honestly no idea how checkpoints sometimes get this prefix, have to debug more
-unwanted_prefix = '_orig_mod.'
-for k,v in list(state_dict.items()):
-    if k.startswith(unwanted_prefix):
-        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-probe.load_state_dict(state_dict)
-probe.eval()
 
 model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, spatial_window=spatial_window, use_null_token=use_null_token, gradient_checkpointing=gradient_checkpointing, patch_size=patch_size, stage=stage, drop_path_rate=drop_path_rate)
 
@@ -346,7 +331,7 @@ def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance
     shape = (gen_shape[0] * n_chunks, 1, max_latent_len)
         
     with ctx:
-        y = y.transpose(2, 3).view(gen_shape[0] * n_chunks, vae_embed_dim, spatial_window)
+        y = rearrange(y, 'b t n c -> (b t) c n')
         y = adapter.decode(y, shape, mask=mask)
         y = tokenizer.decode(y, shape=(1, max_len), n_steps=n_steps, noise=decoder_noise[:, :, :max_len] if decoder_noise is not None else None)
     
@@ -374,7 +359,7 @@ def decode_latents(y, bpm, n_steps, decoder_noise=None):
     shape = (bpm.shape[0] * n_chunks, 1, max_latent_len)
         
     with ctx:
-        y = y.transpose(2, 3).view(bpm.shape[0] * n_chunks, vae_embed_dim, spatial_window)
+        y = rearrange(y, 'b t n c -> (b t) c n')
         y = adapter.decode(y, shape, mask=mask)
         y = tokenizer.decode(y, shape=(1, max_len), n_steps=n_steps, noise=decoder_noise[:, :, :max_len] if decoder_noise is not None else None)
     
