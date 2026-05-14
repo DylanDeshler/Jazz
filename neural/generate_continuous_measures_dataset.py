@@ -165,7 +165,7 @@ if True:
                 
                 codes = adapter.decode(codes, shape, mask=latent_mask[i*batch_size:(i+1)*batch_size])
                 logits = model.decode(codes, shape=batch[i*batch_size:(i+1)*batch_size].shape, n_steps=50)
-                sf.write('test.wav', logits[0].cpu().detach().float().numpy(), rate)
+                sf.write('test.wav', logits[0].flatten().cpu().detach().float().numpy(), rate)
                 
                 this_codes = codes.permute(0, 2, 1).cpu().detach().numpy() # (B, n_queries, vae_embed_dim)
                 print(this_codes.shape)
