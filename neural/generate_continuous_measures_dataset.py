@@ -165,7 +165,7 @@ if True:
                 
                 ## for testing
                 
-                seconds_per_beat = 60.0 / bpms[i*batch_size:(i+1)*batch_size]
+                seconds_per_beat = 60.0 / np.asarray(bpms)[i*batch_size:(i+1)*batch_size]
                 measure_duration_sec = seconds_per_beat * TARGET_SIG
                 
                 target_samples = (measure_duration_sec * 16000).long()
