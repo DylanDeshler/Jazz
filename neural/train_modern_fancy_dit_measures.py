@@ -377,7 +377,7 @@ def save_samples(step):
     os.makedirs(batch_dir, exist_ok=True)
     
     cfg_mode = 'joint'
-    n_steps = 50
+    n_steps = 100
     n_samples = 10
     x, bpm, rms, density, zcr, chroma, style = get_batch('val', batch_size=n_samples)
     
@@ -403,7 +403,8 @@ def save_samples(step):
     uncond_net_kwargs = net_kwargs | {'unconditional_mask': unconditional_mask}
     
     if cfg_mode == 'joint':
-        cfg_net_kwargs = [net_kwargs | {'unconditional_mask': None}]
+        joint_conditional_mask = {k: ~v for k, v in unconditional_mask.items()}
+        cfg_net_kwargs = [net_kwargs | {'unconditional_mask': joint_conditional_mask}]
     elif cfg_mode == 'independent':
         cfg_net_kwargs = []
         for k, v in unconditional_mask.items():
