@@ -164,30 +164,30 @@ if True:
                 codes, init_shape = adapter.encode(codes, mask=latent_mask[i*batch_size:(i+1)*batch_size])
                 
                 ## for testing
-                seconds_per_beat = 60.0 / torch.from_numpy(np.asarray(bpms[i*batch_size:(i+1)*batch_size])).to(device)
-                measure_duration_sec = seconds_per_beat * TARGET_SIG
+                # seconds_per_beat = 60.0 / torch.from_numpy(np.asarray(bpms[i*batch_size:(i+1)*batch_size])).to(device)
+                # measure_duration_sec = seconds_per_beat * TARGET_SIG
                 
-                target_samples = (measure_duration_sec * 16000).long()
-                max_len = min(target_samples.max().item(), encoder_ratios * (max_seq_len - 1))
-                max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
-                max_latent_len = max_len // encoder_ratios
+                # target_samples = (measure_duration_sec * 16000).long()
+                # max_len = min(target_samples.max().item(), encoder_ratios * (max_seq_len - 1))
+                # max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
+                # max_latent_len = max_len // encoder_ratios
                 
-                indices = torch.arange(max_latent_len, device=device).view(1, 1, -1)
-                lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
-                mask = indices < lengths
-                mask = mask.view(seconds_per_beat.shape[0], max_latent_len)
-                shape = (seconds_per_beat.shape[0], vae_embed_dim, max_latent_len)
+                # indices = torch.arange(max_latent_len, device=device).view(1, 1, -1)
+                # lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
+                # mask = indices < lengths
+                # mask = mask.view(seconds_per_beat.shape[0], max_latent_len)
+                # shape = (seconds_per_beat.shape[0], vae_embed_dim, max_latent_len)
                 
-                codes1 = adapter.decode(codes, shape, mask=latent_mask[i*batch_size:(i+1)*batch_size])
-                logits1 = model.decode(codes1, shape=batch[i*batch_size:(i+1)*batch_size].shape, n_steps=50)
-                print(codes1.shape, shape, logits1.shape)
-                sf.write('test1.wav', logits1[0].flatten().cpu().detach().float().numpy(), rate)
+                # codes1 = adapter.decode(codes, shape, mask=latent_mask[i*batch_size:(i+1)*batch_size])
+                # logits1 = model.decode(codes1, shape=batch[i*batch_size:(i+1)*batch_size].shape, n_steps=50)
+                # print(codes1.shape, shape, logits1.shape)
+                # sf.write('test1.wav', logits1[0].flatten().cpu().detach().float().numpy(), rate)
                 
-                codes2 = adapter.decode(codes, init_shape, mask=latent_mask[i*batch_size:(i+1)*batch_size])
-                logits2 = model.decode(codes2, shape=batch[i*batch_size:(i+1)*batch_size].shape, n_steps=50)
-                print(codes2.shape, init_shape, logits2.shape)
-                sf.write('test2.wav', logits2[0].flatten().cpu().detach().float().numpy(), rate)
-                print('Wrote!')
+                # codes2 = adapter.decode(codes, init_shape, mask=latent_mask[i*batch_size:(i+1)*batch_size])
+                # logits2 = model.decode(codes2, shape=batch[i*batch_size:(i+1)*batch_size].shape, n_steps=50)
+                # print(codes2.shape, init_shape, logits2.shape)
+                # sf.write('test2.wav', logits2[0].flatten().cpu().detach().float().numpy(), rate)
+                # print('Wrote!')
                 
                 this_codes = codes.permute(0, 2, 1).cpu().detach().numpy() # (B, n_queries, vae_embed_dim)
 
