@@ -180,6 +180,7 @@ class FM:
         x_flat = x.view(B, -1).detach()
         noise_flat = noise.view(B, -1).detach()
         
+        # cost_matrix = torch.cdist(x_flat, noise_flat, p=2)
         cost_matrix = torch.cdist(noise_flat, x_flat, p=2)
         cost_matrix_np = cost_matrix.cpu().numpy()
         
