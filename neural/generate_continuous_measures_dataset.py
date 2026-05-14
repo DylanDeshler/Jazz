@@ -176,7 +176,7 @@ if True:
                 lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
                 mask = indices < lengths
                 mask = mask.view(seconds_per_beat.shape[0], max_latent_len)
-                shape = (seconds_per_beat.shape[0], 1, max_latent_len)
+                shape = (seconds_per_beat.shape[0], vae_embed_dim, max_latent_len)
                 
                 codes1 = adapter.decode(codes, shape, mask=latent_mask[i*batch_size:(i+1)*batch_size])
                 logits1 = model.decode(codes1, shape=batch[i*batch_size:(i+1)*batch_size].shape, n_steps=50)
