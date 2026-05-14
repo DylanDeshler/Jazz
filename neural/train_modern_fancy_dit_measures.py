@@ -376,6 +376,7 @@ def save_samples(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
     
+    cfg_mode = 'joint'
     n_steps = 50
     n_samples = 10
     x, bpm, rms, density, zcr, chroma, style = get_batch('val', batch_size=n_samples)
@@ -399,18 +400,20 @@ def save_samples(step):
         'chroma': chroma,
         'style': style,
     }
-    
-    cfg_net_kwargs = []
-    for k, v in unconditional_mask.items():
-        temp_mask = unconditional_mask.copy()
-        temp_mask[k] = ~v
-        cfg_net_kwargs.append(net_kwargs | {'unconditional_mask': temp_mask})
-    # cfg_guidances = list({'w_bpm': 3.710699914324043, 'w_rms': 2.028431549774051, 'w_density': 3.9796203268408687, 'w_zcr': 2.074415557615488, 'w_chroma': 4.81149841700109, 'w_style': 3.9142999037339976}.values())
-    cfg_guidances = [4] * len(unconditional_mask)
-    
     uncond_net_kwargs = net_kwargs | {'unconditional_mask': unconditional_mask}
     
-    y_cfg = predict_measures(x.shape, cfg_net_kwargs, uncond_net_kwargs, n_steps, guidance=cfg_guidances, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode="joint")
+    if cfg_mode == 'joint':
+        cfg_net_kwargs = [net_kwargs | {'unconditional_mask': None}]
+    elif cfg_mode == 'independent':
+        cfg_net_kwargs = []
+        for k, v in unconditional_mask.items():
+            temp_mask = unconditional_mask.copy()
+            temp_mask[k] = ~v
+            cfg_net_kwargs.append(net_kwargs | {'unconditional_mask': temp_mask})
+    
+    cfg_guidances = [3] * len(unconditional_mask)
+    
+    y_cfg = predict_measures(x.shape, cfg_net_kwargs, uncond_net_kwargs, n_steps, guidance=cfg_guidances, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode=cfg_mode)
     y = predict_measures(x.shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
     y_gt = decode_latents(x, bpm, n_steps, decoder_noise=decoder_noise)
     
@@ -438,7 +441,7 @@ class EMAModel:
 if wandb_log and master_process:
     import wandb
     if init_from == 'resume':
-        wandb.init(project=wandb_project, name=wandb_run_name, id='j2ajnk5e', config=config)
+        wandb.init(project=wandb_project, name=wandb_run_name, id='j2ajnk5e', resume='must', config=config)
     else:
         wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
