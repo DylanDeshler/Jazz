@@ -358,6 +358,34 @@ def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance
     
     return y
 
+def decode_latents(y, bpm, n_steps, decoder_noise=None):
+    seconds_per_beat = 60.0 / bpm
+    measure_duration_sec = seconds_per_beat * TARGET_SIG
+    
+    target_samples = (measure_duration_sec * 16000).long()
+    max_len = min(target_samples.max().item(), encoder_ratios * (max_adapter_len - 1))
+    max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
+    max_latent_len = max_len // encoder_ratios
+    
+    indices = torch.arange(max_latent_len, device=device).view(1, 1, -1)
+    lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
+    mask = indices < lengths
+    mask = mask.view(bpm.shape[0] * n_chunks, max_latent_len)
+    shape = (bpm.shape[0] * n_chunks, 1, max_latent_len)
+        
+    with ctx:
+        y = y.transpose(2, 3).view(bpm.shape[0] * n_chunks, vae_embed_dim, spatial_window)
+        y = adapter.decode(y, shape, mask=mask)
+        y = tokenizer.decode(y, shape=(1, max_len), n_steps=n_steps, noise=decoder_noise[:, :, :max_len] if decoder_noise is not None else None)
+    
+    target_samples = target_samples.flatten().cpu().detach().numpy()
+    y = y.squeeze().cpu().detach().numpy()
+    
+    target_samples = target_samples.reshape(bpm.shape[0], n_chunks)
+    y = [np.concatenate([y_[:min(int(samples), max_len)] for y_, samples in zip(y[i*n_chunks:(i+1)*n_chunks], target_samples[i])], axis=0).astype(np.float32) for i in range(bpm.shape[0])]
+    
+    return y
+
 @torch.no_grad()
 def save_samples(step):
     batch_dir = os.path.join(out_dir, str(step))
@@ -399,10 +427,12 @@ def save_samples(step):
     
     y_cfg = predict_measures(x.shape, cfg_net_kwargs, uncond_net_kwargs, n_steps, guidance=cfg_guidances, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode="joint")
     y = predict_measures(x.shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
+    y_gt = decode_latents(x, bpm, n_steps, decoder_noise=decoder_noise)
     
     for i in range(n_samples):
         sf.write(os.path.join(batch_dir, f'{i}.wav'), y[i].flatten(), 16000)
         sf.write(os.path.join(batch_dir, f'{i}_cfg.wav'), y_cfg[i].flatten(), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_gt.wav'), y_gt[i].flatten(), 16000)
 
 class EMAModel:
     def __init__(self, model, decay=0.9999):
