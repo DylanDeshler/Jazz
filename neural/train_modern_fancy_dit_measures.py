@@ -328,7 +328,7 @@ def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance
     lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
     mask = indices < lengths
     mask = mask.view(gen_shape[0] * n_chunks, max_latent_len)
-    shape = (gen_shape[0] * n_chunks, 1, max_latent_len)
+    shape = (gen_shape[0] * n_chunks, vae_embed_dim, max_latent_len)
         
     with ctx:
         y = rearrange(y, 'b t n c -> (b t) c n')
@@ -356,7 +356,7 @@ def decode_latents(y, bpm, n_steps, decoder_noise=None):
     lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
     mask = indices < lengths
     mask = mask.view(bpm.shape[0] * n_chunks, max_latent_len)
-    shape = (bpm.shape[0] * n_chunks, 1, max_latent_len)
+    shape = (bpm.shape[0] * n_chunks, vae_embed_dim, max_latent_len)
         
     with ctx:
         y = rearrange(y, 'b t n c -> (b t) c n')
