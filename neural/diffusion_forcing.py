@@ -1873,7 +1873,7 @@ class MetaConditionalModernDiTV2(nn.Module):
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
         self.x_embedder = Patcher(in_channels, hidden_size, patch_size=patch_size, bias=True)
-        self.local_embedder = Patcher(15, hidden_size, patch_size=patch_size, bias=True)
+        self.local_embedder = Patcher(16, hidden_size, patch_size=patch_size, bias=True)
         self.style_embedder = nn.Linear(style_dim, hidden_size, bias=True)
         self.bpm_embedder = nn.Embedding(350, hidden_size)
         
