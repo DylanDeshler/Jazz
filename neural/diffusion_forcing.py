@@ -2014,16 +2014,17 @@ class MetaConditionalModernDiTV2(nn.Module):
                     p_ind_high=0
                 )
             elif self.stage == 2:
+                # probabilities taken from Composer https://arxiv.org/pdf/2302.09778
                 signals = multi_token_drop(
                     signals, 
                     null_tokens, 
                     self.training,
                     p_joint_uncond=0.1, 
                     p_joint_full=0.1,
-                    p_one_hot=0.5, 
-                    p_ind_uncond=0.1, 
-                    p_ind_low=0.05, 
-                    p_ind_high=0.3
+                    p_one_hot=0, 
+                    p_ind_uncond=0.5, 
+                    p_ind_low=0, 
+                    p_ind_high=0
                 )
             
             style = signals['style']
