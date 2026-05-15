@@ -307,6 +307,43 @@ def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', win
             
     return torch.from_numpy(smoothed).to(bpm_tensor.device)
 
+def crossfade_segments(segment_a, segment_b, sample_rate, crossfade_ms=15):
+    """
+    Crossfades two 1D numpy audio arrays to prevent boundary clicks.
+    
+    Args:
+        segment_a: numpy array of the first measure.
+        segment_b: numpy array of the second measure.
+        sample_rate: The sample rate of the audio (e.g., 44100 or 24000).
+        crossfade_ms: Duration of the crossfade in milliseconds.
+    """
+    # Convert milliseconds to exact sample count
+    crossfade_samples = int(sample_rate * (crossfade_ms / 1000.0))
+    
+    # Safety check: if segments are too short, just concatenate
+    if len(segment_a) < crossfade_samples or len(segment_b) < crossfade_samples:
+        return np.concatenate((segment_a, segment_b))
+        
+    # Create linear fade curves (can also use np.cos for equal-power crossfades)
+    fade_out = np.linspace(1.0, 0.0, crossfade_samples)
+    fade_in = np.linspace(0.0, 1.0, crossfade_samples)
+    
+    # Apply fades to the overlapping edges
+    overlap_a = segment_a[-crossfade_samples:] * fade_out
+    overlap_b = segment_b[:crossfade_samples] * fade_in
+    
+    # Sum the overlapped audio
+    mixed_overlap = overlap_a + overlap_b
+    
+    # Stitch the untouched beginnings/ends with the mixed overlap
+    stitched_audio = np.concatenate((
+        segment_a[:-crossfade_samples],
+        mixed_overlap,
+        segment_b[crossfade_samples:]
+    ))
+    
+    return stitched_audio
+
 def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode="independent", t_dist="uniform"):
     with ctx:
         y = ema.ema_model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise, memory_efficient=memory_efficient, rescale_phi=rescale_phi, cfg_mode=cfg_mode, t_dist=t_dist)
@@ -339,9 +376,16 @@ def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance
     y = y.squeeze().cpu().detach().numpy()
     
     target_samples = target_samples.reshape(gen_shape[0], n_chunks)
-    y = [np.concatenate([y_[:min(int(samples), max_len)] for y_, samples in zip(y[i*n_chunks:(i+1)*n_chunks], target_samples[i])], axis=0).astype(np.float32) for i in range(gen_shape[0])]
+    # out = [np.concatenate([y_[:min(int(samples), max_len)] for y_, samples in zip(y[i*n_chunks:(i+1)*n_chunks], target_samples[i])], axis=0).astype(np.float32) for i in range(gen_shape[0])]
     
-    return y
+    out = []
+    for i in range(gen_shape[0]):
+        temp = y[i*n_chunks+j][:min(int(target_samples[i*n_chunks+j]), max_len)]
+        for j in range(1, n_chunks):
+            temp = crossfade_segments(temp, y[i*n_chunks+j][:min(int(target_samples[i*n_chunks+j]), max_len)], sample_rate=16000, crossfade_ms=20)
+        out.append(temp.astype(np.float32))
+    
+    return out
 
 def decode_latents(y, bpm, n_steps, decoder_noise=None):
     seconds_per_beat = 60.0 / bpm
@@ -367,9 +411,16 @@ def decode_latents(y, bpm, n_steps, decoder_noise=None):
     y = y.squeeze().cpu().detach().numpy()
     
     target_samples = target_samples.reshape(bpm.shape[0], n_chunks)
-    y = [np.concatenate([y_[:min(int(samples), max_len)] for y_, samples in zip(y[i*n_chunks:(i+1)*n_chunks], target_samples[i])], axis=0).astype(np.float32) for i in range(bpm.shape[0])]
+    # out = [np.concatenate([y_[:min(int(samples), max_len)] for y_, samples in zip(y[i*n_chunks:(i+1)*n_chunks], target_samples[i])], axis=0).astype(np.float32) for i in range(bpm.shape[0])]
     
-    return y
+    out = []
+    for i in range(bpm.shape[0]):
+        temp = y[i*n_chunks+j][:min(int(target_samples[i*n_chunks+j]), max_len)]
+        for j in range(1, n_chunks):
+            temp = crossfade_segments(temp, y[i*n_chunks+j][:min(int(target_samples[i*n_chunks+j]), max_len)], sample_rate=16000, crossfade_ms=20)
+        out.append(temp.astype(np.float32))
+    
+    return out
 
 @torch.no_grad()
 def save_samples(step):
