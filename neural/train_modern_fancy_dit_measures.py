@@ -45,7 +45,7 @@ import pyrubberband as pyrb
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'Stage1_MetaConditionalModernDiTV2_smedium_24576_subset_adapter_longtrain_24chunks'
+out_dir = 'Stage2_MetaConditionalModernDiTV2_smedium_24576_subset_adapter_longtrain_24chunks'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -53,7 +53,7 @@ save_interval = 5000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = out_dir
@@ -65,7 +65,7 @@ batch_size = 128
 TARGET_SIG = 4
 TARGET_BPM = 60 * TARGET_SIG / (24576 / 16000)
 # model
-stage = 1
+stage = 2
 patch_size = 2
 gradient_checkpointing = False
 spatial_window = 64
@@ -138,27 +138,25 @@ def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
         data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_v2_64_train.bin', dtype=np.float32, mode='r', shape=(3941406, spatial_window, vae_embed_dim))
         style = np.memmap('/home/ubuntu/Data/contrast_learntmep_instance_10s_style_train.bin', dtype=np.float32, mode='r', shape=(3941406, style_dim))
-        meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_meta_train.bin', dtype=np.float32, mode='r', shape=(3941406, 29))
+        meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_chroma_rms_density_zcr_flatness_train.bin', dtype=np.float32, mode='r', shape=(3941406, 16))
         bpms = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_v2_64_bpm_train.bin', dtype=np.float32, mode='r')
     else:
         data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_v2_64_val.bin', dtype=np.float32, mode='r', shape=(88303, spatial_window, vae_embed_dim))
         style = np.memmap('/home/ubuntu/Data/contrast_learntmep_instance_10s_style_val.bin', dtype=np.float32, mode='r', shape=(88303, style_dim))
-        meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_meta_val.bin', dtype=np.float32, mode='r', shape=(88303, 29))
+        meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_chroma_rms_density_zcr_flatness_val.bin', dtype=np.float32, mode='r', shape=(88303, 16))
         bpms = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_v2_64_bpm_val.bin', dtype=np.float32, mode='r')
     
     idxs = torch.randint(len(data) - n_chunks, (batch_size,))    
     x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     style = torch.from_numpy(np.stack([style[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     chroma = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, :12] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    rms_low = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 12] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    rms_mid = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 13] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    rms_high = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 14] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    density = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 15] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    zcr = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 16] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    # mfcc = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 17:] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    rms = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 12] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    density = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 13] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    zcr = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 14] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    flatness = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 15] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     bpm = torch.from_numpy(np.stack([bpms[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
 
-    return x, bpm, rms_low + rms_mid + rms_high, density, zcr, chroma, style
+    return x, bpm, rms, density, zcr, flatness, chroma, style
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
@@ -201,6 +199,24 @@ max_adapter_len = adapter.max_seq_len
 model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, spatial_window=spatial_window, use_null_token=use_null_token, gradient_checkpointing=gradient_checkpointing, patch_size=patch_size, stage=stage, drop_path_rate=drop_path_rate)
 
 if init_from == 'scratch':
+    if stage == 2:
+        stage1_ckpt = torch.load(os.path.join(out_dir.replace('Stage1', 'Stage2'), 'ckpt.pt'))
+        checkpoint = torch.load(ckpt_path, map_location=device)
+        model_args = checkpoint['model_args']
+        model_args['gradient_checkpointing'] = gradient_checkpointing
+
+        model = net(**model_args)
+        state_dict = checkpoint['model']
+
+        # fix the keys of the state dictionary :(
+        # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+        unwanted_prefix = '_orig_mod.'
+        for k,v in list(state_dict.items()):
+            if k.startswith(unwanted_prefix):
+                state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+            if 'local_embedder' in k:
+                state_dict.pop(k)
+        model.load_state_dict(state_dict, strict=False)
     # init a new model from scratch
     print("Initializing a new model from scratch")
     model = net(**model_args)
@@ -431,7 +447,7 @@ def save_samples(step):
     cfg_mode = 'joint'
     n_steps = 100
     n_samples = 10
-    x, bpm, rms, density, zcr, chroma, style = get_batch('val', batch_size=n_samples)
+    x, bpm, rms, density, zcr, flatness, chroma, style = get_batch('val', batch_size=n_samples)
     
     gen_noise = torch.randn(x.shape).to(device)
     decoder_noise = torch.randn(n_samples * n_chunks, 1, encoder_ratios * (max_adapter_len - 1)).to(device)
@@ -441,6 +457,7 @@ def save_samples(step):
         'rms': torch.ones(*rms.shape, 1).to(device).bool(),
         'density': torch.ones(*density.shape, 1).to(device).bool(),
         'zcr': torch.ones(*zcr.shape, 1).to(device).bool(),
+        'flatness': torch.ones(*flatness.shape, 1).to(device).bool(),
         'chroma': torch.ones(*chroma.shape[:-1], 1).to(device).bool(),
         'style': torch.ones(*style.shape[:-1], 1).to(device).bool(),
     }
@@ -449,6 +466,7 @@ def save_samples(step):
         'rms': rms,
         'density': density,
         'zcr': zcr,
+        'flatness': flatness,
         'chroma': chroma,
         'style': style,
     }
@@ -510,6 +528,7 @@ ema = EMAModel(model)
 optimizer = torch.optim.AdamW(model.net.create_optimizer_groups(weight_decay=weight_decay, lr=learning_rate), betas=(beta1, beta2))
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
+if init_from == 'resume' or (init_from == 'scratch' and stage == 2):
     ema.ema_model.load_state_dict(checkpoint['ema'])
 checkpoint = None # free up memory
 while True:
