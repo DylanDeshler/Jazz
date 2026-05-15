@@ -2054,7 +2054,9 @@ class MetaConditionalModernDiTV2(nn.Module):
         
         if self.stage == 2:
             c = torch.cat([chroma, rms.unsqueeze(-1), density.unsqueeze(-1), zcr.unsqueeze(-1), flatness.unsqueeze(-1)], dim=-1)
+            print(c.shape)
             c = c.unsqueeze(2).repeat(1, 1, N, 1)
+            print(c.shape)
             c = rearrange(x, 'b t n c -> (b t) c n')
             c = self.local_embedder(c)
             x = x + c
