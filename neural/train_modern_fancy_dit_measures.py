@@ -527,7 +527,7 @@ optimizer = torch.optim.AdamW(model.net.create_optimizer_groups(weight_decay=wei
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
 if init_from == 'resume' or (init_from == 'scratch' and stage == 2):
-    ema.ema_model.load_state_dict(checkpoint['ema'])
+    ema.ema_model.load_state_dict(stage1_ckpt['ema'])
 checkpoint = None # free up memory
 while True:
 
