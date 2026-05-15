@@ -250,12 +250,12 @@ if init_from == 'scratch':
                 state_dict.pop(k[len(unwanted_prefix):])
         ema.ema_model.load_state_dict(state_dict, strict=False)
         
-        torch.nn.init.zeros_(ema.ema_model.local_embedder.block.block1.project.weight)
-        torch.nn.init.zeros_(ema.ema_model.local_embedder.block.block2.project.weight)
-        torch.nn.init.zeros_(ema.ema_model.local_embedder.block.to_out.weight)
-        torch.nn.init.zeros_(ema.ema_model.local_embedder.block.block1.project.bias)
-        torch.nn.init.zeros_(ema.ema_model.local_embedder.block.block2.project.bias)
-        torch.nn.init.zeros_(ema.ema_model.local_embedder.block.to_out.bias)
+        torch.nn.init.zeros_(ema.ema_model.net.local_embedder.block.block1.project.weight)
+        torch.nn.init.zeros_(ema.ema_model.net.local_embedder.block.block2.project.weight)
+        torch.nn.init.zeros_(ema.ema_model.net.local_embedder.block.to_out.weight)
+        torch.nn.init.zeros_(ema.ema_model.net.local_embedder.block.block1.project.bias)
+        torch.nn.init.zeros_(ema.ema_model.net.local_embedder.block.block2.project.bias)
+        torch.nn.init.zeros_(ema.ema_model.net.local_embedder.block.to_out.bias)
     elif stage == 1:
         # init a new model from scratch
         print("Initializing a new model from scratch")
