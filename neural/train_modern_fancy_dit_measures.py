@@ -202,8 +202,6 @@ if init_from == 'scratch':
     if stage == 2:
         stage1_ckpt = torch.load(os.path.join(out_dir.replace('Stage2', 'Stage1'), 'ckpt.pt'))
         checkpoint = torch.load(ckpt_path, map_location=device)
-        model_args = checkpoint['model_args']
-        model_args['gradient_checkpointing'] = gradient_checkpointing
 
         model = net(**model_args)
         state_dict = checkpoint['model']
