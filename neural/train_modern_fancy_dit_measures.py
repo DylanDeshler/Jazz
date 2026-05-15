@@ -307,9 +307,9 @@ def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', win
             
     return torch.from_numpy(smoothed).to(bpm_tensor.device)
 
-def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode="independent"):
+def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode="independent", t_dist="uniform"):
     with ctx:
-        y = ema.ema_model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise, memory_efficient=memory_efficient, rescale_phi=rescale_phi, cfg_mode=cfg_mode)
+        y = ema.ema_model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise, memory_efficient=memory_efficient, rescale_phi=rescale_phi, cfg_mode=cfg_mode, t_dist=t_dist)
     
     if isinstance(net_kwargs, list):
         bpm = net_kwargs[0]['bpm']
@@ -376,6 +376,7 @@ def save_samples(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
     
+    t_dist = 'logit'
     cfg_mode = 'joint'
     n_steps = 100
     n_samples = 10
@@ -414,8 +415,8 @@ def save_samples(step):
     
     cfg_guidances = [4] * len(unconditional_mask)
     
-    y_cfg = predict_measures(x.shape, cfg_net_kwargs, uncond_net_kwargs, n_steps, guidance=cfg_guidances, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode=cfg_mode)
-    y = predict_measures(x.shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
+    y_cfg = predict_measures(x.shape, cfg_net_kwargs, uncond_net_kwargs, n_steps, guidance=cfg_guidances, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode=cfg_mode, t_dist=t_dist)
+    y = predict_measures(x.shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, t_dist=t_dist)
     y_gt = decode_latents(x, bpm, n_steps, decoder_noise=decoder_noise)
     
     for i in range(n_samples):
