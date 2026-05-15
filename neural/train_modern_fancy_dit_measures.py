@@ -227,7 +227,7 @@ if init_from == 'scratch':
             if k.startswith(unwanted_prefix):
                 state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
             if 'local_embedder' in k:
-                state_dict.pop(k)
+                state_dict.pop(k[len(unwanted_prefix):])
         model.load_state_dict(state_dict, strict=False)
         
         ema = EMAModel(model)
@@ -240,7 +240,7 @@ if init_from == 'scratch':
             if k.startswith(unwanted_prefix):
                 state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
             if 'local_embedder' in k:
-                state_dict.pop(k)
+                state_dict.pop(k[len(unwanted_prefix):])
         ema.ema_model.load_state_dict(state_dict)
     elif stage == 1:
         # init a new model from scratch
