@@ -288,6 +288,7 @@ elif init_from.startswith('gpt2'):
         model_args[k] = getattr(model.config, k)
 
 model.to(device)
+ema.ema_model.to(device)
 summary(model)
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
