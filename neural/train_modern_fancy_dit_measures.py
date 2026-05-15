@@ -78,7 +78,7 @@ use_null_token = True
 cut_seconds = 1
 drop_path_rate = 0.1
 # adamw optimizer
-learning_rate = 1e-4 # max learning rate
+learning_rate = 1e-5 # max learning rate
 max_iters = 1000000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
@@ -230,6 +230,13 @@ if init_from == 'scratch':
                 state_dict.pop(k[len(unwanted_prefix):])
         model.load_state_dict(state_dict, strict=False)
         
+        torch.nn.init.zeros_(model.net.local_embedder.block.block1.project.weight)
+        torch.nn.init.zeros_(model.net.local_embedder.block.block2.project.weight)
+        torch.nn.init.zeros_(model.net.local_embedder.block.to_out.weight)
+        torch.nn.init.zeros_(model.net.local_embedder.block.block1.project.bias)
+        torch.nn.init.zeros_(model.net.local_embedder.block.block2.project.bias)
+        torch.nn.init.zeros_(model.net.local_embedder.block.to_out.bias)
+        
         ema = EMAModel(model)
         state_dict = stage1_ckpt['ema']
 
@@ -242,6 +249,13 @@ if init_from == 'scratch':
             if 'local_embedder' in k:
                 state_dict.pop(k[len(unwanted_prefix):])
         ema.ema_model.load_state_dict(state_dict, strict=False)
+        
+        torch.nn.init.zeros_(ema.ema_model.local_embedder.block.block1.project.weight)
+        torch.nn.init.zeros_(ema.ema_model.local_embedder.block.block2.project.weight)
+        torch.nn.init.zeros_(ema.ema_model.local_embedder.block.to_out.weight)
+        torch.nn.init.zeros_(ema.ema_model.local_embedder.block.block1.project.bias)
+        torch.nn.init.zeros_(ema.ema_model.local_embedder.block.block2.project.bias)
+        torch.nn.init.zeros_(ema.ema_model.local_embedder.block.to_out.bias)
     elif stage == 1:
         # init a new model from scratch
         print("Initializing a new model from scratch")
@@ -547,7 +561,7 @@ raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
 
 # optimizer
-optimizer = torch.optim.AdamW(model.net.create_optimizer_groups(weight_decay=weight_decay, lr=learning_rate), betas=(beta1, beta2))
+optimizer = torch.optim.AdamW(model.net.create_optimizer_groups(weight_decay=weight_decay, base_lr=learning_rate, new_lr=learning_rate*10), betas=(beta1, beta2))
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
 checkpoint = None # free up memory

@@ -1928,22 +1928,38 @@ class MetaConditionalModernDiTV2(nn.Module):
             for param in self.local_embedder.parameters():
                 param.requires_grad = True
     
-    def create_optimizer_groups(self, weight_decay=1e-2, lr=1e-4):
-        decay = []
-        no_decay = []
+    def create_optimizer_groups(self, weight_decay=1e-2, base_lr=1e-4, new_lr=1e-3):
+        base_decay = []
+        base_no_decay = []
+        new_decay = []
+        new_no_decay = []
         
         for name, param in self.named_parameters():
             if not param.requires_grad:
                 continue
-                
-            if param.ndim < 2 or name == 'bpm_embedder.weight':
-                no_decay.append(param)
+            
+            new_layer = 'local_embedder' in name
+            no_decay = param.ndim < 2 or name == 'bpm_embedder.weight'
+            if no_decay:
+                print(name)
+            
+            if new_layer:
+                if no_decay:
+                    new_no_decay.append(param)
+                else:
+                    new_decay.append(param)
             else:
-                decay.append(param)
+                if no_decay:
+                    base_no_decay.append(param)
+                else:
+                    base_decay.append(param)
                 
+        
         optim_groups = [
-            {"params": decay, "weight_decay": weight_decay, "lr": lr},
-            {"params": no_decay, "weight_decay": 0.0, "lr": lr},
+            {"params": base_decay, "weight_decay": weight_decay, "lr": base_lr},
+            {"params": base_no_decay, "weight_decay": 0.0, "lr": base_lr},
+            {"params": new_decay, "weight_decay": weight_decay, "lr": new_lr},
+            {"params": new_no_decay, "weight_decay": 0.0, "lr": new_lr},
         ]
         return optim_groups
     
@@ -1957,6 +1973,13 @@ class MetaConditionalModernDiTV2(nn.Module):
         for block in self.blocks:
             nn.init.zeros_(block.mlp.w3.weight)
             nn.init.zeros_(block.attn.proj.weight)
+        # zero out un-trained weights
+        nn.init.zeros_(self.local_embedder.block.block1.project.weight)
+        nn.init.zeros_(self.local_embedder.block.block2.project.weight)
+        nn.init.zeros_(self.local_embedder.block.to_out.weight)
+        nn.init.zeros_(self.local_embedder.block.block1.project.bias)
+        nn.init.zeros_(self.local_embedder.block.block2.project.bias)
+        nn.init.zeros_(self.local_embedder.block.to_out.bias)
     
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
