@@ -1940,8 +1940,6 @@ class MetaConditionalModernDiTV2(nn.Module):
             
             new_layer = 'local_embedder' in name
             no_decay = param.ndim < 2 or name == 'bpm_embedder.weight'
-            if no_decay and 'bpm' in name:
-                print(name)
             
             if new_layer:
                 if no_decay:
