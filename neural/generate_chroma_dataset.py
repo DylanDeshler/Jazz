@@ -115,7 +115,7 @@ if True:
             wav_onset_env = librosa.onset.onset_strength(y=wav, sr=rate, hop_length=hop_length)
             wav_onset_frames = librosa.onset.onset_detect(onset_envelope=wav_onset_env, sr=rate, hop_length=hop_length)
             wav_zcr = librosa.feature.zero_crossing_rate(wav, hop_length=hop_length)[0]
-            wav_flatness = librosa.feature.spectral_flatness(y=wav, n_fft=n_fft, hop_length=hop_length)
+            wav_flatness = librosa.feature.spectral_flatness(y=wav, n_fft=n_fft, hop_length=hop_length)[0]
             
             # Extract 13 MFCCs, but strictly slice [1:13] to discard the 0th energy coefficient
             # wav_mfccs = librosa.feature.mfcc(y=wav, sr=rate, hop_length=hop_length, n_mfcc=13)[1:13, :]
