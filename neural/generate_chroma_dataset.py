@@ -27,7 +27,7 @@ n_fft = 2048
 TARGET_SIG = 4
 total_write_batches = 48
 
-out_prefix = 'low_large_24576_subset_chroma_rms'
+out_prefix = 'low_large_24576_subset_chroma_rms_density_zcr_flatness'
 
 paths = glob.glob('/home/ubuntu/Data/measures/*')
 with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
@@ -99,24 +99,26 @@ if True:
             
             data = []
             wav_chroma = librosa.feature.chroma_cqt(y=wav, sr=rate, hop_length=hop_length)
-            # wav_rms = librosa.feature.rms(y=wav, hop_length=hop_length)[0]
             stft_mag = np.abs(librosa.stft(wav, n_fft=n_fft, hop_length=hop_length))
             freqs = librosa.fft_frequencies(sr=rate, n_fft=n_fft)
             
-            low_mask = (freqs < 250)
-            mid_mask = (freqs >= 250) & (freqs < 4000)
-            high_mask = (freqs >= 4000)
+            # low_mask = (freqs < 250)
+            # mid_mask = (freqs >= 250) & (freqs < 4000)
+            # high_mask = (freqs >= 4000)
             
-            wav_rms_low = np.sqrt(np.mean(stft_mag[low_mask, :]**2, axis=0))
-            wav_rms_mid = np.sqrt(np.mean(stft_mag[mid_mask, :]**2, axis=0))
-            wav_rms_high = np.sqrt(np.mean(stft_mag[high_mask, :]**2, axis=0))
+            # wav_rms_low = np.sqrt(np.mean(stft_mag[low_mask, :]**2, axis=0))
+            # wav_rms_mid = np.sqrt(np.mean(stft_mag[mid_mask, :]**2, axis=0))
+            # wav_rms_high = np.sqrt(np.mean(stft_mag[high_mask, :]**2, axis=0))
+            
+            wav_rms = librosa.feature.rms(y=wav, hop_length=hop_length)[0]
             
             wav_onset_env = librosa.onset.onset_strength(y=wav, sr=rate, hop_length=hop_length)
             wav_onset_frames = librosa.onset.onset_detect(onset_envelope=wav_onset_env, sr=rate, hop_length=hop_length)
             wav_zcr = librosa.feature.zero_crossing_rate(wav, hop_length=hop_length)[0]
+            wav_flatness = librosa.feature.spectral_flatness(y=wav, n_fft=n_fft, hop_length=hop_length)
             
             # Extract 13 MFCCs, but strictly slice [1:13] to discard the 0th energy coefficient
-            wav_mfccs = librosa.feature.mfcc(y=wav, sr=rate, hop_length=hop_length, n_mfcc=13)[1:13, :]
+            # wav_mfccs = librosa.feature.mfcc(y=wav, sr=rate, hop_length=hop_length, n_mfcc=13)[1:13, :]
             
             for i in range(len(downbeat_indices) - 1):    
                 start_idx = downbeat_indices[i]
@@ -135,31 +137,37 @@ if True:
                 
                 measure_chroma = wav_chroma[:, frame_start:frame_end]
                 
-                measure_rms_low = wav_rms_low[frame_start:frame_end]
-                measure_rms_mid = wav_rms_mid[frame_start:frame_end]
-                measure_rms_high = wav_rms_high[frame_start:frame_end]
+                # measure_rms_low = wav_rms_low[frame_start:frame_end]
+                # measure_rms_mid = wav_rms_mid[frame_start:frame_end]
+                # measure_rms_high = wav_rms_high[frame_start:frame_end]
                 
+                measure_rms = wav_rms[frame_start:frame_end]
                 measure_zcr = wav_zcr[frame_start:frame_end]
+                measure_flatness = wav_flatness[frame_start:frame_end]
                 
-                measure_mfcc = wav_mfccs[:, frame_start:frame_end]
+                # measure_mfcc = wav_mfccs[:, frame_start:frame_end]
                 
                 if measure_chroma.shape[1] > 0:
                     chroma = np.mean(measure_chroma, axis=1)
-                    rms_low = np.mean(measure_rms_low)
-                    rms_mid = np.mean(measure_rms_mid)
-                    rms_high = np.mean(measure_rms_high)
+                    
+                    # rms_low = np.mean(measure_rms_low)
+                    # rms_mid = np.mean(measure_rms_mid)
+                    # rms_high = np.mean(measure_rms_high)
+                    
+                    rms = np.mean(measure_rms)
                     
                     onsets_in_measure = np.sum((wav_onset_frames >= frame_start) & (wav_onset_frames < frame_end))
                     measure_duration_sec = (frame_end - frame_start) / (rate / hop_length)
                     density = onsets_in_measure / measure_duration_sec if measure_duration_sec > 0 else 0.0
                     
                     zcr = np.mean(measure_zcr)
-                    mfcc = np.mean(measure_mfcc, axis=1)
+                    flatness = np.mean(measure_flatness)
+                    # mfcc = np.mean(measure_mfcc, axis=1)
                     
                     data.append(np.concatenate([
                         chroma, 
-                        [rms_low, rms_mid, rms_high, density, zcr], 
-                        mfcc
+                        [rms, density, zcr, flatness], 
+                        # mfcc
                     ], axis=0))
             
             all_data.append(np.asarray(data))
@@ -198,14 +206,14 @@ write_paths = []
 paths = [f'{out_prefix}_{str(i).zfill(2)}.bin' for i in range(total_write_batches + 1)]
 for path in paths:
     data = np.memmap(path, dtype=np.float32, mode='r')
-    data = data.reshape(-1, 29)
+    data = data.reshape(-1, 16)
     write_paths.append((path, data.shape))
 
 # write to train.bin
 cur_idx = 0
 filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_train.bin')
 train_length = np.sum([shape[0] for path, shape in write_paths[:-2]])
-arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, 29))
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, 16))
 print(arr.shape)
 
 for path, shape in write_paths[:-2]:
@@ -220,7 +228,7 @@ for path, shape in write_paths[:-2]:
 cur_idx = 0
 filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_val.bin')
 val_length = np.sum([shape[0] for path, shape in write_paths[-2:]])
-arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length, 29))
+arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length, 16))
 print(arr.shape)
 
 for path, shape in write_paths[-2:]:
