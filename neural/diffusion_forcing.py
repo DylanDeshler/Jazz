@@ -385,15 +385,25 @@ class FMEulerSampler:
         noise=None,
         memory_efficient=False,
         rescale_phi=0,
-        cfg_mode="independent"
+        cfg_mode="independent",
+        t_dist="uniform",
     ):
         """
         Implements simple uniform noise sampling for bidirectional generation
         Supports Compositional CFG by passing lists to net_kwargs and guidance.
         """
+        assert t_dist in ['uniform', 'logit'], f't_dist must be uniform or logit but got {t_dist}'
         device = next(net.parameters()).device
         x_t = torch.randn(shape, device=device) if noise is None else noise
-        t_steps = torch.linspace(1, 0, n_steps + 1, device=device)
+        
+        if t_dist == 'uniform':
+            t_steps = torch.linspace(1, 0, n_steps + 1, device=device)
+        elif t_dist == 'logit':
+            u = torch.linspace(1.0 - 1e-5, 1e-5, n_steps + 1, device=device)
+            z = math.sqrt(2.0) * torch.erfinv(2.0 * u - 1.0)
+            t_steps = torch.sigmoid(z)
+            t_steps[0] = 1.0
+            t_steps[-1] = 0.0
 
         with torch.no_grad():
             for i in range(n_steps):
@@ -2087,7 +2097,7 @@ class MetaConditionalModernDiTV2Wrapper(nn.Module):
             }
         )
     
-    def generate(self, shape, net_kwargs=None, uncond_net_kwargs=None, n_steps=50, guidance=1.0, noise=None, memory_efficient=True, rescale_phi=0, cfg_mode="independent"):
+    def generate(self, shape, net_kwargs=None, uncond_net_kwargs=None, n_steps=50, guidance=1.0, noise=None, memory_efficient=True, rescale_phi=0, cfg_mode="independent", t_dist="uniform"):
         return self.sampler.sample(
             self.net, 
             shape, 
@@ -2098,7 +2108,8 @@ class MetaConditionalModernDiTV2Wrapper(nn.Module):
             noise=noise, 
             memory_efficient=memory_efficient,
             rescale_phi=rescale_phi,
-            cfg_mode=cfg_mode
+            cfg_mode=cfg_mode,
+            t_dist=t_dist
         )
 
 def ModernDiT_large(**kwargs):
