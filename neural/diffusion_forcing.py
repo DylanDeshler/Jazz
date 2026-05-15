@@ -1873,7 +1873,7 @@ class MetaConditionalModernDiTV2(nn.Module):
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
         self.x_embedder = Patcher(in_channels, hidden_size, patch_size=patch_size, bias=True)
-        self.local_embedder = Patcher(16, hidden_size, patch_size=patch_size, bias=True)
+        self.local_embedder = Patcher(15, hidden_size, patch_size=patch_size, bias=True)
         self.style_embedder = nn.Linear(style_dim, hidden_size, bias=True)
         self.bpm_embedder = nn.Embedding(350, hidden_size)
         
@@ -1975,7 +1975,7 @@ class MetaConditionalModernDiTV2(nn.Module):
         rms = (rms - self.rms_mean) / self.rms_std
         density = (density - self.density_mean) / self.density_std
         zcr = (zcr - self.zcr_mean) / self.zcr_std
-        flatness = (flatness - self.flatness_mean) / self.flatness_std
+        # flatness = (flatness - self.flatness_mean) / self.flatness_std
         chroma = (chroma - self.chroma_mean) / self.chroma_std
         
         t = self.t_embedder(t.flatten()).view(B, T, -1)
@@ -1990,7 +1990,7 @@ class MetaConditionalModernDiTV2(nn.Module):
                 'rms': rms,
                 'density': density,
                 'zcr': zcr,
-                'flatness': flatness,
+                # 'flatness': flatness,
             }
             null_tokens = {
                 'style': self.null_style, 
@@ -1999,7 +1999,7 @@ class MetaConditionalModernDiTV2(nn.Module):
                 'rms': torch.zeros_like(rms[0, 0]), 
                 'density': torch.zeros_like(density[0, 0]), 
                 'zcr': torch.zeros_like(zcr[0, 0]),
-                'flatness': torch.zeros_like(flatness[0, 0]),
+                # 'flatness': torch.zeros_like(flatness[0, 0]),
             }
             if self.stage == 1:
                 signals = multi_token_drop(
@@ -2033,7 +2033,7 @@ class MetaConditionalModernDiTV2(nn.Module):
             rms = signals['rms']
             density = signals['density']
             zcr = signals['zcr']
-            flatness = signals['flatness']
+            # flatness = signals['flatness']
             
             if unconditional_mask is not None:
                 scalar_zero = torch.tensor(0.0, device=x.device, dtype=x.dtype)
@@ -2045,7 +2045,7 @@ class MetaConditionalModernDiTV2(nn.Module):
                 rms = torch.where(unconditional_mask['rms'].squeeze(), scalar_zero, rms)
                 density = torch.where(unconditional_mask['density'].squeeze(), scalar_zero, density)
                 zcr = torch.where(unconditional_mask['zcr'].squeeze(), scalar_zero, zcr)
-                flatness = torch.where(unconditional_mask['flatness'].squeeze(), scalar_zero, flatness)
+                # flatness = torch.where(unconditional_mask['flatness'].squeeze(), scalar_zero, flatness)
         
         x = rearrange(x, 'b t n c -> (b t) c n')
         x = self.x_embedder(x)

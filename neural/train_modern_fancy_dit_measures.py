@@ -65,7 +65,7 @@ batch_size = 128
 TARGET_SIG = 4
 TARGET_BPM = 60 * TARGET_SIG / (24576 / 16000)
 # model
-stage = 2
+stage = 1
 patch_size = 2
 gradient_checkpointing = False
 spatial_window = 64
@@ -153,7 +153,8 @@ def get_batch(split='train', batch_size=batch_size):
     rms = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 12] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     density = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 13] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     zcr = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 14] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    flatness = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 15] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    # flatness = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 15] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    flatness = torch.zeros_like(zcr).to(device, non_blocking=True)
     bpm = torch.from_numpy(np.stack([bpms[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
 
     return x, bpm, rms, density, zcr, flatness, chroma, style
