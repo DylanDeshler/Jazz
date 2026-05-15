@@ -380,7 +380,7 @@ def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance
     
     out = []
     for i in range(gen_shape[0]):
-        temp = y[i*n_chunks+j][:min(int(target_samples[i*n_chunks+j]), max_len)]
+        temp = y[i*n_chunks][:min(int(target_samples[i*n_chunks]), max_len)]
         for j in range(1, n_chunks):
             temp = crossfade_segments(temp, y[i*n_chunks+j][:min(int(target_samples[i*n_chunks+j]), max_len)], sample_rate=16000, crossfade_ms=20)
         out.append(temp.astype(np.float32))
@@ -415,7 +415,7 @@ def decode_latents(y, bpm, n_steps, decoder_noise=None):
     
     out = []
     for i in range(bpm.shape[0]):
-        temp = y[i*n_chunks+j][:min(int(target_samples[i*n_chunks+j]), max_len)]
+        temp = y[i*n_chunks][:min(int(target_samples[i*n_chunks]), max_len)]
         for j in range(1, n_chunks):
             temp = crossfade_segments(temp, y[i*n_chunks+j][:min(int(target_samples[i*n_chunks+j]), max_len)], sample_rate=16000, crossfade_ms=20)
         out.append(temp.astype(np.float32))
