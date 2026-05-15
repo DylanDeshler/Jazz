@@ -339,6 +339,8 @@ def get_lr(it):
     # 1) linear warmup for warmup_iters steps
     if it < warmup_iters:
         return learning_rate * (it + 1) / (warmup_iters + 1)
+    if not decay_lr:
+        return learning_rate
     # 2) if it > lr_decay_iters, return min learning rate
     if it > lr_decay_iters:
         return min_lr
@@ -568,9 +570,16 @@ checkpoint = None # free up memory
 while True:
 
     # determine and set the learning rate for this iteration
-    lr = get_lr(iter_num) if decay_lr else learning_rate
+    lr = get_lr(iter_num)
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
+    
+    lr_scale = lr / learning_rate 
+    for param_group in optimizer.param_groups:
+        if 'initial_lr' not in param_group:
+            param_group['initial_lr'] = param_group['lr']
+
+        param_group['lr'] = param_group['initial_lr'] * lr_scale
     
     tokens_trained += batch_size * gradient_accumulation_steps * max_seq_len
 
