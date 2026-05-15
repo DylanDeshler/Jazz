@@ -198,13 +198,27 @@ max_adapter_len = adapter.max_seq_len
 
 model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, spatial_window=spatial_window, use_null_token=use_null_token, gradient_checkpointing=gradient_checkpointing, patch_size=patch_size, stage=stage, drop_path_rate=drop_path_rate)
 
+class EMAModel:
+    def __init__(self, model, decay=0.9999):
+        self.decay = decay
+        self.ema_model = copy.deepcopy(model).eval()
+        self.ema_model.requires_grad_(False)
+        self.ema_model = torch.compile(self.ema_model)
+        
+    @torch.no_grad()
+    def update(self, model, step):
+        current_decay = min(self.decay, (1 + step) / (10 + step))
+        
+        for ema_param, model_param in zip(self.ema_model.parameters(), model.parameters()):
+            if model_param.requires_grad:
+                ema_param.data.mul_(current_decay).add_(model_param.data, alpha=1.0 - current_decay)
+
 if init_from == 'scratch':
     if stage == 2:
-        stage1_ckpt = torch.load(os.path.join(out_dir.replace('Stage2', 'Stage1'), 'ckpt.pt'))
-        checkpoint = torch.load(ckpt_path, map_location=device)
+        stage1_ckpt = torch.load(os.path.join(out_dir.replace('Stage2', 'Stage1'), 'ckpt.pt'), map_location=device)
 
         model = net(**model_args)
-        state_dict = checkpoint['model']
+        state_dict = stage1_ckpt['model']
 
         # fix the keys of the state dictionary :(
         # honestly no idea how checkpoints sometimes get this prefix, have to debug more
@@ -215,9 +229,23 @@ if init_from == 'scratch':
             if 'local_embedder' in k:
                 state_dict.pop(k)
         model.load_state_dict(state_dict, strict=False)
-    # init a new model from scratch
-    print("Initializing a new model from scratch")
-    model = net(**model_args)
+        
+        ema = EMAModel(model)
+        state_dict = stage1_ckpt['ema']
+
+        # fix the keys of the state dictionary :(
+        # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+        unwanted_prefix = '_orig_mod.'
+        for k,v in list(state_dict.items()):
+            if k.startswith(unwanted_prefix):
+                state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+            if 'local_embedder' in k:
+                state_dict.pop(k)
+        ema.ema_model.load_state_dict(state_dict)
+    elif stage == 1:
+        # init a new model from scratch
+        print("Initializing a new model from scratch")
+        model = net(**model_args)
     tokens_trained = 0
 elif init_from == 'resume':
     print(f"Resuming training from {out_dir}")
@@ -236,6 +264,17 @@ elif init_from == 'resume':
         if k.startswith(unwanted_prefix):
             state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
     model.load_state_dict(state_dict)
+    
+    ema = EMAModel(model)
+    state_dict = checkpoint['ema']
+    # fix the keys of the state dictionary :(
+    # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+    unwanted_prefix = '_orig_mod.'
+    for k,v in list(state_dict.items()):
+        if k.startswith(unwanted_prefix):
+            state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+    ema.load_state_dict(state_dict)
+    
     iter_num = checkpoint['iter_num']
     tokens_trained = checkpoint['tokens']
     best_val_loss = checkpoint['best_val_loss']
@@ -491,21 +530,6 @@ def save_samples(step):
         sf.write(os.path.join(batch_dir, f'{i}_cfg.wav'), y_cfg[i].flatten(), 16000)
         sf.write(os.path.join(batch_dir, f'{i}_gt.wav'), y_gt[i].flatten(), 16000)
 
-class EMAModel:
-    def __init__(self, model, decay=0.9999):
-        self.decay = decay
-        self.ema_model = copy.deepcopy(model).eval()
-        self.ema_model.requires_grad_(False)
-        self.ema_model = torch.compile(self.ema_model)
-        
-    @torch.no_grad()
-    def update(self, model, step):
-        current_decay = min(self.decay, (1 + step) / (10 + step))
-        
-        for ema_param, model_param in zip(self.ema_model.parameters(), model.parameters()):
-            if model_param.requires_grad:
-                ema_param.data.mul_(current_decay).add_(model_param.data, alpha=1.0 - current_decay)
-
 # logging
 if wandb_log and master_process:
     import wandb
@@ -520,14 +544,11 @@ t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
-ema = EMAModel(model)
 
 # optimizer
 optimizer = torch.optim.AdamW(model.net.create_optimizer_groups(weight_decay=weight_decay, lr=learning_rate), betas=(beta1, beta2))
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
-if init_from == 'resume' or (init_from == 'scratch' and stage == 2):
-    ema.ema_model.load_state_dict(stage1_ckpt['ema'])
 checkpoint = None # free up memory
 while True:
 
