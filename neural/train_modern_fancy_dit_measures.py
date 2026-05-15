@@ -200,7 +200,7 @@ model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chu
 
 if init_from == 'scratch':
     if stage == 2:
-        stage1_ckpt = torch.load(os.path.join(out_dir.replace('Stage1', 'Stage2'), 'ckpt.pt'))
+        stage1_ckpt = torch.load(os.path.join(out_dir.replace('Stage2', 'Stage1'), 'ckpt.pt'))
         checkpoint = torch.load(ckpt_path, map_location=device)
         model_args = checkpoint['model_args']
         model_args['gradient_checkpointing'] = gradient_checkpointing
