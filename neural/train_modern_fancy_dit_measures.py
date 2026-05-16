@@ -570,16 +570,16 @@ checkpoint = None # free up memory
 while True:
 
     # determine and set the learning rate for this iteration
-    lr = get_lr(iter_num)
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
+    # lr = get_lr(iter_num)
+    # for param_group in optimizer.param_groups:
+    #     param_group['lr'] = lr
     
-    lr_scale = lr / learning_rate 
-    for param_group in optimizer.param_groups:
-        if 'initial_lr' not in param_group:
-            param_group['initial_lr'] = param_group['lr']
+    # lr_scale = lr / learning_rate 
+    # for param_group in optimizer.param_groups:
+    #     if 'initial_lr' not in param_group:
+    #         param_group['initial_lr'] = param_group['lr']
 
-        param_group['lr'] = param_group['initial_lr'] * lr_scale
+    #     param_group['lr'] = param_group['initial_lr'] * lr_scale
     
     tokens_trained += batch_size * gradient_accumulation_steps * max_seq_len
 
