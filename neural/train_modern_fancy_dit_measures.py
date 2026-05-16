@@ -56,7 +56,7 @@ eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = True # disabled by default
+wandb_log = False # disabled by default
 wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
@@ -230,12 +230,12 @@ if init_from == 'scratch':
                 state_dict.pop(k[len(unwanted_prefix):])
         model.load_state_dict(state_dict, strict=False)
         
-        # torch.nn.init.zeros_(model.net.local_embedder.block.block1.project.weight)
-        # torch.nn.init.zeros_(model.net.local_embedder.block.block2.project.weight)
-        # torch.nn.init.zeros_(model.net.local_embedder.block.to_out.weight)
-        # torch.nn.init.zeros_(model.net.local_embedder.block.block1.project.bias)
-        # torch.nn.init.zeros_(model.net.local_embedder.block.block2.project.bias)
-        # torch.nn.init.zeros_(model.net.local_embedder.block.to_out.bias)
+        torch.nn.init.zeros_(model.net.local_embedder.block.block1.project.weight)
+        torch.nn.init.zeros_(model.net.local_embedder.block.block2.project.weight)
+        torch.nn.init.zeros_(model.net.local_embedder.block.to_out.weight)
+        torch.nn.init.zeros_(model.net.local_embedder.block.block1.project.bias)
+        torch.nn.init.zeros_(model.net.local_embedder.block.block2.project.bias)
+        torch.nn.init.zeros_(model.net.local_embedder.block.to_out.bias)
         
         ema = EMAModel(model)
         state_dict = stage1_ckpt['ema']
@@ -250,12 +250,12 @@ if init_from == 'scratch':
                 state_dict.pop(k[len(unwanted_prefix):])
         ema.ema_model.load_state_dict(state_dict, strict=False)
         
-        # torch.nn.init.zeros_(ema.ema_model.net.local_embedder.block.block1.project.weight)
-        # torch.nn.init.zeros_(ema.ema_model.net.local_embedder.block.block2.project.weight)
-        # torch.nn.init.zeros_(ema.ema_model.net.local_embedder.block.to_out.weight)
-        # torch.nn.init.zeros_(ema.ema_model.net.local_embedder.block.block1.project.bias)
-        # torch.nn.init.zeros_(ema.ema_model.net.local_embedder.block.block2.project.bias)
-        # torch.nn.init.zeros_(ema.ema_model.net.local_embedder.block.to_out.bias)
+        torch.nn.init.zeros_(ema.ema_model.net.local_embedder.block.block1.project.weight)
+        torch.nn.init.zeros_(ema.ema_model.net.local_embedder.block.block2.project.weight)
+        torch.nn.init.zeros_(ema.ema_model.net.local_embedder.block.to_out.weight)
+        torch.nn.init.zeros_(ema.ema_model.net.local_embedder.block.block1.project.bias)
+        torch.nn.init.zeros_(ema.ema_model.net.local_embedder.block.block2.project.bias)
+        torch.nn.init.zeros_(ema.ema_model.net.local_embedder.block.to_out.bias)
     elif stage == 1:
         # init a new model from scratch
         print("Initializing a new model from scratch")
