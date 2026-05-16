@@ -78,7 +78,7 @@ use_null_token = True
 cut_seconds = 1
 drop_path_rate = 0.1
 # adamw optimizer
-learning_rate = 1e-5 # max learning rate
+learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
