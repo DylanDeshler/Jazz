@@ -56,7 +56,7 @@ eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = True # disabled by default
+wandb_log = False # disabled by default
 wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
@@ -570,9 +570,9 @@ checkpoint = None # free up memory
 while True:
 
     # determine and set the learning rate for this iteration
-    # lr = get_lr(iter_num)
-    # for param_group in optimizer.param_groups:
-    #     param_group['lr'] = lr
+    lr = get_lr(iter_num) if decay_lr
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
     
     # lr_scale = lr / learning_rate 
     # for param_group in optimizer.param_groups:
