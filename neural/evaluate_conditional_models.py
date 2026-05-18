@@ -543,7 +543,7 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps, n_trials):
     study = optuna.create_study(
         study_name=f'cfg_{batch_size}bs_{micro_batch_size}mbs_{n_steps}steps_{n_trials}trials',
         storage=f'sqlite:///cfg_{batch_size}bs_{micro_batch_size}mbs_{n_steps}steps_{n_trials}trials_optimization.db',
-        directions='minimize',
+        directions=['minimize'],
         load_if_exists=True
     )
     study.optimize(lambda trial: objective(trial, batch_size, micro_batch_size, n_steps), n_trials=n_trials)
