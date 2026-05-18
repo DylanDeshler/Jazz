@@ -284,18 +284,19 @@ def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance
         y = tokenizer.decode(y, shape=(1, max_len), n_steps=n_steps, noise=decoder_noise[:, :, :max_len] if decoder_noise is not None else None)
     
     target_samples = target_samples.flatten().cpu().detach().numpy()
-    y = y.squeeze().cpu().detach().numpy()
+    y = y.squeeze().cpu().detach().numpy().astype(np.float32)
     
     target_samples = target_samples.reshape(gen_shape[0], n_chunks)
     
     out = []
     for i in range(gen_shape[0]):
-        temp = y[i*n_chunks][:min(int(target_samples[i][0]), max_len)]
+        temp = [y[i*n_chunks][:min(int(target_samples[i][0]), max_len)]]
         for j in range(1, n_chunks):
-            temp = crossfade_segments(temp, y[i*n_chunks+j][:min(int(target_samples[i][j]), max_len)], sample_rate=16000, crossfade_ms=20)
-        out.append(temp.astype(np.float32))
+            temp.append(crossfade_segments(temp[-1], y[i*n_chunks+j][:min(int(target_samples[i][j]), max_len)], sample_rate=16000, crossfade_ms=20))
+        out.append(temp)
     
     return out
+
 # Tokenizers
 tokenizer = load_model(os.path.join('tokenizer_low_large_24576_subset_longtrain', 'ckpt.pt'), Tokenizer)
 adapter = load_model(os.path.join('tokenizer_adapter_low_large_24576_subset_longtrain_v2', 'ckpt.pt'), Adapter)
