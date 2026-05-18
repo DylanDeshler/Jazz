@@ -525,7 +525,6 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps, n_trials):
                 style_emb = contrast(y, features_only=True)
             embs.append(emb.cpu().detach().numpy())
             
-            print(mb_style.shape, style_emb.shape)
             sim = np.matmul(mb_style.cpu().detach().numpy(), style_emb.cpu().detach().numpy().T)
             style_errors.append(1 - (np.trace(sim) / mb_style.shape[0]))
             
@@ -539,12 +538,12 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps, n_trials):
         y_mu, y_sigma = calculate_embd_statistics(np.concatenate(embs, axis=0))
         fad_score = calculate_frechet_distance(y_mu, y_sigma, real_mu, real_sigma)
 
-        return np.mean(errors).item(), fad_score, np.mean(style_errors).item()
+        return np.mean(errors).item(), fad_score.item(), np.mean(style_errors).item()
     
     study = optuna.create_study(
         study_name=f'cfg_{batch_size}bs_{micro_batch_size}mbs_{n_steps}steps_{n_trials}trials',
         storage=f'sqlite:///cfg_{batch_size}bs_{micro_batch_size}mbs_{n_steps}steps_{n_trials}trials_optimization.db',
-        directions=['minimize', 'minimize'],
+        directions=['minimize', 'minimize', 'minimize'],
         load_if_exists=True
     )
     study.optimize(lambda trial: objective(trial, batch_size, micro_batch_size, n_steps), n_trials=n_trials)
