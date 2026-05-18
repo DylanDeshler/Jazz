@@ -529,7 +529,7 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps, n_trials):
             sim = np.matmul(mb_style.cpu().detach().numpy(), style_emb.cpu().detach().numpy().T)
             style_errors.append(1 - (np.trace(sim) / mb_style.shape[0]))
             
-            del y, emb, temp_mask, measure_list, style_emb
+            del y, emb, measure_list, style_emb
             del cfg_net_kwargs, uncond_net_kwargs, net_kwargs, unconditional_mask
             del mb_bpm, mb_rms, mb_density, mb_zcr, mb_chroma, mb_style
             import gc
