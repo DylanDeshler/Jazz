@@ -14,6 +14,7 @@ from scipy.signal import medfilt
 from contextlib import nullcontext
 import torch.nn.functional as F
 import optuna
+from einops import rearrange
 
 from contrast import Transformer as Contrast
 from dito import DiToV5 as Tokenizer
@@ -216,11 +217,48 @@ def crossfade_chunks(chunks: list, overlap_samples: int) -> np.ndarray:
         
     return out
 
-@torch.no_grad()
-def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode="independent"):
-    with ctx:
-        y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise, memory_efficient=memory_efficient, rescale_phi=rescale_phi, cfg_mode=cfg_mode)
+def crossfade_segments(segment_a, segment_b, sample_rate, crossfade_ms=15):
+    """
+    Crossfades two 1D numpy audio arrays to prevent boundary clicks.
+    
+    Args:
+        segment_a: numpy array of the first measure.
+        segment_b: numpy array of the second measure.
+        sample_rate: The sample rate of the audio (e.g., 44100 or 24000).
+        crossfade_ms: Duration of the crossfade in milliseconds.
+    """
+    # Convert milliseconds to exact sample count
+    crossfade_samples = int(sample_rate * (crossfade_ms / 1000.0))
+    
+    # Safety check: if segments are too short, just concatenate
+    if len(segment_a) < crossfade_samples or len(segment_b) < crossfade_samples:
+        return np.concatenate((segment_a, segment_b))
         
+    # Create linear fade curves (can also use np.cos for equal-power crossfades)
+    fade_out = np.linspace(1.0, 0.0, crossfade_samples)
+    fade_in = np.linspace(0.0, 1.0, crossfade_samples)
+    
+    # Apply fades to the overlapping edges
+    overlap_a = segment_a[-crossfade_samples:] * fade_out
+    overlap_b = segment_b[:crossfade_samples] * fade_in
+    
+    # Sum the overlapped audio
+    mixed_overlap = overlap_a + overlap_b
+    
+    # Stitch the untouched beginnings/ends with the mixed overlap
+    stitched_audio = np.concatenate((
+        segment_a[:-crossfade_samples],
+        mixed_overlap,
+        segment_b[crossfade_samples:]
+    ))
+    
+    return stitched_audio
+
+@torch.no_grad()
+def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode="independent", t_dist="uniform"):
+    with ctx:
+        y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise, memory_efficient=memory_efficient, rescale_phi=rescale_phi, cfg_mode=cfg_mode, t_dist=t_dist)
+    
     if isinstance(net_kwargs, list):
         bpm = net_kwargs[0]['bpm']
     else:
@@ -230,7 +268,7 @@ def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance
     measure_duration_sec = seconds_per_beat * TARGET_SIG
     
     target_samples = (measure_duration_sec * 16000).long()
-    max_len = min(target_samples.max().item(), encoder_ratios * (max_seq_len - 1))
+    max_len = min(target_samples.max().item(), encoder_ratios * (max_adapter_len - 1))
     max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
     max_latent_len = max_len // encoder_ratios
     
@@ -238,10 +276,10 @@ def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance
     lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
     mask = indices < lengths
     mask = mask.view(gen_shape[0] * n_chunks, max_latent_len)
-    shape = (gen_shape[0] * n_chunks, 1, max_latent_len)
+    shape = (gen_shape[0] * n_chunks, vae_embed_dim, max_latent_len)
         
     with ctx:
-        y = y.transpose(2, 3).view(gen_shape[0] * n_chunks, vae_embed_dim, spatial_window)
+        y = rearrange(y, 'b t n c -> (b t) c n')
         y = adapter.decode(y, shape, mask=mask)
         y = tokenizer.decode(y, shape=(1, max_len), n_steps=n_steps, noise=decoder_noise[:, :, :max_len] if decoder_noise is not None else None)
     
@@ -249,22 +287,25 @@ def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance
     y = y.squeeze().cpu().detach().numpy()
     
     target_samples = target_samples.reshape(gen_shape[0], n_chunks)
-    # y = [np.concatenate([y_[:min(int(samples), max_len)] for y_, samples in zip(y[i*n_chunks:(i+1)*n_chunks], target_samples[i])], axis=0).astype(np.float32) for i in range(gen_shape[0])]
     
-    y = [[y_[:min(int(samples), max_len)].astype(np.float32) for y_, samples in zip(y[i*n_chunks:(i+1)*n_chunks], target_samples[i])] for i in range(gen_shape[0])]
+    out = []
+    for i in range(gen_shape[0]):
+        temp = y[i*n_chunks][:min(int(target_samples[i][0]), max_len)]
+        for j in range(1, n_chunks):
+            temp = crossfade_segments(temp, y[i*n_chunks+j][:min(int(target_samples[i][j]), max_len)], sample_rate=16000, crossfade_ms=20)
+        out.append(temp.astype(np.float32))
     
-    return y
-
+    return out
 # Tokenizers
 tokenizer = load_model(os.path.join('tokenizer_low_large_24576_subset_longtrain', 'ckpt.pt'), Tokenizer)
-adapter = load_model(os.path.join('tokenizer_adapter_low_large_24576_subset_longtrain', 'ckpt.pt'), Adapter)
+adapter = load_model(os.path.join('tokenizer_adapter_low_large_24576_subset_longtrain_v2', 'ckpt.pt'), Adapter)
 encoder_ratios = math.prod(tokenizer.encoder.ratios)
-max_seq_len = adapter.max_seq_len
+max_adapter_len = adapter.max_seq_len
 
 # DiTs
-model = load_model(os.path.join('MetaConditionalModernDiT_large_24576_subset_adapter_longtrain_32chunks', 'ckpt.pt'), DiT)
-n_chunks = 32
-spatial_window = 48
+model = load_model(os.path.join('Stage2_MetaConditionalModernDiTV2_smedium_24576_subset_adapter_longtrain_24chunks', 'ckpt.pt'), DiT)
+n_chunks = 24
+spatial_window = 64
 vae_embed_dim = 16
 
 # Feature Extractors
@@ -288,8 +329,8 @@ n_fft = 2048
 
 data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_val.bin', dtype=np.float32, mode='r', shape=(88303, spatial_window, vae_embed_dim))
 styles = np.memmap('/home/ubuntu/Data/contrast_learntmep_instance_10s_style_val.bin', dtype=np.float32, mode='r', shape=(88303, 128))
-meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_meta_val.bin', dtype=np.float32, mode='r', shape=(88303, 29))
-bpms = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_bpm_val.bin', dtype=np.float32, mode='r')
+meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_chroma_rms_density_zcr_flatness_val.bin', dtype=np.float32, mode='r', shape=(88303, 16))
+bpms = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_v2_64_bpm_val.bin', dtype=np.float32, mode='r')
 
 # DSP Error: 10354.72, FAD: 46.39 | Scales: {'w_bpm': 3.9373842460434645, 'w_rms_low': 3.4393841207062614, 'w_rms_mid': 0.7827845665866684, 'w_rms_high': 1.0842041672977343, 'w_density': 3.618813544402218, 'w_zcr': 1.0507734375953, 'w_mfcc': 4.09447388787254, 'w_chroma': 3.4437712554227327, 'w_style': 1.839268747645621}
 # DSP Error: 9911.62, FAD: 47.15 | Scales: {'w_bpm': 2.9757548862211, 'w_rms_low': 1.6357210298917813, 'w_rms_mid': 1.1282261871766086, 'w_rms_high': 0.03202175277198516, 'w_density': 4.344732034109373, 'w_zcr': 0.25650236008780636, 'w_mfcc': 3.5936278524604393, 'w_chroma': 4.189428251806468, 'w_style': 0.022038777442222046}
@@ -327,30 +368,20 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps, n_trials):
     
     style = torch.from_numpy(np.stack([styles[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     chroma = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, :12] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    rms_low = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 12] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    rms_mid = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 13] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    rms_high = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 14] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    density = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 15] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    zcr = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 16] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    mfcc = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 17:] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    rms = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 12] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    density = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 13] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    zcr = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 14] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    flatness = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 15] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     bpm = torch.from_numpy(np.stack([bpms[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     
     gen_shape = (micro_batch_size, n_chunks, spatial_window, vae_embed_dim)
     gen_noise = torch.randn(gen_shape).to(device)
-    decoder_noise = torch.randn(micro_batch_size * n_chunks, 1, encoder_ratios * (max_seq_len - 1)).to(device)
+    decoder_noise = torch.randn(micro_batch_size * n_chunks, 1, encoder_ratios * (max_adapter_len - 1)).to(device)
     
     @torch.no_grad()  
     def objective(trial, batch_size, micro_batch_size, n_steps):
         scales = {
-            'bpm': trial.suggest_float('w_bpm', 0, 5),
-            'rms_low': trial.suggest_float('w_rms_low', 0, 5),
-            'rms_mid': trial.suggest_float('w_rms_mid', 0, 5),
-            'rms_high': trial.suggest_float('w_rms_high', 0, 5),
-            'density': trial.suggest_float('w_density', 0, 5),
-            'zcr': trial.suggest_float('w_zcr', 0, 5),
-            'mfcc': trial.suggest_float('w_mfcc', 0, 5),
-            'chroma': trial.suggest_float('w_chroma', 0, 5),
-            'style': trial.suggest_float('w_style', 0, 5)
+            'guidance': trial.suggest_float('guidance', 0, 5),
         }
         
         cfg_guidances = list(scales.values())
@@ -360,47 +391,46 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps, n_trials):
             end_idx = start_idx + micro_batch_size
             
             mb_bpm = bpm[start_idx:end_idx]
-            mb_rms_low = rms_low[start_idx:end_idx]
-            mb_rms_mid = rms_mid[start_idx:end_idx]
-            mb_rms_high = rms_high[start_idx:end_idx]
+            mb_rms = rms[start_idx:end_idx]
             mb_density = density[start_idx:end_idx]
             mb_zcr = zcr[start_idx:end_idx]
-            mb_mfcc = mfcc[start_idx:end_idx]
+            mb_flatness = flatness[start_idx:end_idx]
             mb_chroma = chroma[start_idx:end_idx]
             mb_style = style[start_idx:end_idx]
-
-            net_kwargs = {
-                'bpm': mb_bpm,
-                'rms_low': mb_rms_low,
-                'rms_mid': mb_rms_mid,
-                'rms_high': mb_rms_high,
-                'density': mb_density,
-                'zcr': mb_zcr,
-                'mfcc': mb_mfcc,
-                'chroma': mb_chroma,
-                'style': mb_style,
-            }
+            
+            t_dist = 'logit'
+            cfg_mode = 'joint'
             
             unconditional_mask = {
-                'bpm': torch.ones(*mb_bpm.shape, 1, device=device, dtype=torch.bool),
-                'rms_low': torch.ones(*mb_rms_low.shape, 1, device=device, dtype=torch.bool),
-                'rms_mid': torch.ones(*mb_rms_mid.shape, 1, device=device, dtype=torch.bool),
-                'rms_high': torch.ones(*mb_rms_high.shape, 1, device=device, dtype=torch.bool),
-                'density': torch.ones(*mb_density.shape, 1, device=device, dtype=torch.bool),
-                'zcr': torch.ones(*mb_zcr.shape, 1, device=device, dtype=torch.bool),
-                'mfcc': torch.ones(*mb_mfcc.shape[:-1], 1, device=device, dtype=torch.bool),
-                'chroma': torch.ones(*mb_chroma.shape[:-1], 1, device=device, dtype=torch.bool),
-                'style': torch.ones(*mb_style.shape[:-1], 1, device=device, dtype=torch.bool),
+                'bpm': torch.ones(*mb_bpm.shape, 1).to(device).bool(),
+                'rms': torch.ones(*mb_rms.shape, 1).to(device).bool(),
+                'density': torch.ones(*mb_density.shape, 1).to(device).bool(),
+                'zcr': torch.ones(*mb_zcr.shape, 1).to(device).bool(),
+                'flatness': torch.ones(*mb_flatness.shape, 1).to(device).bool(),
+                'chroma': torch.ones(*mb_chroma.shape[:-1], 1).to(device).bool(),
+                'style': torch.ones(*mb_style.shape[:-1], 1).to(device).bool(),
             }
+            net_kwargs = {
+                'bpm': bpm,
+                'rms': rms,
+                'density': density,
+                'zcr': zcr,
+                'flatness': flatness,
+                'chroma': chroma,
+                'style': style,
+            }
+            uncond_net_kwargs = net_kwargs | {'unconditional_mask': unconditional_mask}
             
-            cfg_net_kwargs = []
-            for k, v in unconditional_mask.items():
-                temp_mask = unconditional_mask.copy()
-                temp_mask[k] = ~v
-                cfg_net_kwargs.append(net_kwargs | {'unconditional_mask': temp_mask})
-                
-                uncond_net_kwargs = net_kwargs | {'unconditional_mask': unconditional_mask}
-                
+            if cfg_mode == 'joint':
+                joint_conditional_mask = {k: ~v for k, v in unconditional_mask.items()}
+                cfg_net_kwargs = [net_kwargs | {'unconditional_mask': joint_conditional_mask}]
+            elif cfg_mode == 'independent':
+                cfg_net_kwargs = []
+                for k, v in unconditional_mask.items():
+                    temp_mask = unconditional_mask.copy()
+                    temp_mask[k] = ~v
+                    cfg_net_kwargs.append(net_kwargs | {'unconditional_mask': temp_mask})
+            
             y = predict_measures(
                 gen_shape, 
                 cfg_net_kwargs, 
@@ -410,31 +440,27 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps, n_trials):
                 gen_noise=gen_noise, 
                 decoder_noise=decoder_noise, 
                 method='median', 
-                window_size=3,
-                memory_efficient=False
+                window_size=3, 
+                memory_efficient=False, 
+                rescale_phi=0, 
+                cfg_mode=cfg_mode, 
+                t_dist=t_dist
             )
             
             error = 0
             for batch, measure_list in enumerate(y):
                 wav = np.concatenate(measure_list, axis=0)
                 wav_chroma = librosa.feature.chroma_cqt(y=wav, sr=rate, hop_length=hop_length)
-                stft_mag = np.abs(librosa.stft(wav, n_fft=n_fft, hop_length=hop_length))
-                freqs = librosa.fft_frequencies(sr=rate, n_fft=n_fft)
                 
-                low_mask = (freqs < 250)
-                mid_mask = (freqs >= 250) & (freqs < 4000)
-                high_mask = (freqs >= 4000)
-                
-                wav_rms_low = np.sqrt(np.mean(stft_mag[low_mask, :]**2, axis=0))
-                wav_rms_mid = np.sqrt(np.mean(stft_mag[mid_mask, :]**2, axis=0))
-                wav_rms_high = np.sqrt(np.mean(stft_mag[high_mask, :]**2, axis=0))
+                wav_rms = librosa.feature.rms(y=wav, hop_length=hop_length)[0]
                 
                 wav_onset_env = librosa.onset.onset_strength(y=wav, sr=rate, hop_length=hop_length)
                 wav_onset_frames = librosa.onset.onset_detect(onset_envelope=wav_onset_env, sr=rate, hop_length=hop_length)
                 wav_zcr = librosa.feature.zero_crossing_rate(wav, hop_length=hop_length)[0]
+                wav_flatness = librosa.feature.spectral_flatness(y=wav, n_fft=n_fft, hop_length=hop_length)[0]
                 
                 # Extract 13 MFCCs, but strictly slice [1:13] to discard the 0th energy coefficient
-                wav_mfccs = librosa.feature.mfcc(y=wav, sr=rate, hop_length=hop_length, n_mfcc=13)[1:13, :]
+                # wav_mfccs = librosa.feature.mfcc(y=wav, sr=rate, hop_length=hop_length, n_mfcc=13)[1:13, :]
                 
                 current_sample = 0
                 for i in range(len(measure_list) - 1):
@@ -452,28 +478,25 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps, n_trials):
                     
                     measure_chroma = wav_chroma[:, frame_start:frame_end]
                     
-                    measure_rms_low = wav_rms_low[frame_start:frame_end]
-                    measure_rms_mid = wav_rms_mid[frame_start:frame_end]
-                    measure_rms_high = wav_rms_high[frame_start:frame_end]
-                    
+                    measure_rms = wav_rms[frame_start:frame_end]
                     measure_zcr = wav_zcr[frame_start:frame_end]
+                    measure_flatness = wav_flatness[frame_start:frame_end]
                     
-                    measure_mfcc = wav_mfccs[:, frame_start:frame_end]
+                    # measure_mfcc = wav_mfccs[:, frame_start:frame_end]
                     
                     if measure_chroma.shape[1] > 0:
                         chroma_error = mse(np.mean(measure_chroma, axis=1), mb_chroma[batch, i].cpu().numpy())
-                        rms_low_error = mse(np.mean(measure_rms_low), mb_rms_low[batch, i].cpu().numpy())
-                        rms_mid_error = mse(np.mean(measure_rms_mid), mb_rms_mid[batch, i].cpu().numpy())
-                        rms_high_error = mse(np.mean(measure_rms_high), mb_rms_high[batch, i].cpu().numpy())
+                        rms_error = mse(np.mean(measure_rms), mb_rms[batch, i].cpu().numpy())
+                        flatness_error = mse(np.mean(measure_flatness), mb_flatness)
                         
                         onsets_in_measure = np.sum((wav_onset_frames >= frame_start) & (wav_onset_frames < frame_end))
                         measure_duration_sec = (frame_end - frame_start) / (rate / hop_length)
                         density_error = mse(onsets_in_measure / measure_duration_sec if measure_duration_sec > 0 else 0.0, density[batch, i].cpu().numpy())
                         
                         zcr_error = mse(np.mean(measure_zcr), mb_zcr[batch, i].cpu().numpy())
-                        mfcc_error = mse(np.mean(measure_mfcc, axis=1), mb_mfcc[batch, i].cpu().numpy())
+                        # mfcc_error = mse(np.mean(measure_mfcc, axis=1), mb_mfcc[batch, i].cpu().numpy())
                         
-                        error += chroma_error + rms_low_error + rms_mid_error + rms_high_error + density_error + zcr_error + mfcc_error
+                        error += chroma_error + rms_error + density_error + zcr_error + flatness_error
             
             error /= len(y)
             errors.append(error)
@@ -492,7 +515,7 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps, n_trials):
             
             del y, emb, temp_mask, measure_list, style_emb
             del cfg_net_kwargs, uncond_net_kwargs, net_kwargs, unconditional_mask
-            del mb_bpm, mb_rms_low, mb_rms_mid, mb_rms_high, mb_density, mb_zcr, mb_mfcc, mb_chroma, mb_style
+            del mb_bpm, mb_rms, mb_density, mb_zcr, mb_chroma, mb_style
             import gc
             gc.collect()
             torch.cuda.empty_cache()
@@ -500,7 +523,6 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps, n_trials):
         y_mu, y_sigma = calculate_embd_statistics(np.concatenate(embs, axis=0))
         fad_score = calculate_frechet_distance(y_mu, y_sigma, real_mu, real_sigma)
 
-        print(style_errors)
         return np.mean(errors).item(), fad_score, np.mean(style_errors).item()
     
     study = optuna.create_study(
