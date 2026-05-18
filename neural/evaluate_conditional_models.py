@@ -503,7 +503,7 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps, n_trials):
                     if measure_chroma.shape[1] > 0:
                         chroma_error = mse(np.mean(measure_chroma, axis=1), mb_chroma[batch, i].cpu().numpy())
                         rms_error = mse(np.mean(measure_rms), mb_rms[batch, i].cpu().numpy())
-                        flatness_error = mse(np.mean(measure_flatness), mb_flatness)
+                        flatness_error = mse(np.mean(measure_flatness), mb_flatness[batch, i].cpu().numpy())
                         
                         onsets_in_measure = np.sum((wav_onset_frames >= frame_start) & (wav_onset_frames < frame_end))
                         measure_duration_sec = (frame_end - frame_start) / (rate / hop_length)
