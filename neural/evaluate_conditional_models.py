@@ -20,7 +20,7 @@ from contrast import Transformer as Contrast
 from dito import DiToV5 as Tokenizer
 from fad import MultiTaskFAD as FAD, BPMProbe
 from adapter import InvertibleAdapter as Adapter
-from diffusion_forcing import MetaConditionalModernDiT_large as DiT
+from diffusion_forcing import MetaConditionalModernDiTV2_smedium as DiT
 
 rate = 16000
 n_samples = 24576
@@ -303,7 +303,22 @@ encoder_ratios = math.prod(tokenizer.encoder.ratios)
 max_adapter_len = adapter.max_seq_len
 
 # DiTs
-model = load_model(os.path.join('Stage2_MetaConditionalModernDiTV2_smedium_24576_subset_adapter_longtrain_24chunks', 'ckpt.pt'), DiT)
+ckpt_path = os.path.join('Stage2_MetaConditionalModernDiTV2_smedium_24576_subset_adapter_longtrain_24chunks', 'ckpt.pt')
+print(f'Loading model {ckpt_path} ...')
+checkpoint = torch.load(ckpt_path, map_location=device)
+tokenizer_args = checkpoint['model_args']
+
+model = DiT(**tokenizer_args).to(device)
+state_dict = checkpoint['ema']
+unwanted_prefix = '_orig_mod.'
+for k,v in list(state_dict.items()):
+    if k.startswith(unwanted_prefix):
+        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+model.load_state_dict(state_dict)
+model.eval()
+if 'cuda' in device:
+    model = torch.compile(model)
+
 n_chunks = 24
 spatial_window = 64
 vae_embed_dim = 16
