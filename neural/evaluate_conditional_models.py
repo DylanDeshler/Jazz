@@ -427,13 +427,13 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps, n_trials):
                 'style': torch.ones(*mb_style.shape[:-1], 1).to(device).bool(),
             }
             net_kwargs = {
-                'bpm': bpm,
-                'rms': rms,
-                'density': density,
-                'zcr': zcr,
-                'flatness': flatness,
-                'chroma': chroma,
-                'style': style,
+                'bpm': mb_bpm,
+                'rms': mb_rms,
+                'density': mb_density,
+                'zcr': mb_zcr,
+                'flatness': mb_flatness,
+                'chroma': mb_chroma,
+                'style': mb_style,
             }
             uncond_net_kwargs = net_kwargs | {'unconditional_mask': unconditional_mask}
             
