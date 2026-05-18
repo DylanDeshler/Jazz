@@ -456,7 +456,7 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps, n_trials):
                 decoder_noise=decoder_noise, 
                 method='median', 
                 window_size=3, 
-                memory_efficient=False, 
+                memory_efficient=True, 
                 rescale_phi=0, 
                 cfg_mode=cfg_mode, 
                 t_dist=t_dist
