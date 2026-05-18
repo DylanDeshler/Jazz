@@ -348,6 +348,21 @@ styles = np.memmap('/home/ubuntu/Data/contrast_learntmep_instance_10s_style_val.
 meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_chroma_rms_density_zcr_flatness_val.bin', dtype=np.float32, mode='r', shape=(88303, 16))
 bpms = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_v2_64_bpm_val.bin', dtype=np.float32, mode='r')
 
+chroma_mean = np.asarray([
+    0.45533183, 0.39680213, 0.44615716, 0.42044115, 0.40855545, 0.45450154, 0.3971631, 0.496346, 0.44164586, 0.4416672, 0.44793198, 0.39493898
+])
+chroma_std = np.asarray([
+    0.18241853, 0.16477719, 0.18014704, 0.18011539, 0.1677363, 0.18919244, 0.16196373, 0.19185093, 0.18003348, 0.1768027, 0.18706752, 0.1618064
+])
+rms_mean = np.asarray([3.2653894])
+rms_std = np.asarray([3.597796])
+density_mean = np.asarray([2.5229013])
+density_std = np.asarray([1.230155])
+zcr_mean = np.asarray([0.10766766])
+zcr_std = np.asarray([0.048143145])
+flatness_mean = np.asarray([0.011151944])
+flatness_std = np.asarray([0.018700112])
+
 # DSP Error: 10354.72, FAD: 46.39 | Scales: {'w_bpm': 3.9373842460434645, 'w_rms_low': 3.4393841207062614, 'w_rms_mid': 0.7827845665866684, 'w_rms_high': 1.0842041672977343, 'w_density': 3.618813544402218, 'w_zcr': 1.0507734375953, 'w_mfcc': 4.09447388787254, 'w_chroma': 3.4437712554227327, 'w_style': 1.839268747645621}
 # DSP Error: 9911.62, FAD: 47.15 | Scales: {'w_bpm': 2.9757548862211, 'w_rms_low': 1.6357210298917813, 'w_rms_mid': 1.1282261871766086, 'w_rms_high': 0.03202175277198516, 'w_density': 4.344732034109373, 'w_zcr': 0.25650236008780636, 'w_mfcc': 3.5936278524604393, 'w_chroma': 4.189428251806468, 'w_style': 0.022038777442222046}
 # DSP Error: 15889.04, FAD: 43.82 | Scales: {'w_bpm': 4.4264080009987, 'w_rms_low': 3.283656337130307, 'w_rms_mid': 3.707876645874035, 'w_rms_high': 2.4815314659351877, 'w_density': 1.1081407656234061, 'w_zcr': 1.0670885384460864, 'w_mfcc': 0.28568961916008273, 'w_chroma': 4.94783978080251, 'w_style': 2.754625245386409}
@@ -501,15 +516,30 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps, n_trials):
                     # measure_mfcc = wav_mfccs[:, frame_start:frame_end]
                     
                     if measure_chroma.shape[1] > 0:
-                        chroma_error = mse(np.mean(measure_chroma, axis=1), mb_chroma[batch, i].cpu().numpy())
-                        rms_error = mse(np.mean(measure_rms), mb_rms[batch, i].cpu().numpy())
-                        flatness_error = mse(np.mean(measure_flatness), mb_flatness[batch, i].cpu().numpy())
+                        chroma_error = mse(
+                            (np.mean(measure_chroma, axis=1) - chroma_mean) / chroma_std, 
+                            (mb_chroma[batch, i].cpu().numpy() - chroma_mean) / chroma_std
+                        )
+                        rms_error = mse(
+                            (np.mean(measure_rms) - rms_mean) / rms_std, 
+                            (mb_rms[batch, i].cpu().numpy() - rms_mean) / rms_std
+                        )
+                        flatness_error = mse(
+                            (np.mean(measure_flatness) - flatness_mean) / flatness_std, 
+                            (mb_flatness[batch, i].cpu().numpy() - flatness_mean) / flatness_std
+                        )
                         
                         onsets_in_measure = np.sum((wav_onset_frames >= frame_start) & (wav_onset_frames < frame_end))
                         measure_duration_sec = (frame_end - frame_start) / (rate / hop_length)
-                        density_error = mse(onsets_in_measure / measure_duration_sec if measure_duration_sec > 0 else 0.0, density[batch, i].cpu().numpy())
+                        density_error = mse(
+                            ((onsets_in_measure / measure_duration_sec) - density_mean) / density_std if measure_duration_sec > 0 else 0.0, 
+                            (mb_density[batch, i].cpu().numpy() - density_mean) / density_std
+                        )
                         
-                        zcr_error = mse(np.mean(measure_zcr), mb_zcr[batch, i].cpu().numpy())
+                        zcr_error = mse(
+                            (np.mean(measure_zcr) - zcr_mean) / zcr_std, 
+                            (mb_zcr[batch, i].cpu().numpy() - zcr_mean) / zcr_std
+                        )
                         # mfcc_error = mse(np.mean(measure_mfcc, axis=1), mb_mfcc[batch, i].cpu().numpy())
                         
                         error += chroma_error + rms_error + density_error + zcr_error + flatness_error
