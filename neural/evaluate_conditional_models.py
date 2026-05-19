@@ -583,7 +583,7 @@ def run_optuna_experiments(batch_size, micro_batch_size, n_steps, n_trials):
         print(f"DSP Error: {t.values[0]:.2f}, FAD: {t.values[1]:.2f} | Scales: {t.params}")
 
 @torch.no_grad()
-def run_eval(batch_size, micro_batch_size, n_steps):
+def run_eval(batch_size, micro_batch_size, n_steps, memory_efficient):
     torch.manual_seed(0)
     np.random.seed(0)
     
@@ -674,7 +674,7 @@ def run_eval(batch_size, micro_batch_size, n_steps):
             decoder_noise=decoder_noise, 
             method='median', 
             window_size=3, 
-            memory_efficient=True, 
+            memory_efficient=memory_efficient, 
             rescale_phi=0, 
             cfg_mode=cfg_mode, 
             t_dist=t_dist
@@ -735,6 +735,12 @@ if __name__ == '__main__':
         default=100,
         help="Number of optuna experiments to run (default: 100)"
     )
+    parser.add_argument(
+        "--parallel",
+        type=bool,
+        default=False,
+        help="CFG in parallel (default: False)"
+    )
     
     args = parser.parse_args()
     if args.micro_batch_size is None:
@@ -743,5 +749,5 @@ if __name__ == '__main__':
     if args.mode == "run_optuna_experiments":
         run_optuna_experiments(args.batch_size, args.micro_batch_size, args.n_steps, args.n_trials)
     elif args.mode == "run_eval":
-        run_eval(args.batch_size, args.micro_batch_size, args.n_steps)
+        run_eval(args.batch_size, args.micro_batch_size, args.n_steps, args.parallel)
         
