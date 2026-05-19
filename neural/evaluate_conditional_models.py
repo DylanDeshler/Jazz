@@ -588,7 +588,7 @@ def run_eval(batch_size, micro_batch_size, n_steps):
     np.random.seed(0)
     
     x = []
-    path_idxs = np.random.choice(np.arange(len(measure_paths)), size=batch_size, replace=False)
+    path_idxs = np.random.choice(np.arange(len(measure_paths)), size=batch_size, replace=True)
     for i in path_idxs:
         wav, _ = librosa.load(measure_paths[i], sr=None)
         start = np.random.randint(len(wav) - n_chunks * rate)
@@ -607,70 +607,63 @@ def run_eval(batch_size, micro_batch_size, n_steps):
     
     style = torch.from_numpy(np.stack([styles[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     chroma = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, :12] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    rms_low = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 12] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    rms_mid = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 13] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    rms_high = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 14] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    density = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 15] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    zcr = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 16] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    mfcc = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 17:] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    rms = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 12] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    density = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 13] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    zcr = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 14] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    flatness = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 15] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     bpm = torch.from_numpy(np.stack([bpms[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     
     gen_shape = (micro_batch_size, n_chunks, spatial_window, vae_embed_dim)
     gen_noise = torch.randn(gen_shape).to(device)
-    decoder_noise = torch.randn(micro_batch_size * n_chunks, 1, encoder_ratios * (max_seq_len - 1)).to(device)
+    decoder_noise = torch.randn(micro_batch_size * n_chunks, 1, encoder_ratios * (max_adapter_len - 1)).to(device)
     
-    scales = {'w_bpm': 1.0851264588839231, 'w_rms_low': 0.659259594828685, 'w_rms_mid': 3.448296776845229, 'w_rms_high': 0.4130761136569244, 'w_density': 4.437366136337984, 'w_zcr': 4.235012657009647, 'w_mfcc': 2.8912681805245666, 'w_chroma': 4.489133559225099, 'w_style': 1.3087819574454755}
-    cfg_guidances = list(scales.values())
-    # cfg_guidances = [2, 0.5, 1, 0.5, 2, 0.5, 2, 3, 5]
-    # cfg_guidances = [0, 0, 0, 0, 0, 0, 0, 0, 3]
-    cfg_guidances = [3]
+    cfg_guidances = [5]
     embs = []
     for micro_batch in tqdm(range(batch_size // micro_batch_size)):
         start_idx = micro_batch * micro_batch_size
         end_idx = start_idx + micro_batch_size
         
         mb_bpm = bpm[start_idx:end_idx]
-        mb_rms_low = rms_low[start_idx:end_idx]
-        mb_rms_mid = rms_mid[start_idx:end_idx]
-        mb_rms_high = rms_high[start_idx:end_idx]
+        mb_rms = rms[start_idx:end_idx]
         mb_density = density[start_idx:end_idx]
         mb_zcr = zcr[start_idx:end_idx]
-        mb_mfcc = mfcc[start_idx:end_idx]
+        mb_flatness = flatness[start_idx:end_idx]
         mb_chroma = chroma[start_idx:end_idx]
         mb_style = style[start_idx:end_idx]
-
+        
+        t_dist = 'logit'
+        cfg_mode = 'joint'
+        
+        unconditional_mask = {
+            'bpm': torch.ones(*mb_bpm.shape, 1).to(device).bool(),
+            'rms': torch.ones(*mb_rms.shape, 1).to(device).bool(),
+            'density': torch.ones(*mb_density.shape, 1).to(device).bool(),
+            'zcr': torch.ones(*mb_zcr.shape, 1).to(device).bool(),
+            'flatness': torch.ones(*mb_flatness.shape, 1).to(device).bool(),
+            'chroma': torch.ones(*mb_chroma.shape[:-1], 1).to(device).bool(),
+            'style': torch.ones(*mb_style.shape[:-1], 1).to(device).bool(),
+        }
         net_kwargs = {
             'bpm': mb_bpm,
-            'rms_low': mb_rms_low,
-            'rms_mid': mb_rms_mid,
-            'rms_high': mb_rms_high,
+            'rms': mb_rms,
             'density': mb_density,
             'zcr': mb_zcr,
-            'mfcc': mb_mfcc,
+            'flatness': mb_flatness,
             'chroma': mb_chroma,
             'style': mb_style,
         }
+        uncond_net_kwargs = net_kwargs | {'unconditional_mask': unconditional_mask}
         
-        unconditional_mask = {
-            'bpm': torch.ones(*mb_bpm.shape, 1, device=device, dtype=torch.bool),
-            'rms_low': torch.ones(*mb_rms_low.shape, 1, device=device, dtype=torch.bool),
-            'rms_mid': torch.ones(*mb_rms_mid.shape, 1, device=device, dtype=torch.bool),
-            'rms_high': torch.ones(*mb_rms_high.shape, 1, device=device, dtype=torch.bool),
-            'density': torch.ones(*mb_density.shape, 1, device=device, dtype=torch.bool),
-            'zcr': torch.ones(*mb_zcr.shape, 1, device=device, dtype=torch.bool),
-            'mfcc': torch.ones(*mb_mfcc.shape[:-1], 1, device=device, dtype=torch.bool),
-            'chroma': torch.ones(*mb_chroma.shape[:-1], 1, device=device, dtype=torch.bool),
-            'style': torch.ones(*mb_style.shape[:-1], 1, device=device, dtype=torch.bool),
-        }
+        if cfg_mode == 'joint':
+            joint_conditional_mask = {k: ~v for k, v in unconditional_mask.items()}
+            cfg_net_kwargs = [net_kwargs | {'unconditional_mask': joint_conditional_mask}]
+        elif cfg_mode == 'independent':
+            cfg_net_kwargs = []
+            for k, v in unconditional_mask.items():
+                temp_mask = unconditional_mask.copy()
+                temp_mask[k] = ~v
+                cfg_net_kwargs.append(net_kwargs | {'unconditional_mask': temp_mask})
         
-        cfg_net_kwargs = []
-        for k, v in unconditional_mask.items():
-            temp_mask = unconditional_mask.copy()
-            temp_mask[k] = ~v
-            cfg_net_kwargs.append(net_kwargs | {'unconditional_mask': temp_mask})
-            
-            uncond_net_kwargs = net_kwargs | {'unconditional_mask': unconditional_mask}
-            
         y = predict_measures(
             gen_shape, 
             cfg_net_kwargs, 
@@ -680,10 +673,11 @@ def run_eval(batch_size, micro_batch_size, n_steps):
             gen_noise=gen_noise, 
             decoder_noise=decoder_noise, 
             method='median', 
-            window_size=3,
-            memory_efficient=False,
-            rescale_phi=0.7,
-            cfg_mode="joint"
+            window_size=3, 
+            memory_efficient=True, 
+            rescale_phi=0, 
+            cfg_mode=cfg_mode, 
+            t_dist=t_dist
         )
         
         sf.write(
