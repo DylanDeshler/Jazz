@@ -739,6 +739,7 @@ if __name__ == '__main__':
         "--parallel",
         type=bool,
         default=False,
+        action='store_true',
         help="CFG in parallel (default: False)"
     )
     
