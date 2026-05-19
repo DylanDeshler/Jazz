@@ -737,7 +737,6 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         "--parallel",
-        type=bool,
         default=False,
         action='store_true',
         help="CFG in parallel (default: False)"
