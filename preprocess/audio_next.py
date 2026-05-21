@@ -43,8 +43,9 @@ def process_card(card):
             temp_mp3.write(response.content)
             temp_mp3.flush()
             
-            y, sr = librosa.load(temp_mp3.name)
+            y, sr = librosa.load(temp_mp3.name, rate=16000)
             sf.write('test_input.wav', y, sr)
+            print(sr)
         
         return True
     except Exception as e:
