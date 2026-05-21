@@ -299,7 +299,7 @@ def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance
 
 # Tokenizers
 tokenizer = load_model(os.path.join('tokenizer_low_large_24576_subset_longtrain', 'ckpt.pt'), Tokenizer)
-adapter = load_model(os.path.join('tokenizer_adapter_low_large_24576_subset_longtrain_v2', 'ckpt.pt'), Adapter)
+adapter = load_model(os.path.join('tokenizer_adapter_low_large_24576_subset_longtrain_v2_64', 'ckpt.pt'), Adapter)
 encoder_ratios = math.prod(tokenizer.encoder.ratios)
 max_adapter_len = adapter.max_seq_len
 
@@ -750,4 +750,5 @@ if __name__ == '__main__':
         run_optuna_experiments(args.batch_size, args.micro_batch_size, args.n_steps, args.n_trials)
     elif args.mode == "run_eval":
         run_eval(args.batch_size, args.micro_batch_size, args.n_steps, args.parallel)
-        
+
+# FAD:  21.126814254077317
