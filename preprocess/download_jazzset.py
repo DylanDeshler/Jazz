@@ -45,7 +45,7 @@ def process_card(card):
         return f"Error with {card.get('URLS', [{}])[0].get('FILE')}: {e}"
 
 # Load data
-cards = pickle.load(open('/home/ubuntu/base/Data/JazzSet.0.9.pkl', "rb"))[6:]
+cards = pickle.load(open('/data/JazzSet.0.9.pkl', "rb"))[6:]
 
 # Execute in parallel
 print(f"Starting parallel processing with {MAX_WORKERS} workers...")
