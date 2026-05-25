@@ -29,7 +29,7 @@ total_write_batches = 48
 
 out_prefix = 'low_large_24576_subset_chroma_rms_density_zcr_flatness'
 
-paths = glob.glob('/data/measures/*')
+paths = glob.glob('/data/wavs/*') # was measures
 with open('/data/valid_files_by_bpm.json', 'r') as f:
     beat_paths = json.load(f)
 paths = [os.path.join('/data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
