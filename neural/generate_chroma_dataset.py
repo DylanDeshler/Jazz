@@ -29,10 +29,10 @@ total_write_batches = 48
 
 out_prefix = 'low_large_24576_subset_chroma_rms_density_zcr_flatness'
 
-paths = glob.glob('/home/ubuntu/Data/measures/*')
-with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
+paths = glob.glob('/data/measures/*')
+with open('/data/valid_files_by_bpm.json', 'r') as f:
     beat_paths = json.load(f)
-paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
+paths = [os.path.join('/data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
 print(len(paths))
 
 import concurrent.futures
