@@ -468,7 +468,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     if args.mode == 'stats':
-        beat_path = '/home/ubuntu/Data/beats'
+        beat_path = '/data/beats'
         if os.path.isdir(beat_path):
             analyze_folder_stats(beat_path)
         else:
