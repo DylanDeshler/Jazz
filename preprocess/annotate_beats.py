@@ -11,7 +11,7 @@ from beat_this.inference import File2Beats
 from beat_this.utils import save_beat_tsv
 
 worker_model = None
-out_dir = '/home/ubuntu/Data/beats'
+out_dir = '/data/beats'
 
 def init_worker():
     """
@@ -41,9 +41,9 @@ def process_audio(audio_path):
 if __name__ == '__main__':
     mp.set_start_method('spawn', force=True)
     
-    paths = glob.glob('/home/ubuntu/Data/wavs/*')
+    paths = glob.glob('/data/wavs/*')
     os.makedirs(out_dir, exist_ok=True)
-    NUM_WORKERS = 40
+    NUM_WORKERS = 20
     
     print(f"Processing {len(paths)} files with {NUM_WORKERS} parallel workers...")
     
