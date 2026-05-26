@@ -4,7 +4,7 @@ import glob
 from tqdm import tqdm
 
 model_id = "nvidia/audio-flamingo-next-think-hf"
-model_id = "nvidia/music-flamingo"
+# model_id = "nvidia/music-flamingo"
 
 print(f"Loading {model_id}...")
 
@@ -25,6 +25,7 @@ for wav in tqdm(wavs):
 
     # Explicitly asking for reasoning triggers the model's Chain-of-Thought
     text_prompt = "Summarize the track with precision: mention its musical style, BPM, key, arrangement, production choices, and the emotions or story it conveys."
+    # text_prompt = "Write a short, detailed, and concise caption for this track without mentioning lyrics"
 
     # Audio Flamingo uses a standardized multimodal chat template
     conversation = [
