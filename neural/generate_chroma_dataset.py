@@ -89,7 +89,7 @@ if True:
     all_data = []
     with torch.no_grad():
         for idx, path in enumerate(tqdm(paths)):
-            wav = librosa.load(path, sr=rate)
+            wav, _ = librosa.load(path, sr=rate)
             beat_path = os.path.join('/data/beats', os.path.basename(paths[idx]))
             beat_data = parse_beat_file(beat_path)
             downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
