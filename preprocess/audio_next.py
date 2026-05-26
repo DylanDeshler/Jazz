@@ -25,7 +25,7 @@ for wav in tqdm(wavs):
 
     # Explicitly asking for reasoning triggers the model's Chain-of-Thought
     text_prompt = "Summarize the track with precision: mention its musical style, BPM, key, arrangement, production choices, and the emotions or story it conveys. Do not mention BPM, length, chords, or lyrics."
-    # text_prompt = "Write a short, detailed, and concise caption for this track without mentioning lyrics"
+    text_prompt = "Write a short, detailed, and concise caption for this track without mentioning BPM, length, chords, or lyrics."
 
     # Audio Flamingo uses a standardized multimodal chat template
     conversation = [
