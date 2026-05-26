@@ -10,10 +10,6 @@ from torchinfo import summary
 import numpy as np
 import torch
 
-from dito import DiToV5 as Tokenizer
-from adapter import InvertibleAdapter
-
-import soundfile as sf
 import librosa
 import glob
 
@@ -94,7 +90,7 @@ if True:
     with torch.no_grad():
         for idx, path in enumerate(tqdm(paths)):
             wav = librosa.load(path, sr=rate)
-            beat_path = os.path.join('/home/ubuntu/Data/beats', os.path.basename(paths[idx]))
+            beat_path = os.path.join('/data/beats', os.path.basename(paths[idx]))
             beat_data = parse_beat_file(beat_path)
             downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
             
