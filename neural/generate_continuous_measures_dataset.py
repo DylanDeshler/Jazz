@@ -61,26 +61,26 @@ adapter = torch.compile(adapter)
 max_seq_len = adapter.max_seq_len
 n_queries = adapter_args['n_queries']
 
-paths = glob.glob('/home/ubuntu/Data/measures/*')
-with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
+paths = glob.glob('data/measures/*')
+with open('data/valid_files_by_bpm.json', 'r') as f:
     beat_paths = json.load(f)
-paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
+paths = [os.path.join('data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
 print(len(paths))
 
-import concurrent.futures
-from multiprocessing import cpu_count
-wavs = [None] * len(paths)
+# import concurrent.futures
+# from multiprocessing import cpu_count
+# wavs = [None] * len(paths)
 
-with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
-    future_to_index = {
-        executor.submit(lambda x: librosa.load(x, sr=rate)[0], path): i 
-        for i, path in enumerate(paths)
-    }
+# with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
+#     future_to_index = {
+#         executor.submit(lambda x: librosa.load(x, sr=rate)[0], path): i 
+#         for i, path in enumerate(paths)
+#     }
     
-    for future in tqdm(concurrent.futures.as_completed(future_to_index), desc='Loading wav files', total=len(paths)):
-        original_index = future_to_index[future]
-        wav = future.result()
-        wavs[original_index] = wav
+#     for future in tqdm(concurrent.futures.as_completed(future_to_index), desc='Loading wav files', total=len(paths)):
+#         original_index = future_to_index[future]
+#         wav = future.result()
+#         wavs[original_index] = wav
 
 def parse_beat_file(beat_path):
     """
@@ -123,8 +123,9 @@ if True:
     all_codes = []
     all_bpms = []
     with torch.no_grad():
-        for idx, wav in enumerate(tqdm(wavs)):
-            beat_path = os.path.join('/home/ubuntu/Data/beats', os.path.basename(paths[idx]))
+        for idx, path in enumerate(tqdm(paths)):
+            wav, sr = librosa.load(path, sr=rate)
+            beat_path = os.path.join('data/beats', os.path.basename(paths[idx]))
             beat_data = parse_beat_file(beat_path)
             downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
             
