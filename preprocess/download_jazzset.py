@@ -13,7 +13,7 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 # Configuration
 rate = 16000
 out_dir = '/data/wavs'
-os.makedirs(out_dir, exist_ok=True)
+os.makedirs(out_dir, exist_ok=False)
 MAX_WORKERS = 40  # Number of simultaneous downloads/processes
 
 def process_card(card):
