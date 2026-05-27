@@ -112,7 +112,7 @@ def main():
     my_wavs = all_wavs[start_idx:end_idx]
     print(f"GPU {args.gpu} processing {len(my_wavs)} files...")
 
-    text_prompt = "Summarize the track with precision: mention its musical style, BPM, key, arrangement, production choices, and the emotions or story it conveys."
+    text_prompt = "Summarize the track with precision: mention its musical style, BPM, key, arrangement, production choices, and the emotions or story it conveys. Do not mention chords, lyrics, length, or BPM."
     # text_prompt = "Write a short, detailed, and concise caption for this track without mentioning BPM, length, chords, or lyrics."
     
     # 2. Open an output file specific to this GPU to save incrementally
