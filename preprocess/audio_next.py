@@ -9,7 +9,7 @@ import numpy as np
 import librosa
 import warnings
 
-def get_musical_key(wav_path, rate=16000):
+def get_musical_key(wav_path, rate=16000, hop_length=1024):
     try:
         y, _ = librosa.load(wav_path, sr=rate, mono=True)
         
@@ -18,7 +18,7 @@ def get_musical_key(wav_path, rate=16000):
             return "Unknown"
             
         # Extract Pitch Class Profile (Chromagram)
-        chromagram = librosa.feature.chroma_cqt(y=y, sr=rate)
+        chromagram = librosa.feature.chroma_cqt(y=y, sr=rate, hop_length=hop_length)
         chroma_vals = np.sum(chromagram, axis=1)
         
         # 2. SAFETY CHECK: If the chromagram has zero variance, correlation will fail
@@ -29,11 +29,8 @@ def get_musical_key(wav_path, rate=16000):
         maj_profile = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88]
         min_profile = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17]
         
-        # 3. SAFETY CHECK: Suppress any lingering floating-point warnings during math
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            maj_corrs = [np.corrcoef(chroma_vals, np.roll(maj_profile, i))[0, 1] for i in range(12)]
-            min_corrs = [np.corrcoef(chroma_vals, np.roll(min_profile, i))[0, 1] for i in range(12)]
+        maj_corrs = [np.corrcoef(chroma_vals, np.roll(maj_profile, i))[0, 1] for i in range(12)]
+        min_corrs = [np.corrcoef(chroma_vals, np.roll(min_profile, i))[0, 1] for i in range(12)]
         
         keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
         
@@ -112,8 +109,8 @@ def main():
     my_wavs = all_wavs[start_idx:end_idx]
     print(f"GPU {args.gpu} processing {len(my_wavs)} files...")
 
-    text_prompt = "Summarize the track with precision: mention its musical style, BPM, key, arrangement, production choices, and the emotions or story it conveys. Do not mention chords, lyrics, length, or BPM."
-    # text_prompt = "Write a short, detailed, and concise caption for this track without mentioning BPM, length, chords, or lyrics."
+    # text_prompt = "Summarize the track with precision: mention its musical style, BPM, key, arrangement, production choices, and the emotions or story it conveys. Do not mention chords, lyrics, length, or BPM."
+    text_prompt = "Write a short, detailed, and concise caption for this track without mentioning BPM, length, chords, or lyrics."
     
     # 2. Open an output file specific to this GPU to save incrementally
     output_filename = f"captions_part_{args.gpu}.jsonl"
