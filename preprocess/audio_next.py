@@ -124,7 +124,7 @@ def main():
             for wav in batch_wavs:
                 beat_path = os.path.join('/data/beats', os.path.basename(wav))
                 beat_data = parse_beat_file(beat_path)
-                downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
+                downbeat_indices = [k for k, b in enumerate(beat_data) if b['beat'] == 1]
                 print(len(downbeat_indices))
                 
                 wav_len = len(librosa.load(wav, sr=rate)[0])
@@ -147,7 +147,6 @@ def main():
                     
                     bpms.append(instant_bpm)
                 batch_bpms.append(np.median(bpms))
-                print(batch_bpms[-1])
                 
                 batch_keys.append(get_musical_key(wav, rate=rate))
                 
