@@ -146,8 +146,8 @@ def main():
                     instant_bpm = (TARGET_SIG / duration_sec) * 60
                     
                     bpms.append(instant_bpm)
-                    print(instant_bpm)
-                batch_bpms.append(np.mean(bpms))
+                batch_bpms.append(np.median(bpms))
+                print(batch_bpms[-1])
                 
                 batch_keys.append(get_musical_key(wav, rate=rate))
                 
