@@ -76,8 +76,9 @@ def parse_beat_file(beat_path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--gpu", type=int, default=0, help="GPU ID to use (0, 1, 2, or 3)")
-    parser.add_argument("--world_size", type=int, default=4, help="Total number of GPUs")
+    parser.add_argument("--gpu", type=int, default=1, help="Physical GPU ID to use (e.g., 1, 2, or 3)")
+    parser.add_argument("--rank", type=int, default=0, help="Logical worker rank (0, 1, or 2)")
+    parser.add_argument("--world_size", type=int, default=3, help="Total number of active workers")
     parser.add_argument("--batch_size", type=int, default=4, help="Number of audio files to process at once")
     args = parser.parse_args()
     
@@ -101,8 +102,8 @@ def main():
     
     # Slice the original glob order into contiguous chunks
     chunk_size = len(all_wavs) // args.world_size
-    start_idx = args.gpu * chunk_size
-    end_idx = start_idx + chunk_size if args.gpu < args.world_size - 1 else len(all_wavs)
+    start_idx = args.rank * chunk_size
+    end_idx = start_idx + chunk_size if args.rank < args.world_size - 1 else len(all_wavs)
     
     my_wavs = all_wavs[start_idx:end_idx]
     print(f"GPU {args.gpu} processing {len(my_wavs)} files...")
@@ -111,7 +112,7 @@ def main():
     text_prompt = "Write a short, detailed, and concise caption for this track without mentioning BPM, length, chords, or lyrics."
     
     # 2. Open an output file specific to this GPU to save incrementally
-    output_filename = f"captions_part_{args.gpu}.jsonl"
+    output_filename = f"captions_part_{args.rank}.jsonl"
     
     with open(output_filename, "w", encoding="utf-8") as outfile:
         # 3. Process in batches
