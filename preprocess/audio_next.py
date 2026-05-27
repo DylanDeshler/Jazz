@@ -125,7 +125,7 @@ def main():
                 beat_path = os.path.join('/data/beats', os.path.basename(wav))
                 beat_data = parse_beat_file(beat_path)
                 downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
-                print(downbeat_indices)
+                print(len(downbeat_indices))
                 
                 bpms = []
                 for k in range(len(downbeat_indices) - 1):    
@@ -139,6 +139,7 @@ def main():
                     frame_end = int(t_end * rate)
                     
                     if frame_end > len(wav):
+                        print(f'end {frame_end} > song {len(wav)}')
                         break
                     
                     duration_sec = (frame_end - frame_start) / rate
