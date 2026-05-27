@@ -77,14 +77,20 @@ def parse_beat_file(beat_path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--gpu", type=int, default=1, help="Physical GPU ID to use (e.g., 1, 2, or 3)")
-    parser.add_argument("--rank", type=int, default=0, help="Logical worker rank (0, 1, or 2)")
+    parser.add_argument("--gpu", type=int, default=0, help="Physical GPU ID to use (e.g., 1, 2, or 3)")
+    parser.add_argument("--rank", type=int, default=None, help="Logical worker rank (0, 1, or 2)")
     parser.add_argument("--world_size", type=int, default=3, help="Total number of active workers")
     parser.add_argument("--batch_size", type=int, default=4, help="Number of audio files to process at once")
     args = parser.parse_args()
     
+    if args.rank is None:
+        args.rank = args.gpu
+    print(f'GPU: {args.gpu} RANK: {args.rank} WORLD SIZE: {args.world_size} BATCH SIZE: {args.batch_size}')
+    
     TARGET_SIG = 4
     rate = 16000
+    OFFSET = 0
+    MAX_DURATION = 60 * 4
 
     device = f"cuda:{args.gpu}"
     model_id = "nvidia/audio-flamingo-next-think-hf"
