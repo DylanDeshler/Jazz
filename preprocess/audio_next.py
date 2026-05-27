@@ -62,9 +62,9 @@ def main():
                 conversations,
                 tokenize=True,
                 add_generation_prompt=True,
+                return_dict=True,          # <--- Belongs to apply_chat_template
                 processor_kwargs={
-                    "return_dict": True,
-                    "padding": True
+                    "padding": True        # <--- Belongs to the underlying processor
                 }
             ).to(device)
 
