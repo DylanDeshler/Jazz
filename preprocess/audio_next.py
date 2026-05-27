@@ -125,7 +125,6 @@ def main():
                 beat_path = os.path.join('/data/beats', os.path.basename(wav))
                 beat_data = parse_beat_file(beat_path)
                 downbeat_indices = [k for k, b in enumerate(beat_data) if b['beat'] == 1]
-                print(len(downbeat_indices))
                 
                 wav_len = len(librosa.load(wav, sr=rate)[0])
                 bpms = []
