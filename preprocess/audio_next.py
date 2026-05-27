@@ -129,7 +129,7 @@ def main():
                 downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
                 
                 bpms = []
-                for i in range(len(downbeat_indices) - 1):    
+                for k in range(len(downbeat_indices) - 1):    
                     start_idx = downbeat_indices[i]
                     end_idx = downbeat_indices[i+1]
                     
@@ -146,7 +146,7 @@ def main():
                     instant_bpm = (TARGET_SIG / duration_sec) * 60
                     
                     bpms.append(instant_bpm)
-                batch_bpms.append(np.mean(bpms))
+                batch_bpms.append(np.nanmean(bpms))
                 
                 batch_keys.append(get_musical_key(wav, rate=rate))
                 
