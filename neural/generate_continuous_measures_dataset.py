@@ -61,10 +61,10 @@ adapter = torch.compile(adapter)
 max_seq_len = adapter.max_seq_len
 n_queries = adapter_args['n_queries']
 
-paths = glob.glob('data/wavs/*')
-with open('data/valid_files_by_bpm.json', 'r') as f:
+paths = glob.glob('/data/wavs/*')
+with open('/data/valid_files_by_bpm.json', 'r') as f:
     beat_paths = json.load(f)
-paths = [os.path.join('data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
+paths = [os.path.join('/data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
 print(len(paths))
 
 # import concurrent.futures
@@ -125,7 +125,7 @@ if True:
     with torch.no_grad():
         for idx, path in enumerate(tqdm(paths)):
             wav, sr = librosa.load(path, sr=rate)
-            beat_path = os.path.join('data/beats', os.path.basename(paths[idx]))
+            beat_path = os.path.join('/data/beats', os.path.basename(paths[idx]))
             beat_data = parse_beat_file(beat_path)
             downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
             
