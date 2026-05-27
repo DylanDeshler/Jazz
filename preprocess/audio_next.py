@@ -7,7 +7,8 @@ from transformers import AutoProcessor, AutoModelForSeq2SeqLM
 import os
 import numpy as np
 import librosa
-import warnings
+import tempfile
+import soundfile as sf
 
 def get_musical_key(wav_path, rate=16000, hop_length=1024):
     try:
@@ -122,10 +123,17 @@ def main():
             conversations = []
             batch_bpms = []
             batch_keys = []
+            temp_files = []
             for wav in batch_wavs:
                 beat_path = os.path.join('/data/beats', os.path.basename(wav))
                 beat_data = parse_beat_file(beat_path)
                 downbeat_indices = [k for k, b in enumerate(beat_data) if b['beat'] == 1]
+                
+                y, _ = librosa.load(wav, sr=rate, offset=OFFSET, duration=MAX_DURATION)
+    
+                temp_wav = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+                sf.write(temp_wav.name, y, rate)
+                temp_files.append(temp_wav.name)
                 
                 wav_len = len(librosa.load(wav, sr=rate)[0])
                 bpms = []
@@ -155,7 +163,7 @@ def main():
                         "role": "user",
                         "content": [
                             {"type": "text", "text": text_prompt},
-                            {"type": "audio", "path": wav},
+                            {"type": "audio", "path": temp_wav.name},
                         ],
                     }
                 ])
@@ -197,6 +205,9 @@ def main():
                 # Write to the file as a JSON string and flush to disk
                 outfile.write(json.dumps(result, ensure_ascii=False) + "\n")
                 outfile.flush()
+            
+            for temp_file in temp_files:
+                os.remove(temp_file)
 
 if __name__ == "__main__":
     main()
