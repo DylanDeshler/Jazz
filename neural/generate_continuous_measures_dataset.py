@@ -61,7 +61,7 @@ adapter = torch.compile(adapter)
 max_seq_len = adapter.max_seq_len
 n_queries = adapter_args['n_queries']
 
-paths = glob.glob('data/measures/*')
+paths = glob.glob('data/wavs/*')
 with open('data/valid_files_by_bpm.json', 'r') as f:
     beat_paths = json.load(f)
 paths = [os.path.join('data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
