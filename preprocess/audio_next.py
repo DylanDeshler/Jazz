@@ -13,7 +13,6 @@ def get_musical_key(wav_path, rate=16000, hop_length=1024):
     try:
         y, _ = librosa.load(wav_path, sr=rate, mono=True)
         
-        # 1. SAFETY CHECK: If the audio is completely silent or empty, skip it
         if len(y) == 0 or np.max(np.abs(y)) == 0:
             return "Unknown"
             
@@ -21,7 +20,6 @@ def get_musical_key(wav_path, rate=16000, hop_length=1024):
         chromagram = librosa.feature.chroma_cqt(y=y, sr=rate, hop_length=hop_length)
         chroma_vals = np.sum(chromagram, axis=1)
         
-        # 2. SAFETY CHECK: If the chromagram has zero variance, correlation will fail
         if np.std(chroma_vals) == 0:
             return "Unknown"
             
@@ -127,6 +125,7 @@ def main():
                 beat_path = os.path.join('/data/beats', os.path.basename(wav))
                 beat_data = parse_beat_file(beat_path)
                 downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
+                print(downbeat_indices)
                 
                 bpms = []
                 for k in range(len(downbeat_indices) - 1):    
