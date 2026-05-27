@@ -130,8 +130,8 @@ def main():
                 wav_len = len(librosa.load(wav, sr=rate)[0])
                 bpms = []
                 for k in range(len(downbeat_indices) - 1):    
-                    start_idx = downbeat_indices[i]
-                    end_idx = downbeat_indices[i+1]
+                    start_idx = downbeat_indices[k]
+                    end_idx = downbeat_indices[k+1]
                     
                     t_start = beat_data[start_idx]['time']
                     t_end = beat_data[end_idx]['time']
@@ -140,7 +140,6 @@ def main():
                     frame_end = int(t_end * rate)
                     
                     if frame_end > wav_len:
-                        print(f'end {frame_end} > song {wav_len}')
                         break
                     
                     duration_sec = (frame_end - frame_start) / rate
@@ -148,7 +147,7 @@ def main():
                     
                     bpms.append(instant_bpm)
                     print(instant_bpm)
-                batch_bpms.append(np.nanmean(bpms))
+                batch_bpms.append(np.mean(bpms))
                 
                 batch_keys.append(get_musical_key(wav, rate=rate))
                 
