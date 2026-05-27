@@ -7,23 +7,33 @@ from transformers import AutoProcessor, AutoModelForSeq2SeqLM
 import os
 import numpy as np
 import librosa
+import warnings
 
-def get_musical_key(wav_path):
+def get_musical_key(wav_path, rate=16000):
     try:
-        # Load audio (downmix to mono, resample to 22050Hz)
-        y, sr = librosa.load(wav_path, sr=22050, mono=True)
+        y, _ = librosa.load(wav_path, sr=rate, mono=True)
         
+        # 1. SAFETY CHECK: If the audio is completely silent or empty, skip it
+        if len(y) == 0 or np.max(np.abs(y)) == 0:
+            return "Unknown"
+            
         # Extract Pitch Class Profile (Chromagram)
-        chromagram = librosa.feature.chroma_cqt(y=y, sr=sr)
+        chromagram = librosa.feature.chroma_cqt(y=y, sr=rate)
         chroma_vals = np.sum(chromagram, axis=1)
         
+        # 2. SAFETY CHECK: If the chromagram has zero variance, correlation will fail
+        if np.std(chroma_vals) == 0:
+            return "Unknown"
+            
         # Standard Krumhansl-Schmuckler major/minor templates
         maj_profile = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88]
         min_profile = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17]
         
-        # Calculate Pearson correlation for all 12 shifts (12 keys)
-        maj_corrs = [np.corrcoef(chroma_vals, np.roll(maj_profile, i))[0, 1] for i in range(12)]
-        min_corrs = [np.corrcoef(chroma_vals, np.roll(min_profile, i))[0, 1] for i in range(12)]
+        # 3. SAFETY CHECK: Suppress any lingering floating-point warnings during math
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            maj_corrs = [np.corrcoef(chroma_vals, np.roll(maj_profile, i))[0, 1] for i in range(12)]
+            min_corrs = [np.corrcoef(chroma_vals, np.roll(min_profile, i))[0, 1] for i in range(12)]
         
         keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
         
@@ -141,7 +151,7 @@ def main():
                     bpms.append(instant_bpm)
                 batch_bpms.append(np.mean(bpms))
                 
-                batch_keys.append(get_musical_key(wav))
+                batch_keys.append(get_musical_key(wav, rate=rate))
                 
                 conversations.append([
                     {
