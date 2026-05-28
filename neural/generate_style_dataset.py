@@ -41,7 +41,7 @@ model.eval()
 model = torch.compile(model)
 
 # Gather paths using the same filtering logic as the original script
-paths = glob.glob('/data/measures/*')
+paths = glob.glob('/data/wavs/*')
 with open('/data/valid_files_by_bpm.json', 'r') as f:
     beat_paths = json.load(f)
 paths = [os.path.join('/data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
