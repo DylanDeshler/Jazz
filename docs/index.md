@@ -8,7 +8,8 @@ I want to take the Genie approach and apply it to music. But instead of focusing
 
 There are many high quality music generation models that let someone generate music from text, and if we go back far enough in time, even from sheet music. But at the moment text doesn't have sufficient fine grained control, and I'm not yet convinced its even the right medium for that level of control. Instead I propose to learn a set of actions for that very purpose, and most of the fun along the way will be discovering what those actions are. 
 
-I've included a few generated samples from the final model below. Please be aware that the dataset contains recordings from 1880-1980 and the model has learned to mimic that quality, do not expect high fidelity studio quality!
+### Samples
+I've included a few generated samples from the final model below. Please be aware that the dataset contains recordings from 1880-1980 and the model has learned to mimic that quality, do not expect modern high fidelity studio quality!
 
 | Generation |
 |----------|
