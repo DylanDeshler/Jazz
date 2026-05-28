@@ -41,10 +41,10 @@ model.eval()
 model = torch.compile(model)
 
 # Gather paths using the same filtering logic as the original script
-paths = glob.glob('/home/ubuntu/Data/measures/*')
-with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
+paths = glob.glob('/data/measures/*')
+with open('/data/valid_files_by_bpm.json', 'r') as f:
     beat_paths = json.load(f)
-paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
+paths = [os.path.join('/data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
 print(f"Total valid files: {len(paths)}")
 
 wavs = [None] * len(paths)
@@ -89,7 +89,7 @@ all_styles = []
 
 with torch.no_grad():
     for idx, wav in enumerate(tqdm(wavs, desc="Extracting Styles")):    
-        beat_path = os.path.join('/home/ubuntu/Data/beats', os.path.basename(paths[idx]))
+        beat_path = os.path.join('/data/beats', os.path.basename(paths[idx]))
         beat_data = parse_beat_file(beat_path)
         downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
         
