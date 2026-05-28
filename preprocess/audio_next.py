@@ -163,11 +163,11 @@ def main():
                 wav_len = len(librosa.load(wav, sr=rate)[0])
                 
                 beat_path = os.path.join('/data/beats', os.path.basename(wav))
+                bpms = []
                 if os.path.exists(beat_path):
                     beat_data = parse_beat_file(beat_path)
                     downbeat_indices = [k for k, b in enumerate(beat_data) if b['beat'] == 1]
-                
-                    bpms = []
+                    
                     for k in range(len(downbeat_indices) - 1):    
                         start_idx = downbeat_indices[k]
                         end_idx = downbeat_indices[k+1]
@@ -186,10 +186,7 @@ def main():
                             instant_bpm = (TARGET_SIG / duration_sec) * 60
                             bpms.append(instant_bpm)
                             
-                    batch_bpms.append(np.median(bpms) if bpms else 0)
-                else:
-                    batch_bpms.append(0)
-                
+                batch_bpms.append(np.median(bpms) if bpms else 0)
                 batch_keys.append(get_musical_key(wav, rate=rate))
                 
                 conversations.append([
