@@ -28,8 +28,9 @@ def get_musical_key(wav_path, rate=16000, hop_length=1024):
         maj_profile = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88]
         min_profile = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17]
         
-        maj_corrs = [np.corrcoef(chroma_vals, np.roll(maj_profile, i))[0, 1] for i in range(12)]
-        min_corrs = [np.corrcoef(chroma_vals, np.roll(min_profile, i))[0, 1] for i in range(12)]
+        with np.errstate(all='ignore'):
+            maj_corrs = [np.corrcoef(chroma_vals, np.roll(maj_profile, i))[0, 1] for i in range(12)]
+            min_corrs = [np.corrcoef(chroma_vals, np.roll(min_profile, i))[0, 1] for i in range(12)]
         
         keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
         
@@ -113,16 +114,38 @@ def main():
     end_idx = start_idx + chunk_size if args.rank < args.world_size - 1 else len(all_wavs)
     
     my_wavs = all_wavs[start_idx:end_idx]
-    print(f"GPU {args.gpu} processing {len(my_wavs)} files...")
+    
+    # 2. Check for previously processed files and filter them out
+    output_filename = f"captions_part_{args.rank}.jsonl"
+    processed_files = set()
+    
+    if os.path.exists(output_filename):
+        with open(output_filename, "r", encoding="utf-8") as f:
+            for line in f:
+                try:
+                    data = json.loads(line)
+                    processed_files.add(data["file_path"])
+                except json.JSONDecodeError:
+                    # Ignore corrupted lines from a hard crash
+                    pass
+    
+    original_len = len(my_wavs)
+    my_wavs = [wav for wav in my_wavs if wav not in processed_files]
+    
+    print(f"GPU {args.gpu} rank {args.rank} targeting {original_len} files.")
+    if len(processed_files) > 0:
+        print(f"Skipping {original_len - len(my_wavs)} already processed files.")
+    print(f"Files remaining to process: {len(my_wavs)}")
 
-    # text_prompt = "Summarize the track with precision: mention its musical style, BPM, key, arrangement, production choices, and the emotions or story it conveys. Do not mention chords, lyrics, length, or BPM."
     text_prompt = "Write a short, detailed, and concise caption for this track without mentioning BPM, length, chords, or lyrics."
     
-    # 2. Open an output file specific to this GPU to save incrementally
-    output_filename = f"captions_part_{args.rank}.jsonl"
-    
-    with open(output_filename, "w", encoding="utf-8") as outfile:
-        # 3. Process in batches
+    if len(my_wavs) == 0:
+        print("All files for this rank have been processed! Exiting.")
+        return
+
+    # 3. Open the output file in APPEND ("a") mode so we don't overwrite previous runs
+    with open(output_filename, "a", encoding="utf-8") as outfile:
+        # Process in batches
         for i in tqdm(range(0, len(my_wavs), args.batch_size), desc=f"GPU {args.gpu}"):
             batch_wavs = my_wavs[i:i + args.batch_size]
             
@@ -130,6 +153,7 @@ def main():
             batch_bpms = []
             batch_keys = []
             temp_files = []
+            
             for wav in batch_wavs:
                 beat_path = os.path.join('/data/beats', os.path.basename(wav))
                 beat_data = parse_beat_file(beat_path)
@@ -157,11 +181,11 @@ def main():
                         break
                     
                     duration_sec = (frame_end - frame_start) / rate
-                    instant_bpm = (TARGET_SIG / duration_sec) * 60
-                    
-                    bpms.append(instant_bpm)
-                batch_bpms.append(np.median(bpms))
-                
+                    if duration_sec > 0: # Prevent division by zero
+                        instant_bpm = (TARGET_SIG / duration_sec) * 60
+                        bpms.append(instant_bpm)
+                        
+                batch_bpms.append(np.median(bpms) if bpms else 0)
                 batch_keys.append(get_musical_key(wav, rate=rate))
                 
                 conversations.append([
@@ -194,7 +218,7 @@ def main():
                     do_sample=False      
                 )
 
-            # 4. Decode the batch and save the path + caption immediately
+            # Decode the batch and save the path + caption immediately
             input_length = inputs.input_ids.shape[1]
             for j, output in enumerate(outputs):
                 generated_tokens = output[input_length:]
@@ -203,7 +227,7 @@ def main():
                 # Create a dictionary for the result
                 result = {
                     "file_path": batch_wavs[j],
-                    "caption": decoded_output.strip(),
+                    "caption": decoded_output.strip().replace('\u2011', '-'),
                     "bpm": batch_bpms[j],
                     "key": batch_keys[j],
                 }
