@@ -105,7 +105,7 @@ def main():
         torch_dtype=torch.bfloat16
     )
 
-    # 1. Load the dataset WITHOUT sorting to strictly preserve glob's native order
+    # Load the dataset WITHOUT sorting to strictly preserve glob's native order
     all_wavs = glob.glob('/data/wavs/*.wav')
     
     # Slice the original glob order into contiguous chunks
@@ -115,7 +115,7 @@ def main():
     
     my_wavs = all_wavs[start_idx:end_idx]
     
-    # 2. Check for previously processed files and filter them out
+    # Check for previously processed files and filter them out
     output_filename = f"captions_part_{args.rank}.jsonl"
     processed_files = set()
     
@@ -143,9 +143,8 @@ def main():
         print("All files for this rank have been processed! Exiting.")
         return
 
-    # 3. Open the output file in APPEND ("a") mode so we don't overwrite previous runs
+    # Open the output file in APPEND ("a") mode so we don't overwrite previous runs
     with open(output_filename, "a", encoding="utf-8") as outfile:
-        # Process in batches
         for i in tqdm(range(0, len(my_wavs), args.batch_size), desc=f"GPU {args.gpu}"):
             batch_wavs = my_wavs[i:i + args.batch_size]
             
