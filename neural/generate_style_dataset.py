@@ -12,7 +12,7 @@ from multiprocessing import cpu_count
 from contrast import Transformer
 import torch.nn.functional as F
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:3' if torch.cuda.is_available() else 'cpu')
 
 # ==============================================================================
 # CONFIGURATION
