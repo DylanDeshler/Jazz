@@ -154,37 +154,42 @@ def main():
             temp_files = []
             
             for wav in batch_wavs:
-                beat_path = os.path.join('/data/beats', os.path.basename(wav))
-                beat_data = parse_beat_file(beat_path)
-                downbeat_indices = [k for k, b in enumerate(beat_data) if b['beat'] == 1]
-                
                 y, _ = librosa.load(wav, sr=rate, offset=OFFSET, duration=MAX_DURATION)
-    
+                
                 temp_wav = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
                 sf.write(temp_wav.name, y, rate)
                 temp_files.append(temp_wav.name)
                 
                 wav_len = len(librosa.load(wav, sr=rate)[0])
-                bpms = []
-                for k in range(len(downbeat_indices) - 1):    
-                    start_idx = downbeat_indices[k]
-                    end_idx = downbeat_indices[k+1]
-                    
-                    t_start = beat_data[start_idx]['time']
-                    t_end = beat_data[end_idx]['time']
-                    
-                    frame_start = int(t_start * rate)
-                    frame_end = int(t_end * rate)
-                    
-                    if frame_end > wav_len:
-                        break
-                    
-                    duration_sec = (frame_end - frame_start) / rate
-                    if duration_sec > 0: # Prevent division by zero
-                        instant_bpm = (TARGET_SIG / duration_sec) * 60
-                        bpms.append(instant_bpm)
+                
+                beat_path = os.path.join('/data/beats', os.path.basename(wav))
+                if os.path.exists(beat_path):
+                    beat_data = parse_beat_file(beat_path)
+                    downbeat_indices = [k for k, b in enumerate(beat_data) if b['beat'] == 1]
+                
+                    bpms = []
+                    for k in range(len(downbeat_indices) - 1):    
+                        start_idx = downbeat_indices[k]
+                        end_idx = downbeat_indices[k+1]
                         
-                batch_bpms.append(np.median(bpms) if bpms else 0)
+                        t_start = beat_data[start_idx]['time']
+                        t_end = beat_data[end_idx]['time']
+                        
+                        frame_start = int(t_start * rate)
+                        frame_end = int(t_end * rate)
+                        
+                        if frame_end > wav_len:
+                            break
+                        
+                        duration_sec = (frame_end - frame_start) / rate
+                        if duration_sec > 0: # Prevent division by zero
+                            instant_bpm = (TARGET_SIG / duration_sec) * 60
+                            bpms.append(instant_bpm)
+                            
+                    batch_bpms.append(np.median(bpms) if bpms else 0)
+                else:
+                    batch_bpms.append(0)
+                
                 batch_keys.append(get_musical_key(wav, rate=rate))
                 
                 conversations.append([
