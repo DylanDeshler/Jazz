@@ -160,7 +160,7 @@ def main():
                 sf.write(temp_wav.name, y, rate)
                 temp_files.append(temp_wav.name)
                 
-                wav_len = len(librosa.load(wav, sr=rate)[0])
+                wav_len = len(y)
                 
                 beat_path = os.path.join('/data/beats', os.path.basename(wav))
                 bpms = []
