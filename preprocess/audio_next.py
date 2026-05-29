@@ -155,7 +155,6 @@ def main():
             
             for wav in batch_wavs:
                 y, _ = librosa.load(wav, sr=rate, offset=OFFSET, duration=MAX_DURATION)
-                print(len(y), np.mean(y), np.std(y))
                 
                 temp_wav = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
                 sf.write(temp_wav.name, y, rate)
