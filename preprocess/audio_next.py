@@ -233,20 +233,25 @@ def main():
                         "bpm": batch_bpms[j],
                         "key": batch_keys[j],
                     }
+                    
+                    # Write to the file as a JSON string and flush to disk
+                    outfile.write(json.dumps(result, ensure_ascii=False) + "\n")
+                    outfile.flush()
             
             except Exception as e:
                 print(f'Exception {e} ')
 
-                result = {
-                    "file_path": batch_wavs[j],
-                    "caption": f"Failed with exception {e}",
-                    "bpm": batch_bpms[j],
-                    "key": batch_keys[j],
-                }
+                for j in range(len(conversations)):
+                    result = {
+                        "file_path": batch_wavs[j],
+                        "caption": f"Failed with exception {e}",
+                        "bpm": batch_bpms[j],
+                        "key": batch_keys[j],
+                    }
 
-            # Write to the file as a JSON string and flush to disk
-            outfile.write(json.dumps(result, ensure_ascii=False) + "\n")
-            outfile.flush()
+                    # Write to the file as a JSON string and flush to disk
+                    outfile.write(json.dumps(result, ensure_ascii=False) + "\n")
+                    outfile.flush()
             
             for temp_file in temp_files:
                 os.remove(temp_file)
