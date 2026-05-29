@@ -212,30 +212,41 @@ def main():
             if "input_features" in inputs:
                 inputs["input_features"] = inputs["input_features"].to(model.dtype)
 
-            with torch.no_grad():
-                outputs = model.generate(
-                    **inputs,
-                    max_new_tokens=1000, 
-                    do_sample=False      
-                )
-
-            # Decode the batch and save the path + caption immediately
-            input_length = inputs.input_ids.shape[1]
-            for j, output in enumerate(outputs):
-                generated_tokens = output[input_length:]
-                decoded_output = processor.decode(generated_tokens, skip_special_tokens=True)
+            try:
+                with torch.no_grad():
+                    outputs = model.generate(
+                        **inputs,
+                        max_new_tokens=1000, 
+                        do_sample=False      
+                    )
                 
-                # Create a dictionary for the result
+                # Decode the batch and save the path + caption immediately
+                input_length = inputs.input_ids.shape[1]
+                for j, output in enumerate(outputs):
+                    generated_tokens = output[input_length:]
+                    decoded_output = processor.decode(generated_tokens, skip_special_tokens=True)
+                    
+                    # Create a dictionary for the result
+                    result = {
+                        "file_path": batch_wavs[j],
+                        "caption": decoded_output.strip().replace('\u2011', '-'),
+                        "bpm": batch_bpms[j],
+                        "key": batch_keys[j],
+                    }
+            
+            except Exception as e:
+                print(f'Exception {e} ')
+
                 result = {
                     "file_path": batch_wavs[j],
-                    "caption": decoded_output.strip().replace('\u2011', '-'),
+                    "caption": f"Failed with exception {e}",
                     "bpm": batch_bpms[j],
                     "key": batch_keys[j],
                 }
-                
-                # Write to the file as a JSON string and flush to disk
-                outfile.write(json.dumps(result, ensure_ascii=False) + "\n")
-                outfile.flush()
+
+            # Write to the file as a JSON string and flush to disk
+            outfile.write(json.dumps(result, ensure_ascii=False) + "\n")
+            outfile.flush()
             
             for temp_file in temp_files:
                 os.remove(temp_file)
