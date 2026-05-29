@@ -91,7 +91,7 @@ def main():
     TARGET_SIG = 4
     rate = 16000
     OFFSET = 0
-    MAX_DURATION = 60 * 4
+    MAX_DURATION = 60 * 3
 
     device = f"cuda:{args.gpu}"
     model_id = "nvidia/audio-flamingo-next-think-hf"
