@@ -161,7 +161,6 @@ def main():
                 temp_files.append(temp_wav.name)
                 
                 wav_len = len(y)
-                print(OFFSET, MAX_DURATION, wav_len)
                 
                 beat_path = os.path.join('/data/beats', os.path.basename(wav))
                 bpms = []
