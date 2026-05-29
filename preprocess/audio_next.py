@@ -91,7 +91,7 @@ def main():
     TARGET_SIG = 4
     rate = 16000
     OFFSET = 0
-    MAX_DURATION = 60 * 3
+    MAX_DURATION = 60 * 4
 
     device = f"cuda:{args.gpu}"
     model_id = "nvidia/audio-flamingo-next-think-hf"
@@ -216,7 +216,7 @@ def main():
             with torch.no_grad():
                 outputs = model.generate(
                     **inputs,
-                    max_new_tokens=2000, 
+                    max_new_tokens=1000, 
                     do_sample=False      
                 )
 
