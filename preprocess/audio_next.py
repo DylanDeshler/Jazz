@@ -206,7 +206,7 @@ def main():
                 add_generation_prompt=True,
                 return_dict=True,
                 processor_kwargs={
-                    "padding": False
+                    "padding": True
                 }
             ).to(device)
 
