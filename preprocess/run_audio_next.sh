@@ -16,7 +16,7 @@ while true; do
     echo "Launching worker on GPU $GPU (Rank $RANK)..."
     echo "============================================================"
     
-    python audio_next.py --gpu $GPU --rank $RANK --world_size $WORLD_SIZE
+    python audio_next.py --gpu $GPU --rank $RANK --world_size $WORLD_SIZE --batch_size 1
     
     EXIT_CODE=$?
     
