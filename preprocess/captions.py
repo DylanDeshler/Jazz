@@ -4,7 +4,7 @@ import sys
 from google import genai
 from google.genai.errors import APIError
 
-system_instruction = """
+SYSTEM_INSTRUCTION = """
 You are an expert music metadata editor. I will give you a raw description of a song along with its ground-truth musical key and BPM. 
 Your job is to rewrite it into prompts of three distinct lengths: short, medium, and long. These prompts will be used to train a generative music model.
 Critically:
