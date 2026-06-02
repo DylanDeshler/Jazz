@@ -13,7 +13,7 @@ Critically:
         - 80% of the time for long captions
         - 20% of the time for medium captions
         - 5% of the time for short captions
-    - Short captions should range from several words to a sentence.
+    - Short captions should range from several words to a short sentence.
     - Medium captions are between 1 and 2 sentences covering all high level detail and the most informative specifics.
     - Long captions should provide all of the details from the raw description.
 Return ONLY a valid JSON object with the following keys: short_caption, medium_caption, and long_caption.
