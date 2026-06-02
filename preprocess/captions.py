@@ -97,12 +97,17 @@ def submit_job(input_file: str, batch_file: str):
     try:
         with open(input_file, "r", encoding="utf-8") as f:
             for line in f:
-                data = json.loads(line)
-                file_path = data["file_path"]
-                raw_caption = data["flamingo_raw_caption"]
-                actual_key = data["ground_truth_key"]
+                file_path = data.get("file_path", f"unknown_file_{count}")
+                raw_caption = data.get("caption", "")
+                actual_key = data.get("key", "")
+                actual_bpm = data.get("bpm", "")
+                try:
+                    actual_bpm = int(actual_bpm)
+                except:
+                    print(f'Failed to convert {actual_bpm} to int, returning None')
+                    actual_bpm = 'None'
                 
-                prompt = f"Ground Truth Key: {actual_key}\nRaw Description: {raw_caption}"
+                prompt = f"Ground Truth Key: {actual_key}\nGround Truth BPM: {actual_bpm}\nRaw Description: {raw_caption}"
                 
                 batch_request = {
                     "key": file_path, 
