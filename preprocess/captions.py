@@ -40,6 +40,11 @@ def test_prompt(input_file: str, output_file: str, limit: int):
                 raw_caption = data.get("caption", "")
                 actual_key = data.get("key", "")
                 actual_bpm = data.get("bpm", "")
+                try:
+                    actual_bpm = int(actual_bpm)
+                except:
+                    print(f'Failed to convert {actual_bpm} to int, returning None')
+                    actual_bpm = 'None'
                 
                 prompt = f"Ground Truth Key: {actual_key}\nGround Truth BPM: {actual_bpm}\nRaw Description: {raw_caption}"
                 
