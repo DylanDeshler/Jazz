@@ -103,7 +103,7 @@ def submit_job(input_file: str, batch_file: str):
                 file_path = data["file_path"]#data.get("file_path", f"unknown_file_{count}")
                 raw_caption = data.get("caption", "")
                 
-                if raw_caption.contains("Failed due to exceptions") or caption == "":
+                if "Failed due to exceptions" in raw_caption or raw_caption == "":
                     print('Skipping because caption is invalid')
                     skipped.append(file_path)
                     continue
