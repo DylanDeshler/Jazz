@@ -14,8 +14,8 @@ Critically:
         - 100% of the time add them to long and "cleaned" captions
         - 50% of the time add them to medium captions
         - 5% of the time add them to short captions
-    - Short captions should range from several words to a long sentence.
-    - Medium captions are between 1 and 3 sentences covering all high level detail and the most informative specifics.
+    - Short captions should range from several words to a sentence.
+    - Medium captions are between 1 and 2 sentences covering all high level detail and the most informative specifics.
     - Long captions should provide all of the details from the raw description.
 For the "cleaned" prompt follow the rules above but do not provide any rephrasing, it should be the exact same except for these rules.
 Return ONLY a valid JSON object with the following keys: short_caption, medium_caption, long_caption, and cleaned_caption.
