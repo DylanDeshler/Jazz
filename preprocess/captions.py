@@ -38,7 +38,7 @@ def test_prompt(input_file: str, output_file: str, limit: int):
                     break
                     
                 data = json.loads(line)
-                file_path = data.get("file_path", f"unknown_file_{count}")
+                file_path = data["file_path"]#data.get("file_path", f"unknown_file_{count}")
                 raw_caption = data.get("caption", "")
                 actual_key = data.get("key", "")
                 actual_bpm = data.get("bpm", "")
