@@ -150,7 +150,12 @@ def submit_job(input_file: str, batch_file: str):
     print(f"Prepared {len(requests_data)} requests for the Batch API.")
 
     try:
-        client = genai.Client()
+        # client = genai.Client()
+        client = genai.Client(
+            vertexai=True,
+            project=os.getenv("GOOGLE_CLOUD_PROJECT", "virtualitics-ai-team"),
+            location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-east5"),
+        )
         
         print("Uploading file to Google's servers...")
         uploaded_file = client.files.upload(
