@@ -45,6 +45,7 @@ def test_prompt(input_file: str, output_file: str, limit: int):
                 print(f"--- Processing: {file_path} ---")
                 
                 try:
+                    print(f"**LLM Input:***\n{prompt}\n")
                     response = client.models.generate_content(
                         model='gemini-3.5-flash',
                         contents=prompt,
