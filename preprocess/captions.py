@@ -1,5 +1,6 @@
 import json
 import argparse
+import time
 import sys
 from google import genai
 from google.genai.errors import APIError
@@ -160,6 +161,25 @@ def submit_job(input_file: str, batch_file: str):
             }
         )
         print(f"Uploaded! File ID: {uploaded_file.name}")
+        
+        print("Waiting for Google to process the file before starting the job...")
+        while True:
+            # Fetch the latest status of the file
+            file_info = client.files.get(name=uploaded_file.name)
+            
+            # The state is usually an Enum, so we convert to string to safely check it
+            state_str = str(file_info.state)
+            
+            if "ACTIVE" in state_str:
+                print("✅ File is ACTIVE and ready!")
+                break
+            elif "FAILED" in state_str:
+                print("❌ Google's server failed to process the uploaded file.")
+                sys.exit(1)
+            
+            print("File is still PROCESSING. Waiting 10 seconds...")
+            time.sleep(10)
+        # ------------------------
 
         print("Submitting the Batch Job...")
         batch_job = client.batches.create(
