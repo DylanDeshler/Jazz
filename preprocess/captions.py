@@ -153,7 +153,7 @@ def submit_job(input_file: str, batch_file: str):
     try:
         # client = genai.Client()
         client = genai.Client(
-            vertexai=True,
+            # vertexai=True,
             project=os.getenv("GOOGLE_CLOUD_PROJECT", "virtualitics-ai-team"),
             location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-east5"),
         )
