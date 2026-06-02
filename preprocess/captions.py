@@ -3,6 +3,7 @@ import argparse
 import time
 import sys
 import os
+from tqdm import tqdm
 from google import genai
 from google.genai.errors import APIError
 from google.cloud import storage
@@ -125,7 +126,7 @@ def process_synchronous(input_file: str, output_file: str, rps_limit: float = 1.
         with open(input_file, "r", encoding="utf-8") as infile, \
              open(output_file, "a", encoding="utf-8") as outfile:
              
-            for count, line in enumerate(infile):
+            for count, line in enumerate(tqdm(infile)):
                 data = json.loads(line)
                 file_path = data.get("file_path")
                 
