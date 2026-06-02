@@ -2,6 +2,7 @@ import json
 import argparse
 import time
 import sys
+import os
 from google import genai
 from google.genai.errors import APIError
 
