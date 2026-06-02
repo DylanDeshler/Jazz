@@ -11,7 +11,7 @@ from google.cloud import storage
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "virtualitics-ai-team")
 LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-east5")
 GCS_BUCKET_NAME = "virtualitics-caption-batch-data"
-MODEL_NAME = "gemini-2.5-pro"
+MODEL_NAME = "gemini-2.5-flash"
 # ---------------------
 
 SYSTEM_INSTRUCTION = """
