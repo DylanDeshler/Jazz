@@ -6,6 +6,10 @@ import os
 from google import genai
 from google.genai.errors import APIError
 
+PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "virtualitics-ai-team")
+LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-east5")
+GCS_BUCKET_NAME = "virtualitics-caption-batch-data"  # <--- UPDATE THIS
+
 SYSTEM_INSTRUCTION = """
 You are an expert music metadata editor. I will give you a raw description of a song along with its ground-truth musical key and BPM. 
 Your job is to rewrite it into prompts of three distinct lengths: short, medium, and long. Each prompt should provide as much information as possible given their length about the entire piece based on the raw description. These prompts will be used to train a generative music model.
@@ -20,6 +24,14 @@ Critically:
     - Long captions should provide all of the details from the raw description.
 Return ONLY a valid JSON object with the following keys: short_caption, medium_caption, and long_caption.
 """
+
+def get_vertex_client():
+    """Initializes the Vertex AI client using Application Default Credentials."""
+    return genai.Client(
+        vertexai=True,
+        project=PROJECT_ID,
+        location=LOCATION,
+    )
 
 def test_prompt(input_file: str, output_file: str, limit: int):
     """Runs a synchronous test on a small sample of the data to validate prompt quality."""
@@ -151,48 +163,62 @@ def submit_job(input_file: str, batch_file: str):
     print(f"Prepared {len(requests_data)} requests for the Batch API.")
 
     try:
-        # client = genai.Client()
-        client = genai.Client(
-            # vertexai=True,
-            project=os.getenv("GOOGLE_CLOUD_PROJECT", "virtualitics-ai-team"),
-            location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-east5"),
-        )
+        gcs_client = storage.Client(project=PROJECT_ID)
+        bucket = gcs_client.bucket(GCS_BUCKET_NAME)
         
-        print("Uploading file to Google's servers...")
-        uploaded_file = client.files.upload(
-            file=batch_file, 
-            config={
-                'display_name': 'song-captions-input',
-                'mime_type': 'application/jsonl'
-            }
-        )
-        print(f"Uploaded! File ID: {uploaded_file.name}")
+        gcs_input_path = f"batch_inputs/{batch_file}"
+        gcs_output_prefix = "batch_outputs/"
         
-        print("Waiting for Google to process the file before starting the job...")
-        while True:
-            # Fetch the latest status of the file
-            file_info = client.files.get(name=uploaded_file.name)
-            
-            # The state is usually an Enum, so we convert to string to safely check it
-            state_str = str(file_info.state)
-            
-            if "ACTIVE" in state_str:
-                print("✅ File is ACTIVE and ready!")
-                break
-            elif "FAILED" in state_str:
-                print("❌ Google's server failed to process the uploaded file.")
-                sys.exit(1)
-            
-            print("File is still PROCESSING. Waiting 10 seconds...")
-            time.sleep(10)
-        # ------------------------
+        blob = bucket.blob(gcs_input_path)
+        print(f"Uploading to gs://{GCS_BUCKET_NAME}/{gcs_input_path}...")
+        blob.upload_from_filename(batch_file, content_type="application/jsonl")
+        print("✅ Uploaded to Google Cloud Storage!")
 
-        print("Submitting the Batch Job...")
+        client = get_vertex_client()
+        print("Submitting the Vertex AI Batch Job...")
+        
         batch_job = client.batches.create(
             model="gemini-3.5-flash",
-            src=uploaded_file.name,
-            config={'display_name': 'caption-rephraser-job'}
+            src=f"gs://{GCS_BUCKET_NAME}/{gcs_input_path}",
+            dest=f"gs://{GCS_BUCKET_NAME}/{gcs_output_prefix}",
         )
+        
+        # client = genai.Client()
+        # print("Uploading file to Google's servers...")
+        # uploaded_file = client.files.upload(
+        #     file=batch_file, 
+        #     config={
+        #         'display_name': 'song-captions-input',
+        #         'mime_type': 'application/jsonl'
+        #     }
+        # )
+        # print(f"Uploaded! File ID: {uploaded_file.name}")
+        
+        # print("Waiting for Google to process the file before starting the job...")
+        # while True:
+        #     # Fetch the latest status of the file
+        #     file_info = client.files.get(name=uploaded_file.name)
+            
+        #     # The state is usually an Enum, so we convert to string to safely check it
+        #     state_str = str(file_info.state)
+            
+        #     if "ACTIVE" in state_str:
+        #         print("✅ File is ACTIVE and ready!")
+        #         break
+        #     elif "FAILED" in state_str:
+        #         print("❌ Google's server failed to process the uploaded file.")
+        #         sys.exit(1)
+            
+        #     print("File is still PROCESSING. Waiting 10 seconds...")
+        #     time.sleep(10)
+        # # ------------------------
+
+        # print("Submitting the Batch Job...")
+        # batch_job = client.batches.create(
+        #     model="gemini-3.5-flash",
+        #     src=uploaded_file.name,
+        #     config={'display_name': 'caption-rephraser-job'}
+        # )
 
         print(f"\n✅ Job successfully created!")
         print(f"SAVE THIS JOB NAME: {batch_job.name}")
