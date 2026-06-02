@@ -9,7 +9,7 @@ You are an expert music metadata editor. I will give you a raw description of a 
 Your job is to rewrite it into prompts of three distinct lengths: short, medium, and long. Each prompt should provide as much information as possible given their length about the entire piece based on the raw description. These prompts will be used to train a generative music model.
 Critically:
     - You must completely remove any mention of BPM, key, chords, and lyrics as they are incorrect. 
-    - Add the ground truth BPM, key, or both to the prompt:
+    - If not "None", add the ground truth BPM, key, or both to the prompt:
         - 80% of the time for long captions
         - 20% of the time for medium captions
         - 5% of the time for short captions
@@ -93,13 +93,21 @@ def test_prompt(input_file: str, output_file: str, limit: int):
 def submit_job(input_file: str, batch_file: str):
     """Parses local data, formats it for the Batch API, and submits the job."""
     requests_data = []
-
+    skipped = []
+    no_bpm = []
+    
     try:
         with open(input_file, "r", encoding="utf-8") as f:
             for line in f:
                 data = json.loads(line)
                 file_path = data.get("file_path", f"unknown_file_{count}")
                 raw_caption = data.get("caption", "")
+                
+                if raw_caption.contains("Failed due to exceptions"):
+                    print('Skipping because caption is invalid')
+                    skipped.append(file_path)
+                    continue
+                
                 actual_key = data.get("key", "")
                 actual_bpm = data.get("bpm", "")
                 try:
@@ -107,6 +115,7 @@ def submit_job(input_file: str, batch_file: str):
                 except:
                     print(f'Failed to convert {actual_bpm} to int, returning None')
                     actual_bpm = 'None'
+                    no_bpm.append(file_path)
                 
                 prompt = f"Ground Truth Key: {actual_key}\nGround Truth BPM: {actual_bpm}\nRaw Description: {raw_caption}"
                 
@@ -130,6 +139,8 @@ def submit_job(input_file: str, batch_file: str):
     except FileNotFoundError:
         print(f"Error: Could not find input file '{input_file}'")
         sys.exit(1)
+    
+    print(f"Skipped {len(skipped)} requests with bad captions and had {len(no_bpm)} missing BPMs")
 
     with open(batch_file, "w", encoding="utf-8") as f:
         for req in requests_data:
