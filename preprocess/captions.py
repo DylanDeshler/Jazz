@@ -97,6 +97,7 @@ def submit_job(input_file: str, batch_file: str):
     try:
         with open(input_file, "r", encoding="utf-8") as f:
             for line in f:
+                data = json.loads(line)
                 file_path = data.get("file_path", f"unknown_file_{count}")
                 raw_caption = data.get("caption", "")
                 actual_key = data.get("key", "")
