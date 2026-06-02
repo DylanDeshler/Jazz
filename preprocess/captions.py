@@ -38,7 +38,7 @@ def test_prompt(input_file: str, output_file: str, limit: int):
                     break
                     
                 data = json.loads(line)
-                file_path = data["file_path"]#data.get("file_path", f"unknown_file_{count}")
+                file_path = data.get("file_path", f"unknown_file_{count}")
                 raw_caption = data.get("caption", "")
                 actual_key = data.get("key", "")
                 actual_bpm = data.get("bpm", "")
@@ -100,15 +100,15 @@ def submit_job(input_file: str, batch_file: str):
         with open(input_file, "r", encoding="utf-8") as f:
             for line in f:
                 data = json.loads(line)
-                file_path = data.get("file_path", f"unknown_file_{count}")
+                file_path = data["file_path"]#data.get("file_path", f"unknown_file_{count}")
                 raw_caption = data.get("caption", "")
                 
-                if raw_caption.contains("Failed due to exceptions"):
+                if raw_caption.contains("Failed due to exceptions") or caption == "":
                     print('Skipping because caption is invalid')
                     skipped.append(file_path)
                     continue
                 
-                actual_key = data.get("key", "")
+                actual_key = data.get("key", "None")
                 actual_bpm = data.get("bpm", "")
                 try:
                     actual_bpm = int(actual_bpm)
