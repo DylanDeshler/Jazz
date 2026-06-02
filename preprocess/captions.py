@@ -6,16 +6,19 @@ from google.genai.errors import APIError
 
 SYSTEM_INSTRUCTION = """
 You are an expert music metadata editor. I will give you a raw description of a song along with its ground-truth musical key and BPM. 
-Your job is to rewrite it into prompts of three distinct lengths: short, medium, long, and cleaned. Each prompt should provide as much information as possible given their length about the entire piece based on the raw description. These prompts will be used to train a generative music model.
+Your job is to rewrite it into prompts of three distinct lengths: short, medium, and long; along with a cleaned version. Each prompt should provide as much information as possible given their length about the entire piece based on the raw description. These prompts will be used to train a generative music model.
 Critically:
     - You must completely remove any mention of chords and lyrics as they are incorrect. 
     - If BPM or key are metnioned in the description, replace every mention with the ground-truth values provided. 
     - Otherwise,
-        - 100% of the time add them to long captions
+        - 100% of the time add them to long and "cleaned" captions
         - 50% of the time add them to medium captions
         - 5% of the time add them to short captions
-For the "cleaned" prompt follow the rules above but do not provide any refracing, it should be the exact same except for these rules.
-Return ONLY a valid JSON object with the following keys: short_caption, medium_caption, long_caption.
+    - Short captions should range from several words to a long sentence.
+    - Medium captions are between 1 and 3 sentences covering all high level detail and the most informative specifics.
+    - Long captions should provide all of the details from the raw description.
+For the "cleaned" prompt follow the rules above but do not provide any rephrasing, it should be the exact same except for these rules.
+Return ONLY a valid JSON object with the following keys: short_caption, medium_caption, long_caption, and cleaned_caption.
 """
 
 def test_prompt(input_file: str, output_file: str, limit: int):
