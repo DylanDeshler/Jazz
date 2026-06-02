@@ -154,7 +154,10 @@ def submit_job(input_file: str, batch_file: str):
         print("Uploading file to Google's servers...")
         uploaded_file = client.files.upload(
             file=batch_file, 
-            config={'display_name': 'song-captions-input'}
+            config={
+                'display_name': 'song-captions-input',
+                'mime_type': 'application/jsonl'
+            }
         )
         print(f"Uploaded! File ID: {uploaded_file.name}")
 
