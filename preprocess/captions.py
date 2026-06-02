@@ -37,10 +37,11 @@ def test_prompt(input_file: str, output_file: str, limit: int):
                     
                 data = json.loads(line)
                 file_path = data.get("file_path", f"unknown_file_{count}")
-                raw_caption = data.get("flamingo_raw_caption", "")
-                actual_key = data.get("ground_truth_key", "")
+                raw_caption = data.get("caption", "")
+                actual_key = data.get("key", "")
+                actual_bpm = data.get("bpm", "")
                 
-                prompt = f"Ground Truth Key: {actual_key}\nRaw Description: {raw_caption}"
+                prompt = f"Ground Truth Key: {actual_key}\nGround Truth BPM: {actual_bpm}\nRaw Description: {raw_caption}"
                 
                 print(f"--- Processing: {file_path} ---")
                 
