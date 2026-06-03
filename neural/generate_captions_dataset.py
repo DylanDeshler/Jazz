@@ -60,6 +60,9 @@ for data_dict in tqdm(captions, desc='Calculating Token Lengths'):
 for k, v in lengths.items():
     print(f'{k} stats: {np.min(v)} {np.mean(v)} {np.std(v)} {np.max(v)}')
 
+import sys
+sys.exit(1)
+
 if True:
 
     write_idx = 0
