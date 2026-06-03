@@ -35,6 +35,9 @@ embed_dim = model.config.d_model
 # shape = (num_samples, len(caption_types), max_tokens, embed_dim)
 # embedding_memmap = np.memmap(output_memmap_path, dtype=np.float32, mode='w+', shape=shape)
 
+from collections import defaultdict
+length = defaultdict(list)
+
 if True:
 
     write_idx = 0
@@ -57,6 +60,8 @@ if True:
                 max_length=max_tokens,
                 return_tensors="pt"
             ).to(device)
+            
+            print(inputs.keys())
             
             # Forward pass through the text encoder
             outputs = model(**inputs)
