@@ -94,3 +94,4 @@ if True:
             
             outputs = model(**inputs)
             embedding_memmap[idx] = outputs.last_hidden_state.cpu().numpy()
+embedding_memmap.flush()
