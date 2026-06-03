@@ -39,9 +39,13 @@ from collections import defaultdict
 lengths = defaultdict(list)
 
 for data_dict in tqdm(captions, desc='Calculating Token Lengths'):
-    short = data_dict['llm_output'].get('short_caption', '')
-    medium = data_dict['llm_output'].get('medium_caption', '')
-    long = data_dict['llm_output'].get('long_caption', '')
+    data = data_dict.get('llm_output', [])
+    if not data:
+        continue
+    
+    short = data.get('short_caption', '')
+    medium = data.get('medium_caption', '')
+    long = data.get('long_caption', '')
     
     inputs = tokenizer(short, return_tensors="pt")
     lengths['short'].append(inputs['input_ids'].shape[-1])
