@@ -71,9 +71,13 @@ if True:
     with torch.no_grad():
         for idx, data_dict in enumerate(tqdm(captions)):
             path = data_dict['file_path']
-            short = data_dict['llm_output']['short_caption']
-            medium = data_dict['llm_output']['medium_caption']
-            long = data_dict['llm_output']['long_caption']
+            data = data_dict.get('llm_output', [])
+            if isinstance(data, list):
+                data = {'short_caption': '', 'medium_caption': '', 'long_caption': ''}
+            
+            short = data.get('short_caption', '')
+            medium = data.get('medium_caption', '')
+            long = data.get('long_caption', '')
             
             texts = [short, medium, long]
             
