@@ -22,7 +22,7 @@ out_prefix = 'caption_embeddings'
 
 with open('/home/dylandeshler/Jazz/preprocess/final_llm_captions.jsonl', 'r', encoding='utf-8') as f:
     captions = [json.loads(line) for line in f]
-print(len(captions))
+print(f'Found {len(captions)} captions')
 
 print("Loading T5-large model and tokenizer...")
 tokenizer = T5Tokenizer.from_pretrained("t5-large")
@@ -32,7 +32,7 @@ model.eval()
 
 embed_dim = model.config.d_model
 
-shape = (num_samples, len(caption_types), max_tokens, embed_dim)
+# shape = (num_samples, len(caption_types), max_tokens, embed_dim)
 # embedding_memmap = np.memmap(output_memmap_path, dtype=np.float32, mode='w+', shape=shape)
 
 if True:
