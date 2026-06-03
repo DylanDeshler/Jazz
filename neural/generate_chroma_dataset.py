@@ -88,7 +88,6 @@ if True:
 
     all_data = []
     
-    # NEW: Track paths and their generated row counts per batch
     batch_path_lengths = []
     current_batch_paths = []
     
@@ -174,7 +173,6 @@ if True:
             
             all_data.append(np.asarray(data))
             
-            # NEW: Track how many rows this specific path generated
             current_batch_paths.append((path, len(data)))
             
             if (idx + 1) % (len(paths) // total_write_batches) == 0:
@@ -191,7 +189,6 @@ if True:
                 write_paths.append((filename, len(all_data)))
                 all_data = []
                 
-                # NEW: Commit the path mappings for this batch and reset
                 batch_path_lengths.append(current_batch_paths)
                 current_batch_paths = []
     
@@ -209,7 +206,6 @@ if True:
     write_paths.append((filename, len(all_data)))
     all_data = []
     
-    # NEW: Commit trailing batch paths
     batch_path_lengths.append(current_batch_paths)
     current_batch_paths = []
 
@@ -217,7 +213,6 @@ if True:
 dtype = np.float32
 write_paths = []
 
-# NEW: Renamed internal loop variable 'paths' -> 'paths_bin' to prevent overwriting your original glob 'paths'
 paths_bin = [f'{out_prefix}_{str(i).zfill(2)}.bin' for i in range(total_write_batches + 1)]
 for path in paths_bin:
     data = np.memmap(path, dtype=np.float32, mode='r')
@@ -226,7 +221,7 @@ for path in paths_bin:
 
 # write to train.bin
 cur_idx = 0
-train_map = {} # NEW: Dict to hold training bounds
+train_map = {}
 filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_train.bin')
 train_length = np.sum([shape[0] for path, shape in write_paths[:-2]])
 arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, 16))
@@ -235,12 +230,10 @@ print(arr.shape)
 for i, (path, shape) in enumerate(write_paths[:-2]):
     data = np.memmap(path, dtype=dtype, mode='r', shape=shape)
 
-    # NEW: Preserve start index for array writing
     start_idx = cur_idx 
     arr[start_idx:start_idx+shape[0]] = data
     arr.flush()
     
-    # NEW: Build map dynamically using the tracked path lengths for this batch
     for audio_path, count in batch_path_lengths[i]:
         if count > 0: 
             train_map[audio_path] = (cur_idx, cur_idx + count)
@@ -248,28 +241,25 @@ for i, (path, shape) in enumerate(write_paths[:-2]):
 
 # write to val.bin
 cur_idx = 0
-val_map = {} # NEW: Dict to hold validation bounds
+val_map = {}
 filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_val.bin')
 val_length = np.sum([shape[0] for path, shape in write_paths[-2:]])
 arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length, 16))
 print(arr.shape)
 
-offset = len(write_paths) - 2 # NEW: offset to access the correct batch_path_lengths
+offset = len(write_paths) - 2
 for i, (path, shape) in enumerate(write_paths[-2:]):
     data = np.memmap(path, dtype=dtype, mode='r', shape=shape)
 
-    # NEW: Preserve start index for array writing
     start_idx = cur_idx 
     arr[start_idx:start_idx+shape[0]] = data
     arr.flush()
 
-    # NEW: Build validation map dynamically
     for audio_path, count in batch_path_lengths[offset + i]:
         if count > 0:
             val_map[audio_path] = (cur_idx, cur_idx + count)
             cur_idx += count
 
-# NEW: Save output maps to JSON
 train_map_path = os.path.join(os.path.dirname(__file__), f'{out_prefix}_train_map.json')
 val_map_path = os.path.join(os.path.dirname(__file__), f'{out_prefix}_val_map.json')
 
