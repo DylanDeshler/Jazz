@@ -65,17 +65,6 @@ for data_dict in tqdm(captions, desc='Calculating Token Lengths'):
 for k, v in lengths.items():
     print(f'[{k} token stats] min: {np.min(v)} mean: {np.mean(v)} std: {np.std(v)} max: {np.max(v)}')
 
-inputs = tokenizer(
-    [''],
-    padding="max_length",
-    truncation=True,
-    max_length=max_tokens,
-    return_tensors="pt"
-).to(device)
-
-outputs = model(**inputs)
-embedding_memmap[0] = outputs.last_hidden_state.cpu().numpy()
-
 with torch.no_grad():
     for idx, data_dict in enumerate(tqdm(captions)):
         path = data_dict['file_path']
@@ -98,5 +87,17 @@ with torch.no_grad():
         ).to(device)
         
         outputs = model(**inputs)
-        embedding_memmap[idx + 1] = outputs.last_hidden_state.cpu().numpy()
+        embedding_memmap[idx] = outputs.last_hidden_state.cpu().numpy()
+
+    inputs = tokenizer(
+        [''],
+        padding="max_length",
+        truncation=True,
+        max_length=max_tokens,
+        return_tensors="pt"
+    ).to(device)
+
+    outputs = model(**inputs)
+    embedding_memmap[-1] = outputs.last_hidden_state.cpu().numpy()
+
 embedding_memmap.flush()
