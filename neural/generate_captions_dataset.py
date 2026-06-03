@@ -36,7 +36,7 @@ embed_dim = model.config.d_model
 # embedding_memmap = np.memmap(output_memmap_path, dtype=np.float32, mode='w+', shape=shape)
 
 from collections import defaultdict
-length = defaultdict(list)
+lengths = defaultdict(list)
 
 for data_dict in tqdm(captions, desc='Calculating Token Lengths'):
     short = data_dict['llm_output']['short_caption']
