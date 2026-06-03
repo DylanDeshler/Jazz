@@ -61,7 +61,7 @@ if True:
                 return_tensors="pt"
             ).to(device)
             
-            print(inputs.keys())
+            print(inputs['input_ids'].shape)
             
             # Forward pass through the text encoder
             outputs = model(**inputs)
