@@ -51,7 +51,7 @@ if True:
             texts = [short, medium, long]
             
             inputs = tokenizer(
-                flat_texts,
+                texts,
                 padding="max_length",
                 truncation=True,
                 max_length=max_tokens,
