@@ -40,7 +40,8 @@ lengths = defaultdict(list)
 
 for data_dict in tqdm(captions, desc='Calculating Token Lengths'):
     data = data_dict.get('llm_output', [])
-    if not data:
+    if isinstance(data, list):
+        print('skipping bad data')
         continue
     
     short = data.get('short_caption', '')
