@@ -87,6 +87,11 @@ if True:
     write_paths = []
 
     all_data = []
+    
+    # NEW: Track paths and their generated row counts per batch
+    batch_path_lengths = []
+    current_batch_paths = []
+    
     with torch.no_grad():
         for idx, path in enumerate(tqdm(paths)):
             wav, _ = librosa.load(path, sr=rate)
@@ -169,6 +174,9 @@ if True:
             
             all_data.append(np.asarray(data))
             
+            # NEW: Track how many rows this specific path generated
+            current_batch_paths.append((path, len(data)))
+            
             if (idx + 1) % (len(paths) // total_write_batches) == 0:
                 print(f'Writing batch {write_idx}...')
                 all_data = np.concatenate(all_data, axis=0)
@@ -182,6 +190,10 @@ if True:
                 write_idx += 1
                 write_paths.append((filename, len(all_data)))
                 all_data = []
+                
+                # NEW: Commit the path mappings for this batch and reset
+                batch_path_lengths.append(current_batch_paths)
+                current_batch_paths = []
     
     # write the remaining batch
     print(f'Writing batch {write_idx}...')
@@ -196,42 +208,75 @@ if True:
     write_idx += 1
     write_paths.append((filename, len(all_data)))
     all_data = []
+    
+    # NEW: Commit trailing batch paths
+    batch_path_lengths.append(current_batch_paths)
+    current_batch_paths = []
 
 ## get token write paths
 dtype = np.float32
 write_paths = []
-paths = [f'{out_prefix}_{str(i).zfill(2)}.bin' for i in range(total_write_batches + 1)]
-for path in paths:
+
+# NEW: Renamed internal loop variable 'paths' -> 'paths_bin' to prevent overwriting your original glob 'paths'
+paths_bin = [f'{out_prefix}_{str(i).zfill(2)}.bin' for i in range(total_write_batches + 1)]
+for path in paths_bin:
     data = np.memmap(path, dtype=np.float32, mode='r')
     data = data.reshape(-1, 16)
     write_paths.append((path, data.shape))
 
 # write to train.bin
 cur_idx = 0
+train_map = {} # NEW: Dict to hold training bounds
 filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_train.bin')
 train_length = np.sum([shape[0] for path, shape in write_paths[:-2]])
 arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, 16))
 print(arr.shape)
 
-for path, shape in write_paths[:-2]:
+for i, (path, shape) in enumerate(write_paths[:-2]):
     data = np.memmap(path, dtype=dtype, mode='r', shape=shape)
 
-    arr[cur_idx:cur_idx+shape[0]] = data
+    # NEW: Preserve start index for array writing
+    start_idx = cur_idx 
+    arr[start_idx:start_idx+shape[0]] = data
     arr.flush()
-
-    cur_idx += shape[0]
+    
+    # NEW: Build map dynamically using the tracked path lengths for this batch
+    for audio_path, count in batch_path_lengths[i]:
+        if count > 0: 
+            train_map[audio_path] = (cur_idx, cur_idx + count)
+            cur_idx += count
 
 # write to val.bin
 cur_idx = 0
+val_map = {} # NEW: Dict to hold validation bounds
 filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_val.bin')
 val_length = np.sum([shape[0] for path, shape in write_paths[-2:]])
 arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length, 16))
 print(arr.shape)
 
-for path, shape in write_paths[-2:]:
+offset = len(write_paths) - 2 # NEW: offset to access the correct batch_path_lengths
+for i, (path, shape) in enumerate(write_paths[-2:]):
     data = np.memmap(path, dtype=dtype, mode='r', shape=shape)
 
-    arr[cur_idx:cur_idx+shape[0]] = data
+    # NEW: Preserve start index for array writing
+    start_idx = cur_idx 
+    arr[start_idx:start_idx+shape[0]] = data
     arr.flush()
 
-    cur_idx += shape[0]
+    # NEW: Build validation map dynamically
+    for audio_path, count in batch_path_lengths[offset + i]:
+        if count > 0:
+            val_map[audio_path] = (cur_idx, cur_idx + count)
+            cur_idx += count
+
+# NEW: Save output maps to JSON
+train_map_path = os.path.join(os.path.dirname(__file__), f'{out_prefix}_train_map.json')
+val_map_path = os.path.join(os.path.dirname(__file__), f'{out_prefix}_val_map.json')
+
+with open(train_map_path, 'w') as f:
+    json.dump(train_map, f, indent=4)
+print(f"Saved train map to {train_map_path}")
+
+with open(val_map_path, 'w') as f:
+    json.dump(val_map, f, indent=4)
+print(f"Saved val map to {val_map_path}")
