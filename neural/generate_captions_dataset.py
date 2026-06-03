@@ -38,6 +38,20 @@ embed_dim = model.config.d_model
 from collections import defaultdict
 length = defaultdict(list)
 
+for data_dict in tqdm(captions, desc='Calculating Token Lengths'):
+    short = data_dict['llm_output']['short_caption']
+    medium = data_dict['llm_output']['medium_caption']
+    long = data_dict['llm_output']['long_caption']
+    
+    inputs = tokenizer(
+        short,
+        return_tensors="pt"
+    )
+    
+    print(inputs['input_ids'].shape)
+    
+    lengths['short'].append(inputs['input_ids'].shape[0])
+
 if True:
 
     write_idx = 0
