@@ -39,18 +39,21 @@ from collections import defaultdict
 lengths = defaultdict(list)
 
 for data_dict in tqdm(captions, desc='Calculating Token Lengths'):
-    short = data_dict['llm_output']['short_caption']
-    medium = data_dict['llm_output']['medium_caption']
-    long = data_dict['llm_output']['long_caption']
+    short = data_dict['llm_output'].get('short_caption', '')
+    medium = data_dict['llm_output'].get('medium_caption', '')
+    long = data_dict['llm_output'].get('long_caption', '')
     
-    inputs = tokenizer(
-        short,
-        return_tensors="pt"
-    )
+    inputs = tokenizer(short, return_tensors="pt")
+    lengths['short'].append(inputs['input_ids'].shape[-1])
     
-    print(inputs['input_ids'].shape)
+    inputs = tokenizer(medium, return_tensors="pt")
+    lengths['medium'].append(inputs['input_ids'].shape[-1])
     
-    lengths['short'].append(inputs['input_ids'].shape[0])
+    inputs = tokenizer(long, return_tensors="pt")
+    lengths['long'].append(inputs['input_ids'].shape[-1])
+
+for k, v in lengths.items():
+    print(f'{k} stats: {np.min(v)} {np.mean(v)} {np.std(v)} {np.max(v)}')
 
 if True:
 
