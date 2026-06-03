@@ -30,10 +30,12 @@ model = T5EncoderModel.from_pretrained("t5-large")
 model.to(device)
 model.eval()
 
-embed_dim = model.config.d_model
-
-# shape = (num_samples, len(caption_types), max_tokens, embed_dim)
-# embedding_memmap = np.memmap(output_memmap_path, dtype=np.float32, mode='w+', shape=shape)
+embedding_memmap = np.memmap(
+    os.path.join(os.path.dirname(__file__), f'{out_prefix}.bin'), 
+    dtype=np.float32, 
+    mode='w+', 
+    shape=(len(captions), 3, max_tokens, model.config.d_model)
+)
 
 from collections import defaultdict
 lengths = defaultdict(list)
@@ -58,10 +60,7 @@ for data_dict in tqdm(captions, desc='Calculating Token Lengths'):
     lengths['long'].append(inputs['input_ids'].shape[-1])
 
 for k, v in lengths.items():
-    print(f'{k} stats: {np.min(v)} {np.mean(v)} {np.std(v)} {np.max(v)}')
-
-import sys
-sys.exit(1)
+    print(f'[{k} token stats] min: {np.min(v)} mean: {np.mean(v)} std: {np.std(v)} max: {np.max(v)}')
 
 if True:
 
@@ -86,13 +85,11 @@ if True:
                 return_tensors="pt"
             ).to(device)
             
-            print(inputs['input_ids'].shape)
-            
-            # Forward pass through the text encoder
             outputs = model(**inputs)
-            # Extracted last hidden state shape: [Batch * 3, max_tokens, 1024]
             embeddings = outputs.last_hidden_state.cpu().numpy()
             print(embeddings.shape)
+            
+            embedding_memmap[idx] = embeddings
             
 #             # Reshape back to unflattened batch space: [Batch, 3, max_tokens, 1024]
 #             reshaped_embeddings = embeddings.reshape(-1, len(caption_types), max_tokens, embed_dim)
