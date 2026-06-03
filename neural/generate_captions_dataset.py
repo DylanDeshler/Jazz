@@ -20,7 +20,7 @@ max_tokens = 256
 
 out_prefix = 'caption_embeddings'
 
-with open('', 'r', encoding='utf-8') as f:
+with open('/home/dylandeshler/Jazz/preprocess/final_llm_captions.jsonl', 'r', encoding='utf-8') as f:
     captions = [json.loads(line) for line in f]
 print(len(captions))
 
