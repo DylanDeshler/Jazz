@@ -2231,6 +2231,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
                  hidden_size,
                  spatial_window,
                  n_chunks,
+                 style_dim,
                  n_text_tokens,
                  num_heads=12,
                  depth=12,

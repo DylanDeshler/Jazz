@@ -72,6 +72,8 @@ max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
 n_style_embeddings = 256
 style_dim = 128
+signal_dim = {'style': style_dim, 'chroma': 12, 'rms': 1, 'density': 1, 'zcr': 1, 'flatness': 1, 'bpm': 768}
+weights = {k: 1 for k in signal_dim.keys()}
 use_null_token = True
 cut_seconds = 1
 drop_path_rate = 0.1
@@ -230,7 +232,7 @@ dit.load_state_dict(state_dict)
 dit.eval()
 del state_dict
 
-model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, n_text_tokens=256, spatial_window=spatial_window, use_null_token=use_null_token, gradient_checkpointing=gradient_checkpointing, patch_size=patch_size, drop_path_rate=drop_path_rate)
+model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, n_text_tokens=256, spatial_window=spatial_window, signal_dim=signal_dim, use_null_token=use_null_token, gradient_checkpointing=gradient_checkpointing, patch_size=patch_size, drop_path_rate=drop_path_rate, weights=weights)
 
 class EMAModel:
     def __init__(self, model, decay=0.9999):
