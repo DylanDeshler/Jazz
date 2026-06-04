@@ -2271,7 +2271,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         self.norm = nn.ModuleDict({
             name: RMSNorm(hidden_size) for name in signal_dim.keys()
         })
-        self.final_layer_scale_shift_table = nn.ModuleDict({
+        self.final_layer_scale_shift_table = nn.ParameterDict({
             name: nn.Parameter(torch.randn(2, hidden_size) / hidden_size ** 0.5,) for name in signal_dim.keys()
         })
         self.fc = nn.ModuleDict({
