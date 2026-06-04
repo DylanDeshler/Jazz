@@ -174,11 +174,12 @@ def get_batch(split='train', batch_size=batch_size):
     #     stop = np.clip(start + n_chunks, start + n_chunks, song_stop)
     #     styles.append(np.pad(style[start:stop], (0, n_chunks - (stop - start)), mode='constant', constant_values=style[stop]))
         
-    text = torch.from_numpy(text).pin_memory().to(device, non_blocking=True)
-    style = torch.from_numpy(style[idx_matrix]).pin_memory().to(device, non_blocking=True)
-        
     # likely require text augmentation (more caption variants) to reduce overfitting
     text = torch.from_numpy(np.stack([data[i] for i in song_idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    
+    style = torch.from_numpy(style[idx_matrix]).pin_memory().to(device, non_blocking=True)
+    
+    print(text.shape, style.shape)
     
     # # maybe apply augmentation but seems risky...
     # style = torch.from_numpy(np.stack([style[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
