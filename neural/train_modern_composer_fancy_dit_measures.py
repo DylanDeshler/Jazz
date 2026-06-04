@@ -168,13 +168,6 @@ def get_batch(split='train', batch_size=batch_size):
     idx_matrix = starts[:, None] + np.arange(n_chunks)
     idx_matrix = np.minimum(idx_matrix, stops[:, None])
     
-    # styles = []
-    # for song_idx in song_idxs:
-    #     song_start, song_stop = train_map[train_paths[song_idx]]
-    #     start = np.random.randint(song_start, np.max(song_stop - n_chunks, song_start + 1))
-    #     stop = np.clip(start + n_chunks, start + n_chunks, song_stop)
-    #     styles.append(np.pad(style[start:stop], (0, n_chunks - (stop - start)), mode='constant', constant_values=style[stop]))
-        
     # likely require text augmentation (more caption variants) to reduce overfitting
     text = torch.from_numpy(np.stack([data[i, :n_text_tokens] for i in song_idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     
@@ -185,17 +178,6 @@ def get_batch(split='train', batch_size=batch_size):
     zcr = torch.from_numpy(meta[idx_matrix, 14]).pin_memory().to(device, non_blocking=True)
     flatness = torch.from_numpy(meta[idx_matrix, 15]).pin_memory().to(device, non_blocking=True)
     bpm = torch.from_numpy(bpms[idx_matrix]).pin_memory().to(device, non_blocking=True)
-    
-    print(text.shape, style.shape, chroma.shape, bpm.shape)
-    
-    # # maybe apply augmentation but seems risky...
-    # style = torch.from_numpy(np.stack([style[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    # chroma = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, :12] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    # rms = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 12] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    # density = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 13] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    # zcr = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 14] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    # flatness = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 15] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    # bpm = torch.from_numpy(np.stack([bpms[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     
     x = {
         'style': style,

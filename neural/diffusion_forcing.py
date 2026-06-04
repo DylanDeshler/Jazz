@@ -2359,8 +2359,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         flatness = (flatness - self.flatness_mean) / self.flatness_std
         chroma = (chroma - self.chroma_mean) / self.chroma_std
         
-        print(style.shape, rms.shape, bpm.shape, t.shape)
-        B, T, N, C = x.shape
+        B, T = t.shape
         
         t = self.t_embedder(t.flatten()).view(B, T, -1)
         
