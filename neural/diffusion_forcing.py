@@ -2142,6 +2142,315 @@ class MetaConditionalModernDiTV2Wrapper(nn.Module):
             t_dist=t_dist
         )
 
+class _GradientBalancerFunction(torch.autograd.Function):
+    """
+    The hidden autograd engine that intercepts the gradient flowing from 
+    a specific head down into the shared trunk, scaling it on the fly.
+    """
+    @staticmethod
+    def forward(ctx, features, total_buffer, fix_buffer, task_weight, total_weight, ema_decay, total_norm, epsilon):
+        # Save variables for the backward pass
+        ctx.total_buffer = total_buffer
+        ctx.fix_buffer = fix_buffer
+        ctx.task_weight = task_weight
+        ctx.total_weight = total_weight
+        ctx.ema_decay = ema_decay
+        ctx.total_norm = total_norm
+        ctx.epsilon = epsilon
+        
+        # Pass features through untouched during the forward pass
+        return features.clone()
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        # 1. Compute per-batch-item norm (EnCodec style)
+        dims = tuple(range(1, grad_output.dim()))
+        norm = grad_output.norm(dim=dims).mean()
+        batch_size = grad_output.shape[0]
+        
+        # 2. Update EMA buffers IN-PLACE 
+        # (Using pure tensor ops: no float(), no .item() -> zero graph breaks!)
+        ctx.total_buffer.mul_(ctx.ema_decay).add_(norm * batch_size)
+        ctx.fix_buffer.mul_(ctx.ema_decay).add_(batch_size)
+        
+        # 3. Calculate the smoothed average norm
+        avg_norm = ctx.total_buffer / ctx.fix_buffer
+        
+        # 4. Calculate the EnCodec scaling factor
+        ratio = ctx.task_weight / ctx.total_weight
+        scale = ratio * ctx.total_norm / (ctx.epsilon + avg_norm)
+        
+        # 5. Scale the gradient before it passes down into the trunk
+        grad_input = grad_output * scale
+        
+        # Return gradients for the inputs (None for the hyperparameter arguments)
+        return grad_input, None, None, None, None, None, None, None
+
+
+class GradientBalancer(nn.Module):
+    """
+    A drop-in module that wraps the EnCodec balancing math into an automatic layer.
+    """
+    def __init__(self, weights: dict, ema_decay=0.999, total_norm=1.0, epsilon=1e-12):
+        super().__init__()
+        self.weights = weights
+        self.ema_decay = ema_decay
+        self.total_norm = total_norm
+        self.epsilon = epsilon
+        self.total_weight = sum(weights.values())
+        
+        # Register EMA trackers as PyTorch buffers so they live on the GPU 
+        # and are saved in your model's state_dict
+        for task in weights.keys():
+            self.register_buffer(f'total_{task}', torch.tensor(0.0))
+            self.register_buffer(f'fix_{task}', torch.tensor(0.0))
+
+    def forward(self, features, task_name):
+        """
+        Pass the trunk features through this function before sending them to a head.
+        """
+        # Fetch the specific EMA buffers for this task
+        total_buffer = getattr(self, f'total_{task_name}')
+        fix_buffer = getattr(self, f'fix_{task_name}')
+        task_weight = self.weights[task_name]
+        
+        return _GradientBalancerFunction.apply(
+            features, 
+            total_buffer, 
+            fix_buffer, 
+            task_weight, 
+            self.total_weight, 
+            self.ema_decay, 
+            self.total_norm, 
+            self.epsilon
+        )
+
+class MetaConditionalModernDiTV2Composer(nn.Module):
+    def __init__(self,
+                 in_channels,
+                 hidden_size,
+                 spatial_window,
+                 n_chunks,
+                 n_text_tokens,
+                 num_heads=12,
+                 depth=12,
+                 mlp_ratio=4,
+                 gradient_checkpointing=False,
+                 patch_size=1,
+                 drop_path_rate=0.1,
+                 signal_dim = {},
+                 weights = {},
+                 **kwargs,
+                 ):
+        super().__init__()
+        self.spatial_window = spatial_window
+        self.gradient_checkpointing = gradient_checkpointing
+        max_input_size = spatial_window * n_chunks + n_text_tokens
+        self.patch_size = patch_size
+
+        self.balancer = GradientBalancer(weights=weights)
+        
+        self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
+        self.local_embedder = Patcher(16, hidden_size, patch_size=patch_size, bias=True)
+        self.style_embedder = nn.Linear(style_dim, hidden_size, bias=True)
+        self.bpm_embedder = nn.Embedding(350, hidden_size)
+        self.text_embed = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
+        self.audio_embed = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
+        
+        self.t_block = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(hidden_size, hidden_size * 6, bias=True),
+        )
+        
+        dp_rates=[x.item() for x in torch.linspace(0, drop_path_rate, depth)] 
+        self.blocks = nn.ModuleList([
+            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio, drop_path=dp_rates[i]) for i in range(depth)
+        ])
+
+        self.norm = nn.ModuleDict({
+            name: RMSNorm(hidden_size) for name in signal_dim.keys()
+        })
+        self.final_layer_scale_shift_table = nn.ModuleDict({
+            name: nn.Parameter(torch.randn(2, hidden_size) / hidden_size ** 0.5,) for name in signal_dim.keys()
+        })
+        self.fc = nn.ModuleDict({
+            name: nn.Linear(hidden_size, dim * patch_size, bias=False) for name, dim in signal_dim.items()
+        })
+        self.bias = nn.ModuleDict({
+            name: nn.Parameter(torch.zeros(dim * patch_size)) for name, dim in signal_dim.items()
+        })
+        
+        self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
+        self.register_buffer('chroma_mean', torch.tensor([
+            0.45533183, 0.39680213, 0.44615716, 0.42044115, 0.40855545, 0.45450154, 0.3971631, 0.496346, 0.44164586, 0.4416672, 0.44793198, 0.39493898
+        ]))
+        self.register_buffer('chroma_std', torch.tensor([
+            0.18241853, 0.16477719, 0.18014704, 0.18011539, 0.1677363, 0.18919244, 0.16196373, 0.19185093, 0.18003348, 0.1768027, 0.18706752, 0.1618064
+        ]))
+        self.register_buffer('rms_mean', torch.tensor([3.2653894]))
+        self.register_buffer('rms_std', torch.tensor([3.597796]))
+        self.register_buffer('density_mean', torch.tensor([2.5229013]))
+        self.register_buffer('density_std', torch.tensor([1.230155]))
+        self.register_buffer('zcr_mean', torch.tensor([0.10766766]))
+        self.register_buffer('zcr_std', torch.tensor([0.048143145]))
+        self.register_buffer('flatness_mean', torch.tensor([0.011151944]))
+        self.register_buffer('flatness_std', torch.tensor([0.018700112]))
+        
+        self.initialize_weights()
+    
+    def create_optimizer_groups(self, weight_decay=1e-2, lr=1e-4):
+        decay = []
+        no_decay = []
+        
+        for name, param in self.named_parameters():
+            if not param.requires_grad:
+                continue
+            
+            no_decay = param.ndim < 2
+            
+            if no_decay:
+                no_decay.append(param)
+            else:
+                decay.append(param)
+        
+        optim_groups = [
+            {"params": decay, "weight_decay": weight_decay, "lr": lr},
+            {"params": no_decay, "weight_decay": 0.0, "lr": lr},
+        ]
+        return optim_groups
+    
+    def initialize_weights(self):
+        self.apply(self._init_weights)
+        # zero out classifier weights
+        for name in self.signal_dim.keys():
+            nn.init.zeros_(self.fc[name].weight)
+        nn.init.zeros_(self.t_block[-1].weight)
+        nn.init.zeros_(self.t_block[-1].bias)
+        # zero out c_proj weights in all blocks
+        for block in self.blocks:
+            nn.init.zeros_(block.mlp.w3.weight)
+            nn.init.zeros_(block.attn.proj.weight)
+        
+    
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            # https://arxiv.org/pdf/2310.17813
+            fan_out = module.weight.size(0)
+            fan_in = module.weight.size(1)
+            std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
+            nn.init.normal_(module.weight, mean=0.0, std=std)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
+    
+    def forward(self, x, t, text):
+        style = x['style']
+        chroma = x['chroma']
+        rms = x['rms']
+        density = x['density']
+        zcr = x['zcr']
+        flatness = x['flatness']
+        bpm = x['bpm']
+        
+        B, T, N, C = x.shape
+        
+        t = self.t_embedder(t.flatten()).view(B, T, -1)
+        
+        # text null token is embedding of empty string
+        if self.use_null_token:
+            signals = {
+                'text': text,
+            }
+            null_tokens = {
+                'text': self.null_text,
+            }
+            signals = multi_token_drop(
+                signals, 
+                null_tokens, 
+                self.training,
+                p_joint_uncond=0.1, 
+                p_joint_full=0.9,
+                p_one_hot=0, 
+                p_ind_uncond=0, 
+                p_ind_low=0, 
+                p_ind_high=0
+            )
+            
+            text = signals['text']
+            
+            if unconditional_mask is not None:
+                text = torch.where(unconditional_mask['text'], null_tokens['text'], text)
+        
+        # prepend x with text
+        x = torch.cat([chroma, rms, density, zcr, flatness], dim=-1)
+        x = rearrange(x, 'b t n c -> (b t) c n')
+        x = self.local_embedder(x)
+        bpm = self.bpm_embedder(bpm)
+        style = self.style_embedder(style)
+        x = x + self.audio_embed
+        x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
+        
+        text = self.text_embedder(text) + self.text_embed
+        x = torch.cat([text, x], dim=1)
+        
+        t = t + text.mean(dim=1) # mean pool text for global embeddiner
+        t0 = self.t_block(t)
+        
+        freqs_cis = self.freqs_cis[:x.shape[1]]
+        for block in self.blocks:
+            if self.gradient_checkpointing and self.training:
+                x = checkpoint(block, x, t0, freqs_cis=freqs_cis, use_reentrant=False)
+            else:
+                x = block(x, t0, freqs_cis=freqs_cis)
+        
+        out = {}
+        for name in self.signal_dim.keys():
+            features = self.balancer(x, name)
+            # SAM Audio does not use a non-linearity on t here
+            shift, scale = (self.final_layer_scale_shift_table[name][None, None] + F.silu(t[:, :, None])).chunk(
+                2, dim=2
+            )
+            features = rearrange(features, 'b (t n) c -> b t n c', t=T, n=N // self.patch_size)
+            features = modulate(self.norm[name](features), shift.expand(-1, -1, N // self.patch_size, -1), scale.expand(-1, -1, N // self.patch_size, -1))
+            features = self.fc[name](features) + self.bias[name]
+            features = rearrange(features, 'b t n (p c) -> b t (n p) c', p=self.patch_size, c=C)
+            out[name] = features
+        
+        out = torch.cat(list(out.values()), dim=-1)
+        return out
+
+class MetaConditionalModernDiTV2ComposerWrapper(nn.Module):
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.net = MetaConditionalModernDiTV2Composer(**kwargs)
+        
+        self.diffusion = FM(timescale=1000.0)
+        self.sampler = FMEulerSampler(self.diffusion)
+    
+    def forward(self, x, text, t=None):
+        return self.diffusion.loss(
+            self.net, 
+            x, 
+            t=t, 
+            net_kwargs={'text': text}
+        )
+    
+    def generate(self, shape, net_kwargs=None, uncond_net_kwargs=None, n_steps=50, guidance=1.0, noise=None, memory_efficient=True, rescale_phi=0, cfg_mode="independent", t_dist="uniform"):
+        return self.sampler.sample(
+            self.net, 
+            shape, 
+            n_steps=n_steps, 
+            net_kwargs=net_kwargs, 
+            uncond_net_kwargs=uncond_net_kwargs, 
+            guidance=guidance, 
+            noise=noise, 
+            memory_efficient=memory_efficient,
+            rescale_phi=rescale_phi,
+            cfg_mode=cfg_mode,
+            t_dist=t_dist
+        )
+
 def ModernDiT_large(**kwargs):
     return ModernDiTWrapper(depth=28, hidden_size=1152, num_heads=16, **kwargs)
 
@@ -2228,3 +2537,18 @@ def MetaConditionalModernDiTV2_small(**kwargs):
 
 def MetaConditionalModernDiTV2_tiny(**kwargs):
     return MetaConditionalModernDiTV2Wrapper(depth=16, hidden_size=768, num_heads=12, **kwargs)
+
+def MetaConditionalModernDiTV2Composer_large(**kwargs):
+    return MetaConditionalModernDiTV2ComposerWrapper(depth=28, hidden_size=1152, num_heads=16, **kwargs)
+
+def MetaConditionalModernDiTV2Composer_medium(**kwargs):
+    return MetaConditionalModernDiTV2ComposerWrapper(depth=24, hidden_size=1024, num_heads=16, **kwargs)
+
+def MetaConditionalModernDiTV2Composer_smedium(**kwargs):
+    return MetaConditionalModernDiTV2ComposerWrapper(depth=20, hidden_size=768, num_heads=12, **kwargs)
+
+def MetaConditionalModernDiTV2Composer_small(**kwargs):
+    return MetaConditionalModernDiTV2ComposerWrapper(depth=16, hidden_size=1024, num_heads=16, **kwargs)
+
+def MetaConditionalModernDiTV2Composer_tiny(**kwargs):
+    return MetaConditionalModernDiTV2ComposerWrapper(depth=16, hidden_size=768, num_heads=12, **kwargs)
