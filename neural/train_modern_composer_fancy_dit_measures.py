@@ -179,15 +179,22 @@ def get_batch(split='train', batch_size=batch_size):
     flatness = torch.from_numpy(meta[idx_matrix, 15]).pin_memory().to(device, non_blocking=True)
     bpm = torch.from_numpy(bpms[idx_matrix]).pin_memory().to(device, non_blocking=True)
     
-    x = {
-        'style': style,
-        'chroma': chroma,
-        'rms': rms,
-        'density': density,
-        'zcr': zcr,
-        'flatness': flatness,
-        'bpm': bpm
-    }
+    
+    print(style.shape, chroma.shape, bpm.shape)
+    
+    x = torch.cat([style, chroma, rms, density, zcr, flatness, bpm], dim=-1)
+    
+    print(x.shape)
+    
+    # x = {
+    #     'style': style,
+    #     'chroma': chroma,
+    #     'rms': rms,
+    #     'density': density,
+    #     'zcr': zcr,
+    #     'flatness': flatness,
+    #     'bpm': bpm
+    # }
 
     return x, text
 

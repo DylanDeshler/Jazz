@@ -2345,13 +2345,21 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
     def forward(self, x, t, text):
-        style = x['style']
-        chroma = x['chroma']
-        rms = x['rms']
-        density = x['density']
-        zcr = x['zcr']
-        flatness = x['flatness']
-        bpm = x['bpm']
+        # style = x['style']
+        # chroma = x['chroma']
+        # rms = x['rms']
+        # density = x['density']
+        # zcr = x['zcr']
+        # flatness = x['flatness']
+        # bpm = x['bpm']
+        
+        style = x[:, :128]
+        chroma = x[:, 128:128+12]
+        rms = x[:, 128+12]
+        density = x[:, 128+13]
+        zcr = x[:, 128+14]
+        flatness = x[:, 128+15]
+        bpm = x[:, 128+16]
         
         rms = (rms - self.rms_mean) / self.rms_std
         density = (density - self.density_mean) / self.density_std
