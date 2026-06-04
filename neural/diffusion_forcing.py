@@ -2308,9 +2308,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
             if not param.requires_grad:
                 continue
             
-            no_decay = param.ndim < 2
-            
-            if no_decay:
+            if param.ndim < 2:
                 no_decay.append(param)
             else:
                 decay.append(param)
@@ -2354,6 +2352,12 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         zcr = x['zcr']
         flatness = x['flatness']
         bpm = x['bpm']
+        
+        rms = (rms - self.rms_mean) / self.rms_std
+        density = (density - self.density_mean) / self.density_std
+        zcr = (zcr - self.zcr_mean) / self.zcr_std
+        flatness = (flatness - self.flatness_mean) / self.flatness_std
+        chroma = (chroma - self.chroma_mean) / self.chroma_std
         
         B, T, N, C = x.shape
         
