@@ -256,6 +256,8 @@ if init_from == 'scratch':
     model.net.bpm_embedder.load_state_dict(dit.net.bpm_embedder.state_dict())
     model.net.bpm_embedder.requires_grad_(False)
     tokens_trained = 0
+    
+    ema = EMAModel(model)
 elif init_from == 'resume':
     print(f"Resuming training from {out_dir}")
     # resume training from a checkpoint.
