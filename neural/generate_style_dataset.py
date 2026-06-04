@@ -182,6 +182,8 @@ for path in paths_to_check:
 
 train_length = np.sum([shape[0] for path, shape in compiled_write_paths[:-2]])
 val_length = np.sum([shape[0] for path, shape in compiled_write_paths[-2:]])
+print('Train length: ', train_length)
+print('Val length: ', val_length)
 
 # Write Train
 arr_style_train = np.memmap(f'{out_prefix}_style_train.bin', dtype=dtype, mode='w+', shape=(train_length, style_embed_dim))
