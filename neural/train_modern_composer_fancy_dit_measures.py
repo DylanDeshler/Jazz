@@ -142,6 +142,7 @@ train_paths = list(train_map.keys())
 val_paths = list(val_map.keys())
 
 def get_batch(split='train', batch_size=batch_size):
+    print(np.memmap('/data/binaries/caption_embeddings.bin', dtype=np.float32, mode='r').shape)
     data = np.memmap('/data/binaries/caption_embeddings.bin', dtype=np.float32, mode='r', shape=(21030, 3, 256, 1024))
     if split == 'train':
         paths = np.random.choice(train_paths, size=batch_size)
