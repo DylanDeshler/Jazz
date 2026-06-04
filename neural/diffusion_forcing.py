@@ -2359,7 +2359,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         density = x[:, 128+13]
         zcr = x[:, 128+14]
         flatness = x[:, 128+15]
-        bpm = x[:, 128+16]
+        bpm = x[:, 128+16].squeeze(-1)
         
         rms = (rms - self.rms_mean) / self.rms_std
         density = (density - self.density_mean) / self.density_std

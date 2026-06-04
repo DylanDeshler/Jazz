@@ -177,7 +177,7 @@ def get_batch(split='train', batch_size=batch_size):
     density = torch.from_numpy(meta[idx_matrix, 13]).pin_memory().to(device, non_blocking=True)
     zcr = torch.from_numpy(meta[idx_matrix, 14]).pin_memory().to(device, non_blocking=True)
     flatness = torch.from_numpy(meta[idx_matrix, 15]).pin_memory().to(device, non_blocking=True)
-    bpm = torch.from_numpy(bpms[idx_matrix]).pin_memory().to(device, non_blocking=True)
+    bpm = torch.from_numpy(bpms[idx_matrix]).unsqueeze(-1).pin_memory().to(device, non_blocking=True)
     
     
     print(style.shape, chroma.shape, bpm.shape)
