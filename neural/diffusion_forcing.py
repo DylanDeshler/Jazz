@@ -2277,7 +2277,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         self.fc = nn.ModuleDict({
             name: nn.Linear(hidden_size, dim * patch_size, bias=False) for name, dim in signal_dim.items()
         })
-        self.bias = nn.ModuleDict({
+        self.bias = nn.ParameterDict({
             name: nn.Parameter(torch.zeros(dim * patch_size)) for name, dim in signal_dim.items()
         })
         
