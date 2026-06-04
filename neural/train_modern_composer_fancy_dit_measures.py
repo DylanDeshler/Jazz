@@ -562,7 +562,7 @@ raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
 
 # optimizer
-optimizer = torch.optim.AdamW(model.net.create_optimizer_groups(weight_decay=weight_decay, base_lr=learning_rate, new_lr=learning_rate), betas=(beta1, beta2))
+optimizer = torch.optim.AdamW(model.net.create_optimizer_groups(weight_decay=weight_decay, lr=learning_rate), betas=(beta1, beta2))
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
 checkpoint = None # free up memory
