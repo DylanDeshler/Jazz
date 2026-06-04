@@ -39,7 +39,6 @@ from adapter import InvertibleAdapter
 import soundfile as sf
 
 import torch
-import pyrubberband as pyrb
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
