@@ -132,9 +132,9 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
-with open('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_train_map.json') as f:
+with open('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_train_map.json', 'r', encoding='utf-8') as f:
     train_map = json.load(f)
-with opne('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_val_map.json') as f:
+with open('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_val_map.json', 'r', encoding='utf-8') as f:
     val_map = json.load(f)
 train_paths = list(train_map.keys())
 val_paths = list(val_map.keys())
