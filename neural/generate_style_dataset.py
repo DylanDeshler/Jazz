@@ -47,19 +47,19 @@ with open('/data/valid_files_by_bpm.json', 'r') as f:
 paths = [os.path.join('/data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
 print(f"Total valid files: {len(paths)}")
 
-wavs = [None] * len(paths)
+# wavs = [None] * len(paths)
 
-# Load wavs concurrently
-with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
-    future_to_index = {
-        executor.submit(lambda x: librosa.load(x, sr=rate)[0], path): i 
-        for i, path in enumerate(paths)
-    }
+# # Load wavs concurrently
+# with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
+#     future_to_index = {
+#         executor.submit(lambda x: librosa.load(x, sr=rate)[0], path): i 
+#         for i, path in enumerate(paths)
+#     }
     
-    for future in tqdm(concurrent.futures.as_completed(future_to_index), desc='Loading wav files', total=len(paths)):
-        original_index = future_to_index[future]
-        wav = future.result()
-        wavs[original_index] = wav
+#     for future in tqdm(concurrent.futures.as_completed(future_to_index), desc='Loading wav files', total=len(paths)):
+#         original_index = future_to_index[future]
+#         wav = future.result()
+#         wavs[original_index] = wav
 
 def parse_beat_file(beat_path):
     beat_data = []
@@ -88,7 +88,8 @@ write_paths = []
 all_styles = []
 
 with torch.no_grad():
-    for idx, wav in enumerate(tqdm(wavs, desc="Extracting Styles")):    
+    for idx, path in enumerate(tqdm(paths, desc="Extracting Styles")):
+        wav, _ = librosa.load(path, sr=rate)
         beat_path = os.path.join('/data/beats', os.path.basename(paths[idx]))
         beat_data = parse_beat_file(beat_path)
         downbeat_indices = [i for i, b in enumerate(beat_data) if b['beat'] == 1]
