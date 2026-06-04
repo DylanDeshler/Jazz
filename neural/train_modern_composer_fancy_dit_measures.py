@@ -71,6 +71,7 @@ n_chunks = 192
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
 n_style_embeddings = 256
+n_text_tokens = 256
 style_dim = 128
 signal_dim = {'style': style_dim, 'chroma': 12, 'rms': 1, 'density': 1, 'zcr': 1, 'flatness': 1, 'bpm': 768}
 weights = {k: 1 for k in signal_dim.keys()}
@@ -138,8 +139,8 @@ with open('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness
     train_map = json.load(f)
 with open('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_val_map.json', 'r', encoding='utf-8') as f:
     val_map = json.load(f)
-train_paths = list(train_map.keys())
-val_paths = list(val_map.keys())
+train_paths = list(train_map.keys())[:21030]
+val_paths = list(val_map.keys())[:21030]
 print(f'Found {len(train_paths)} train paths and {len(val_paths)} val paths')
 
 def get_batch(split='train', batch_size=batch_size):
@@ -175,7 +176,7 @@ def get_batch(split='train', batch_size=batch_size):
     #     styles.append(np.pad(style[start:stop], (0, n_chunks - (stop - start)), mode='constant', constant_values=style[stop]))
         
     # likely require text augmentation (more caption variants) to reduce overfitting
-    text = torch.from_numpy(np.stack([data[i] for i in song_idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    text = torch.from_numpy(np.stack([data[i, :n_text_tokens] for i in song_idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     
     style = torch.from_numpy(style[idx_matrix]).pin_memory().to(device, non_blocking=True)
     
@@ -256,7 +257,7 @@ dit.load_state_dict(state_dict)
 dit.eval()
 del state_dict
 
-model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, n_text_tokens=256, spatial_window=spatial_window, signal_dim=signal_dim, use_null_token=use_null_token, gradient_checkpointing=gradient_checkpointing, patch_size=patch_size, drop_path_rate=drop_path_rate, weights=weights)
+model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, n_text_tokens=n_text_tokens, spatial_window=spatial_window, signal_dim=signal_dim, use_null_token=use_null_token, gradient_checkpointing=gradient_checkpointing, patch_size=patch_size, drop_path_rate=drop_path_rate, weights=weights)
 
 class EMAModel:
     def __init__(self, model, decay=0.9999):
