@@ -142,13 +142,16 @@ train_paths = list(train_map.keys())
 val_paths = list(val_map.keys())
 
 def get_batch(split='train', batch_size=batch_size):
+    data = np.memmap('/data/binaries/caption_embeddings.bin', dtype=np.float32, mode='r', shape=(21030, 3, 256, 1024))
     if split == 'train':
-        data = np.memmap('/data/binaries/caption_embeddings.bin', dtype=np.float32, mode='r', shape=(3941406, 3, 256, 1024))
+        paths = np.random.choice(train_paths, size=batch_size)
+        print(train_map[paths[0]])
         style = np.memmap('/data/binaries/contrast_learntmep_instance_10s_style_train.bin', dtype=np.float32, mode='r', shape=(3941406, style_dim))
         meta = np.memmap('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_train.bin', dtype=np.float32, mode='r', shape=(3941406, 16))
         bpms = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_bpm_train.bin', dtype=np.float32, mode='r')
     else:
-        data = np.memmap('/data/binaries/caption_embeddings.bin', dtype=np.float32, mode='r', shape=(88303, 3, 256, 1024))
+        paths = np.random.choice(val_paths, size=batch_size)
+        print(val_map[paths[0]])
         style = np.memmap('/data/binaries/contrast_learntmep_instance_10s_style_val.bin', dtype=np.float32, mode='r', shape=(88303, style_dim))
         meta = np.memmap('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_val.bin', dtype=np.float32, mode='r', shape=(88303, 16))
         bpms = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_bpm_val.bin', dtype=np.float32, mode='r')
