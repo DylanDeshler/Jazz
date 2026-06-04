@@ -2248,6 +2248,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         self.gradient_checkpointing = gradient_checkpointing
         max_input_size = spatial_window * n_chunks + n_text_tokens
         self.patch_size = patch_size
+        self.signal_dim = signal_dim
 
         self.balancer = GradientBalancer(weights=weights)
         
