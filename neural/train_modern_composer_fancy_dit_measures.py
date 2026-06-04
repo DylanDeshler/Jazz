@@ -214,7 +214,7 @@ adapter.eval()
 del state_dict
 max_adapter_len = adapter.max_seq_len
 
-ckpt_path = os.path.join(out_dir.replace('Composer', ''), 'ckpt.pt')
+ckpt_path = os.path.join('Stage2_MetaConditionalModernDiTV2_smedium_24576_subset_adapter_longtrain_24chunks', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 dit_args = checkpoint['model_args']
 
