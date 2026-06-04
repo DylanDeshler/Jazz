@@ -180,7 +180,7 @@ def get_batch(split='train', batch_size=batch_size):
     bpm = torch.from_numpy(bpms[idx_matrix]).unsqueeze(-1).pin_memory().to(device, non_blocking=True)
     
     
-    print(style.shape, chroma.shape, bpm.shape)
+    print(style.shape, chroma.shape, rms.shape, bpm.shape)
     
     x = torch.cat([style, chroma, rms, density, zcr, flatness, bpm], dim=-1)
     
