@@ -179,8 +179,14 @@ def get_batch(split='train', batch_size=batch_size):
     text = torch.from_numpy(np.stack([data[i, :n_text_tokens] for i in song_idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     
     style = torch.from_numpy(style[idx_matrix]).pin_memory().to(device, non_blocking=True)
+    chroma = torch.from_numpy(meta[idx_matrix, :12]).pin_memory().to(device, non_blocking=True)
+    rms = torch.from_numpy(meta[idx_matrix, 12]).pin_memory().to(device, non_blocking=True)
+    density = torch.from_numpy(meta[idx_matrix, 13]).pin_memory().to(device, non_blocking=True)
+    zcr = torch.from_numpy(meta[idx_matrix, 14]).pin_memory().to(device, non_blocking=True)
+    flatness = torch.from_numpy(meta[idx_matrix, 15]).pin_memory().to(device, non_blocking=True)
+    bpm = torch.from_numpy(bpms[idx_matrix]).pin_memory().to(device, non_blocking=True)
     
-    print(text.shape, style.shape)
+    print(text.shape, style.shape, chroma.shape, bpm.shape)
     
     # # maybe apply augmentation but seems risky...
     # style = torch.from_numpy(np.stack([style[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
