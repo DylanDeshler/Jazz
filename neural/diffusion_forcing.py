@@ -2341,13 +2341,13 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         # bpm = x['bpm']
         
         x = x.squeeze(2)
-        style = x[:, :128]
-        chroma = x[:, 128:128+12]
-        rms = x[:, 128+12]
-        density = x[:, 128+13]
-        zcr = x[:, 128+14]
-        flatness = x[:, 128+15]
-        bpm = x[:, 128+16]
+        style = x[..., :128]
+        chroma = x[..., 128:128+12]
+        rms = x[..., 128+12]
+        density = x[..., 128+13]
+        zcr = x[..., 128+14]
+        flatness = x[..., 128+15]
+        bpm = x[..., 128+16]
         
         B, T = t.shape
         
@@ -2379,7 +2379,8 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
                 text = torch.where(unconditional_mask['text'], null_tokens['text'], text)
         
         # prepend x with text
-        x = torch.cat([chroma, rms, density, zcr, flatness], dim=-1)
+        print(chroma.shape, rms.shape, density.shape)
+        x = torch.cat([chroma, rms.unsqueeze(-1), density, zcr, flatness], dim=-1)
         x = rearrange(x, 'b t n c -> (b t) c n')
         x = self.local_embedder(x)
         bpm = self.bpm_embedder(bpm)
