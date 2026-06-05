@@ -2283,21 +2283,6 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         })
         
         self.register_buffer('freqs_cis',  precompute_freqs_cis(hidden_size // num_heads, max_input_size))
-        self.register_buffer('chroma_mean', torch.tensor([
-            0.45533183, 0.39680213, 0.44615716, 0.42044115, 0.40855545, 0.45450154, 0.3971631, 0.496346, 0.44164586, 0.4416672, 0.44793198, 0.39493898
-        ]))
-        self.register_buffer('chroma_std', torch.tensor([
-            0.18241853, 0.16477719, 0.18014704, 0.18011539, 0.1677363, 0.18919244, 0.16196373, 0.19185093, 0.18003348, 0.1768027, 0.18706752, 0.1618064
-        ]))
-        self.register_buffer('rms_mean', torch.tensor([3.2653894]))
-        self.register_buffer('rms_std', torch.tensor([3.597796]))
-        self.register_buffer('density_mean', torch.tensor([2.5229013]))
-        self.register_buffer('density_std', torch.tensor([1.230155]))
-        self.register_buffer('zcr_mean', torch.tensor([0.10766766]))
-        self.register_buffer('zcr_std', torch.tensor([0.048143145]))
-        self.register_buffer('flatness_mean', torch.tensor([0.011151944]))
-        self.register_buffer('flatness_std', torch.tensor([0.018700112]))
-        
         self.initialize_weights()
     
     def create_optimizer_groups(self, weight_decay=1e-2, lr=1e-4):
@@ -2360,12 +2345,6 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         zcr = x[:, 128+14]
         flatness = x[:, 128+15]
         bpm = x[:, 128+16].squeeze(-1)
-        
-        rms = (rms - self.rms_mean) / self.rms_std
-        density = (density - self.density_mean) / self.density_std
-        zcr = (zcr - self.zcr_mean) / self.zcr_std
-        flatness = (flatness - self.flatness_mean) / self.flatness_std
-        chroma = (chroma - self.chroma_mean) / self.chroma_std
         
         B, T = t.shape
         

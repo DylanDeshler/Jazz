@@ -143,6 +143,21 @@ train_paths = list(train_map.keys())[:21030]
 val_paths = list(val_map.keys())[:21030]
 print(f'Found {len(train_paths)} train paths and {len(val_paths)} val paths')
 
+chroma_mean = torch.tensor([
+    0.45533183, 0.39680213, 0.44615716, 0.42044115, 0.40855545, 0.45450154, 0.3971631, 0.496346, 0.44164586, 0.4416672, 0.44793198, 0.39493898
+])
+chroma_std = torch.tensor([
+    0.18241853, 0.16477719, 0.18014704, 0.18011539, 0.1677363, 0.18919244, 0.16196373, 0.19185093, 0.18003348, 0.1768027, 0.18706752, 0.1618064
+])
+rms_mean = torch.tensor([3.2653894])
+rms_std = torch.tensor([3.597796])
+density_mean = torch.tensor([2.5229013])
+density_std = torch.tensor([1.230155])
+zcr_mean = torch.tensor([0.10766766])
+zcr_std = torch.tensor([0.048143145])
+flatness_mean = torch.tensor([0.011151944])
+flatness_std = torch.tensor([0.018700112])
+
 def get_batch(split='train', batch_size=batch_size):
     data = np.memmap('/data/binaries/caption_embeddings.bin', dtype=np.float32, mode='r', shape=(21030, 3, 256, 1024))
     if split == 'train':
@@ -179,10 +194,15 @@ def get_batch(split='train', batch_size=batch_size):
     flatness = torch.from_numpy(meta[idx_matrix, 15]).pin_memory().to(device, non_blocking=True)
     bpm = torch.from_numpy(bpms[idx_matrix]).unsqueeze(-1).pin_memory().to(device, non_blocking=True)
     
+    rms = (rms - rms_mean) / rms_std
+    density = (density - density_mean) / density_std
+    zcr = (zcr - zcr_mean) / zcr_std
+    flatness = (flatness - flatness_mean) / flatness_std
+    chroma = (chroma - chroma_mean) / chroma_std
     
     print(style.shape, chroma.shape, rms.shape, bpm.shape)
     
-    x = torch.cat([style, chroma, rms, density, zcr, flatness, bpm], dim=-1)
+    x = torch.cat([style, chroma, rms.unsqueeze(-1), density.unsqueeze(-1), zcr.unsqueeze(-1), flatness.unsqueeze(-1), bpm.unsqueeze(-1)], dim=-1)
     
     print(x.shape)
     
