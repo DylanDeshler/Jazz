@@ -291,6 +291,7 @@ if init_from == 'scratch':
     model = net(**model_args)
     model.net.bpm_embedder.load_state_dict(dit.net.bpm_embedder.state_dict())
     model.net.bpm_embedder.requires_grad_(False)
+    model.net.null_text = torch.from_numpy(np.memmap('/data/binaries/caption_embeddings.bin', dtype=np.float32, mode='r', shape=(21030, 3, 256, 1024))[-1, -1])
     tokens_trained = 0
     
     ema = EMAModel(model)

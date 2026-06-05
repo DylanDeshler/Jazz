@@ -2237,6 +2237,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
                  depth=12,
                  mlp_ratio=4,
                  gradient_checkpointing=False,
+                 use_null_token=False,
                  patch_size=1,
                  drop_path_rate=0.1,
                  signal_dim = {},
@@ -2249,6 +2250,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         max_input_size = spatial_window * n_chunks + n_text_tokens
         self.patch_size = patch_size
         self.signal_dim = signal_dim
+        self.use_null_token = use_null_token
 
         self.balancer = GradientBalancer(weights=weights)
         
