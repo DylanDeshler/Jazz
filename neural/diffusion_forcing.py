@@ -2380,7 +2380,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         
         # prepend x with text
         print(chroma.shape, rms.shape, density.shape)
-        x = torch.cat([chroma, rms.unsqueeze(-1), density, zcr, flatness], dim=-1)
+        x = torch.cat([chroma, rms, density, zcr, flatness], dim=-1)
         x = rearrange(x, 'b t n c -> (b t) c n')
         x = self.local_embedder(x)
         bpm = self.bpm_embedder(bpm)
