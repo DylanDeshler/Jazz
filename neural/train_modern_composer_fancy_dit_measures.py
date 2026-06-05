@@ -201,7 +201,7 @@ def get_batch(split='train', batch_size=batch_size):
     chroma = (chroma - chroma_mean) / chroma_std
     
     x = torch.cat([style, chroma, rms.unsqueeze(-1), density.unsqueeze(-1), zcr.unsqueeze(-1), flatness.unsqueeze(-1), bpm.unsqueeze(-1)], dim=-1).unsqueeze(2)
-    
+    print(x.shape)
     # x = {
     #     'style': style,
     #     'chroma': chroma,
