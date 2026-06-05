@@ -145,18 +145,18 @@ print(f'Found {len(train_paths)} train paths and {len(val_paths)} val paths')
 
 chroma_mean = torch.tensor([
     0.45533183, 0.39680213, 0.44615716, 0.42044115, 0.40855545, 0.45450154, 0.3971631, 0.496346, 0.44164586, 0.4416672, 0.44793198, 0.39493898
-])
+]).to(device)
 chroma_std = torch.tensor([
     0.18241853, 0.16477719, 0.18014704, 0.18011539, 0.1677363, 0.18919244, 0.16196373, 0.19185093, 0.18003348, 0.1768027, 0.18706752, 0.1618064
-])
-rms_mean = torch.tensor([3.2653894])
-rms_std = torch.tensor([3.597796])
-density_mean = torch.tensor([2.5229013])
-density_std = torch.tensor([1.230155])
-zcr_mean = torch.tensor([0.10766766])
-zcr_std = torch.tensor([0.048143145])
-flatness_mean = torch.tensor([0.011151944])
-flatness_std = torch.tensor([0.018700112])
+]).to(device)
+rms_mean = torch.tensor([3.2653894]).to(device)
+rms_std = torch.tensor([3.597796]).to(device)
+density_mean = torch.tensor([2.5229013]).to(device)
+density_std = torch.tensor([1.230155]).to(device)
+zcr_mean = torch.tensor([0.10766766]).to(device)
+zcr_std = torch.tensor([0.048143145]).to(device)
+flatness_mean = torch.tensor([0.011151944]).to(device)
+flatness_std = torch.tensor([0.018700112]).to(device)
 
 def get_batch(split='train', batch_size=batch_size):
     data = np.memmap('/data/binaries/caption_embeddings.bin', dtype=np.float32, mode='r', shape=(21030, 3, 256, 1024))
