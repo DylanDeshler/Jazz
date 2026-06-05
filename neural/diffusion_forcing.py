@@ -2331,7 +2331,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         elif isinstance(module, nn.Embedding):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
-    def forward(self, x, t, text):
+    def forward(self, x, t, text, unconditional_mask=None):
         # style = x['style']
         # chroma = x['chroma']
         # rms = x['rms']
