@@ -2343,11 +2343,11 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         x = x.squeeze(2)
         style = x[..., :128]
         chroma = x[..., 128:128+12]
-        rms = x[..., 128+12]
-        density = x[..., 128+13]
-        zcr = x[..., 128+14]
-        flatness = x[..., 128+15]
-        bpm = x[..., 128+16]
+        rms = x[..., [128+12]]
+        density = x[..., [128+13]]
+        zcr = x[..., [128+14]]
+        flatness = x[..., [128+15]]
+        bpm = x[..., [128+16]]
         
         B, T = t.shape
         
