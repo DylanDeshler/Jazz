@@ -59,7 +59,7 @@ wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 1
+gradient_accumulation_steps = 2
 batch_size = 128
 TARGET_SIG = 4
 TARGET_BPM = 60 * TARGET_SIG / (24576 / 16000)
@@ -585,51 +585,51 @@ while True:
     tokens_trained += batch_size * gradient_accumulation_steps * max_seq_len
 
     # evaluate the loss on train/val sets and write checkpoints
-    if iter_num % eval_interval == 0 and master_process:
-        # if iter_num % sample_interval == 0 and master_process:
-        #     with ctx:
-        #         save_samples(iter_num)
+    # if iter_num % eval_interval == 0 and master_process:
+    #     # if iter_num % sample_interval == 0 and master_process:
+    #     #     with ctx:
+    #     #         save_samples(iter_num)
             
-        losses = estimate_loss()
-        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+    #     losses = estimate_loss()
+    #     print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         
-        if wandb_log and not (init_from == 'resume' and local_iter_num == 0):
-            wandb.log({
-                "iter": iter_num,
-                "train/loss": losses['train'],
-                "val/loss": losses['val'],
-                "lr": lr,
-                "mfu": running_mfu*100, # convert to percentage
-                "tokens": tokens_trained,
-            })
-        if iter_num > 0 and losses['val'] < best_val_loss:
-            best_val_loss = losses['val']
-            checkpoint = {
-                'model': raw_model.state_dict(),
-                'optimizer': optimizer.state_dict(),
-                'model_args': model_args,
-                'iter_num': iter_num,
-                'val_loss': best_val_loss,
-                'best_val_loss': best_val_loss,
-                'config': config,
-                'tokens': tokens_trained,
-                'ema': ema.ema_model.state_dict(),
-            }
-            torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
-            print(f"saving new best checkpoint to {out_dir}")
-        if iter_num > 0 and always_save_checkpoint:
-            checkpoint = {
-                'model': raw_model.state_dict(),
-                'optimizer': optimizer.state_dict(),
-                'model_args': model_args,
-                'iter_num': iter_num,
-                'val_loss': losses['val'],
-                'best_val_loss': best_val_loss,
-                'config': config,
-                'tokens': tokens_trained,
-                'ema': ema.ema_model.state_dict(),
-            }
-            torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
+    #     if wandb_log and not (init_from == 'resume' and local_iter_num == 0):
+    #         wandb.log({
+    #             "iter": iter_num,
+    #             "train/loss": losses['train'],
+    #             "val/loss": losses['val'],
+    #             "lr": lr,
+    #             "mfu": running_mfu*100, # convert to percentage
+    #             "tokens": tokens_trained,
+    #         })
+    #     if iter_num > 0 and losses['val'] < best_val_loss:
+    #         best_val_loss = losses['val']
+    #         checkpoint = {
+    #             'model': raw_model.state_dict(),
+    #             'optimizer': optimizer.state_dict(),
+    #             'model_args': model_args,
+    #             'iter_num': iter_num,
+    #             'val_loss': best_val_loss,
+    #             'best_val_loss': best_val_loss,
+    #             'config': config,
+    #             'tokens': tokens_trained,
+    #             'ema': ema.ema_model.state_dict(),
+    #         }
+    #         torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+    #         print(f"saving new best checkpoint to {out_dir}")
+    #     if iter_num > 0 and always_save_checkpoint:
+    #         checkpoint = {
+    #             'model': raw_model.state_dict(),
+    #             'optimizer': optimizer.state_dict(),
+    #             'model_args': model_args,
+    #             'iter_num': iter_num,
+    #             'val_loss': losses['val'],
+    #             'best_val_loss': best_val_loss,
+    #             'config': config,
+    #             'tokens': tokens_trained,
+    #             'ema': ema.ema_model.state_dict(),
+    #         }
+    #         torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
     
     if eval_only:
         break
