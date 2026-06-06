@@ -199,6 +199,7 @@ def get_batch(split='train', batch_size=batch_size):
     zcr = (zcr - zcr_mean) / zcr_std
     flatness = (flatness - flatness_mean) / flatness_std
     chroma = (chroma - chroma_mean) / chroma_std
+    bpm = dit.net.bpm_embedder(torch.clamp(torch.round(bpm), min=0, max=349).long())
     
     x = torch.cat([style, chroma, rms.unsqueeze(-1), density.unsqueeze(-1), zcr.unsqueeze(-1), flatness.unsqueeze(-1), bpm.unsqueeze(-1)], dim=-1).unsqueeze(2)
     print('inputs: ', x.shape, text.shape)
@@ -280,8 +281,8 @@ if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
     model = net(**model_args)
-    model.net.bpm_embedder.load_state_dict(dit.net.bpm_embedder.state_dict())
-    model.net.bpm_embedder.requires_grad_(False)
+    # model.net.bpm_embedder.load_state_dict(dit.net.bpm_embedder.state_dict())
+    # model.net.bpm_embedder.requires_grad_(False)
     model.net.null_text = torch.from_numpy(np.memmap('/data/binaries/caption_embeddings.bin', dtype=np.float32, mode='r', shape=(21030, 3, 256, 1024))[-1, -1].copy())
     tokens_trained = 0
     

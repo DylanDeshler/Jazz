@@ -2379,7 +2379,6 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
         self.local_embedder = Patcher(16, hidden_size, patch_size=patch_size, bias=True)
         self.style_embedder = nn.Linear(style_dim, hidden_size, bias=True)
-        self.bpm_embedder = nn.Embedding(350, hidden_size)
         self.text_embedder = nn.Sequential(nn.LayerNorm(1024), nn.Linear(1024, hidden_size, bias=True))
         
         self.pooler = PerceiverTokenPooler(hidden_size, num_heads, mlp_ratio)
@@ -2466,7 +2465,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         density = x[..., [128+13]]
         zcr = x[..., [128+14]]
         flatness = x[..., [128+15]]
-        bpm = x[..., 128+16]
+        bpm = x[..., 128+16:128+16+768]
         
         # text null token is embedding of empty string
         if self.use_null_token:
@@ -2498,7 +2497,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         x = torch.cat([chroma, rms, density, zcr, flatness], dim=-1)
         print(x.shape)
         x = self.local_embedder(x.transpose(1, 2)).transpose(1, 2)
-        bpm = self.bpm_embedder(torch.clamp(torch.round(bpm), min=0, max=349).long())
+        # bpm = self.bpm_embedder(torch.clamp(torch.round(bpm), min=0, max=349).long())
         style = self.style_embedder(style)
         x = self.pooler([x, bpm, style]) + self.audio_embed
         print(x.shape)
@@ -2539,7 +2538,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
             print(features.shape)
             out[name] = features
         
-        out = torch.cat(list(out.values()), dim=-1)
+        out = torch.cat(list(out.values()), dim=-1).unsqueeze(2)
         print(out.shape)
         return out
 
