@@ -2463,7 +2463,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         x = torch.cat([text, x], dim=1)
         print(x.shape)
         
-        t = t + text.mean(dim=1) # mean pool text for global embedder
+        t = t + text.mean(dim=1, keepdims=True) # mean pool text for global embedder
         t0 = self.t_block(t)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
