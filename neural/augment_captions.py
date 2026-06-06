@@ -136,11 +136,13 @@ def main():
         "properties": {"selected": {"type": "array", "items": {"type": "string"}, "minItems": NUM_SELECTIONS, "maxItems": NUM_SELECTIONS}},
         "required": ["selected"]
     }
+    
     select_params = SamplingParams(
         temperature=0.0,
         max_tokens=8192,
         structured_outputs=StructuredOutputsParams(json=json.dumps(select_schema))
     )
+    
     outputs = llm.generate(select_prompts, select_params)
 
     print("Parsing outputs and writing to disk...")
@@ -153,13 +155,13 @@ def main():
             for key in ["short_caption", "medium_caption", "long_caption"]:
                 ref_text = llm_output.get(key, "")
                 try:
-                    selected_vars = json.loads(outputs[final_idx].outputs[0].text).get("selected", [])
+                    selected_vars = json.loads(outputs[out_idx].outputs[0].text).get("selected", [])
                 except Exception:
                     selected_vars = [ref_text] * NUM_SELECTIONS
                 
                 # Prepend the reference token to build the final list format
                 captions_data[key] = [ref_text] + selected_vars
-                final_idx += 1
+                out_idx += 1
             
             new_item = {
                 "file_path": item.get("file_path", ""),
