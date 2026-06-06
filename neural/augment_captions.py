@@ -11,18 +11,6 @@ OUTPUT_JSONL = "/home/dylandeshler/Jazz/preprocess/final_llm_captions_expanded.j
 MODEL_ID = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 NUM_VARIATIONS = 5
 
-def shuffle_short_tags(tag_string, num_variations=5):
-    """Instantly shuffles comma-separated tags using pure Python."""
-    tags = [t.strip() for t in tag_string.split(',') if t.strip()]
-    if not tags:
-        return [tag_string] * num_variations
-        
-    variations = []
-    for _ in range(num_variations):
-        random.shuffle(tags)
-        variations.append(", ".join(tags))
-    return variations
-
 def build_prompt(caption):
     """Formats the prompt using Llama 3's native chat template."""
     return (
@@ -49,6 +37,11 @@ def main():
     # Extract medium and long captions to process in one massive batch
     prompts = []
     for item in data:
+        item = item.get('llm_output', [])
+        if isinstance(item, list):
+            print('skipping bad data')
+            continue
+            
         prompts.append(build_prompt(item.get("short_caption", "")))
         prompts.append(build_prompt(item.get("medium_caption", "")))
         prompts.append(build_prompt(item.get("long_caption", "")))
