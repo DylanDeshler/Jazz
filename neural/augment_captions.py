@@ -49,8 +49,10 @@ def main():
     # Extract medium and long captions to process in one massive batch
     prompts = []
     for item in data:
-        prompts.append(build_prompt(item.get("medium", "")))
-        prompts.append(build_prompt(item.get("long", "")))
+        prompts.append(build_prompt(item.get("short_caption", "")))
+        prompts.append(build_prompt(item.get("medium_caption", "")))
+        prompts.append(build_prompt(item.get("long_caption", "")))
+        print(prompts[:-3])
 
     print("Initializing vLLM Engine...")
     # gpu_memory_utilization=0.95 allocates almost all your 46GB to the engine.
@@ -97,7 +99,7 @@ def main():
             # 1. Handle Short (LLM Output)
             try:
                 short_json = json.loads(outputs[out_idx].outputs[0].text)
-                new_item["short_caption"] = med_json.get("variations", [item.get("short_caption")] * NUM_VARIATIONS)
+                new_item["short_caption"] = short_json.get("variations", [item.get("short_caption")] * NUM_VARIATIONS)
             except json.JSONDecodeError:
                 new_item["short_caption"] = [item.get("short_caption")] * NUM_VARIATIONS # Fallback on failure
             out_idx += 1
