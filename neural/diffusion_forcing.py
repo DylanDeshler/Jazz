@@ -2445,7 +2445,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         print(x.shape)
         x = rearrange(x, 'b t c -> b c t')
         x = self.local_embedder(x)
-        bpm = self.bpm_embedder(bpm)
+        bpm = self.bpm_embedder(bpm.long())
         style = self.style_embedder(style)
         x = self.pooler([x, bpm, style]) + self.audio_embed
         print(x.shape)
