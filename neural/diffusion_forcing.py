@@ -763,6 +763,7 @@ class DiTAirBlock(nn.Module):
         B, T, C = t.shape
         
         biases = self.scale_shift_table[None] + t.reshape(x.size(0), T, 6, -1)
+        print(biases.shape)
         (
             shift_msa_T,
             scale_msa_T,
@@ -2311,6 +2312,10 @@ class PerceiverTokenPooler(nn.Module):
         """
         B, T, C = signals[0].shape
         M = len(signals)
+        
+        print('signals')
+        for signal in signals:
+            print(signal.shape)
             
         stacked = torch.stack(signals, dim=1).permute(0, 2, 1, 3)
         
