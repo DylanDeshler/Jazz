@@ -79,12 +79,6 @@ def main():
         gen_prompts.append(build_generation_prompt(llm_output.get("short_caption", "")))
         gen_prompts.append(build_generation_prompt(llm_output.get("medium_caption", "")))
         gen_prompts.append(build_generation_prompt(llm_output.get("long_caption", "")))
-
-    pool_schema = {
-        "type": "object",
-        "properties": {"variations": {"type": "array", "items": {"type": "string"}, "minItems": NUM_VARIATIONS, "maxItems": NUM_VARIATIONS}},
-        "required": ["variations"]
-    }
     
     print("Initializing vLLM Engine...")
     llm = LLM(
@@ -94,7 +88,6 @@ def main():
         gpu_memory_utilization=0.95, 
     )
 
-    # Force the LLM to output our exact JSON structure using guided decoding
     json_schema = {
         "type": "object",
         "properties": {
@@ -116,7 +109,7 @@ def main():
     )
 
     print("Generating variations...")
-    outputs = llm.generate(prompts, sampling_params)
+    outputs = llm.generate(gen_prompts, sampling_params)
     
     print("Stage 2: Preparing verification prompts...")
     select_prompts = []
@@ -140,7 +133,7 @@ def main():
     print("Stage 2: Running LLM-as-a-Judge downselection...")
     select_schema = {
         "type": "object",
-        "properties": {"selected": {"type": "array", "items": {"type": "string"}, "minItems": TARGET_COUNT, "maxItems": TARGET_COUNT}},
+        "properties": {"selected": {"type": "array", "items": {"type": "string"}, "minItems": NUM_SELECTIONS, "maxItems": NUM_SELECTIONS}},
         "required": ["selected"]
     }
     select_params = SamplingParams(
