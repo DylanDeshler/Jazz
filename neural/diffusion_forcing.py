@@ -2260,19 +2260,22 @@ class PerceiverTokenPooler(nn.Module):
             pooled_token: A tensor of shape (batch_size, 1, d_model) representing 
                           the single fused token for your DiT.
         """
-        batch_size = signals[0].shape[0]
+        B, T, C = signals[0].shape
+        M = len(signals)
         
         print('signals')
         for signal in signals:
             print(signal.shape)
+            
+        stacked = torch.stack(signals, dim=1).permute(0, 2, 1, 3)
         
         # Step 1: Concatenate all signals along the sequence dimension (dim=1)
         # This creates a "bag of features" of shape (batch_size, total_M_tokens, d_model)
-        kv_sequence = self.norm1(torch.cat(signals, dim=1))
+        kv_sequence = self.norm1(stacked.reshape(B * T, M, C))
         
         # Step 2: Prepare the single Query token for the batch
         # Expand the learned latent token from (1, 1, d_model) to (batch_size, 1, d_model)
-        q = self.norm2(self.latents.unsqueeze(0).unsqueeze(0).expand(batch_size, -1, -1))
+        q = self.norm2(self.latents.unsqueeze(0).unsqueeze(0).expand(B * T, -1, -1))
         
         # Step 3: Perform Cross-Attention
         # Query comes from our learned latent. Keys/Values come from the combined signals.
@@ -2288,6 +2291,7 @@ class PerceiverTokenPooler(nn.Module):
         
         # Step 5: Feed-Forward Network block
         x = x + self.mlp(self.norm3(x))
+        x = x.reshape(B, T, C)
         
         return x
 
@@ -2408,7 +2412,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         density = x[..., [128+13]]
         zcr = x[..., [128+14]]
         flatness = x[..., [128+15]]
-        bpm = x[..., [128+16]]
+        bpm = x[..., 128+16]
         
         B, T = t.shape
         
@@ -2445,11 +2449,11 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         print(x.shape)
         x = rearrange(x, 'b t c -> b c t')
         x = self.local_embedder(x)
+        x = rearrange(x, 'b c t -> b t c', b=B, t=T)
         bpm = self.bpm_embedder(torch.clamp(torch.round(bpm), min=0, max=349).long())
         style = self.style_embedder(style)
         x = self.pooler([x, bpm, style]) + self.audio_embed
         print(x.shape)
-        x = rearrange(x, 'b c t -> b t c', b=B, t=T)
         
         text = self.text_embedder(text) + self.text_embed
         x = torch.cat([text, x], dim=1)
