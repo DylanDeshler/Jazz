@@ -2317,6 +2317,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         super().__init__()
         self.spatial_window = spatial_window
         self.gradient_checkpointing = gradient_checkpointing
+        self.n_chunks = n_chunks
         max_input_size = spatial_window * n_chunks + n_text_tokens
         self.patch_size = patch_size
         self.signal_dim = signal_dim
@@ -2465,6 +2466,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         
         t = t + text.mean(dim=1, keepdims=True) # mean pool text for global embedder
         t0 = self.t_block(t)
+        print('pool: ', text.mean(dim=1, keepdims=True).shape)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
         for block in self.blocks:
@@ -2475,7 +2477,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         
         out = {}
         for name in self.signal_dim.keys():
-            features = self.balancer(x, name)
+            features = self.balancer(x[:-self.n_chunks], name)
             # SAM Audio does not use a non-linearity on t here
             shift, scale = (self.final_layer_scale_shift_table[name][None, None] + F.silu(t[:, :, None])).chunk(
                 2, dim=2
