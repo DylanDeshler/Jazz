@@ -2525,7 +2525,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         
         out = {}
         for name in self.signal_dim.keys():
-            features = self.balancer(x[-self.n_chunks:], name)
+            features = self.balancer(x, name)
             print(name)
             print(features.shape)
             # SAM Audio does not use a non-linearity on t here
