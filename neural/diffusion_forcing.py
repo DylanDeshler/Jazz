@@ -2458,8 +2458,6 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
     def forward(self, x, t, text, unconditional_mask=None):
-        x = x.squeeze(2)
-        
         print(x.shape)
         style = x[..., :128]
         chroma = x[..., 128:128+12]
@@ -2522,6 +2520,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
                 x = checkpoint(block, x, t0, freqs_cis=freqs_cis, use_reentrant=False)
             else:
                 x = block(x, t0, freqs_cis=freqs_cis)
+        x = x[:, -self.n_chunks:]
         
         out = {}
         for name in self.signal_dim.keys():
@@ -2529,23 +2528,17 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
             print(name)
             print(features.shape)
             # SAM Audio does not use a non-linearity on t here
-            shift_T, scale_T = (self.final_layer_scale_shift_table[name][None] + F.silu(t[:, -self.n_chunks:, None])).chunk(
+            shift, scale = (self.final_layer_scale_shift_table[name][None] + F.silu(t[:, :, None])).chunk(
                 2, dim=2
             )
-            print(shift_T.shape, scale_T.shape)
-            
-            shift = torch.zeros_like(x)
-            shift[:, -T:] = shift_T.squeeze(2)
-            
-            scale = torch.ones_like(x)
-            scale[:, -T:] = scale_T.squeeze(2)
+            print(shift.shape, scale.shape)
             
             features = modulate(self.norm[name](features), shift, scale)
             features = self.fc[name](features) + self.bias[name]
             print(features.shape)
             out[name] = features
         
-        out = torch.cat(list(out.values()), dim=-1).unsqueeze(2)
+        out = torch.cat(list(out.values()), dim=-1)
         print(out.shape)
         return out
 

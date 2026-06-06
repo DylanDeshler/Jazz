@@ -200,7 +200,7 @@ def get_batch(split='train', batch_size=batch_size):
     flatness = (flatness - flatness_mean) / flatness_std
     chroma = (chroma - chroma_mean) / chroma_std
     
-    x = torch.cat([style, chroma, rms.unsqueeze(-1), density.unsqueeze(-1), zcr.unsqueeze(-1), flatness.unsqueeze(-1), bpm.unsqueeze(-1)], dim=-1).unsqueeze(2)
+    x = torch.cat([style, chroma, rms.unsqueeze(-1), density.unsqueeze(-1), zcr.unsqueeze(-1), flatness.unsqueeze(-1), bpm.unsqueeze(-1)], dim=-1)
     print('inputs: ', x.shape, text.shape)
 
     return x, text
