@@ -2458,6 +2458,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         x = self.pooler([x, bpm, style]) + self.audio_embed
         print(x.shape)
         
+        print('text: ', text.shape)
         text = self.text_embedder(text) + self.text_embed
         x = torch.cat([text, x], dim=1)
         print(x.shape)
