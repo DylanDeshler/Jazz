@@ -2262,6 +2262,10 @@ class PerceiverTokenPooler(nn.Module):
         """
         batch_size = signals[0].shape[0]
         
+        print('signals')
+        for signal in signals:
+            print(signal.shape)
+        
         # Step 1: Concatenate all signals along the sequence dimension (dim=1)
         # This creates a "bag of features" of shape (batch_size, total_M_tokens, d_model)
         kv_sequence = self.norm1(torch.cat(signals, dim=1))
