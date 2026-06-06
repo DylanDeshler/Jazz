@@ -201,7 +201,7 @@ def get_batch(split='train', batch_size=batch_size):
     chroma = (chroma - chroma_mean) / chroma_std
     bpm = dit.net.bpm_embedder(torch.clamp(torch.round(bpm), min=0, max=349).long())
     
-    x = torch.cat([style, chroma, rms.unsqueeze(-1), density.unsqueeze(-1), zcr.unsqueeze(-1), flatness.unsqueeze(-1), bpm.unsqueeze(-1)], dim=-1).unsqueeze(2)
+    x = torch.cat([style, chroma, rms.unsqueeze(-1), density.unsqueeze(-1), zcr.unsqueeze(-1), flatness.unsqueeze(-1), bpm], dim=-1).unsqueeze(2)
     print('inputs: ', x.shape, text.shape)
 
     return x, text
