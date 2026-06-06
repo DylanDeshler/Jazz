@@ -28,31 +28,34 @@ def build_prompt(caption):
 
 def main():
     print("Loading dataset...")
-    data = []
+    raw_data = []
     with open(INPUT_JSONL, 'r', encoding='utf-8') as f:
         for line in f:
             if line.strip():
-                data.append(json.loads(line))
+                raw_data.append(json.loads(line))
 
-    data = data[:10]
-    print(f"Loaded {len(data)} items. Preparing prompts...")
+    raw_data = raw_data[:10]
     
-    # Extract medium and long captions to process in one massive batch
-    prompts = []
-    for item in data:
-        item = item.get('llm_output', [])
-        if isinstance(item, list):
+    # NEW: Filter data upfront so data, prompts, and outputs track 1-to-1 perfectly
+    data = []
+    for item in raw_data:
+        llm_output = item.get('llm_output', [])
+        if isinstance(llm_output, list) or llm_output is None:
             print('skipping bad data')
             continue
-            
-        prompts.append(build_prompt(item.get("short_caption", "")))
-        prompts.append(build_prompt(item.get("medium_caption", "")))
-        prompts.append(build_prompt(item.get("long_caption", "")))
-        print(prompts[:-3])
+        data.append(item)
+
+    print(f"Loaded {len(data)} valid items. Preparing prompts...")
+    
+    # Extract short, medium, and long captions
+    prompts = []
+    for item in data:
+        llm_output = item['llm_output']
+        prompts.append(build_prompt(llm_output.get("short_caption", "")))
+        prompts.append(build_prompt(llm_output.get("medium_caption", "")))
+        prompts.append(build_prompt(llm_output.get("long_caption", "")))
 
     print("Initializing vLLM Engine...")
-    # gpu_memory_utilization=0.95 allocates almost all your 46GB to the engine.
-    # The 8B weights take ~16GB, leaving ~28GB for a massive KV Cache = extreme speed.
     llm = LLM(
         model=MODEL_ID,
         dtype="bfloat16",
@@ -81,40 +84,52 @@ def main():
     )
 
     print("Generating variations (this will go very fast)...")
-    # vLLM handles the continuous batching automatically
     outputs = llm.generate(prompts, sampling_params)
-    print(outputs)
 
     print("Parsing outputs and writing to disk...")
-    # Map the linear outputs back to our original dictionary structure
     out_idx = 0
     with open(OUTPUT_JSONL, 'w', encoding='utf-8') as f:
         for item in tqdm(data, desc="Saving"):
-            new_item = {}
+            llm_output = item['llm_output']
             
-            # 1. Handle Short (LLM Output)
+            # Extract references
+            ref_short = llm_output.get("short_caption", "")
+            ref_med = llm_output.get("medium_caption", "")
+            ref_long = llm_output.get("long_caption", "")
+            
+            # 1. Handle Short
             try:
                 short_json = json.loads(outputs[out_idx].outputs[0].text)
-                new_item["short_caption"] = short_json.get("variations", [item.get("short_caption")] * NUM_VARIATIONS)
-            except json.JSONDecodeError:
-                new_item["short_caption"] = [item.get("short_caption")] * NUM_VARIATIONS # Fallback on failure
+                short_vars = short_json.get("variations", [ref_short] * NUM_VARIATIONS)
+            except (json.JSONDecodeError, IndexError):
+                short_vars = [ref_short] * NUM_VARIATIONS
             out_idx += 1
             
-            # 2. Handle Medium (LLM Output)
+            # 2. Handle Medium
             try:
                 med_json = json.loads(outputs[out_idx].outputs[0].text)
-                new_item["medium_caption"] = med_json.get("variations", [item.get("medium_caption")] * NUM_VARIATIONS)
-            except json.JSONDecodeError:
-                new_item["medium_caption"] = [item.get("medium_caption")] * NUM_VARIATIONS # Fallback on failure
+                med_vars = med_json.get("variations", [ref_med] * NUM_VARIATIONS)
+            except (json.JSONDecodeError, IndexError):
+                med_vars = [ref_med] * NUM_VARIATIONS
             out_idx += 1
             
-            # 3. Handle Long (LLM Output)
+            # 3. Handle Long
             try:
                 long_json = json.loads(outputs[out_idx].outputs[0].text)
-                new_item["long_caption"] = long_json.get("variations", [item.get("long_caption")] * NUM_VARIATIONS)
-            except json.JSONDecodeError:
-                new_item["long_caption"] = [item.get("long_caption")] * NUM_VARIATIONS # Fallback on failure
+                long_vars = long_json.get("variations", [ref_long] * NUM_VARIATIONS)
+            except (json.JSONDecodeError, IndexError):
+                long_vars = [ref_long] * NUM_VARIATIONS
             out_idx += 1
+            
+            # NEW: Re-construct original nested structure with the reference as element 0
+            new_item = {
+                "file_path": item.get("file_path", ""),
+                "llm_output": {
+                    "short_caption": [ref_short] + short_vars,
+                    "medium_caption": [ref_med] + med_vars,
+                    "long_caption": [ref_long] + long_vars
+                }
+            }
             
             f.write(json.dumps(new_item) + "\n")
 
