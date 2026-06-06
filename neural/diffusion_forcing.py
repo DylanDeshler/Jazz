@@ -2328,7 +2328,10 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         self.local_embedder = Patcher(16, hidden_size, patch_size=patch_size, bias=True)
         self.style_embedder = nn.Linear(style_dim, hidden_size, bias=True)
         self.bpm_embedder = nn.Embedding(350, hidden_size)
+        self.text_embedder = nn.Sequential(nn.Linear(1024, hidden_size, bias=True), nn.LayerNorm(1024))
+        
         self.pooler = PerceiverTokenPooler(hidden_size, num_heads, mlp_ratio)
+        
         self.text_embed = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
         self.audio_embed = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
         
@@ -2455,7 +2458,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         x = self.pooler([x, bpm, style]) + self.audio_embed
         print(x.shape)
         
-        text = text + self.text_embed
+        text = self.text_embeder(text) + self.text_embed
         x = torch.cat([text, x], dim=1)
         print(x.shape)
         
