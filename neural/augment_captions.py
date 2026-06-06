@@ -79,10 +79,7 @@ def main():
         for line in f:
             if line.strip():
                 raw_data.append(json.loads(line))
-
-    raw_data = raw_data[:50]
     
-    # NEW: Filter data upfront so data, prompts, and outputs track 1-to-1 perfectly
     data = []
     for item in raw_data:
         llm_output = item.get('llm_output', [])
@@ -129,10 +126,9 @@ def main():
         structured_outputs=StructuredOutputsParams(json=json.dumps(json_schema))
     )
 
-    print("Generating variations...")
+    print("Stage 1. Generating variations...")
     outputs = llm.generate(gen_prompts, sampling_params)
     
-    print("Stage 2: Preparing verification prompts...")
     select_prompts = []
     references = []
     out_idx = 0
