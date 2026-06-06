@@ -2319,7 +2319,7 @@ class PerceiverTokenPooler(nn.Module):
         
         # Step 1: Concatenate all signals along the sequence dimension (dim=1)
         # This creates a "bag of features" of shape (batch_size, total_M_tokens, d_model)
-        kv_sequence = self.norm1(stacked.reshape(B * T, M, C))
+        kv_sequence = self.norm1(stacked.contiguous().reshape(B * T, M, C))
         
         # Step 2: Prepare the single Query token for the batch
         # Expand the learned latent token from (1, 1, d_model) to (batch_size, 1, d_model)
