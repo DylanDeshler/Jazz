@@ -774,6 +774,7 @@ class DiTAirBlock(nn.Module):
             scale_mlp_T,
             gate_mlp_T,
         ) = [chunk.squeeze(2) for chunk in biases.chunk(6, dim=-2)]
+        print(x.shape, shift_msa_T.shape)
         
         shift_msa = torch.zeros_like(x)
         shift_msa[:, :-T] = shift_msa_T
