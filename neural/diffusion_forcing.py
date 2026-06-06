@@ -2312,7 +2312,6 @@ class PerceiverTokenPooler(nn.Module):
         B, T, C = signals[0].shape
         M = len(signals)
         
-        print('signals')
         for signal in signals:
             print(signal.shape)
             
