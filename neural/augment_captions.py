@@ -80,7 +80,7 @@ def main():
             if line.strip():
                 raw_data.append(json.loads(line))
 
-    raw_data = raw_data[:10]
+    raw_data = raw_data[:50]
     
     # NEW: Filter data upfront so data, prompts, and outputs track 1-to-1 perfectly
     data = []
