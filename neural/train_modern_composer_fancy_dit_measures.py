@@ -59,8 +59,8 @@ wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 2
-batch_size = 64
+gradient_accumulation_steps = 1
+batch_size = 64 # 128
 TARGET_SIG = 4
 TARGET_BPM = 60 * TARGET_SIG / (24576 / 16000)
 # model
@@ -139,8 +139,8 @@ with open('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness
     train_map = json.load(f)
 with open('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_val_map.json', 'r', encoding='utf-8') as f:
     val_map = json.load(f)
-train_paths = list(train_map.keys())[:21030]
-val_paths = list(val_map.keys())[:21030]
+train_paths = list(train_map.keys())
+val_paths = list(val_map.keys())
 print(f'Found {len(train_paths)} train paths and {len(val_paths)} val paths')
 
 chroma_mean = torch.tensor([
