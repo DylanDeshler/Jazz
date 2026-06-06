@@ -11,19 +11,40 @@ OUTPUT_JSONL = "/home/dylandeshler/Jazz/preprocess/final_llm_captions_expanded.j
 MODEL_ID = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 NUM_VARIATIONS = 5
 
+# def build_prompt(caption):
+#     """Formats the prompt using Llama 3's native chat template."""
+#     return (
+#         "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n"
+#         "You are a strict data augmentation script. You will receive a song caption and produce generations that could be used as prompts to generate a song with the given caption. "
+#         f"Generate exactly {NUM_VARIATIONS} distinct, paraphrased, reworded, reordered variations of this caption. "
+#         "Each generation should roughly match the length of the reference caption. "
+#         "When the reference caption contains BPM or key you MUST maintain at least one of them in your generations, if not both. "
+#         "Do not change the underlying meaning or attributes. "
+#         "Do not add or make up additional details that are not in reference caption. "
+#         "Output ONLY a valid JSON object containing a single key 'variations' which maps to a list of strings."
+#         "<|eot_id|><|start_header_id|>user<|end_header_id|>\n"
+#         f"Caption: {caption}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n"
+#     )
+
 def build_prompt(caption):
-    """Formats the prompt using Llama 3's native chat template."""
     return (
         "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n"
-        "You are a strict data augmentation script. You will receive a song caption and produce generations that could be used as prompts to generate a song with the given caption. "
-        f"Generate exactly {NUM_VARIATIONS} distinct, paraphrased, reworded, reordered variations of this caption. "
-        "Each generation should roughly match the length of the reference caption. "
-        "When the reference caption contains BPM or key you MUST maintain at least one of them in your generations, if not both. "
-        "Do not change the underlying meaning or attributes. "
-        "Do not add or make up additional details that are not in reference caption. "
-        "Output ONLY a valid JSON object containing a single key 'variations' which maps to a list of strings."
+        "You are a strict text augmentation script for music generation prompts. "
+        "Your job is to generate highly diverse, reworded, and structurally reordered variations of a reference caption.\n\n"
+        "CRITICAL RULES:\n"
+        "1. NEVER copy the reference caption verbatim. Every variation must use different phrasing, word orders, or sentence structures.\n"
+        "2. If the reference contains a BPM or Key, you MUST preserve them in every single variation.\n"
+        "3. Keep the overall length and core attributes identical, but change the syntax drastically.\n\n"
+        "EXAMPLE:\n"
+        "Reference: 'A slow lo-fi hip hop beat with a dusty piano chord progression and smooth sax. 80 BPM. Key: C minor.'\n"
+        "Expected Output:\n"
+        '{\n  "variations": [\n'
+        '    "Dusty piano chords and a smooth saxophone at 80 BPM lead this slow-tempo lo-fi hip hop track in C minor.",\n'
+        '    "80 BPM lo-fi hip hop instrumental featuring a smooth sax melody accompanied by a dusty piano progression in C minor.",\n'
+        '    "In C minor, a relaxing and slow lo-fi hip hop groove highlighting smooth saxophone lines over dusty piano chords. 80 BPM."\n'
+        '  ]\n}\n'
         "<|eot_id|><|start_header_id|>user<|end_header_id|>\n"
-        f"Caption: {caption}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n"
+        f"Reference Caption: {caption}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n"
     )
 
 def main():
