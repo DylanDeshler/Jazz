@@ -15,8 +15,9 @@ def build_prompt(caption):
     """Formats the prompt using Llama 3's native chat template."""
     return (
         "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n"
-        "You are a strict data augmentation script. You will receive a song caption. "
+        "You are a strict data augmentation script. You will receive a song caption and produce generations that could be used as prompts to generate a song with the given caption. "
         f"Generate exactly {NUM_VARIATIONS} distinct, paraphrased variations of this caption. "
+        "Each generation should roughly match the length of the reference caption. "
         "Do not change the underlying meaning or attributes. "
         "Output ONLY a valid JSON object containing a single key 'variations' which maps to a list of strings."
         "<|eot_id|><|start_header_id|>user<|end_header_id|>\n"
