@@ -98,9 +98,16 @@ def main():
         "required": ["variations"]
     }
     
+    # sampling_params = SamplingParams(
+    #     temperature=0.7, 
+    #     max_tokens=4096,
+    #     structured_outputs=StructuredOutputsParams(json=json.dumps(json_schema))
+    # )
     sampling_params = SamplingParams(
-        temperature=0.7, 
-        max_tokens=256,
+        temperature=1.0,         # Higher temperature forces token variety
+        top_p=0.95,              # Keeps the output coherent while allowing novel choices
+        presence_penalty=0.3,    # Mathematically penalizes the model for repeating words it already used
+        max_tokens=4096,          # Bumped slightly to ensure it doesn't cut off 5 variations
         structured_outputs=StructuredOutputsParams(json=json.dumps(json_schema))
     )
 
