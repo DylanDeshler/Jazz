@@ -774,7 +774,6 @@ class DiTAirBlock(nn.Module):
             scale_mlp_T,
             gate_mlp_T,
         ) = [chunk.squeeze(2) for chunk in biases.chunk(6, dim=-2)]
-        print(x.shape, shift_msa_T.shape)
         
         shift_msa = torch.zeros_like(x)
         shift_msa[:, -T:] = shift_msa_T
@@ -793,8 +792,6 @@ class DiTAirBlock(nn.Module):
         
         scale_mlp = torch.ones_like(x)
         scale_mlp[:, -T:] = scale_mlp_T
-        
-        print(shift_msa.shape, scale_msa.shape)
         
         x = x + self.drop_path(gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask))
         x = x + self.drop_path(gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp)))
@@ -2531,13 +2528,19 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
             features = self.balancer(x[-self.n_chunks:], name)
             print(features.shape)
             # SAM Audio does not use a non-linearity on t here
-            shift, scale = (self.final_layer_scale_shift_table[name][None] + F.silu(t[:, None])).chunk(
+            shift_T, scale_T = (self.final_layer_scale_shift_table[name][None] + F.silu(t[:, None])).chunk(
                 2, dim=2
             )
-            features = rearrange(features, 'b (t n) c -> b t n c', t=T, n=1 // self.patch_size)
-            features = modulate(self.norm[name](features), shift.expand(-1, -1, 1 // self.patch_size, -1), scale.expand(-1, -1, 1 // self.patch_size, -1))
+            print(shift_T.shape, scale_T.shape)
+            
+            shift = torch.zeros_like(x)
+            shift[:, -T:] = shift_T
+            
+            scale = torch.ones_like(x)
+            scale[:, -T:] = scale_T
+            
+            features = modulate(self.norm[name](features), shift, scale)
             features = self.fc[name](features) + self.bias[name]
-            features = rearrange(features, 'b t n (p c) -> b t (n p) c', p=self.patch_size, c=C)
             out[name] = features
         
         out = torch.cat(list(out.values()), dim=-1)
