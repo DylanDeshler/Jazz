@@ -2458,6 +2458,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
     def forward(self, x, t, text, unconditional_mask=None):
+        x = x.squeeze(2)
         print(x.shape)
         style = x[..., :128]
         chroma = x[..., 128:128+12]
