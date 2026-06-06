@@ -160,6 +160,7 @@ flatness_std = torch.tensor([0.018700112]).to(device)
 
 def get_batch(split='train', batch_size=batch_size):
     data = np.memmap('/data/binaries/caption_embeddings.bin', dtype=np.float32, mode='r', shape=(21030, 3, 256, 1024))
+    caption_idxs = np.random.randint(data.shape[1], size=batch_size)
     if split == 'train':
         song_idxs = np.random.randint(len(train_paths), size=batch_size)
         bounds = np.array([train_map[train_paths[i]] for i in song_idxs])
@@ -183,7 +184,7 @@ def get_batch(split='train', batch_size=batch_size):
     idx_matrix = starts[:, None] + np.arange(n_chunks)
     idx_matrix = np.minimum(idx_matrix, stops[:, None])
     
-    text = torch.from_numpy(np.stack([data[i, :n_text_tokens] for i in song_idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    text = torch.from_numpy(np.stack([data[i, , :n_text_tokens] for i, j in zip(song_idxs, caption_idxs)], axis=0)).pin_memory().to(device, non_blocking=True)
     
     style = torch.from_numpy(style[idx_matrix]).pin_memory().to(device, non_blocking=True)
     chroma = torch.from_numpy(meta[idx_matrix, :12]).pin_memory().to(device, non_blocking=True)
@@ -200,7 +201,7 @@ def get_batch(split='train', batch_size=batch_size):
     chroma = (chroma - chroma_mean) / chroma_std
     
     x = torch.cat([style, chroma, rms.unsqueeze(-1), density.unsqueeze(-1), zcr.unsqueeze(-1), flatness.unsqueeze(-1), bpm.unsqueeze(-1)], dim=-1).unsqueeze(2)
-    print(x.shape)
+    print('inputs: ', x.shape, text.shape)
 
     return x, text
 
