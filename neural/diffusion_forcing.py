@@ -2299,6 +2299,7 @@ class PerceiverTokenPooler(nn.Module):
         
         self.mlp = SwiGLUMlp(d_model, int(2 / 3 * mlp_ratio * d_model), bias=True)
 
+    @torch.compiler.disable
     def forward(self, signals: list[torch.Tensor]) -> torch.Tensor:
         """
         Args:
