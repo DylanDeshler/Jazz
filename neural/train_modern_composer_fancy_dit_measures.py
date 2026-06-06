@@ -54,7 +54,7 @@ eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = False # disabled by default
+wandb_log = True # disabled by default
 wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
@@ -349,7 +349,7 @@ if ddp:
 @torch.no_grad()
 def estimate_loss():
     out = {}
-    for i, split in enumerate(['val']):
+    for i, split in enumerate(['train', 'val']):
         losses = torch.zeros(eval_iters)
         for k in tqdm(range(eval_iters)):
             X = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
@@ -497,7 +497,12 @@ def save_samples(step):
     cfg_mode = 'joint'
     n_steps = 100
     n_samples = 10
-    x, bpm, rms, density, zcr, flatness, chroma, style = get_batch('val', batch_size=n_samples)
+    x, text = get_batch('val', batch_size=n_samples)
+    
+    gen_noise = torch.randn(x.shape).to(device)
+    net_kwargs = {
+        'text': text
+    }
     
     gen_noise = torch.randn(x.shape).to(device)
     decoder_noise = torch.randn(n_samples * n_chunks, 1, encoder_ratios * (max_adapter_len - 1)).to(device)
