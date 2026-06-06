@@ -2418,10 +2418,6 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         flatness = x[..., [128+15]]
         bpm = x[..., 128+16]
         
-        B, T = t.shape
-        
-        t = self.t_embedder(t.flatten()).view(B, T, -1)
-        
         # text null token is embedding of empty string
         if self.use_null_token:
             signals = {
@@ -2451,9 +2447,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         print(chroma.shape, rms.shape, density.shape)
         x = torch.cat([chroma, rms, density, zcr, flatness], dim=-1)
         print(x.shape)
-        x = rearrange(x, 'b t c -> b c t')
-        x = self.local_embedder(x)
-        x = rearrange(x, 'b c t -> b t c', b=B, t=T)
+        x = self.local_embedder(x.transpose(1, 2)).transpose(1, 2)
         bpm = self.bpm_embedder(torch.clamp(torch.round(bpm), min=0, max=349).long())
         style = self.style_embedder(style)
         x = self.pooler([x, bpm, style]) + self.audio_embed
@@ -2463,6 +2457,9 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         text = self.text_embedder(text) + self.text_embed
         x = torch.cat([text, x], dim=1)
         print(x.shape)
+        
+        B, T = x.shape
+        t = self.t_embedder(t.flatten()).view(B, T, -1)
         
         t = t + text.mean(dim=1, keepdims=True) # mean pool text for global embedder
         t0 = self.t_block(t)
