@@ -2534,7 +2534,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
             )
             print(shift.shape, scale.shape)
             
-            features = modulate(self.norm[name](features), shift, scale)
+            features = modulate(self.norm[name](features), shift.squeeze(2), scale.squeeze(2))
             features = self.fc[name](features) + self.bias[name]
             print(features.shape)
             out[name] = features
