@@ -2313,8 +2313,8 @@ class PerceiverTokenPooler(nn.Module):
         B, T, C = signals[0].shape
         M = len(signals)
         
-        for signal in signals:
-            print(signal.shape)
+        # for signal in signals:
+        #     print(signal.shape)
         
         unsqueezed = [s.unsqueeze(2) for s in signals]
         # Cat along the new dimension to get (B, T, M, C)
