@@ -2455,7 +2455,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         x = self.pooler([x, bpm, style]) + self.audio_embed
         print(x.shape)
         
-        text = self.text_embedder(text) + self.text_embed
+        text = text + self.text_embed
         x = torch.cat([text, x], dim=1)
         
         t = t + text.mean(dim=1) # mean pool text for global embeddiner
