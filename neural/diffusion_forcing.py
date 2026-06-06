@@ -765,6 +765,7 @@ class DiTAirBlock(nn.Module):
         print('shapes: ', x.shape, t.shape)
         
         biases = self.scale_shift_table[None] + t.reshape(x.size(0), T, 6, -1)
+        print(biases.shape)
         (
             shift_msa,
             scale_msa,
@@ -773,7 +774,7 @@ class DiTAirBlock(nn.Module):
             scale_mlp,
             gate_mlp,
         ) = biases.chunk(6, dim=-2)
-        
+        print(shift_msa.shape, scale_msa.shape)
         
         modulate_out = torch.cat([x[:, :N-T], modulate(self.norm1(x[:, :-T]), shift_msa, scale_msa)], dim=1)
         attn_out = self.attn(modulate_out, freqs_cis=freqs_cis, attn_mask=attn_mask)
