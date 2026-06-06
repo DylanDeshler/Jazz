@@ -776,10 +776,10 @@ class DiTAirBlock(nn.Module):
         ) = [chunk.squeeze(2) for chunk in biases.chunk(6, dim=-2)]
         print(shift_msa.shape, scale_msa.shape)
         
-        modulate_out = torch.cat([x[:, :N-T], modulate(self.norm1(x[:, :-T]), shift_msa, scale_msa)], dim=1)
+        modulate_out = torch.cat([x[:, :N-T], modulate(self.norm1(x[:, -T:]), shift_msa, scale_msa)], dim=1)
         attn_out = self.attn(modulate_out, freqs_cis=freqs_cis, attn_mask=attn_mask)
         x = x + self.drop_path(gate_msa * attn_out)
-        modulate_out = torch.cat([x[:, :N-T], modulate(self.norm2(x[:, :-T]), shift_mlp, scale_mlp)], dim=1)
+        modulate_out = torch.cat([x[:, :N-T], modulate(self.norm2(x[:, -T:]), shift_mlp, scale_mlp)], dim=1)
         x = x + self.drop_path(gate_mlp * self.mlp(modulate_out))
         return x
 
@@ -2511,7 +2511,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         
         out = {}
         for name in self.signal_dim.keys():
-            features = self.balancer(x[:-self.n_chunks], name)
+            features = self.balancer(x[-self.n_chunks:], name)
             print(features.shape)
             # SAM Audio does not use a non-linearity on t here
             shift, scale = (self.final_layer_scale_shift_table[name][None] + F.silu(t[:, None])).chunk(
