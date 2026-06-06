@@ -2528,7 +2528,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
             features = self.balancer(x[-self.n_chunks:], name)
             print(features.shape)
             # SAM Audio does not use a non-linearity on t here
-            shift_T, scale_T = (self.final_layer_scale_shift_table[name][None] + F.silu(t[:, None])).chunk(
+            shift_T, scale_T = (self.final_layer_scale_shift_table[name][None] + F.silu(t[:, -self.n_chunks:, None])).chunk(
                 2, dim=2
             )
             print(shift_T.shape, scale_T.shape)
