@@ -2313,38 +2313,18 @@ class PerceiverTokenPooler(nn.Module):
         B, T, C = signals[0].shape
         M = len(signals)
         
-        # for signal in signals:
-        #     print(signal.shape)
-        
-        unsqueezed = [s.unsqueeze(2) for s in signals]
-        # Cat along the new dimension to get (B, T, M, C)
-        combined = torch.cat(unsqueezed, dim=2)
-        # Flattening this is cleaner for the compiler
+        combined = torch.cat([s.unsqueeze(2) for s in signals], dim=2)
         kv_sequence = self.norm1(combined.view(B * T, M, C))
-            
-        # stacked = torch.stack(signals, dim=1).permute(0, 2, 1, 3)
         
-        # # Step 1: Concatenate all signals along the sequence dimension (dim=1)
-        # # This creates a "bag of features" of shape (batch_size, total_M_tokens, d_model)
-        # kv_sequence = self.norm1(stacked.contiguous().reshape(B * T, M, C))
-        
-        # Step 2: Prepare the single Query token for the batch
-        # Expand the learned latent token from (1, 1, d_model) to (batch_size, 1, d_model)
         q = self.norm2(self.latents.unsqueeze(0).unsqueeze(0).expand(B * T, -1, -1))
         
-        # Step 3: Perform Cross-Attention
-        # Query comes from our learned latent. Keys/Values come from the combined signals.
-        # attn_output shape: (batch_size, 1, d_model)
         attn_output, _ = self.cross_attn(
             query=q, 
             key=kv_sequence, 
             value=kv_sequence
         )
         
-        # Step 4: Residual connection and LayerNorm
         x = q + attn_output
-        
-        # Step 5: Feed-Forward Network block
         x = x + self.mlp(self.norm3(x))
         x = x.reshape(B, T, C)
         
