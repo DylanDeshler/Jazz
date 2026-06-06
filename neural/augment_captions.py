@@ -20,7 +20,7 @@ def build_generation_prompt(caption):
         "CRITICAL RULES:\n"
         "1. NEVER copy the reference caption verbatim. Every variation must use different phrasing, word orders, or sentence structures.\n"
         "2. DO NOT SUMMARIZE. Every variation must retain the descriptive detail, mood, instruments, historical context, and stylistic adjectives found in the reference.\n"
-        "3. ABSOLUTE CONSTRAINTS. If the reference contains a BPM or Key, you MUST preserve at least one of them in every single variation.\n"
+        "3. ABSOLUTE CONSTRAINTS. If the reference contains a BPM or Key, you MUST preserve them in every single variation.\n"
         "4. MATCH THE LENGTH. Keep the overall length and core attributes identical, but change the syntax drastically.\n\n"
         "5. ROTATE CLAUSES. Achieve diversity by changing the sentence structures, moving technical details around, or flipping the order of descriptions.\n"
         "EXAMPLE:\n"
