@@ -16,7 +16,7 @@ def build_prompt(caption):
     return (
         "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n"
         "You are a strict data augmentation script. You will receive a song caption and produce generations that could be used as prompts to generate a song with the given caption. "
-        f"Generate exactly {NUM_VARIATIONS} distinct, paraphrased variations of this caption. "
+        f"Generate exactly {NUM_VARIATIONS} distinct, paraphrased, reworded, reordered variations of this caption. "
         "Each generation should roughly match the length of the reference caption. "
         "Do not change the underlying meaning or attributes. "
         "Do not add or make up additional details that are not in reference caption. "
