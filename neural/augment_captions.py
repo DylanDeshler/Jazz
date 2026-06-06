@@ -18,6 +18,7 @@ def build_prompt(caption):
         "You are a strict data augmentation script. You will receive a song caption and produce generations that could be used as prompts to generate a song with the given caption. "
         f"Generate exactly {NUM_VARIATIONS} distinct, paraphrased, reworded, reordered variations of this caption. "
         "Each generation should roughly match the length of the reference caption. "
+        "When the reference caption contains BPM or key always maintain at least one of them in your generations. "
         "Do not change the underlying meaning or attributes. "
         "Do not add or make up additional details that are not in reference caption. "
         "Output ONLY a valid JSON object containing a single key 'variations' which maps to a list of strings."
