@@ -2524,6 +2524,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
             out[name] = features
         
         out = torch.cat(list(out.values()), dim=-1).unsqueeze(2)
+        print(out.shape)
         return out
 
 class MetaConditionalModernDiTV2ComposerWrapper(nn.Module):
