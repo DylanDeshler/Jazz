@@ -184,7 +184,7 @@ def get_batch(split='train', batch_size=batch_size):
     idx_matrix = starts[:, None] + np.arange(n_chunks)
     idx_matrix = np.minimum(idx_matrix, stops[:, None])
     
-    text = torch.from_numpy(np.stack([data[i, , :n_text_tokens] for i, j in zip(song_idxs, caption_idxs)], axis=0)).pin_memory().to(device, non_blocking=True)
+    text = torch.from_numpy(np.stack([data[i, j, :n_text_tokens] for i, j in zip(song_idxs, caption_idxs)], axis=0)).pin_memory().to(device, non_blocking=True)
     
     style = torch.from_numpy(style[idx_matrix]).pin_memory().to(device, non_blocking=True)
     chroma = torch.from_numpy(meta[idx_matrix, :12]).pin_memory().to(device, non_blocking=True)
