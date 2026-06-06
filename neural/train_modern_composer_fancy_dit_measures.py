@@ -202,6 +202,7 @@ def get_batch(split='train', batch_size=batch_size):
     bpm = dit.net.bpm_embedder(torch.clamp(torch.round(bpm), min=0, max=349).long())
     
     x = torch.cat([style, chroma, rms.unsqueeze(-1), density.unsqueeze(-1), zcr.unsqueeze(-1), flatness.unsqueeze(-1), bpm], dim=-1).unsqueeze(2)
+    print('inputs: ', x.shape, text.shape)
 
     return x, text
 
