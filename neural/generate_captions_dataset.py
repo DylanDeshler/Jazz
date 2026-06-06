@@ -12,7 +12,7 @@ import torch
 
 from transformers import T5Tokenizer, T5EncoderModel
 
-device = torch.device('cuda:3')
+device = torch.device('cuda:0')
 
 batch_size = 32
 total_write_batches = 16
