@@ -175,9 +175,9 @@ def get_batch(split='train', batch_size=batch_size):
         bpms = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_bpm_val.bin', dtype=np.float32, mode='r')
     
     song_starts = bounds[:, 0]
-    song_stops  = bounds[:, 1]
+    song_stops  = bounds[:, 1] - 1
 
-    highs = np.maximum(song_stops - n_chunks - 1, song_starts + 1)
+    highs = np.maximum(song_stops - n_chunks, song_starts + 1)
     random_offsets = np.floor(np.random.rand(batch_size) * (highs - song_starts)).astype(int)
     starts = song_starts + random_offsets
     stops = np.minimum(starts + n_chunks, song_stops)
