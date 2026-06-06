@@ -2225,6 +2225,68 @@ class GradientBalancer(nn.Module):
             self.epsilon
         )
 
+class PerceiverTokenPooler(nn.Module):
+    def __init__(self, d_model: int, nhead: int = 8, mlp_ratio: float = 4.0):
+        super().__init__()
+        self.d_model = d_model
+        
+        # 1. The Single Latent Query Token (Learned Parameter)
+        # We initialize it as (1, 1, d_model) so it easily broadcasts across batches
+        self.latents = nn.Parameter(torch.randn(d_model) / d_model ** 0.5)
+        
+        # 2. Multi-Head Cross-Attention Layer
+        # batch_first=True expects input shapes to be (batch, seq_len, features)
+        self.cross_attn = nn.MultiheadAttention(
+            embed_dim=d_model, 
+            num_heads=nhead, 
+            dropout=0, 
+            batch_first=True
+        )
+        
+        # 3. Standard Post-Attention Processing (LayerNorm + FeedForward)
+        self.norm1 = nn.LayerNorm(d_model)
+        self.norm2 = nn.LayerNorm(d_model)
+        self.norm3 = nn.LayerNorm(d_model)
+        
+        self.mlp = SwiGLUMlp(d_model, int(2 / 3 * mlp_ratio * d_model), bias=True)
+
+    def forward(self, signals: list[torch.Tensor]) -> torch.Tensor:
+        """
+        Args:
+            signals: A list of Tensors, where each tensor represents a processed signal.
+                     Each tensor in the list must have shape (batch_size, seq_len_i, d_model).
+                     Note: seq_len_i can vary between different signals!
+        Returns:
+            pooled_token: A tensor of shape (batch_size, 1, d_model) representing 
+                          the single fused token for your DiT.
+        """
+        batch_size = signals[0].shape[0]
+        
+        # Step 1: Concatenate all signals along the sequence dimension (dim=1)
+        # This creates a "bag of features" of shape (batch_size, total_M_tokens, d_model)
+        kv_sequence = self.norm1(torch.cat(signals, dim=1))
+        
+        # Step 2: Prepare the single Query token for the batch
+        # Expand the learned latent token from (1, 1, d_model) to (batch_size, 1, d_model)
+        q = self.norm2(self.latents.unsqueeze(0).unsqueeze(0).expand(batch_size, -1, -1))
+        
+        # Step 3: Perform Cross-Attention
+        # Query comes from our learned latent. Keys/Values come from the combined signals.
+        # attn_output shape: (batch_size, 1, d_model)
+        attn_output, _ = self.cross_attn(
+            query=q, 
+            key=kv_sequence, 
+            value=kv_sequence
+        )
+        
+        # Step 4: Residual connection and LayerNorm
+        x = q + attn_output
+        
+        # Step 5: Feed-Forward Network block
+        x = x + self.mlp(self.norm3(x))
+        
+        return x
+
 class MetaConditionalModernDiTV2Composer(nn.Module):
     def __init__(self,
                  in_channels,
@@ -2258,6 +2320,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         self.local_embedder = Patcher(16, hidden_size, patch_size=patch_size, bias=True)
         self.style_embedder = nn.Linear(style_dim, hidden_size, bias=True)
         self.bpm_embedder = nn.Embedding(350, hidden_size)
+        self.pooler = PerceiverTokenPooler(hidden_size, num_heads, mlp_ratio)
         self.text_embed = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
         self.audio_embed = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
         
@@ -2376,12 +2439,13 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         print(chroma.shape, rms.shape, density.shape)
         x = torch.cat([chroma, rms, density, zcr, flatness], dim=-1)
         print(x.shape)
-        x = rearrange(x, 'b t n c -> (b t) c n')
+        x = rearrange(x, 'b t c -> b c t')
         x = self.local_embedder(x)
         bpm = self.bpm_embedder(bpm)
         style = self.style_embedder(style)
-        x = x + self.audio_embed
-        x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
+        x = self.pooler([x, bpm, style]) + self.audio_embed
+        print(x.shape)
+        x = rearrange(x, 'b c t -> b t c', b=B, t=T)
         
         text = self.text_embedder(text) + self.text_embed
         x = torch.cat([text, x], dim=1)
