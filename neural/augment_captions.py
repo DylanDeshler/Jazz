@@ -19,6 +19,7 @@ def build_prompt(caption):
         f"Generate exactly {NUM_VARIATIONS} distinct, paraphrased variations of this caption. "
         "Each generation should roughly match the length of the reference caption. "
         "Do not change the underlying meaning or attributes. "
+        "Do not add or make up additional details that are not in reference caption. "
         "Output ONLY a valid JSON object containing a single key 'variations' which maps to a list of strings."
         "<|eot_id|><|start_header_id|>user<|end_header_id|>\n"
         f"Caption: {caption}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n"
