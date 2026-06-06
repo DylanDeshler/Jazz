@@ -762,10 +762,7 @@ class DiTAirBlock(nn.Module):
         B, N, C = x.shape
         B, T, C = t.shape
         
-        print('shapes: ', x.shape, t.shape)
-        
         biases = self.scale_shift_table[None] + t.reshape(x.size(0), T, 6, -1)
-        print(biases.shape)
         (
             shift_msa_T,
             scale_msa_T,
