@@ -746,6 +746,36 @@ class DiTBlock(nn.Module):
         x = rearrange(x, 'b t n c -> b (t n) c')
         return x
 
+class DiTAirBlock(nn.Module):
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, drop_path=0, **block_kwargs):
+        super().__init__()
+        self.norm1 = nn.LayerNorm(hidden_size)
+        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=False, proj_bias=True, **block_kwargs)
+        self.norm2 = nn.LayerNorm(hidden_size)
+        self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), bias=True)
+        self.scale_shift_table = nn.Parameter(
+            torch.randn(6, hidden_size) / hidden_size ** 0.5,
+        )
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+    
+    def forward(self, x, t, freqs_cis=None, attn_mask=None):
+        B, N, C = x.shape
+        B, T, C = t.shape
+        
+        biases = self.scale_shift_table[None] + t.reshape(x.size(0), T, 6, -1)
+        (
+            shift_msa,
+            scale_msa,
+            gate_msa,
+            shift_mlp,
+            scale_mlp,
+            gate_mlp,
+        ) = biases.chunk(6, dim=-2)
+        
+        x = x + self.drop_path(gate_msa * self.attn(modulate(self.norm1(x[:, :-T]), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask))
+        x = x + self.drop_path(gate_mlp * self.mlp(modulate(self.norm2(x[:, :-T]), shift_mlp, scale_mlp)))
+        return x
+
 def create_block_causal_mask(block_size: int, num_blocks: int, dtype=torch.float32):
     """
     Creates a block causal mask where tokens can attend to their own block 
@@ -2343,7 +2373,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         
         dp_rates=[x.item() for x in torch.linspace(0, drop_path_rate, depth)] 
         self.blocks = nn.ModuleList([
-            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio, drop_path=dp_rates[i]) for i in range(depth)
+            DiTAirBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio, drop_path=dp_rates[i]) for i in range(depth)
         ])
 
         self.norm = nn.ModuleDict({
@@ -2458,7 +2488,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         x = torch.cat([text, x], dim=1)
         print(x.shape)
         
-        B, T = x.shape
+        B, T = .shape
         t = self.t_embedder(t.flatten()).view(B, T, -1)
         
         t = t + text.mean(dim=1, keepdims=True) # mean pool text for global embedder
@@ -2477,7 +2507,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
             features = self.balancer(x[:-self.n_chunks], name)
             print(features.shape)
             # SAM Audio does not use a non-linearity on t here
-            shift, scale = (self.final_layer_scale_shift_table[name][None, None] + F.silu(t[:, :, None])).chunk(
+            shift, scale = (self.final_layer_scale_shift_table[name][None] + F.silu(t[:, None])).chunk(
                 2, dim=2
             )
             features = rearrange(features, 'b (t n) c -> b t n c', t=T, n=1 // self.patch_size)
