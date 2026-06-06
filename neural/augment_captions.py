@@ -41,11 +41,11 @@ def build_selection_prompt(reference, pool_list):
     return (
         "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n"
         "You are an expert data curation judge. Your job is to select the best subset of variations from a provided pool.\n"
-        f"Review the Reference Caption and select exactly {TARGET_COUNT} variations from the Candidate Pool that meet these criteria:\n"
+        f"Review the Reference Caption and select exactly {NUM_SELECTIONS} variations from the Candidate Pool that meet these criteria:\n"
         "1. ACCURACY: They must perfectly retain 100% of the information, exact numbers, BPM, and musical key from the reference.\n"
         "2. DIVERSITY: They must be structurally and linguistically unique from the reference and from each other.\n"
         "3. QUALITY: Discard any candidates that are verbatim copies of the reference or are heavily truncated summaries.\n"
-        f"Output ONLY a valid JSON object containing a single key 'selected' which maps to a list of exactly {TARGET_COUNT} strings chosen from the pool."
+        f"Output ONLY a valid JSON object containing a single key 'selected' which maps to a list of exactly {NUM_SELECTIONS} strings chosen from the pool."
         "<|eot_id|><|start_header_id|>user<|end_header_id|>\n"
         f"Reference Caption: {reference}\n\n"
         f"Candidate Pool:\n{pool_str}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n"
