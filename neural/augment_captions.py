@@ -3,6 +3,7 @@ import random
 import os
 from tqdm import tqdm
 from vllm import LLM, SamplingParams
+from vllm.sampling_params import StructuredOutputsParams
 
 # --- CONFIGURATION ---
 INPUT_JSONL = "/home/dylandeshler/Jazz/preprocess/final_llm_captions.jsonl"
@@ -77,7 +78,7 @@ def main():
     sampling_params = SamplingParams(
         temperature=0.7, 
         max_tokens=256,
-        guided_json=json.dumps(json_schema)
+        structured_outputs=StructuredOutputsParams(json=json.dumps(json_schema))
     )
 
     print("Generating variations (this will go very fast)...")
