@@ -762,6 +762,8 @@ class DiTAirBlock(nn.Module):
         B, N, C = x.shape
         B, T, C = t.shape
         
+        print('shapes: ', x.shape, t.shape)
+        
         biases = self.scale_shift_table[None] + t.reshape(x.size(0), T, 6, -1)
         (
             shift_msa,
@@ -772,8 +774,12 @@ class DiTAirBlock(nn.Module):
             gate_mlp,
         ) = biases.chunk(6, dim=-2)
         
-        x = x + self.drop_path(gate_msa * self.attn(modulate(self.norm1(x[:, :-T]), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask))
-        x = x + self.drop_path(gate_mlp * self.mlp(modulate(self.norm2(x[:, :-T]), shift_mlp, scale_mlp)))
+        
+        modulate_out = torch.cat([x[:, :N-T], modulate(self.norm1(x[:, :-T]), shift_msa, scale_msa)], dim=1)
+        attn_out = self.attn(modulate_out, freqs_cis=freqs_cis, attn_mask=attn_mask)
+        x = x + self.drop_path(gate_msa * attn_out)
+        modulate_out = torch.cat([x[:, :N-T], modulate(self.norm2(x[:, :-T]), shift_mlp, scale_mlp)], dim=1)
+        x = x + self.drop_path(gate_mlp * self.mlp(modulate_out))
         return x
 
 def create_block_causal_mask(block_size: int, num_blocks: int, dtype=torch.float32):
