@@ -762,10 +762,7 @@ class DiTAirBlock(nn.Module):
         B, N, C = x.shape
         B, T, C = t.shape
         
-        print('shapes: ', x.shape, t.shape)
-        
         biases = self.scale_shift_table[None] + t.reshape(x.size(0), T, 6, -1)
-        print(biases.shape)
         (
             shift_msa_T,
             scale_msa_T,
@@ -795,6 +792,7 @@ class DiTAirBlock(nn.Module):
         
         x = x + self.drop_path(gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask))
         x = x + self.drop_path(gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp)))
+        
         return x
 
 def create_block_causal_mask(block_size: int, num_blocks: int, dtype=torch.float32):
@@ -2313,10 +2311,6 @@ class PerceiverTokenPooler(nn.Module):
         """
         B, T, C = signals[0].shape
         M = len(signals)
-        
-        print('signals')
-        for signal in signals:
-            print(signal.shape)
             
         stacked = torch.stack(signals, dim=1).permute(0, 2, 1, 3)
         
