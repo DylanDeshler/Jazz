@@ -2310,10 +2310,6 @@ class PerceiverTokenPooler(nn.Module):
         """
         B, T, C = signals[0].shape
         M = len(signals)
-        
-        print('signals')
-        for signal in signals:
-            print(signal.shape)
             
         stacked = torch.stack(signals, dim=1).permute(0, 2, 1, 3)
         
