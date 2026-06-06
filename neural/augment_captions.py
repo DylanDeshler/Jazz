@@ -33,8 +33,10 @@ def build_prompt(caption):
         "Your job is to generate highly diverse, reworded, and structurally reordered variations of a reference caption.\n\n"
         "CRITICAL RULES:\n"
         "1. NEVER copy the reference caption verbatim. Every variation must use different phrasing, word orders, or sentence structures.\n"
-        "2. If the reference contains a BPM or Key, you MUST preserve them in every single variation.\n"
-        "3. Keep the overall length and core attributes identical, but change the syntax drastically.\n\n"
+        "2. DO NOT SUMMARIZE. Every variation must retain the descriptive detail, mood, instruments, historical context, and stylistic adjectives found in the reference.\n"
+        "3. ABSOLUTE CONSTRAINTS. If the reference contains a BPM or Key, you MUST preserve at least one of them in every single variation.\n"
+        "4. MATCH THE LENGTH. Keep the overall length and core attributes identical, but change the syntax drastically.\n\n"
+        "5. ROTATE CLAUSES. Achieve diversity by changing the sentence structures, moving technical details around, or flipping the order of descriptions.\n"
         "EXAMPLE:\n"
         "Reference: 'A slow lo-fi hip hop beat with a dusty piano chord progression and smooth sax. 80 BPM. Key: C minor.'\n"
         "Expected Output:\n"
@@ -104,10 +106,9 @@ def main():
     #     structured_outputs=StructuredOutputsParams(json=json.dumps(json_schema))
     # )
     sampling_params = SamplingParams(
-        temperature=1.0,         # Higher temperature forces token variety
-        top_p=0.95,              # Keeps the output coherent while allowing novel choices
-        presence_penalty=0.3,    # Mathematically penalizes the model for repeating words it already used
-        max_tokens=4096,          # Bumped slightly to ensure it doesn't cut off 5 variations
+        temperature=1.0, 
+        top_p=0.95,
+        max_tokens=4096,
         structured_outputs=StructuredOutputsParams(json=json.dumps(json_schema))
     )
 
