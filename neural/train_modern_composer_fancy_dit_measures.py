@@ -349,7 +349,7 @@ if ddp:
 @torch.no_grad()
 def estimate_loss():
     out = {}
-    for i, split in enumerate(['train', 'val']):
+    for i, split in enumerate(['val']):
         losses = torch.zeros(eval_iters)
         for k in tqdm(range(eval_iters)):
             X = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
