@@ -2458,7 +2458,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
     
     def forward(self, x, t, text, unconditional_mask=None):
         x = x.squeeze(2)
-        print(x.shape)
+        
         style = x[..., :128]
         chroma = x[..., 128:128+12]
         rms = x[..., [128+12]]
@@ -2493,26 +2493,20 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
                 text = torch.where(unconditional_mask['text'], null_tokens['text'], text)
         
         # prepend x with text
-        print(chroma.shape, rms.shape, density.shape)
         x = torch.cat([chroma, rms, density, zcr, flatness], dim=-1)
-        print(x.shape)
         x = self.local_embedder(x.transpose(1, 2)).transpose(1, 2)
         # bpm = self.bpm_embedder(torch.clamp(torch.round(bpm), min=0, max=349).long())
         style = self.style_embedder(style)
         x = self.pooler([x, bpm, style]) + self.audio_embed
-        print(x.shape)
         
-        print('text: ', text.shape)
         text = self.text_embedder(text) + self.text_embed
         x = torch.cat([text, x], dim=1)
-        print(x.shape)
         
         B, T = t.shape
         t = self.t_embedder(t.flatten()).view(B, T, -1)
         
         t = t + text.mean(dim=1, keepdims=True) # mean pool text for global embedder
         t0 = self.t_block(t)
-        print('pool: ', text.mean(dim=1, keepdims=True).shape)
         
         freqs_cis = self.freqs_cis[:x.shape[1]]
         for block in self.blocks:
@@ -2525,21 +2519,18 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         out = {}
         for name in self.signal_dim.keys():
             features = self.balancer(x, name)
-            print(name)
-            print(features.shape)
+            
             # SAM Audio does not use a non-linearity on t here
             shift, scale = (self.final_layer_scale_shift_table[name][None] + F.silu(t[:, :, None])).chunk(
                 2, dim=2
             )
-            print(shift.shape, scale.shape)
             
             features = modulate(self.norm[name](features), shift.squeeze(2), scale.squeeze(2))
             features = self.fc[name](features) + self.bias[name]
-            print(features.shape)
+            
             out[name] = features
         
         out = torch.cat(list(out.values()), dim=-1).unsqueeze(2)
-        print(out.shape)
         return out
 
 class MetaConditionalModernDiTV2ComposerWrapper(nn.Module):
