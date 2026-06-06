@@ -1,6 +1,7 @@
 import json
 import random
 import os
+import re
 from tqdm import tqdm
 from vllm import LLM, SamplingParams
 from vllm.sampling_params import StructuredOutputsParams
@@ -53,6 +54,23 @@ def build_selection_prompt(reference, pool_list):
         f"Reference Caption: {reference}\n\n"
         f"Candidate Pool:\n{pool_str}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n"
     )
+
+def clean_formatting_artifacts(text):
+    """
+    Strips leading numbers, bullets, or hyphens that the LLM 
+    might accidentally retain from the numbered candidate pool.
+    Example: "1. A lively ragtime..." -> "A lively ragtime..."
+    """
+    # Regex breakdown:
+    # ^          : Start of string
+    # \s* : Optional leading whitespace
+    # (?:\d+\.?) : A number followed by an optional period (e.g., "1", "1.", "12.")
+    # |          : OR
+    # (?:[-*•])  : A hyphen, asterisk, or bullet point
+    # \s+        : Must be followed by at least one space before the actual text begins
+    
+    cleaned_text = re.sub(r'^\s*(?:\d+\.?|[-*•])\s+', '', text)
+    return cleaned_text.strip()
 
 def main():
     print("Loading dataset...")
@@ -159,6 +177,7 @@ def main():
                 ref_text = llm_output.get(key, "")
                 try:
                     selected_vars = json.loads(outputs[out_idx].outputs[0].text).get("selected", [])
+                    selected_vars = [clean_formatting_artifacts(var) for var in selected_vars]
                 except Exception:
                     selected_vars = [ref_text] * NUM_SELECTIONS
                 
