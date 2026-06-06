@@ -43,11 +43,12 @@ def main():
             if line.strip():
                 data.append(json.loads(line))
 
+    data = data[:10]
     print(f"Loaded {len(data)} items. Preparing prompts...")
     
     # Extract medium and long captions to process in one massive batch
     prompts = []
-    for item in data[:10]:
+    for item in data:
         prompts.append(build_prompt(item.get("medium", "")))
         prompts.append(build_prompt(item.get("long", "")))
 
@@ -93,23 +94,28 @@ def main():
         for item in tqdm(data, desc="Saving"):
             new_item = {}
             
-            # 1. Handle Short (Pure Python)
-            new_item["short"] = shuffle_short_tags(item.get("short", ""), NUM_VARIATIONS)
+            # 1. Handle Short (LLM Output)
+            try:
+                short_json = json.loads(outputs[out_idx].outputs[0].text)
+                new_item["short_caption"] = med_json.get("variations", [item.get("short_caption")] * NUM_VARIATIONS)
+            except json.JSONDecodeError:
+                new_item["short_caption"] = [item.get("short_caption")] * NUM_VARIATIONS # Fallback on failure
+            out_idx += 1
             
             # 2. Handle Medium (LLM Output)
             try:
                 med_json = json.loads(outputs[out_idx].outputs[0].text)
-                new_item["medium"] = med_json.get("variations", [item.get("medium")] * NUM_VARIATIONS)
+                new_item["medium_caption"] = med_json.get("variations", [item.get("medium_caption")] * NUM_VARIATIONS)
             except json.JSONDecodeError:
-                new_item["medium"] = [item.get("medium")] * NUM_VARIATIONS # Fallback on failure
+                new_item["medium_caption"] = [item.get("medium_caption")] * NUM_VARIATIONS # Fallback on failure
             out_idx += 1
             
             # 3. Handle Long (LLM Output)
             try:
                 long_json = json.loads(outputs[out_idx].outputs[0].text)
-                new_item["long"] = long_json.get("variations", [item.get("long")] * NUM_VARIATIONS)
+                new_item["long_caption"] = long_json.get("variations", [item.get("long_caption")] * NUM_VARIATIONS)
             except json.JSONDecodeError:
-                new_item["long"] = [item.get("long")] * NUM_VARIATIONS # Fallback on failure
+                new_item["long_caption"] = [item.get("long_caption")] * NUM_VARIATIONS # Fallback on failure
             out_idx += 1
             
             f.write(json.dumps(new_item) + "\n")
