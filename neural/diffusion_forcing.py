@@ -767,20 +767,36 @@ class DiTAirBlock(nn.Module):
         biases = self.scale_shift_table[None] + t.reshape(x.size(0), T, 6, -1)
         print(biases.shape)
         (
-            shift_msa,
-            scale_msa,
-            gate_msa,
-            shift_mlp,
-            scale_mlp,
-            gate_mlp,
+            shift_msa_T,
+            scale_msa_T,
+            gate_msa_T,
+            shift_mlp_T,
+            scale_mlp_T,
+            gate_mlp_T,
         ) = [chunk.squeeze(2) for chunk in biases.chunk(6, dim=-2)]
+        
+        shift_msa = torch.zeros_like(x)
+        shift_msa[:-T] = shift_msa_T
+        
+        shift_mlp = torch.zeros_like(x)
+        shift_mlp[:-T] = shift_mlp_T
+        
+        gate_msa = torch.zeros_like(x)
+        gate_msa[:-T] = gate_msa_T
+        
+        gate_mlp = torch.zeros_like(x)
+        gate_mlp[:-T] = gate_mlp_T
+        
+        scale_msa = torch.ones_like(x)
+        scale_msa[:-T] = scale_msa_T
+        
+        scale_mlp = torch.ones_like(x)
+        scale_mlp[:-T] = scale_mlp_T
+        
         print(shift_msa.shape, scale_msa.shape)
         
-        modulate_out = torch.cat([x[:, :N-T], modulate(self.norm1(x[:, -T:]), shift_msa, scale_msa)], dim=1)
-        attn_out = self.attn(modulate_out, freqs_cis=freqs_cis, attn_mask=attn_mask)
-        x = x + self.drop_path(gate_msa * attn_out)
-        modulate_out = torch.cat([x[:, :N-T], modulate(self.norm2(x[:, -T:]), shift_mlp, scale_mlp)], dim=1)
-        x = x + self.drop_path(gate_mlp * self.mlp(modulate_out))
+        x = x + self.drop_path(gate_msa * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), freqs_cis=freqs_cis, attn_mask=attn_mask))
+        x = x + self.drop_path(gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp)))
         return x
 
 def create_block_causal_mask(block_size: int, num_blocks: int, dtype=torch.float32):
