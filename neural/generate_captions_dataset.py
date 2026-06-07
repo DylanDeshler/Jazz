@@ -20,7 +20,7 @@ batch_size = 32
 total_write_batches = 16
 max_tokens = 256
 
-out_prefix = 'caption_embeddings'
+out_prefix = 'caption_embeddings_expanded'
 
 with open('/home/dylandeshler/Jazz/preprocess/final_llm_captions_expanded.jsonl', 'r', encoding='utf-8') as f:
     captions = [json.loads(line) for line in f]
@@ -39,33 +39,33 @@ embedding_memmap = np.memmap(
     shape=(len(captions) + 1, NUM_TIERS, NUM_VARS, max_tokens, model.config.d_model)
 )
 
-from collections import defaultdict
-lengths = defaultdict(list)
+# from collections import defaultdict
+# lengths = defaultdict(list)
 
-for data_dict in tqdm(captions, desc='Calculating Token Lengths'):
-    data = data_dict.get('llm_output', [])
-    if isinstance(data, list):
-        print('skipping bad data')
-        continue
+# for data_dict in tqdm(captions, desc='Calculating Token Lengths'):
+#     data = data_dict.get('llm_output', [])
+#     if isinstance(data, list):
+#         print('skipping bad data')
+#         continue
     
-    short = data.get('short_caption', '')
-    medium = data.get('medium_caption', '')
-    long = data.get('long_caption', '')
+#     short = data.get('short_caption', '')
+#     medium = data.get('medium_caption', '')
+#     long = data.get('long_caption', '')
     
-    inputs = tokenizer(short, return_tensors="pt")
-    if inputs['input_ids'].shape[-1] > 1:
-        lengths['short'].append(inputs['input_ids'].shape[-1])
+#     inputs = tokenizer(short, return_tensors="pt")
+#     if inputs['input_ids'].shape[-1] > 1:
+#         lengths['short'].append(inputs['input_ids'].shape[-1])
     
-    inputs = tokenizer(medium, return_tensors="pt")
-    if inputs['input_ids'].shape[-1] > 1:
-        lengths['medium'].append(inputs['input_ids'].shape[-1])
+#     inputs = tokenizer(medium, return_tensors="pt")
+#     if inputs['input_ids'].shape[-1] > 1:
+#         lengths['medium'].append(inputs['input_ids'].shape[-1])
     
-    inputs = tokenizer(long, return_tensors="pt")
-    if inputs['input_ids'].shape[-1] > 1:
-        lengths['long'].append(inputs['input_ids'].shape[-1])
+#     inputs = tokenizer(long, return_tensors="pt")
+#     if inputs['input_ids'].shape[-1] > 1:
+#         lengths['long'].append(inputs['input_ids'].shape[-1])
 
-for k, v in lengths.items():
-    print(f'[{k} token stats] min: {np.min(v)} mean: {np.mean(v)} std: {np.std(v)} max: {np.max(v)}')
+# for k, v in lengths.items():
+#     print(f'[{k} token stats] min: {np.min(v)} mean: {np.mean(v)} std: {np.std(v)} max: {np.max(v)}')
 
 with torch.no_grad():
     for idx, data_dict in enumerate(tqdm(captions)):
