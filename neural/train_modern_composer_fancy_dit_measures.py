@@ -139,8 +139,8 @@ with open('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness
     train_map = json.load(f)
 with open('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_val_map.json', 'r', encoding='utf-8') as f:
     val_map = json.load(f)
-train_paths = list(train_map.keys())[:21030]
-val_paths = list(val_map.keys())[:21030]
+train_paths = list(train_map.keys())
+val_paths = list(val_map.keys())
 print(f'Found {len(train_paths)} train paths and {len(val_paths)} val paths')
 
 chroma_mean = torch.tensor([
@@ -159,8 +159,9 @@ flatness_mean = torch.tensor([0.011151944]).to(device)
 flatness_std = torch.tensor([0.018700112]).to(device)
 
 def get_batch(split='train', batch_size=batch_size):
-    data = np.memmap('/data/binaries/caption_embeddings.bin', dtype=np.float32, mode='r', shape=(21030, 3, 256, 1024))
+    data = np.memmap('/data/binaries/caption_embeddings.bin', dtype=np.float32, mode='r', shape=(40138, 3, 6, 256, 1024))
     caption_idxs = np.random.randint(data.shape[1], size=batch_size)
+    caption_vars = np.random.randint(data.shape[2], size=batch_size)
     if split == 'train':
         song_idxs = np.random.randint(len(train_paths), size=batch_size)
         bounds = np.array([train_map[train_paths[i]] for i in song_idxs])
@@ -184,7 +185,7 @@ def get_batch(split='train', batch_size=batch_size):
     idx_matrix = starts[:, None] + np.arange(n_chunks)
     idx_matrix = np.minimum(idx_matrix, stops[:, None])
     
-    text = torch.from_numpy(np.stack([data[i, j, :n_text_tokens] for i, j in zip(song_idxs, caption_idxs)], axis=0)).pin_memory().to(device, non_blocking=True)
+    text = torch.from_numpy(np.stack([data[i, j, k, :n_text_tokens] for i, j, k in zip(song_idxs, caption_idxs, caption_vars)], axis=0)).pin_memory().to(device, non_blocking=True)
     
     style = torch.from_numpy(style[idx_matrix]).pin_memory().to(device, non_blocking=True)
     chroma = torch.from_numpy(meta[idx_matrix, :12]).pin_memory().to(device, non_blocking=True)
