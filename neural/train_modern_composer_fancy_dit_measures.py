@@ -192,7 +192,7 @@ def get_batch(split='train', batch_size=batch_size):
     
     # text = torch.zeros(batch_size, n_text_tokens, 1024).to(device, non_blocking=True)
     # text = torch.from_numpy(data[song_idxs, caption_idxs, caption_vars]).pin_memory().to(device, non_blocking=True)
-    text = torch.from_numpy(data[:batch_size, caption_idxs, caption_vars]).pin_memory().to(device, non_blocking=True)
+    text = torch.from_numpy(data[song_idxs, 0, 0]).pin_memory().to(device, non_blocking=True)
     t5 = time.time()
     
     style = torch.from_numpy(style[idx_matrix]).pin_memory().to(device, non_blocking=True)
