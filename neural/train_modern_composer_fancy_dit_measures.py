@@ -158,11 +158,9 @@ zcr_std = torch.tensor([0.048143145]).to(device)
 flatness_mean = torch.tensor([0.011151944]).to(device)
 flatness_std = torch.tensor([0.018700112]).to(device)
 
-import mmap
 def get_batch(split='train', batch_size=batch_size):
     t0 = time.time()
     data = np.memmap('/data/binaries/caption_embeddings_expanded.bin', dtype=np.float32, mode='r', shape=(40138, 3, 6, 256, 1024))
-    madv = mmap.madvise(data.data, mmap.MADV_RANDOM)
     caption_idxs = np.random.randint(data.shape[1], size=batch_size)
     caption_vars = np.random.randint(data.shape[2], size=batch_size)
     t1 = time.time()
@@ -192,8 +190,7 @@ def get_batch(split='train', batch_size=batch_size):
     idx_matrix = np.minimum(idx_matrix, stops[:, None])
     t4 = time.time()
     
-    # text = torch.from_numpy(np.stack([data[i, j, k, :n_text_tokens] for i, j, k in zip(song_idxs, caption_idxs, caption_vars)], axis=0)).pin_memory().to(device, non_blocking=True)
-    text = torch.from_numpy(data[song_idxs, caption_idxs, caption_vars, :n_text_tokens]).pin_memory().to(device, non_blocking=True)
+    text = torch.from_numpy(data[song_idxs, caption_idxs, caption_vars]).pin_memory().to(device, non_blocking=True)
     t5 = time.time()
     
     style = torch.from_numpy(style[idx_matrix]).pin_memory().to(device, non_blocking=True)
