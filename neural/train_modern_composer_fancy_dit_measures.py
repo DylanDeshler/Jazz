@@ -490,6 +490,53 @@ def decode_latents(y, bpm, n_steps, decoder_noise=None):
     return out
 
 @torch.no_grad()
+def invert_embedding(x, embedding, metric):
+    """
+    Args:
+        x: Tensor of shape (..., d_model) containing continuous vectors
+        metric: "cosine" or "l2" (Euclidean)
+    Returns:
+        indices: Tensor of shape (...) containing the closest token IDs
+    """
+    # Grab the raw weight matrix: Shape is (num_embeddings, d_model)
+    weights = embedding.weight
+    
+    # Flatten the input batch dimensions to make calculation simple: (B_total, d_model)
+    original_shape = x.shape[:-1]
+    d_model = x.shape[-1]
+    x_flat = x.reshape(-1, d_model)
+    
+    if metric == "cosine":
+        # Normalize inputs and weights to unit length
+        x_norm = F.normalize(x_flat, p=2, dim=-1)
+        weights_norm = F.normalize(weights, p=2, dim=-1)
+        
+        # Compute cosine similarity via matrix multiplication
+        # (B_total, d_model) x (d_model, num_embeddings) -> (B_total, num_embeddings)
+        similarity = torch.matmul(x_norm, weights_norm.t())
+        
+        # Find the token with the highest similarity score
+        indices = torch.argmax(similarity, dim=-1)
+        
+    elif metric == "l2":
+        # Compute Pairwise Euclidean Distance squared: ||a - b||^2 = ||a||^2 + ||b||^2 - 2ab
+        # This is significantly faster than using torch.cdist
+        x_sq = torch.sum(x_flat ** 2, dim=-1, keepdim=True)        # (B_total, 1)
+        w_sq = torch.sum(weights ** 2, dim=-1, keepdim=True).t()   # (1, num_embeddings)
+        cross_term = torch.matmul(x_flat, weights.t())             # (B_total, num_embeddings)
+        
+        distances = x_sq + w_sq - 2 * cross_term
+        
+        # Find the token with the lowest distance
+        indices = torch.argmin(distances, dim=-1)
+        
+    else:
+        raise ValueError("Metric must be 'cosine' or 'l2'")
+        
+    # Reshape indices back to match the original incoming batch layout
+    return indices.reshape(original_shape)
+
+@torch.no_grad()
 def save_samples(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
@@ -501,11 +548,41 @@ def save_samples(step):
     x, text = get_batch('val', batch_size=n_samples)
     
     gen_noise = torch.randn(x.shape).to(device)
-    net_kwargs = {
-        'text': text
-    }
+    net_kwargs = {'text': text}
+    unconditional_mask = {'text': torch.ones(*text.shape[:-1], 1).to(device).bool()}
+    uncond_net_kwargs = net_kwargs | {'unconditional_mask': unconditional_mask}
     
-    gen_noise = torch.randn(x.shape).to(device)
+    if cfg_mode == 'joint':
+        joint_conditional_mask = {k: ~v for k, v in unconditional_mask.items()}
+        cfg_net_kwargs = [net_kwargs | {'unconditional_mask': joint_conditional_mask}]
+    elif cfg_mode == 'independent':
+        cfg_net_kwargs = []
+        for k, v in unconditional_mask.items():
+            temp_mask = unconditional_mask.copy()
+            temp_mask[k] = ~v
+            cfg_net_kwargs.append(net_kwargs | {'unconditional_mask': temp_mask})
+    
+    cfg_guidances = [4] * len(unconditional_mask)
+    
+    with ctx:
+        y = ema.ema_model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise, memory_efficient=False, rescale_phi=0, cfg_mode=cfg_mode, t_dist=t_dist)
+    
+    style = y[..., :128]
+    chroma = y[..., 128:128+12]
+    rms = y[..., [128+12]]
+    density = y[..., [128+13]]
+    zcr = y[..., [128+14]]
+    flatness = y[..., [128+15]]
+    bpm = y[..., 128+16:128+16+768]
+    
+    # un-normalize
+    rms = rms * rms_std + rms_mean
+    density = density * dennsity_std + density_mean
+    zcr = zcr * zcr_std + zr_mean
+    flatness = flatness * flatness_std + flatness_mean
+    chroma = chroma * chroma_std + chroma_mean
+    bpm = invert_embedding(bpm, dit.net.bpm_embedder, 'cosine')
+    
     decoder_noise = torch.randn(n_samples * n_chunks, 1, encoder_ratios * (max_adapter_len - 1)).to(device)
     
     unconditional_mask = {
@@ -538,7 +615,7 @@ def save_samples(step):
             temp_mask[k] = ~v
             cfg_net_kwargs.append(net_kwargs | {'unconditional_mask': temp_mask})
     
-    cfg_guidances = [3] * len(unconditional_mask)
+    cfg_guidances = [4] * len(unconditional_mask)
     
     y_cfg = predict_measures(x.shape, cfg_net_kwargs, uncond_net_kwargs, n_steps, guidance=cfg_guidances, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode=cfg_mode, t_dist=t_dist)
     y = predict_measures(x.shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, t_dist=t_dist)
