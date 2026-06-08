@@ -159,15 +159,19 @@ flatness_mean = torch.tensor([0.011151944]).to(device)
 flatness_std = torch.tensor([0.018700112]).to(device)
 
 def get_batch(split='train', batch_size=batch_size):
+    t0 = time.time()
     data = np.memmap('/data/binaries/caption_embeddings_expanded.bin', dtype=np.float32, mode='r', shape=(40138, 3, 6, 256, 1024))
     caption_idxs = np.random.randint(data.shape[1], size=batch_size)
     caption_vars = np.random.randint(data.shape[2], size=batch_size)
+    t1 = time.time()
     if split == 'train':
         song_idxs = np.random.randint(len(train_paths), size=batch_size)
         bounds = np.array([train_map[train_paths[i]] for i in song_idxs])
+        t2 = time.time()
         style = np.memmap('/data/binaries/contrast_learntmep_instance_10s_style_train.bin', dtype=np.float32, mode='r', shape=(4490789, style_dim))
         meta = np.memmap('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_train.bin', dtype=np.float32, mode='r', shape=(4490789, 16))
         bpms = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_bpm_train.bin', dtype=np.float32, mode='r')
+        t3 = time.time()
     else:
         song_idxs = np.random.randint(len(val_paths), size=batch_size)
         bounds = np.array([val_map[val_paths[i]] for i in song_idxs])
@@ -184,6 +188,7 @@ def get_batch(split='train', batch_size=batch_size):
     stops = np.minimum(starts + n_chunks, song_stops)
     idx_matrix = starts[:, None] + np.arange(n_chunks)
     idx_matrix = np.minimum(idx_matrix, stops[:, None])
+    t4 = time.time()
     
     text = torch.from_numpy(np.stack([data[i, j, k, :n_text_tokens] for i, j, k in zip(song_idxs, caption_idxs, caption_vars)], axis=0)).pin_memory().to(device, non_blocking=True)
     
@@ -203,6 +208,9 @@ def get_batch(split='train', batch_size=batch_size):
     bpm = dit.net.bpm_embedder(torch.clamp(torch.round(bpm), min=0, max=349).long())
     
     x = torch.cat([style, chroma, rms.unsqueeze(-1), density.unsqueeze(-1), zcr.unsqueeze(-1), flatness.unsqueeze(-1), bpm], dim=-1).unsqueeze(2)
+    t5 = time.time()
+    
+    print(t1 - t0, t2 - t1, t3 - t2, t4 - t3, t5 - t4)
 
     return x, text
 
