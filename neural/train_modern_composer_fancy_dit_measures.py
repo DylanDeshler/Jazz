@@ -191,6 +191,7 @@ def get_batch(split='train', batch_size=batch_size):
     t4 = time.time()
     
     text = torch.from_numpy(np.stack([data[i, j, k, :n_text_tokens] for i, j, k in zip(song_idxs, caption_idxs, caption_vars)], axis=0)).pin_memory().to(device, non_blocking=True)
+    t5 = time.time()
     
     style = torch.from_numpy(style[idx_matrix]).pin_memory().to(device, non_blocking=True)
     chroma = torch.from_numpy(meta[idx_matrix, :12]).pin_memory().to(device, non_blocking=True)
@@ -199,7 +200,7 @@ def get_batch(split='train', batch_size=batch_size):
     zcr = torch.from_numpy(meta[idx_matrix, 14]).pin_memory().to(device, non_blocking=True)
     flatness = torch.from_numpy(meta[idx_matrix, 15]).pin_memory().to(device, non_blocking=True)
     bpm = torch.from_numpy(bpms[idx_matrix]).pin_memory().to(device, non_blocking=True)
-    t5 = time.time()
+    t6 = time.time()
     
     rms = (rms - rms_mean) / rms_std
     density = (density - density_mean) / density_std
@@ -209,9 +210,9 @@ def get_batch(split='train', batch_size=batch_size):
     bpm = dit.net.bpm_embedder(torch.clamp(torch.round(bpm), min=0, max=349).long())
     
     x = torch.cat([style, chroma, rms.unsqueeze(-1), density.unsqueeze(-1), zcr.unsqueeze(-1), flatness.unsqueeze(-1), bpm], dim=-1).unsqueeze(2)
-    t6 = time.time()
+    t7 = time.time()
     
-    print(t1 - t0, t2 - t1, t3 - t2, t4 - t3, t5 - t4, t6 - t5)
+    print(t1 - t0, t2 - t1, t3 - t2, t4 - t3, t5 - t4, t6 - t5, t7 - t6)
 
     return x, text
 
