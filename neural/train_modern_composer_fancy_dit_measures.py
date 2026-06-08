@@ -190,7 +190,8 @@ def get_batch(split='train', batch_size=batch_size):
     idx_matrix = np.minimum(idx_matrix, stops[:, None])
     t4 = time.time()
     
-    text = torch.from_numpy(data[song_idxs, 0, 0]).pin_memory().to(device, non_blocking=True)
+    text = torch.zeros(batch_size, 1, 1, n_text_tokens, 1024).to(device, non_blocking=True)
+    # text = torch.from_numpy(data[song_idxs, caption_idxs, caption_vars]).pin_memory().to(device, non_blocking=True)
     t5 = time.time()
     
     style = torch.from_numpy(style[idx_matrix]).pin_memory().to(device, non_blocking=True)
