@@ -158,9 +158,11 @@ zcr_std = torch.tensor([0.048143145]).to(device)
 flatness_mean = torch.tensor([0.011151944]).to(device)
 flatness_std = torch.tensor([0.018700112]).to(device)
 
+import mmap
 def get_batch(split='train', batch_size=batch_size):
     t0 = time.time()
     data = np.memmap('/data/binaries/caption_embeddings_expanded.bin', dtype=np.float32, mode='r', shape=(40138, 3, 6, 256, 1024))
+    madv = mmap.madvise(data.data, mmap.MADV_RANDOM)
     caption_idxs = np.random.randint(data.shape[1], size=batch_size)
     caption_vars = np.random.randint(data.shape[2], size=batch_size)
     t1 = time.time()
@@ -178,11 +180,6 @@ def get_batch(split='train', batch_size=batch_size):
         style = np.memmap('/data/binaries/contrast_learntmep_instance_10s_style_val.bin', dtype=np.float32, mode='r', shape=(99131, style_dim))
         meta = np.memmap('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_val.bin', dtype=np.float32, mode='r', shape=(99131, 16))
         bpms = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_bpm_val.bin', dtype=np.float32, mode='r')
-    
-    sort_order = np.argsort(song_idxs)
-    song_idxs = song_idxs[sort_order]
-    caption_idxs = caption_idxs[sort_order]
-    caption_vars = caption_vars[sort_order]
     
     song_starts = bounds[:, 0]
     song_stops  = bounds[:, 1] - 1
