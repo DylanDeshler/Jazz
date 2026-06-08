@@ -196,7 +196,7 @@ def get_batch(split='train', batch_size=batch_size):
     stride_1 = 3 * 6
     stride_2 = 6
     flat_song_idxs = (song_idxs * stride_1) + (caption_idxs * stride_2) + caption_vars
-    text = torch.from_numpy(flat_data[flat_song_idxs, :, :n_text_tokens]).pin_memory().to(device, non_blocking=True)
+    text = torch.from_numpy(flat_data[flat_song_idxs, :n_text_tokens]).pin_memory().to(device, non_blocking=True)
     t5 = time.time()
     
     style = torch.from_numpy(style[idx_matrix]).pin_memory().to(device, non_blocking=True)
