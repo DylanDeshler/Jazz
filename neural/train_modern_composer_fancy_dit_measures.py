@@ -160,7 +160,7 @@ flatness_std = torch.tensor([0.018700112]).to(device)
 
 def get_batch(split='train', batch_size=batch_size):
     t0 = time.time()
-    data = np.memmap('/data/binaries/caption_embeddings_expanded.bin', dtype=np.float32, mode='r', shape=(40138, 3, 6, 256, 1024))
+    data = np.memmap('/data/binaries/caption_embeddings_expanded.bin', dtype=np.float32, mode='r', shape=(40138, 3, 6, 256, 1024)).reshape(40138 * 3 * 6, 256, 1024)
     caption_idxs = np.random.randint(data.shape[1], size=batch_size)
     caption_vars = np.random.randint(data.shape[2], size=batch_size)
     t1 = time.time()
@@ -200,9 +200,9 @@ def get_batch(split='train', batch_size=batch_size):
     # print(text.shape)
     caption_idx = np.random.randint(3)
     caption_var = np.random.randint(6)
-    # text = np.stack([data[song_idxs[i], 1, 1] for i in range(len(song_idxs))], axis=0)
-    text = np.array(data[song_idxs[0]:song_idxs[0]+batch_size])
-    text = text[:, caption_idx, caption_var].copy()
+    text = np.stack([data[song_idxs[i], 1, 1] for i in range(len(song_idxs))], axis=0)
+    # text = np.array(data[song_idxs[0]:song_idxs[0]+batch_size])
+    # text = text[:, caption_idx, caption_var].copy()
     print(text.shape)
     
     text = torch.from_numpy(text).pin_memory().to(device, non_blocking=True)
