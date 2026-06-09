@@ -22,8 +22,9 @@ batch_size = 128
 rate = 16000
 n_samples = 24576
 
-out_prefix = 'low_large_24576'
-ckpt_path = os.path.join('tokenizer_low_large_24576', 'ckpt.pt')
+out_prefix = 'low_large_24576_longtrain'
+
+ckpt_path = os.path.join('tokenizer_low_large_24576_subset_longtrain', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 tokenizer_args = checkpoint['model_args']
 vae_embed_dim = tokenizer_args['dimension']
@@ -44,23 +45,23 @@ model.eval()
 #     beat_paths = json.load(f)
 # paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
 
-paths = glob.glob('/home/ubuntu/Data/wavs/*')
+paths = glob.glob('/data/wavs/*')
 print(len(paths))
 
-import concurrent.futures
-from multiprocessing import cpu_count
-wavs = [None] * len(paths)
+# import concurrent.futures
+# from multiprocessing import cpu_count
+# wavs = [None] * len(paths)
 
-with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
-    future_to_index = {
-        executor.submit(lambda x: librosa.load(x, sr=rate)[0], path): i 
-        for i, path in enumerate(paths)
-    }
+# with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
+#     future_to_index = {
+#         executor.submit(lambda x: librosa.load(x, sr=rate)[0], path): i 
+#         for i, path in enumerate(paths)
+#     }
     
-    for future in tqdm(concurrent.futures.as_completed(future_to_index), desc='Loading wav files', total=len(paths)):
-        original_index = future_to_index[future]
-        wav = future.result()
-        wavs[original_index] = wav
+#     for future in tqdm(concurrent.futures.as_completed(future_to_index), desc='Loading wav files', total=len(paths)):
+#         original_index = future_to_index[future]
+#         wav = future.result()
+#         wavs[original_index] = wav
 
 # with open('/home/dylan.d/research/music/Jazz/song_instruments.json', 'r') as f:
 #     song_instruments = json.load(f)
@@ -76,7 +77,9 @@ if True:
     all_codes = []
     all_instruments = []
     with torch.no_grad():
-        for idx, x in enumerate(tqdm(wavs)):
+        for idx, path in enumerate(tqdm(wavs)):
+            x, sr = librosa.load(path, sr=rate)
+            
             # instruments = song_instruments[path.split('/')[-1]]
             this_codes = []
             if test:
