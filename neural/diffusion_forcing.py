@@ -2474,6 +2474,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
             text = signals['text']
             
             if unconditional_mask is not None:
+                print(text.device, unconditional_mask['text'].device, null_tokens['text'].device)
                 text = torch.where(unconditional_mask['text'], null_tokens['text'], text)
         
         # prepend x with text
@@ -2566,6 +2567,21 @@ def UnconditionalModernDiT_large(**kwargs):
 
 def UnconditionalModernDiT_medium(**kwargs):
     return UnconditionalModernDiTWrapper(depth=24, hidden_size=1024, num_heads=16, **kwargs)
+
+def UnconditionalModernDiT_smedium_L5(**kwargs):
+    return UnconditionalModernDiTWrapper(depth=20, hidden_size=1024, num_heads=16, **kwargs)
+
+def UnconditionalModernDiT_smedium_L4(**kwargs):
+    return UnconditionalModernDiTWrapper(depth=20, hidden_size=768, num_heads=12, **kwargs)
+
+def UnconditionalModernDiT_smedium_L3(**kwargs):
+    return UnconditionalModernDiTWrapper(depth=20, hidden_size=512, num_heads=8, **kwargs)
+
+def UnconditionalModernDiT_smedium_L2(**kwargs):
+    return UnconditionalModernDiTWrapper(depth=20, hidden_size=384, num_heads=6, **kwargs)
+
+def UnconditionalModernDiT_smedium_L1(**kwargs):
+    return UnconditionalModernDiTWrapper(depth=20, hidden_size=256, num_heads=4, **kwargs)
 
 def UnconditionalModernDiT_smedium(**kwargs):
     return UnconditionalModernDiTWrapper(depth=20, hidden_size=768, num_heads=12, **kwargs)
