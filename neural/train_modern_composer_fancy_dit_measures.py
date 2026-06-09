@@ -160,7 +160,7 @@ flatness_std = torch.tensor([0.018700112]).to(device)
 
 def get_batch(split='train', batch_size=batch_size):
     t0 = time.time()
-    data = np.random.shuffle(np.memmap('/data/binaries/caption_embeddings_expanded.bin', dtype=np.float32, mode='r', shape=(40138, 3, 6, 256, 1024)))
+    data = np.memmap('/data/binaries/caption_embeddings_expanded.bin', dtype=np.float32, mode='r', shape=(40138, 3, 6, 256, 1024))
     caption_idxs = np.random.randint(data.shape[1], size=batch_size)
     caption_vars = np.random.randint(data.shape[2], size=batch_size)
     t1 = time.time()
