@@ -30,6 +30,7 @@ from torchinfo import summary
 from scipy.signal import medfilt
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
@@ -38,8 +39,6 @@ from diffusion_forcing import MetaConditionalModernDiTV2Composer_smedium as net,
 from dito import DiToV5 as Tokenizer
 from adapter import InvertibleAdapter
 import soundfile as sf
-
-import torch
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
