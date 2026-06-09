@@ -638,7 +638,9 @@ def save_samples(step):
     bpm = bpm[:, :24].squeeze()
     print(style.shape, chroma.shape, rms.shape, density.shape, zcr.shape, flatness.shape, bpm.shape)
     
-    decoder_noise = torch.randn(n_samples * n_chunks, 1, encoder_ratios * (max_adapter_len - 1)).to(device)
+    gen_shape = (n_samples, 24, 64, 16)
+    gen_noise = torch.randn(*gen_shape).to(device)
+    decoder_noise = torch.randn(n_samples * 24, 1, encoder_ratios * (max_adapter_len - 1)).to(device)
     
     unconditional_mask = {
         'bpm': torch.ones(*bpm.shape, 1).to(device).bool(),
@@ -672,8 +674,8 @@ def save_samples(step):
     
     cfg_guidances = [4] * len(unconditional_mask)
     
-    y_cfg = predict_measures(x.shape, cfg_net_kwargs, uncond_net_kwargs, n_steps, guidance=cfg_guidances, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode=cfg_mode, t_dist=t_dist)
-    y = predict_measures(x.shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, t_dist=t_dist)
+    y_cfg = predict_measures(gen_shape, cfg_net_kwargs, uncond_net_kwargs, n_steps, guidance=cfg_guidances, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode=cfg_mode, t_dist=t_dist)
+    y = predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, t_dist=t_dist)
     y_gt = decode_latents(x, bpm, n_steps, decoder_noise=decoder_noise)
     
     for i in range(n_samples):
