@@ -172,6 +172,9 @@ with open('/home/dylandeshler/Jazz/preprocess/final_llm_captions_expanded.jsonl'
 train_raw_paths = [cap.get('file_path', '') for cap in raw_captions if cap.get('file_path', '') in audio_train_map]
 val_raw_paths = [cap.get('file_path', '') for cap in raw_captions if cap.get('file_path', '') in audio_val_map]
 
+train_raw_captions = [cap for cap in raw_captions if cap.get('file_path', '') in audio_train_map]
+val_raw_captions = [cap for cap in raw_captions if cap.get('file_path', '') in audio_val_map]
+
 train_shuffled_indices = text_meta['train']['shuffled_indices']
 train_orig_sub_shape = text_meta['train']['orig_sub_shape']
 
