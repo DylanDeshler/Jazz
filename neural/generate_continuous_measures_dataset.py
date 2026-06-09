@@ -26,7 +26,7 @@ TARGET_SIG = 4
 total_write_batches = 48
 
 dir_name = '/data/binaries/temp'
-os.makedirs(dir_name)
+# os.makedirs(dir_name)
 out_prefix = 'low_large_24576_subset_adapter_longtrain_v2_64'
 
 ckpt_path = os.path.join('tokenizer_low_large_24576_subset_longtrain', 'ckpt.pt')
