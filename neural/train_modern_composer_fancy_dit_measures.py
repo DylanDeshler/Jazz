@@ -170,19 +170,14 @@ with open('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness
 with open('/home/dylandeshler/Jazz/preprocess/final_llm_captions_expanded.jsonl', 'r', encoding='utf-8') as f:
     raw_captions = [json.loads(line) for line in f]
 
-# Split the raw captions file into train and val using the exact same logic your generator used
 train_raw_paths = [cap.get('file_path', '') for cap in raw_captions if cap.get('file_path', '') in audio_train_map]
 val_raw_paths = [cap.get('file_path', '') for cap in raw_captions if cap.get('file_path', '') in audio_val_map]
 
-# Extract shapes and indices
 train_shuffled_indices = text_meta['train']['shuffled_indices']
-train_orig_sub_shape = text_meta['train']['orig_sub_shape']  # (33095, 3, 6)
+train_orig_sub_shape = text_meta['train']['orig_sub_shape']
 
 val_shuffled_indices = text_meta['val']['shuffled_indices']
-val_orig_sub_shape = text_meta['val']['orig_sub_shape']      # (754, 3, 6)
-
-TOTAL_TRAIN_ROWS = train_shuffled_indices.shape[0]  # 33095 * 3 * 6 = 595,710
-TOTAL_VAL_ROWS = val_shuffled_indices.shape[0]      # 754 * 3 * 6 = 13,572
+val_orig_sub_shape = text_meta['val']['orig_sub_shape']
 
 def map_to_slices(idx, split, current_batch_size):
     bounds = []
@@ -190,37 +185,32 @@ def map_to_slices(idx, split, current_batch_size):
     if split == 'train':
         shuffled_indices = train_shuffled_indices
         orig_sub_shape = train_orig_sub_shape
-        song_paths_list = train_raw_paths  # Guaranteed length 33095
+        song_paths_list = train_raw_paths
         audio_map = audio_train_map
     else:
         shuffled_indices = val_shuffled_indices
         orig_sub_shape = val_orig_sub_shape
-        song_paths_list = val_raw_paths    # Guaranteed length 754
+        song_paths_list = val_raw_paths
         audio_map = audio_val_map
         
     for i in range(idx, idx + current_batch_size):
         orig_flat_idx = shuffled_indices[i]
         song_idx, tier_j, var_k = np.unravel_index(orig_flat_idx, orig_sub_shape)
 
-        # song_idx is now mathematically bound to [0, len(song_paths_list)-1]
         matched_song_path = song_paths_list[song_idx]
         bounds.append(audio_map[matched_song_path])
         
     return np.array(bounds)
 
 def get_batch(split='train', batch_size=batch_size):
-    t0 = time.time()
-    t1 = time.time()
     if split == 'train':
         data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_train.bin', dtype=np.float16, mode='r', shape=(33095 * 3 * 6, 256, 1024))
         song_idx = np.random.randint(33095 * 3 * 6 - batch_size)
         bounds = map_to_slices(song_idx, 'train', batch_size)
         
-        t2 = time.time()
         style = np.memmap('/data/binaries/contrast_learntmep_instance_10s_style_train.bin', dtype=np.float32, mode='r', shape=(4490789, style_dim))
         meta = np.memmap('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_train.bin', dtype=np.float32, mode='r', shape=(4490789, 16))
         bpms = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_bpm_train.bin', dtype=np.float32, mode='r')
-        t3 = time.time()
     else:
         data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_val.bin', dtype=np.float16, mode='r', shape=(754 * 3 * 6, 256, 1024))
         song_idx = np.random.randint(754 * 3 * 6 - batch_size)
@@ -239,23 +229,9 @@ def get_batch(split='train', batch_size=batch_size):
     stops = np.minimum(starts + n_chunks, song_stops)
     idx_matrix = starts[:, None] + np.arange(n_chunks)
     idx_matrix = np.minimum(idx_matrix, stops[:, None])
-    t4 = time.time()
     
-    # text = torch.zeros(batch_size, n_text_tokens, 1024).to(device, non_blocking=True)
-    # text = torch.from_numpy(data[song_idxs, caption_idxs, caption_vars]).pin_memory().to(device, non_blocking=True)
-    # local_data = data[song_idxs[0]:song_idxs[0] + batch_size]
-    # print(local_data.shape)
-    # text = local_data[np.arange(batch_size), caption_idxs, caption_vars]
-    # print(text.shape)
-    # text = data[song_idxs[0]:song_idxs[0] + batch_size, 0, 0]
-    # print(text.shape)
-    # text = np.stack([data[song_idxs[i]] for i in range(len(song_idxs))], axis=0)
     text = data[song_idx:song_idx+batch_size].astype(np.float32)
-    # text = text[:, caption_idx, caption_var].copy()
-    print(text.shape)
-    
     text = torch.from_numpy(text).pin_memory().to(device, non_blocking=True)
-    t5 = time.time()
     
     style = torch.from_numpy(style[idx_matrix]).pin_memory().to(device, non_blocking=True)
     chroma = torch.from_numpy(meta[idx_matrix, :12]).pin_memory().to(device, non_blocking=True)
@@ -264,7 +240,6 @@ def get_batch(split='train', batch_size=batch_size):
     zcr = torch.from_numpy(meta[idx_matrix, 14]).pin_memory().to(device, non_blocking=True)
     flatness = torch.from_numpy(meta[idx_matrix, 15]).pin_memory().to(device, non_blocking=True)
     bpm = torch.from_numpy(bpms[idx_matrix]).pin_memory().to(device, non_blocking=True)
-    t6 = time.time()
     
     rms = (rms - rms_mean) / rms_std
     density = (density - density_mean) / density_std
@@ -274,9 +249,6 @@ def get_batch(split='train', batch_size=batch_size):
     bpm = dit.net.bpm_embedder(torch.clamp(torch.round(bpm), min=0, max=349).long())
     
     x = torch.cat([style, chroma, rms.unsqueeze(-1), density.unsqueeze(-1), zcr.unsqueeze(-1), flatness.unsqueeze(-1), bpm], dim=-1).unsqueeze(2)
-    t7 = time.time()
-    
-    print(t1 - t0, t2 - t1, t3 - t2, t4 - t3, t5 - t4, t6 - t5, t7 - t6)
 
     return x, text
 
@@ -323,7 +295,7 @@ checkpoint = torch.load(ckpt_path, map_location=device)
 dit_args = checkpoint['model_args']
 
 dit = dit(**dit_args).to(device)
-state_dict = checkpoint['model']
+state_dict = checkpoint['ema']
 # fix the keys of the state dictionary :(
 # honestly no idea how checkpoints sometimes get this prefix, have to debug more
 unwanted_prefix = '_orig_mod.'
