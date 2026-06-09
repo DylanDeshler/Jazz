@@ -158,10 +158,10 @@ zcr_std = torch.tensor([0.048143145]).to(device)
 flatness_mean = torch.tensor([0.011151944]).to(device)
 flatness_std = torch.tensor([0.018700112]).to(device)
 
-with open('caption_embeddings_shuffled_split_metadata.pkl', 'rb') as f:
+with open('/data/binaries/caption_embeddings_shuffled_split_metadata.pkl', 'rb') as f:
     text_meta = pickle.load(f)
 
-with open('low_large_24576_subset_chroma_rms_density_zcr_flatness_train_map.json', 'r') as f:
+with open('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_train_map.json', 'r') as f:
     audio_train_map = json.load(f)
 
 shuffled_indices = text_meta['train']['shuffled_indices']
