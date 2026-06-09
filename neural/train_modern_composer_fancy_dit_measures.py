@@ -181,11 +181,9 @@ val_orig_sub_shape = text_meta['val']['orig_sub_shape']
 TOTAL_TRAIN_ROWS = train_shuffled_indices.shape[0]  # 33095 * 3 * 6 = 595,710
 TOTAL_VAL_ROWS = val_shuffled_indices.shape[0]      # 754 * 3 * 6 = 13,572
 
-def map_to_slices(idx, split, batch_size=batch_size):
-    print(idx)
+def map_to_slices(idx, split, current_batch_size):
     bounds = []
     
-    # 1. Select the split-specific tools
     if split == 'train':
         shuffled_indices = train_shuffled_indices
         orig_sub_shape = train_orig_sub_shape
@@ -195,15 +193,13 @@ def map_to_slices(idx, split, batch_size=batch_size):
         shuffled_indices = val_shuffled_indices
         orig_sub_shape = val_orig_sub_shape
         song_paths_list = val_song_paths
-        audio_map = audio_val_map  # Fixed: Use validation audio map for validation split
+        audio_map = audio_val_map
         
-    for i in range(idx, idx + batch_size):
-        # i safely loops through the row array indices
+    # FIX 1: Loop using the dynamic batch size passed from get_batch
+    for i in range(idx, idx + current_batch_size):
         orig_flat_idx = shuffled_indices[i]
         song_idx, tier_j, var_k = np.unravel_index(orig_flat_idx, orig_sub_shape)
-        print(song_idx)
 
-        # song_idx is now guaranteed to stay within the bounds of song_paths_list
         matched_song_path = song_paths_list[song_idx]
         bounds.append(audio_map[matched_song_path])
         
