@@ -201,6 +201,7 @@ def map_to_slices(idx, split, batch_size=batch_size):
         # i safely loops through the row array indices
         orig_flat_idx = shuffled_indices[i]
         song_idx, tier_j, var_k = np.unravel_index(orig_flat_idx, orig_sub_shape)
+        print(song_idx)
 
         # song_idx is now guaranteed to stay within the bounds of song_paths_list
         matched_song_path = song_paths_list[song_idx]
