@@ -480,8 +480,8 @@ def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance
     lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
     mask = indices < lengths
     print(indices.shape, lengths.shape, mask.shape)
-    mask = mask.view(gen_shape[0] * n_chunks, max_latent_len)
-    shape = (gen_shape[0] * n_chunks, vae_embed_dim, max_latent_len)
+    mask = mask.view(gen_shape[0] * 24, max_latent_len)
+    shape = (gen_shape[0] * 24, vae_embed_dim, max_latent_len)
         
     with ctx:
         y = rearrange(y, 'b t n c -> (b t) c n')
@@ -491,13 +491,13 @@ def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance
     target_samples = target_samples.flatten().cpu().detach().numpy()
     y = y.squeeze().cpu().detach().numpy()
     
-    target_samples = target_samples.reshape(gen_shape[0], n_chunks)
+    target_samples = target_samples.reshape(gen_shape[0], 24)
     
     out = []
     for i in range(gen_shape[0]):
-        temp = y[i*n_chunks][:min(int(target_samples[i][0]), max_len)]
-        for j in range(1, n_chunks):
-            temp = crossfade_segments(temp, y[i*n_chunks+j][:min(int(target_samples[i][j]), max_len)], sample_rate=16000, crossfade_ms=20)
+        temp = y[i*24][:min(int(target_samples[i][0]), max_len)]
+        for j in range(1, 24):
+            temp = crossfade_segments(temp, y[i*24+j][:min(int(target_samples[i][j]), max_len)], sample_rate=16000, crossfade_ms=20)
         out.append(temp.astype(np.float32))
     
     return out
