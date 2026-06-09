@@ -21,6 +21,7 @@ device = torch.device('cuda')
 batch_size = 384
 rate = 16000
 n_samples = 24576
+total_write_batches = 48
 
 dir_name = '/data/binaries'
 out_prefix = 'low_large_24576_longtrain'
@@ -74,7 +75,6 @@ if False:
 
     write_idx = 0
     write_paths = []
-    total_write_batches = 48
 
     all_codes = []
     all_instruments = []
