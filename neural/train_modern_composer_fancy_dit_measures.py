@@ -164,29 +164,55 @@ with open('/data/binaries/caption_embeddings_expanded_shuffled_split_metadata.pk
 with open('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_train_map.json', 'r') as f:
     audio_train_map = json.load(f)
 
-shuffled_indices = text_meta['train']['shuffled_indices']
-orig_sub_shape = text_meta['train']['orig_sub_shape']
+with open('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_val_map.json', 'r') as f:
+    audio_val_map = json.load(f)
+
+train_song_paths = list(text_meta['train']['audio_file_to_text_rows'].keys())
+val_song_paths = list(text_meta['val']['audio_file_to_text_rows'].keys())
+
+# Extract shapes and indices
+train_shuffled_indices = text_meta['train']['shuffled_indices']
+train_orig_sub_shape = text_meta['train']['orig_sub_shape']
+
+val_shuffled_indices = text_meta['val']['shuffled_indices']
+val_orig_sub_shape = text_meta['val']['orig_sub_shape']
+
+# Determine total text matrix rows available per split
+TOTAL_TRAIN_ROWS = train_shuffled_indices.shape[0]  # 33095 * 3 * 6 = 595,710
+TOTAL_VAL_ROWS = val_shuffled_indices.shape[0]      # 754 * 3 * 6 = 13,572
 
 def map_to_slices(idx, split):
-    print(idx, split)
     bounds = []
-    for i in range(idx,idx+batch_size):
+    
+    # 1. Select the split-specific tools
+    if split == 'train':
+        shuffled_indices = train_shuffled_indices
+        orig_sub_shape = train_orig_sub_shape
+        song_paths_list = train_song_paths
+        audio_map = audio_train_map
+    else:
+        shuffled_indices = val_shuffled_indices
+        orig_sub_shape = val_orig_sub_shape
+        song_paths_list = val_song_paths
+        audio_map = audio_val_map  # Fixed: Use validation audio map for validation split
+        
+    for i in range(idx, idx + batch_size):
+        # i safely loops through the row array indices
         orig_flat_idx = shuffled_indices[i]
         song_idx, tier_j, var_k = np.unravel_index(orig_flat_idx, orig_sub_shape)
 
-        song_paths_list = list(text_meta[split]['audio_file_to_text_rows'].keys())
+        # song_idx is now guaranteed to stay within the bounds of song_paths_list
         matched_song_path = song_paths_list[song_idx]
-
-        bounds.append(audio_train_map[matched_song_path])
-    bounds = np.array(bounds)
-    return bounds
+        bounds.append(audio_map[matched_song_path])
+        
+    return np.array(bounds)
 
 def get_batch(split='train', batch_size=batch_size):
     t0 = time.time()
     t1 = time.time()
     if split == 'train':
         data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_train.bin', dtype=np.float16, mode='r', shape=(33095 * 3 * 6, 256, 1024))
-        song_idx = np.random.randint(33095 - batch_size)
+        song_idx = np.random.randint(33095 * 3 * 6 - batch_size)
         bounds = map_to_slices(song_idx, 'train')
         
         t2 = time.time()
@@ -196,7 +222,7 @@ def get_batch(split='train', batch_size=batch_size):
         t3 = time.time()
     else:
         data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_val.bin', dtype=np.float16, mode='r', shape=(754 * 3 * 6, 256, 1024))
-        song_idx = np.random.randint(754 - batch_size)
+        song_idx = np.random.randint(754 * 3 * 6 - batch_size)
         bounds = map_to_slices(song_idx, 'val')
         
         style = np.memmap('/data/binaries/contrast_learntmep_instance_10s_style_val.bin', dtype=np.float32, mode='r', shape=(99131, style_dim))
