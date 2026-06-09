@@ -675,7 +675,7 @@ def save_samples(step):
     
     cfg_guidances = [4] * len(unconditional_mask)
     
-    y_cfg = predict_measures(gen_shape, cfg_net_kwargs, uncond_net_kwargs, n_steps, guidance=cfg_guidances, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode=cfg_mode, t_dist=t_dist)
+    y_cfg = predict_measures(gen_shape, cfg_net_kwargs, uncond_net_kwargs, n_steps, guidance=cfg_guidances, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, memory_efficient=True, rescale_phi=0, cfg_mode=cfg_mode, t_dist=t_dist)
     y = predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, t_dist=t_dist)
     y_gt = decode_latents(x, bpm, n_steps, decoder_noise=decoder_noise)
     
