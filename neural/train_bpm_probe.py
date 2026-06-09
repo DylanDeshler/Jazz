@@ -124,7 +124,7 @@ def get_batch(split='train', batch_size=batch_size):
         data = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_val.bin', dtype=np.float32, mode='r', shape=(98749, spatial_window, vae_embed_dim))
         meta = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_bpm_val.bin', dtype=np.float32, mode='r')
     
-    idxs = torch.randint(len(data) - n_chunks, (batch_size,))    
+    idxs = torch.randint(len(data) - n_chunks - 1, (batch_size,))    
     x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     
     meta = torch.from_numpy(np.stack([scipy.signal.medfilt(meta[idx:idx+n_chunks], kernel_size=3) for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
