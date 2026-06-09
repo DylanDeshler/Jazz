@@ -169,7 +169,7 @@ orig_sub_shape = text_meta['train']['orig_sub_shape']
 
 def map_to_slices(idx, split):
     bounds = []
-    for i in range(idx:idx+batch_size):
+    for i in range(idx,idx+batch_size):
         orig_flat_idx = shuffled_indices[i]
         song_idx, tier_j, var_k = np.unravel_index(orig_flat_idx, orig_sub_shape)
 
