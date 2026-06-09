@@ -181,6 +181,7 @@ val_orig_sub_shape = text_meta['val']['orig_sub_shape']
 TOTAL_TRAIN_ROWS = train_shuffled_indices.shape[0]  # 33095 * 3 * 6 = 595,710
 TOTAL_VAL_ROWS = val_shuffled_indices.shape[0]      # 754 * 3 * 6 = 13,572
 
+
 def map_to_slices(idx, split, current_batch_size):
     bounds = []
     
@@ -195,12 +196,16 @@ def map_to_slices(idx, split, current_batch_size):
         song_paths_list = val_song_paths
         audio_map = audio_val_map
         
-    # FIX 1: Loop using the dynamic batch size passed from get_batch
     for i in range(idx, idx + current_batch_size):
         orig_flat_idx = shuffled_indices[i]
+        
+        # Unravel directly yields the song position in song_paths_list 
         song_idx, tier_j, var_k = np.unravel_index(orig_flat_idx, orig_sub_shape)
 
+        # FIX 2: song_idx maps directly into the matched song paths list sequence 
         matched_song_path = song_paths_list[song_idx]
+        
+        # Append the specific index boundaries for this song from our target split maps
         bounds.append(audio_map[matched_song_path])
         
     return np.array(bounds)
