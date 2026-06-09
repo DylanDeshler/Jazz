@@ -31,14 +31,36 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from diffusion_forcing import UnconditionalModernDiT_smedium_L1 as net
 from dito import DiToV5 as Tokenizer
 import soundfile as sf
+
+parser = argparse.ArgumentParser(description="Process a specific level argument.")
+valid_levels = [f"L{i}" for i in range(1, 6)]
+
+parser.add_argument(
+    '--level', 
+    type=str, 
+    required=True, 
+    choices=valid_levels,
+    help="Specify the level. Must be one of L1 through L5."
+)
+
+args = parser.parse_args()
+print(f"Successfully selected level: {args.level}")
+
+from diffusion_forcing import UnconditionalModernDiT_smedium_L1, UnconditionalModernDiT_smedium_L2, UnconditionalModernDiT_smedium_L3, UnconditionalModernDiT_smedium_L4, UnconditionalModernDiT_smedium_L5
+
+net_map = {
+    'L1': UnconditionalModernDiT_smedium_L1,
+    'L2': UnconditionalModernDiT_smedium_L2,
+    'L3': UnconditionalModernDiT_smedium_L3,
+}
+net = net_map[args.level]
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'UnconditionalModernDiT_smedium_L1_24576_subset_longtrain_24chunks'
+out_dir = f'UnconditionalModernDiT_smedium_{args.level}_24576_subset_longtrain_24chunks'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -282,9 +304,12 @@ def save_samples(step):
 
     B, T, N, D = x.shape
     
+    gen_noise = torch.randn(*x.shape).to(device)
+    decoder_noise = torch.randn(n_samples * n_chunks, 1, 24576).to(device)
+    
     with ctx:
-        y = ema.ema_model.generate(gen_shape, n_steps=n_steps, noise=gen_noise, memory_efficient=False, cfg_mode=cfg_mode, t_dist=t_dist)
-        y = tokenizer.decode(y.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=n_steps).view(B, T, 1, 24576 * cut_seconds)
+        y = ema.ema_model.generate(x.shape, n_steps=n_steps, noise=gen_noise, memory_efficient=False, cfg_mode=cfg_mode, t_dist=t_dist)
+        y = tokenizer.decode(y.view(B * T, N, D).permute(0, 2, 1), shape=(1, 24576 * cut_seconds), n_steps=n_steps, noise=decoder_noise).view(B, T, 1, 24576 * cut_seconds)
     
     y = y.cpu().detach().float().numpy().squeeze(-2)
 
