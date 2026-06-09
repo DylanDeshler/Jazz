@@ -625,7 +625,7 @@ def save_samples(step):
     # un-normalize
     rms = rms * rms_std + rms_mean
     density = density * density_std + density_mean
-    zcr = zcr * zcr_std + zr_mean
+    zcr = zcr * zcr_std + zcr_mean
     flatness = flatness * flatness_std + flatness_mean
     chroma = chroma * chroma_std + chroma_mean
     bpm = invert_embedding(bpm, dit.net.bpm_embedder, 'cosine')
