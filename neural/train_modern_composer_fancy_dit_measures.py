@@ -201,6 +201,44 @@ def map_to_slices(idx, split, current_batch_size):
         
     return np.array(bounds)
 
+def get_text_from_index(binary_row_idx, split='train'):
+    """
+    Given a specific row index from the shuffled text binary file,
+    returns the literal string caption text that generated it.
+    """
+    if split == 'train':
+        shuffled_indices = train_shuffled_indices
+        orig_sub_shape = train_orig_sub_shape
+        caption_source_list = train_raw_captions
+    else:
+        shuffled_indices = val_shuffled_indices
+        orig_sub_shape = val_orig_sub_shape
+        caption_source_list = val_raw_captions
+
+    # 1. Map the text binary row back to the original matrix grid coordinates
+    orig_flat_idx = shuffled_indices[binary_row_idx]
+    song_idx, tier_j, var_k = np.unravel_index(orig_flat_idx, orig_sub_shape)
+
+    # 2. Extract the structured LLM output dictionary for this specific song
+    song_data = caption_source_list[song_idx].get('llm_output', {})
+    
+    # 3. Figure out which text group tier_j corresponds to (0=short, 1=medium, 2=long)
+    if tier_j == 0:
+        caption_list = song_data.get('short_caption', [])
+    elif tier_j == 1:
+        caption_list = song_data.get('medium_caption', [])
+    else:
+        caption_list = song_data.get('long_caption', [])
+        
+    # Pad just like the generator script did to protect against empty variants
+    NUM_VARS = 6
+    caption_list = (caption_list + [''] * NUM_VARS)[:NUM_VARS]
+
+    # 4. Extract the precise string variation matching var_k
+    literal_text = caption_list[var_k]
+    
+    return literal_text
+
 def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
         data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_train.bin', dtype=np.float16, mode='r', shape=(33095 * 3 * 6, 256, 1024))
@@ -250,6 +288,63 @@ def get_batch(split='train', batch_size=batch_size):
     x = torch.cat([style, chroma, rms.unsqueeze(-1), density.unsqueeze(-1), zcr.unsqueeze(-1), flatness.unsqueeze(-1), bpm], dim=-1).unsqueeze(2)
 
     return x, text
+
+def get_gen_batch(split='train', batch_size=batch_size):
+    if split == 'train':
+        data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_train.bin', dtype=np.float16, mode='r', shape=(33095 * 3 * 6, 256, 1024))
+        song_idx = np.random.randint(33095 * 3 * 6 - batch_size)
+        bounds = map_to_slices(song_idx, 'train', batch_size)
+        caption = [get_text_from_index(i, split='train') for i in range(song_idx, song_idx + batch_size)]
+        
+        latents = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_train.bin', dtype=np.float32, mode='r', shape=(4490789, 64, vae_embed_dim))
+        style = np.memmap('/data/binaries/contrast_learntmep_instance_10s_style_train.bin', dtype=np.float32, mode='r', shape=(4490789, style_dim))
+        meta = np.memmap('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_train.bin', dtype=np.float32, mode='r', shape=(4490789, 16))
+        bpms = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_bpm_train.bin', dtype=np.float32, mode='r')
+    else:
+        data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_val.bin', dtype=np.float16, mode='r', shape=(754 * 3 * 6, 256, 1024))
+        song_idx = np.random.randint(754 * 3 * 6 - batch_size)
+        bounds = map_to_slices(song_idx, 'val', batch_size)
+        caption = [get_text_from_index(i, split='val') for i in range(song_idx, song_idx + batch_size)]
+        
+        latents = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_val.bin', dtype=np.float32, mode='r', shape=(99131, 64, vae_embed_dim))
+        style = np.memmap('/data/binaries/contrast_learntmep_instance_10s_style_val.bin', dtype=np.float32, mode='r', shape=(99131, style_dim))
+        meta = np.memmap('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_val.bin', dtype=np.float32, mode='r', shape=(99131, 16))
+        bpms = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_bpm_val.bin', dtype=np.float32, mode='r')
+    
+    song_starts = bounds[:, 0]
+    song_stops  = bounds[:, 1] - 1
+
+    highs = np.maximum(song_stops - n_chunks, song_starts + 1)
+    random_offsets = np.floor(np.random.rand(batch_size) * (highs - song_starts)).astype(int)
+    starts = song_starts + random_offsets
+    stops = np.minimum(starts + n_chunks, song_stops)
+    idx_matrix = starts[:, None] + np.arange(n_chunks)
+    idx_matrix = np.minimum(idx_matrix, stops[:, None])
+    
+    text = data[song_idx:song_idx+batch_size].astype(np.float32)
+    text = torch.from_numpy(text).pin_memory().to(device, non_blocking=True)
+    
+    latents = torch.from_numpy(latents[idx_matrix]).pin_memory().to(device, non_blocking=True)
+    style = torch.from_numpy(style[idx_matrix]).pin_memory().to(device, non_blocking=True)
+    chroma = torch.from_numpy(meta[idx_matrix, :12]).pin_memory().to(device, non_blocking=True)
+    rms = torch.from_numpy(meta[idx_matrix, 12]).pin_memory().to(device, non_blocking=True)
+    density = torch.from_numpy(meta[idx_matrix, 13]).pin_memory().to(device, non_blocking=True)
+    zcr = torch.from_numpy(meta[idx_matrix, 14]).pin_memory().to(device, non_blocking=True)
+    flatness = torch.from_numpy(meta[idx_matrix, 15]).pin_memory().to(device, non_blocking=True)
+    bpm = torch.from_numpy(bpms[idx_matrix]).pin_memory().to(device, non_blocking=True)
+    
+    rms = (rms - rms_mean) / rms_std
+    density = (density - density_mean) / density_std
+    zcr = (zcr - zcr_mean) / zcr_std
+    flatness = (flatness - flatness_mean) / flatness_std
+    chroma = (chroma - chroma_mean) / chroma_std
+    bpm = dit.net.bpm_embedder(torch.clamp(torch.round(bpm), min=0, max=349).long())
+    
+    x = torch.cat([style, chroma, rms.unsqueeze(-1), density.unsqueeze(-1), zcr.unsqueeze(-1), flatness.unsqueeze(-1), bpm], dim=-1).unsqueeze(2)
+    
+    
+
+    return x, text, caption, latents
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
@@ -479,7 +574,6 @@ def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance
     indices = torch.arange(max_latent_len, device=device).view(1, 1, -1)
     lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
     mask = indices < lengths
-    print(indices.shape, lengths.shape, mask.shape)
     mask = mask.view(gen_shape[0] * 24, max_latent_len)
     shape = (gen_shape[0] * 24, vae_embed_dim, max_latent_len)
         
@@ -592,7 +686,7 @@ def save_samples(step):
     cfg_mode = 'joint'
     n_steps = 100
     n_samples = 5
-    x, text = get_batch('val', batch_size=n_samples)
+    x, text, caption, latents = get_gen_batch('val', batch_size=n_samples)
     
     gen_noise = torch.randn(x.shape).to(device)
     net_kwargs = {'text': text}
@@ -637,7 +731,6 @@ def save_samples(step):
     flatness = flatness[:, :24].squeeze()
     chroma = chroma[:, :24]
     bpm = bpm[:, :24].squeeze()
-    print(style.shape, chroma.shape, rms.shape, density.shape, zcr.shape, flatness.shape, bpm.shape)
     
     gen_shape = (n_samples, 24, 64, 16)
     gen_noise = torch.randn(*gen_shape).to(device)
@@ -677,12 +770,16 @@ def save_samples(step):
     
     y_cfg = predict_measures(gen_shape, cfg_net_kwargs, uncond_net_kwargs, n_steps, guidance=cfg_guidances, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, memory_efficient=True, rescale_phi=0, cfg_mode=cfg_mode, t_dist=t_dist)
     y = predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, t_dist=t_dist)
-    y_gt = decode_latents(x, bpm, n_steps, decoder_noise=decoder_noise)
+    y_gt = decode_latents(latents, bpm, n_steps, decoder_noise=decoder_noise)
     
     for i in range(n_samples):
         sf.write(os.path.join(batch_dir, f'{i}.wav'), y[i].flatten(), 16000)
         sf.write(os.path.join(batch_dir, f'{i}_cfg.wav'), y_cfg[i].flatten(), 16000)
         sf.write(os.path.join(batch_dir, f'{i}_gt.wav'), y_gt[i].flatten(), 16000)
+    
+    with open(os.path.join(batch_size, 'captions.txt'), 'w') as f:
+        for i in range(n_samples):
+            f.write(f'[{i}]: {caption[i]}\n')
 
 # logging
 if wandb_log and master_process:
