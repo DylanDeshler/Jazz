@@ -68,7 +68,7 @@ print(len(paths))
 # with open('/home/dylan.d/research/music/Jazz/song_instruments.json', 'r') as f:
 #     song_instruments = json.load(f)
 
-if True:
+if False:
 
     test = False
 
@@ -206,7 +206,7 @@ if True:
 ## get token write paths
 dtype = np.float32
 write_paths = []
-paths = [f'{out_prefix}_{str(i).zfill(2)}.bin' for i in range(total_write_batches + 1)]
+paths = [os.path.join(dir_name, f'{out_prefix}_{str(i).zfill(2)}.bin') for i in range(total_write_batches + 1)]
 for path in paths:
     data = np.memmap(path, dtype=np.float32, mode='r')
     data = data.reshape((-1, vae_embed_dim))
