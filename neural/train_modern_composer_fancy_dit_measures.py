@@ -201,7 +201,7 @@ def get_batch(split='train', batch_size=batch_size):
     caption_idx = np.random.randint(3)
     caption_var = np.random.randint(6)
     # text = np.stack([data[song_idxs[i]] for i in range(len(song_idxs))], axis=0)
-    text = np.array(data[song_idxs[0]:song_idxs[0]+batch_size])
+    text = data[song_idxs[0]:song_idxs[0]+batch_size]
     # text = text[:, caption_idx, caption_var].copy()
     print(text.shape)
     
