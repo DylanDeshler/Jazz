@@ -478,8 +478,8 @@ def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance
     
     indices = torch.arange(max_latent_len, device=device).view(1, 1, -1)
     lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
-    print(indices.shape, lengths.shape)
     mask = indices < lengths
+    print(indices.shape, lengths.shape, mask.shape)
     mask = mask.view(gen_shape[0] * n_chunks, max_latent_len)
     shape = (gen_shape[0] * n_chunks, vae_embed_dim, max_latent_len)
         
