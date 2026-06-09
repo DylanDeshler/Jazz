@@ -630,6 +630,8 @@ def save_samples(step):
     chroma = chroma * chroma_std + chroma_mean
     bpm = invert_embedding(bpm, dit.net.bpm_embedder, 'cosine')
     
+    print(style.shape, chroma.shape, rms.shape, density.shape, zcr.shape, flatness.shape, bpm.shape)
+    
     decoder_noise = torch.randn(n_samples * n_chunks, 1, encoder_ratios * (max_adapter_len - 1)).to(device)
     
     unconditional_mask = {
@@ -711,9 +713,9 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        # if iter_num % sample_interval == 0 and master_process:
-        #     with ctx:
-        #         save_samples(iter_num)
+        if iter_num % sample_interval == 0 and master_process:
+            with ctx:
+                save_samples(iter_num)
             
         losses = estimate_loss()
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
