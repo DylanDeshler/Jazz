@@ -612,7 +612,7 @@ def save_samples(step):
     cfg_guidances = [4] * len(unconditional_mask)
     
     with ctx:
-        y = ema.ema_model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise, memory_efficient=False, rescale_phi=0, cfg_mode=cfg_mode, t_dist=t_dist)
+        y = ema.ema_model.generate(x.shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise, memory_efficient=False, rescale_phi=0, cfg_mode=cfg_mode, t_dist=t_dist)
     
     style = y[..., :128]
     chroma = y[..., 128:128+12]
