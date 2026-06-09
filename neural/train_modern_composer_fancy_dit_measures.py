@@ -167,7 +167,7 @@ with open('low_large_24576_subset_chroma_rms_density_zcr_flatness_train_map.json
 shuffled_indices = text_meta['train']['shuffled_indices']
 orig_sub_shape = text_meta['train']['orig_sub_shape']
 
-def map_to_slices(idx, split)
+def map_to_slices(idx, split):
     bounds = []
     for i in range(idx:idx+batch_size):
         orig_flat_idx = shuffled_indices[i]
