@@ -17,7 +17,7 @@ import soundfile as sf
 import librosa
 import glob
 
-device = torch.device('cuda')
+device = torch.device('cuda:2')
 
 batch_size = 384
 rate = 16000
@@ -25,6 +25,8 @@ n_samples = 24576
 TARGET_SIG = 4
 total_write_batches = 48
 
+dir_name = '/data/binaries/temp'
+os.makedirs(dir_name)
 out_prefix = 'low_large_24576_subset_adapter_longtrain_v2_64'
 
 ckpt_path = os.path.join('tokenizer_low_large_24576_subset_longtrain', 'ckpt.pt')
@@ -199,7 +201,7 @@ if True:
                 print(f'Writing batch {write_idx}...')
                 all_codes = np.concatenate(all_codes, axis=0)
                 print(all_codes.shape)
-                filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_{str(write_idx).zfill(2)}.bin')
+                filename = os.path.join(dir_name, f'{out_prefix}_{str(write_idx).zfill(2)}.bin')
                 dtype = np.float32
                 arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_codes.shape)
                 arr[:] = all_codes
@@ -207,7 +209,7 @@ if True:
                 
                 all_bpms = np.concatenate(all_bpms, axis=0)
                 print(all_bpms.shape)
-                filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_bpm_{str(write_idx).zfill(2)}.bin')
+                filename = os.path.join(dir_name, f'{out_prefix}_bpm_{str(write_idx).zfill(2)}.bin')
                 dtype = np.float32
                 arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_bpms.shape)
                 arr[:] = all_bpms
@@ -222,7 +224,7 @@ if True:
     print(f'Writing batch {write_idx}...')
     all_codes = np.concatenate(all_codes, axis=0)
     print(all_codes.shape)
-    filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_{str(write_idx).zfill(2)}.bin')
+    filename = os.path.join(dir_name, f'{out_prefix}_{str(write_idx).zfill(2)}.bin')
     dtype = np.float32
     arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_codes.shape)
     arr[:] = all_codes
@@ -230,7 +232,7 @@ if True:
     
     all_bpms = np.concatenate(all_bpms, axis=0)
     print(all_bpms.shape)
-    filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_bpm_{str(write_idx).zfill(2)}.bin')
+    filename = os.path.join(dir_name, f'{out_prefix}_bpm_{str(write_idx).zfill(2)}.bin')
     dtype = np.float32
     arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_bpms.shape)
     arr[:] = all_bpms
@@ -251,7 +253,7 @@ for path in paths:
 
 # write tokens to train.bin
 cur_idx = 0
-filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_train.bin')
+filename = os.path.join(dir_name, f'{out_prefix}_train.bin')
 train_length = np.sum([shape[0] for path, shape in write_paths[:-2]])
 arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, n_queries, vae_embed_dim))
 print(arr.shape)
@@ -266,7 +268,7 @@ for path, shape in write_paths[:-2]:
 
 # write tokens to val.bin
 cur_idx = 0
-filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_val.bin')
+filename = os.path.join(dir_name, f'{out_prefix}_val.bin')
 val_length = np.sum([shape[0] for path, shape in write_paths[-2:]])
 arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length, n_queries, vae_embed_dim))
 print(arr.shape)
@@ -289,7 +291,7 @@ for path in paths:
 
 # write BPM to train.bin
 cur_idx = 0
-filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_bpm_train.bin')
+filename = os.path.join(dir_name, f'{out_prefix}_bpm_train.bin')
 train_length = np.sum([shape[0] for path, shape in write_paths[:-2]])
 arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length,))
 print(arr.shape)
@@ -304,7 +306,7 @@ for path, shape in write_paths[:-2]:
 
 # write BPM to val.bin
 cur_idx = 0
-filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_bpm_val.bin')
+filename = os.path.join(dir_name, f'{out_prefix}_bpm_val.bin')
 val_length = np.sum([shape[0] for path, shape in write_paths[-2:]])
 arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length,))
 print(arr.shape)
