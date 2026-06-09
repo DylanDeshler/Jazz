@@ -45,9 +45,16 @@ parser.add_argument(
     choices=valid_levels,
     help="Specify the level. Must be one of L1 through L5."
 )
+parser.add_argument(
+    '--device', 
+    type=str, 
+    required=True, 
+    choices=valid_levels,
+    help="Specify the device. Like cuda:1."
+)
 
 args = parser.parse_args()
-print(f"Successfully selected level: {args.level}")
+print(f"Begining training for {args.level} on {args.device}")
 
 from diffusion_forcing import UnconditionalModernDiT_smedium_L1, UnconditionalModernDiT_smedium_L2, UnconditionalModernDiT_smedium_L3, UnconditionalModernDiT_smedium_L4, UnconditionalModernDiT_smedium_L5
 
@@ -66,7 +73,7 @@ net = net_map[args.level]
 # I/O
 out_dir = f'UnconditionalModernDiT_smedium_{args.level}_24576_subset_longtrain_32chunks'
 eval_interval = 5000
-sample_interval = 5000
+sample_interval = 10000
 log_interval = 100
 save_interval = 5000
 eval_iters = 600
@@ -74,7 +81,7 @@ eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = False # disabled by default
+wandb_log = True # disabled by default
 wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
@@ -95,7 +102,7 @@ use_null_token = True
 cut_seconds = 1
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 1000000 # total number of training iterations
+max_iters = 200000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.95
@@ -108,7 +115,7 @@ min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
-device = 'cuda:2' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+device = args.device # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
@@ -301,7 +308,7 @@ def save_samples(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
     
-    n_samples = 10
+    n_samples = 5
     n_steps = 100
     t_dist = 'logit'
     cfg_mode = 'joint'
@@ -353,8 +360,7 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         if iter_num % sample_interval == 0 and master_process:
-            with ctx:
-                save_samples(iter_num)
+            save_samples(iter_num)
                 
         losses = estimate_loss()
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
