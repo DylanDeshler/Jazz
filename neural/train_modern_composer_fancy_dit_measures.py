@@ -199,7 +199,7 @@ def get_batch(split='train', batch_size=batch_size):
     # print(text.shape)
     # text = data[song_idxs[0]:song_idxs[0] + batch_size, 0, 0]
     # print(text.shape)
-    text = np.stack([local_data[i, caption_idxs[i], caption_vars[0]] for i in caption_idxs], axis=1)
+    text = np.stack([local_data[i, caption_idxs[i], caption_vars[0]] for i in range(len(caption_idxs))], axis=1)
     print(text.shape)
     
     text = torch.from_numpy(text).pin_memory().to(device, non_blocking=True)
