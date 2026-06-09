@@ -168,6 +168,7 @@ shuffled_indices = text_meta['train']['shuffled_indices']
 orig_sub_shape = text_meta['train']['orig_sub_shape']
 
 def map_to_slices(idx, split):
+    print(idx, split)
     bounds = []
     for i in range(idx,idx+batch_size):
         orig_flat_idx = shuffled_indices[i]
@@ -185,7 +186,7 @@ def get_batch(split='train', batch_size=batch_size):
     t1 = time.time()
     if split == 'train':
         data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_train.bin', dtype=np.float16, mode='r', shape=(33095 * 3 * 6, 256, 1024))
-        song_idx = np.random.randint(33095)
+        song_idx = np.random.randint(33095 - batch_size)
         bounds = map_to_slices(song_idx, 'train')
         
         t2 = time.time()
@@ -195,7 +196,7 @@ def get_batch(split='train', batch_size=batch_size):
         t3 = time.time()
     else:
         data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_val.bin', dtype=np.float16, mode='r', shape=(754 * 3 * 6, 256, 1024))
-        song_idx = np.random.randint(754)
+        song_idx = np.random.randint(754 - batch_size)
         bounds = map_to_slices(song_idx, 'val')
         
         style = np.memmap('/data/binaries/contrast_learntmep_instance_10s_style_val.bin', dtype=np.float32, mode='r', shape=(99131, style_dim))
