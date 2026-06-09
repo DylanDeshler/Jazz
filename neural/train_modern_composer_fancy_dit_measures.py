@@ -591,7 +591,7 @@ def save_samples(step):
     t_dist = 'logit'
     cfg_mode = 'joint'
     n_steps = 100
-    n_samples = 10
+    n_samples = 5
     x, text = get_batch('val', batch_size=n_samples)
     
     gen_noise = torch.randn(x.shape).to(device)
