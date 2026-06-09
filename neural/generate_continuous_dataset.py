@@ -22,6 +22,7 @@ batch_size = 128
 rate = 16000
 n_samples = 24576
 
+dir_name = '/data/binaries'
 out_prefix = 'low_large_24576_longtrain'
 
 ckpt_path = os.path.join('tokenizer_low_large_24576_subset_longtrain', 'ckpt.pt')
@@ -152,7 +153,7 @@ if True:
                 all_codes = all_codes.reshape(all_codes.shape[0] * all_codes.shape[1], all_codes.shape[2])
                 print(all_codes.shape)
 
-                filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_{str(write_idx).zfill(2)}.bin')
+                filename = os.path.join(dir_name, f'{out_prefix}_{str(write_idx).zfill(2)}.bin')
                 dtype = np.float32
                 arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_codes.shape)
                 arr[:] = all_codes
@@ -163,7 +164,7 @@ if True:
                 # all_instruments = all_instruments.reshape(all_instruments.shape[0] * all_instruments.shape[1], all_instruments.shape[2])
                 # print(all_instruments.shape)
 
-                # filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_instruments_{str(write_idx).zfill(2)}.bin')
+                # filename = os.path.join(dir_name, f'{out_prefix}_instruments_{str(write_idx).zfill(2)}.bin')
                 # dtype = np.uint8
                 # arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_instruments.shape)
                 # arr[:] = all_instruments
@@ -190,7 +191,7 @@ if True:
     arr[:] = all_codes
     arr.flush()
 
-    # filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_instruments_{str(write_idx).zfill(2)}.bin')
+    # filename = os.path.join(dir_name, f'{out_prefix}_instruments_{str(write_idx).zfill(2)}.bin')
     # dtype = np.uint8
     # arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_instruments.shape)
     # arr[:] = all_instruments
@@ -212,7 +213,7 @@ for path in paths:
 
 # write tokens to train.bin
 cur_idx = 0
-filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_train.bin')
+filename = os.path.join(dir_name, f'{out_prefix}_train.bin')
 train_length = np.sum([length for path, length in write_paths[:-2]])
 arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, vae_embed_dim))
 print(arr.shape)
@@ -227,7 +228,7 @@ for path, length in write_paths[:-2]:
 
 # write tokens to val.bin
 cur_idx = 0
-filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_val.bin')
+filename = os.path.join(dir_name, f'{out_prefix}_val.bin')
 val_length = np.sum([length for path, length in write_paths[-2:]])
 arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length, vae_embed_dim))
 print(arr.shape)
@@ -251,7 +252,7 @@ for path, length in write_paths[-2:]:
 
 # # write instruments to instruments_train.bin
 # cur_idx = 0
-# filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_instruments_train.bin')
+# filename = os.path.join(dir_name, f'{out_prefix}_instruments_train.bin')
 # train_length = np.sum([length for path, length in write_paths[:-2]])
 # arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(train_length, 26))
 # print(arr.shape)
@@ -266,7 +267,7 @@ for path, length in write_paths[-2:]:
 
 # # write instruments to instruments_val.bin
 # cur_idx = 0
-# filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_instruments_val.bin')
+# filename = os.path.join(dir_name, f'{out_prefix}_instruments_val.bin')
 # val_length = np.sum([length for path, length in write_paths[-2:]])
 # arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(val_length, 26))
 # print(arr.shape)
