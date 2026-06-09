@@ -186,7 +186,7 @@ if False:
     # all_instruments = all_instruments.reshape(all_instruments.shape[0] * all_instruments.shape[1], all_instruments.shape[2])
     # print(all_codes.shape, all_instruments.shape)
 
-    filename = os.path.join(os.path.dirname(__file__), f'{out_prefix}_{str(write_idx).zfill(2)}.bin')
+    filename = os.path.join(dir_name, f'{out_prefix}_{str(write_idx).zfill(2)}.bin')
     dtype = np.float32
     arr = np.memmap(filename, dtype=dtype, mode='w+', shape=all_codes.shape)
     arr[:] = all_codes
