@@ -184,9 +184,6 @@ val_orig_sub_shape = text_meta['val']['orig_sub_shape']      # (754, 3, 6)
 TOTAL_TRAIN_ROWS = train_shuffled_indices.shape[0]  # 33095 * 3 * 6 = 595,710
 TOTAL_VAL_ROWS = val_shuffled_indices.shape[0]      # 754 * 3 * 6 = 13,572
 
-batch_size = 128
-style_dim = 512 
-
 def map_to_slices(idx, split, current_batch_size):
     bounds = []
     
