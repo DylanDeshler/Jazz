@@ -49,8 +49,8 @@ def restructure_binary():
     
     # 6. Write to the new binary in optimized chunks to prevent RAM bloat
     print("Writing shuffled data to disk...")
-    chunk_size = 10000  # Adjust based on your available CPU RAM
-    for i in range(0, total_combinations, chunk_size):
+    chunk_size = 1000  # Adjust based on your available CPU RAM
+    for i in tqdm(range(0, total_combinations, chunk_size)):
         end_idx = min(i + chunk_size, total_combinations)
         
         # Grab coordinates for this chunk
@@ -61,7 +61,7 @@ def restructure_binary():
         # Read non-contiguously from source, write perfectly contiguously to destination
         dst_data[i:end_idx] = src_data[s_c, c_c, v_c]
         
-        if i % 100000 == 0 or end_idx == total_combinations:
+        if i % 20000 == 0 or end_idx == total_combinations:
             print(f"Progress: {end_idx}/{total_combinations} combinations written.")
             dst_data.flush()  # Force write to disk memory
 
