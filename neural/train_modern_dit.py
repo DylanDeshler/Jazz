@@ -301,7 +301,7 @@ def save_samples(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
     
-    n_samples = 20
+    n_samples = 10
     n_steps = 100
     t_dist = 'logit'
     cfg_mode = 'joint'
