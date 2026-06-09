@@ -23,7 +23,7 @@ max_tokens = 256
 # Configuration prefixes matching your audio script
 text_prefix = 'caption_embeddings_expanded_shuffled'
 
-dir_path = os.path.dirname(__file__)
+dir_path = '/data/binaries'
 
 # -------------------------------------------------------------------------
 # 1. LOAD AUDIO METADATA SPLIT DICTIONARIES
@@ -75,7 +75,7 @@ def setup_split_resources(split_name, split_list):
     
     # Instantiate the direct memory map on disk
     bin_file = os.path.join(dir_path, f'{text_prefix}_{split_name}.bin')
-    memmap_arr = np.memmap(bin_file, dtype=np.float32, mode='w+', shape=(total_matrices, max_tokens, model.config.d_model))
+    memmap_arr = np.memmap(bin_file, dtype=np.float16, mode='w+', shape=(total_matrices, max_tokens, model.config.d_model))
     
     return memmap_arr, shuffled_indices, inverse_mapping, orig_sub_shape
 
@@ -116,7 +116,7 @@ def process_split_embeddings(split_list, memmap_arr, inverse_mapping, orig_sub_s
             ).to(device)
             
             outputs = model(**inputs)
-            hidden_states = outputs.last_hidden_state.cpu().numpy()  # (18, 256, 1024)
+            hidden_states = outputs.last_hidden_state.cpu().numpy().astype(np.float16)  # (18, 256, 1024)
             
             # Scatter each matrix row individually into its global shuffled home on disk
             assigned_rows = []
@@ -150,7 +150,7 @@ val_memmap.flush()
 print("\nGenerating separate null embedding...")
 inputs = tokenizer([''], padding="max_length", truncation=True, max_length=max_tokens, return_tensors="pt").to(device)
 outputs = model(**inputs)
-null_state = outputs.last_hidden_state.cpu().numpy()[0]
+null_state = outputs.last_hidden_state.cpu().numpy()[0].astype(np.float16)
 np.save(os.path.join(dir_path, 'null_embedding.npy'), null_state)
 
 # -------------------------------------------------------------------------
