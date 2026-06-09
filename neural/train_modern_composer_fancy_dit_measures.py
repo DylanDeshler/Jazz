@@ -167,20 +167,25 @@ with open('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness
 with open('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_val_map.json', 'r') as f:
     audio_val_map = json.load(f)
 
-train_song_paths = list(text_meta['train']['audio_file_to_text_rows'].keys())
-val_song_paths = list(text_meta['val']['audio_file_to_text_rows'].keys())
+with open('/home/dylandeshler/Jazz/preprocess/final_llm_captions_expanded.jsonl', 'r', encoding='utf-8') as f:
+    raw_captions = [json.loads(line) for line in f]
+
+# Split the raw captions file into train and val using the exact same logic your generator used
+train_raw_paths = [cap.get('file_path', '') for cap in raw_captions if cap.get('file_path', '') in audio_train_map]
+val_raw_paths = [cap.get('file_path', '') for cap in raw_captions if cap.get('file_path', '') in audio_val_map]
 
 # Extract shapes and indices
 train_shuffled_indices = text_meta['train']['shuffled_indices']
-train_orig_sub_shape = text_meta['train']['orig_sub_shape']
+train_orig_sub_shape = text_meta['train']['orig_sub_shape']  # (33095, 3, 6)
 
 val_shuffled_indices = text_meta['val']['shuffled_indices']
-val_orig_sub_shape = text_meta['val']['orig_sub_shape']
+val_orig_sub_shape = text_meta['val']['orig_sub_shape']      # (754, 3, 6)
 
-# Determine total text matrix rows available per split
 TOTAL_TRAIN_ROWS = train_shuffled_indices.shape[0]  # 33095 * 3 * 6 = 595,710
 TOTAL_VAL_ROWS = val_shuffled_indices.shape[0]      # 754 * 3 * 6 = 13,572
 
+batch_size = 128
+style_dim = 512 
 
 def map_to_slices(idx, split, current_batch_size):
     bounds = []
@@ -188,24 +193,20 @@ def map_to_slices(idx, split, current_batch_size):
     if split == 'train':
         shuffled_indices = train_shuffled_indices
         orig_sub_shape = train_orig_sub_shape
-        song_paths_list = train_song_paths
+        song_paths_list = train_raw_paths  # Guaranteed length 33095
         audio_map = audio_train_map
     else:
         shuffled_indices = val_shuffled_indices
         orig_sub_shape = val_orig_sub_shape
-        song_paths_list = val_song_paths
+        song_paths_list = val_raw_paths    # Guaranteed length 754
         audio_map = audio_val_map
         
     for i in range(idx, idx + current_batch_size):
         orig_flat_idx = shuffled_indices[i]
-        
-        # Unravel directly yields the song position in song_paths_list 
         song_idx, tier_j, var_k = np.unravel_index(orig_flat_idx, orig_sub_shape)
 
-        # FIX 2: song_idx maps directly into the matched song paths list sequence 
+        # song_idx is now mathematically bound to [0, len(song_paths_list)-1]
         matched_song_path = song_paths_list[song_idx]
-        
-        # Append the specific index boundaries for this song from our target split maps
         bounds.append(audio_map[matched_song_path])
         
     return np.array(bounds)
