@@ -158,23 +158,46 @@ zcr_std = torch.tensor([0.048143145]).to(device)
 flatness_mean = torch.tensor([0.011151944]).to(device)
 flatness_std = torch.tensor([0.018700112]).to(device)
 
-data = np.memmap('/data/binaries/caption_embeddings_expanded.bin', dtype=np.float32, mode='r', shape=(40138, 3, 6, 256, 1024)).reshape(40138 * 3 * 6, 256, 1024)
+with open('caption_embeddings_shuffled_split_metadata.pkl', 'rb') as f:
+    text_meta = pickle.load(f)
+
+with open('low_large_24576_subset_chroma_rms_density_zcr_flatness_train_map.json', 'r') as f:
+    audio_train_map = json.load(f)
+
+shuffled_indices = text_meta['train']['shuffled_indices']
+orig_sub_shape = text_meta['train']['orig_sub_shape']
+
+def map_to_slices(idx, split)
+    bounds = []
+    for i in range(idx:idx+batch_size):
+        orig_flat_idx = shuffled_indices[i]
+        song_idx, tier_j, var_k = np.unravel_index(orig_flat_idx, orig_sub_shape)
+
+        song_paths_list = list(text_meta[split]['audio_file_to_text_rows'].keys())
+        matched_song_path = song_paths_list[song_idx]
+
+        bounds.append(audio_train_map[matched_song_path])
+    bounds = np.array(bounds)
+    return bounds
+
 def get_batch(split='train', batch_size=batch_size):
     t0 = time.time()
-    caption_idxs = np.random.randint(data.shape[1], size=batch_size)
-    caption_vars = np.random.randint(data.shape[2], size=batch_size)
     t1 = time.time()
     if split == 'train':
-        song_idxs = np.random.randint(len(train_paths), size=batch_size)
-        bounds = np.array([train_map[train_paths[i]] for i in song_idxs])
+        data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_train.bin', dtype=np.float16, mode='r', shape=(40138 * 3 * 6, 256, 1024))
+        song_idx = np.random.randint(len(train_paths))
+        bounds = map_to_slices(song_idx, 'train')
+        
         t2 = time.time()
         style = np.memmap('/data/binaries/contrast_learntmep_instance_10s_style_train.bin', dtype=np.float32, mode='r', shape=(4490789, style_dim))
         meta = np.memmap('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_train.bin', dtype=np.float32, mode='r', shape=(4490789, 16))
         bpms = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_bpm_train.bin', dtype=np.float32, mode='r')
         t3 = time.time()
     else:
-        song_idxs = np.random.randint(len(val_paths), size=batch_size)
-        bounds = np.array([val_map[val_paths[i]] for i in song_idxs])
+        data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_val.bin', dtype=np.float16, mode='r', shape=(40138 * 3 * 6, 256, 1024))
+        song_idx = np.random.randint(len(val_paths))
+        bounds = map_to_slices(song_idx, 'val')
+        
         style = np.memmap('/data/binaries/contrast_learntmep_instance_10s_style_val.bin', dtype=np.float32, mode='r', shape=(99131, style_dim))
         meta = np.memmap('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_val.bin', dtype=np.float32, mode='r', shape=(99131, 16))
         bpms = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_bpm_val.bin', dtype=np.float32, mode='r')
@@ -198,10 +221,8 @@ def get_batch(split='train', batch_size=batch_size):
     # print(text.shape)
     # text = data[song_idxs[0]:song_idxs[0] + batch_size, 0, 0]
     # print(text.shape)
-    caption_idx = np.random.randint(3)
-    caption_var = np.random.randint(6)
     # text = np.stack([data[song_idxs[i]] for i in range(len(song_idxs))], axis=0)
-    text = data[song_idxs[0]:song_idxs[0]+batch_size]
+    text = data[song_idx:song_idx+batch_size].astype(np.float32)
     # text = text[:, caption_idx, caption_var].copy()
     print(text.shape)
     
@@ -308,7 +329,7 @@ if init_from == 'scratch':
     model = net(**model_args)
     # model.net.bpm_embedder.load_state_dict(dit.net.bpm_embedder.state_dict())
     # model.net.bpm_embedder.requires_grad_(False)
-    model.net.null_text = torch.from_numpy(np.memmap('/data/binaries/caption_embeddings.bin', dtype=np.float32, mode='r', shape=(21030, 3, 256, 1024))[-1, -1].copy())
+    model.net.null_text = torch.from_numpy(null_emb.astype(np.float32))
     tokens_trained = 0
     
     ema = EMAModel(model)
