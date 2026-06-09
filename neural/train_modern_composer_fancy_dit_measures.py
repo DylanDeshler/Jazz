@@ -45,7 +45,7 @@ import soundfile as sf
 # I/O
 out_dir = 'MetaConditionalModernDiTV2Composer_smedium_24576_subset_adapter_longtrain_24chunks'
 eval_interval = 5000
-sample_interval = 5000
+sample_interval = 10000
 log_interval = 100
 save_interval = 5000
 eval_iters = 600
@@ -778,7 +778,7 @@ def save_samples(step):
         sf.write(os.path.join(batch_dir, f'{i}_cfg.wav'), y_cfg[i].flatten(), 16000)
         # sf.write(os.path.join(batch_dir, f'{i}_gt.wav'), y_gt[i].flatten(), 16000)
     
-    with open(os.path.join(batch_size, 'captions.txt'), 'w') as f:
+    with open(os.path.join(batch_dir, 'captions.txt'), 'w') as f:
         for i in range(n_samples):
             f.write(f'[{i}]: {caption[i]}\n')
 
