@@ -611,7 +611,7 @@ def save_samples(step):
     cfg_guidances = [4] * len(unconditional_mask)
     
     with ctx:
-        y = ema.ema_model.generate(x.shape, net_kwargs=cfg_net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=cfg_guidances, noise=gen_noise, memory_efficient=False, rescale_phi=0, cfg_mode=cfg_mode, t_dist=t_dist)
+        y = ema.ema_model.generate(x.shape, net_kwargs=cfg_net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=cfg_guidances, noise=gen_noise, memory_efficient=False, rescale_phi=0, cfg_mode=cfg_mode, t_dist=t_dist).squeeze(2)
     
     style = y[..., :128]
     chroma = y[..., 128:128+12]
@@ -629,6 +629,13 @@ def save_samples(step):
     chroma = chroma * chroma_std + chroma_mean
     bpm = invert_embedding(bpm, dit.net.bpm_embedder, 'cosine')
     
+    style = style[:, :24]
+    rms = rms[:, :24].squeeze()
+    density = density[:, :24].squeeze()
+    zcr = zcr[:, :24].squeeze()
+    flatness = flatness[:, :24].squeeze()
+    chroma = chroma[:, :24]
+    bpm = bpm[:, :24].squeeze()
     print(style.shape, chroma.shape, rms.shape, density.shape, zcr.shape, flatness.shape, bpm.shape)
     
     decoder_noise = torch.randn(n_samples * n_chunks, 1, encoder_ratios * (max_adapter_len - 1)).to(device)
