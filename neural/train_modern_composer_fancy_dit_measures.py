@@ -158,9 +158,10 @@ zcr_std = torch.tensor([0.048143145]).to(device)
 flatness_mean = torch.tensor([0.011151944]).to(device)
 flatness_std = torch.tensor([0.018700112]).to(device)
 
+data = np.array(np.memmap('/data/binaries/caption_embeddings_expanded.bin', dtype=np.float32, mode='r', shape=(40138, 3, 6, 256, 1024)))
 def get_batch(split='train', batch_size=batch_size):
     t0 = time.time()
-    data = np.memmap('/data/binaries/caption_embeddings_expanded.bin', dtype=np.float32, mode='r', shape=(40138, 3, 6, 256, 1024))
+    
     caption_idxs = np.random.randint(data.shape[1], size=batch_size)
     caption_vars = np.random.randint(data.shape[2], size=batch_size)
     t1 = time.time()
