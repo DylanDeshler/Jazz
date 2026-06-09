@@ -117,7 +117,7 @@ def parse_beat_file(beat_path):
     
     return beat_data
 
-if True:
+if False:
 
     write_idx = 0
     write_paths = []
@@ -245,7 +245,7 @@ if True:
 ## get token write paths
 dtype = np.float32
 write_paths = []
-paths = [f'{out_prefix}_{str(i).zfill(2)}.bin' for i in range(total_write_batches + 1)]
+paths = [os.path.join(dir_name, f'{out_prefix}_{str(i).zfill(2)}.bin') for i in range(total_write_batches + 1)]
 for path in paths:
     data = np.memmap(path, dtype=np.float32, mode='r')
     data = data.reshape((-1, n_queries, vae_embed_dim))
@@ -284,7 +284,7 @@ for path, shape in write_paths[-2:]:
 ## get BPM write paths
 dtype = np.float32
 write_paths = []
-paths = [f'{out_prefix}_bpm_{str(i).zfill(2)}.bin' for i in range(total_write_batches + 1)]
+paths = [os.path.join(dir_name, f'{out_prefix}_bpm_{str(i).zfill(2)}.bin') for i in range(total_write_batches + 1)]
 for path in paths:
     data = np.memmap(path, dtype=np.float32, mode='r')
     write_paths.append((path, data.shape))
