@@ -23,6 +23,7 @@ import pickle
 from contextlib import nullcontext
 from tqdm import tqdm
 from torchinfo import summary
+import copy
 
 import numpy as np
 import torch
@@ -33,8 +34,6 @@ from einops import rearrange
 from diffusion_forcing import UnconditionalModernDiT_smedium_L1 as net
 from dito import DiToV5 as Tokenizer
 import soundfile as sf
-
-import torch
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
