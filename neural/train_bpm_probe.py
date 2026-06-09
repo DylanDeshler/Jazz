@@ -46,7 +46,7 @@ eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = True # disabled by default
+wandb_log = False # disabled by default
 wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
@@ -54,8 +54,8 @@ dataset = ''
 gradient_accumulation_steps = 1
 batch_size = 256
 # model
-spatial_window = 48
-n_chunks = 32
+spatial_window = 64
+n_chunks = 24
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
 # adamw optimizer
@@ -66,7 +66,7 @@ beta1 = 0.9
 beta2 = 0.999
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
-decay_lr = True # whether to decay the learning rate
+decay_lr = False # whether to decay the learning rate
 warmup_iters = 5000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
@@ -118,11 +118,11 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 # poor man's data loader
 def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
-        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_train.bin', dtype=np.float32, mode='r', shape=(3941406, spatial_window, vae_embed_dim))
-        meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_bpm_train.bin', dtype=np.float32, mode='r')
+        data = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_train.bin', dtype=np.float32, mode='r', shape=(3941406, spatial_window, vae_embed_dim))
+        meta = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_bpm_train.bin', dtype=np.float32, mode='r')
     else:
-        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_val.bin', dtype=np.float32, mode='r', shape=(88303, spatial_window, vae_embed_dim))
-        meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_bpm_val.bin', dtype=np.float32, mode='r')
+        data = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_val.bin', dtype=np.float32, mode='r', shape=(88303, spatial_window, vae_embed_dim))
+        meta = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_bpm_val.bin', dtype=np.float32, mode='r')
     
     idxs = torch.randint(len(data) - n_chunks, (batch_size,))    
     x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
