@@ -184,7 +184,7 @@ def get_batch(split='train', batch_size=batch_size):
     t0 = time.time()
     t1 = time.time()
     if split == 'train':
-        data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_train.bin', dtype=np.float16, mode='r', shape=(40138 * 3 * 6, 256, 1024))
+        data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_train.bin', dtype=np.float16, mode='r', shape=(33095 * 3 * 6, 256, 1024))
         song_idx = np.random.randint(len(train_paths))
         bounds = map_to_slices(song_idx, 'train')
         
@@ -194,7 +194,7 @@ def get_batch(split='train', batch_size=batch_size):
         bpms = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_bpm_train.bin', dtype=np.float32, mode='r')
         t3 = time.time()
     else:
-        data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_val.bin', dtype=np.float16, mode='r', shape=(40138 * 3 * 6, 256, 1024))
+        data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_val.bin', dtype=np.float16, mode='r', shape=(754 * 3 * 6, 256, 1024))
         song_idx = np.random.randint(len(val_paths))
         bounds = map_to_slices(song_idx, 'val')
         
