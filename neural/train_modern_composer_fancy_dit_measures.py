@@ -182,6 +182,7 @@ TOTAL_TRAIN_ROWS = train_shuffled_indices.shape[0]  # 33095 * 3 * 6 = 595,710
 TOTAL_VAL_ROWS = val_shuffled_indices.shape[0]      # 754 * 3 * 6 = 13,572
 
 def map_to_slices(idx, split, batch_size=batch_size):
+    print(idx)
     bounds = []
     
     # 1. Select the split-specific tools
