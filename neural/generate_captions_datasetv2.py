@@ -21,7 +21,7 @@ total_write_batches = 16
 max_tokens = 256
 
 # Configuration prefixes matching your audio script
-text_prefix = 'caption_embeddings_shuffled'
+text_prefix = 'caption_embeddings_expanded_shuffled'
 
 dir_path = os.path.dirname(__file__)
 
