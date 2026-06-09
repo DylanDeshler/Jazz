@@ -89,7 +89,7 @@ gradient_accumulation_steps = 1
 batch_size = 64
 # model
 patch_size = 2
-gradient_checkpointing = True
+gradient_checkpointing = False
 # set to match with measures using n_chunks=24, spatial_window=64
 spatial_window = 48
 n_chunks = 32
@@ -101,7 +101,7 @@ use_null_token = True
 cut_seconds = 1
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 200000 # total number of training iterations
+max_iters = 100000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.95
