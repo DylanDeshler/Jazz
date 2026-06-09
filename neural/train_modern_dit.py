@@ -48,8 +48,7 @@ parser.add_argument(
 parser.add_argument(
     '--device', 
     type=str, 
-    required=True, 
-    choices=valid_levels,
+    required=True,
     help="Specify the device. Like cuda:1."
 )
 
