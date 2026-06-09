@@ -38,7 +38,7 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'UnconditionalModernDiT_smedium_L1_24576_24chunks'
+out_dir = 'UnconditionalModernDiT_smedium_L1_24576_subset_longtrain_24chunks'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100

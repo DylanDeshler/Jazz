@@ -1360,8 +1360,20 @@ class UnconditionalModernDiTWrapper(nn.Module):
     def forward(self, x, t=None):
         return self.diffusion.loss(self.net, x, t=t)
     
-    def generate(self, shape, n_steps=50, noise=None):
-        return self.sampler.sample(self.net, shape, n_steps=n_steps, noise=noise)
+    def generate(self, shape, net_kwargs=None, uncond_net_kwargs=None, n_steps=50, guidance=1.0, noise=None, memory_efficient=True, rescale_phi=0, cfg_mode="independent", t_dist="uniform"):
+        return self.sampler.sample(
+            self.net, 
+            shape, 
+            n_steps=n_steps, 
+            net_kwargs=net_kwargs, 
+            uncond_net_kwargs=uncond_net_kwargs, 
+            guidance=guidance, 
+            noise=noise, 
+            memory_efficient=memory_efficient,
+            rescale_phi=rescale_phi,
+            cfg_mode=cfg_mode,
+            t_dist=t_dist
+        )
 
 class StyleConditionalModernDiT(nn.Module):
     def __init__(self,
