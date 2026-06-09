@@ -21,7 +21,6 @@ total_write_batches = 16
 max_tokens = 256
 
 # Configuration prefixes matching your audio script
-metadata_prefix = 'low_large_24576_subset_chroma_rms_density_zcr_flatness'
 text_prefix = 'caption_embeddings_shuffled'
 
 dir_path = os.path.dirname(__file__)
@@ -30,9 +29,9 @@ dir_path = os.path.dirname(__file__)
 # 1. LOAD AUDIO METADATA SPLIT DICTIONARIES
 # -------------------------------------------------------------------------
 try:
-    with open(os.path.join(dir_path, f'{metadata_prefix}_train_map.json'), 'r') as f:
+    with open('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_train_map.json', 'r') as f:
         audio_train_map = json.load(f)
-    with open(os.path.join(dir_path, f'{metadata_prefix}_val_map.json'), 'r') as f:
+    with open('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_val_map.json', 'r') as f:
         audio_val_map = json.load(f)
 except FileNotFoundError as e:
     raise FileNotFoundError("Please run the audio metadata script first to generate the train/val json maps!") from e
