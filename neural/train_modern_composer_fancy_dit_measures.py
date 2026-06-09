@@ -771,7 +771,7 @@ def save_samples(step):
     
     y_cfg = predict_measures(gen_shape, cfg_net_kwargs, uncond_net_kwargs, n_steps, guidance=cfg_guidances, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, memory_efficient=True, rescale_phi=0, cfg_mode=cfg_mode, t_dist=t_dist)
     y = predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, t_dist=t_dist)
-    y_gt = decode_latents(latents, bpm, n_steps, decoder_noise=decoder_noise)
+    # y_gt = decode_latents(latents, bpm, n_steps, decoder_noise=decoder_noise)
     
     for i in range(n_samples):
         sf.write(os.path.join(batch_dir, f'{i}.wav'), y[i].flatten(), 16000)
