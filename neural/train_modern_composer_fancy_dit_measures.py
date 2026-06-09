@@ -181,7 +181,7 @@ val_orig_sub_shape = text_meta['val']['orig_sub_shape']
 TOTAL_TRAIN_ROWS = train_shuffled_indices.shape[0]  # 33095 * 3 * 6 = 595,710
 TOTAL_VAL_ROWS = val_shuffled_indices.shape[0]      # 754 * 3 * 6 = 13,572
 
-def map_to_slices(idx, split):
+def map_to_slices(idx, split, batch_size=batch_size):
     bounds = []
     
     # 1. Select the split-specific tools
@@ -213,7 +213,7 @@ def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
         data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_train.bin', dtype=np.float16, mode='r', shape=(33095 * 3 * 6, 256, 1024))
         song_idx = np.random.randint(33095 * 3 * 6 - batch_size)
-        bounds = map_to_slices(song_idx, 'train')
+        bounds = map_to_slices(song_idx, 'train', batch_size)
         
         t2 = time.time()
         style = np.memmap('/data/binaries/contrast_learntmep_instance_10s_style_train.bin', dtype=np.float32, mode='r', shape=(4490789, style_dim))
@@ -223,7 +223,7 @@ def get_batch(split='train', batch_size=batch_size):
     else:
         data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_val.bin', dtype=np.float16, mode='r', shape=(754 * 3 * 6, 256, 1024))
         song_idx = np.random.randint(754 * 3 * 6 - batch_size)
-        bounds = map_to_slices(song_idx, 'val')
+        bounds = map_to_slices(song_idx, 'val', batch_size)
         
         style = np.memmap('/data/binaries/contrast_learntmep_instance_10s_style_val.bin', dtype=np.float32, mode='r', shape=(99131, style_dim))
         meta = np.memmap('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_val.bin', dtype=np.float32, mode='r', shape=(99131, 16))
