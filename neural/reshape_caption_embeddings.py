@@ -52,7 +52,7 @@ def main():
     # -------------------------------------------------------------------------
     print("\n--> Starting physical shuffling process...")
     # Adjust chunk_size depending on available RAM. 5,000 matrices ~ 5.2 GB of RAM during transit.
-    chunk_size = 5000 
+    chunk_size = 500 
     
     for start_idx in tqdm(range(0, total_matrices, chunk_size)):
         end_idx = min(start_idx + chunk_size, total_matrices)
