@@ -55,13 +55,16 @@ net_map = {
     'L1': UnconditionalModernDiT_smedium_L1,
     'L2': UnconditionalModernDiT_smedium_L2,
     'L3': UnconditionalModernDiT_smedium_L3,
+    'L4': UnconditionalModernDiT_smedium_L4,
+    'L5': UnconditionalModernDiT_smedium_L5
 }
+assert len(net_map) == len(valid_levels)
 net = net_map[args.level]
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = f'UnconditionalModernDiT_smedium_{args.level}_24576_subset_longtrain_24chunks'
+out_dir = f'UnconditionalModernDiT_smedium_{args.level}_24576_subset_longtrain_32chunks'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -81,8 +84,9 @@ batch_size = 64
 # model
 patch_size = 2
 gradient_checkpointing = True
-spatial_window = 64
-n_chunks = 24
+# set to match with measures using n_chunks=24, spatial_window=64
+spatial_window = 48
+n_chunks = 32
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
 n_style_embeddings = 256
@@ -348,12 +352,12 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        losses = estimate_loss()
-        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-        
         if iter_num % sample_interval == 0 and master_process:
             with ctx:
                 save_samples(iter_num)
+                
+        losses = estimate_loss()
+        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         
         if wandb_log and not (init_from == 'resume' and local_iter_num == 0):
             wandb.log({
