@@ -325,11 +325,9 @@ while True:
         losses = estimate_loss()
         print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
         
-        # if iter_num % sample_interval == 0 and master_process:
-        #     model.eval()
-        #     with ctx:
-        #         save_samples(iter_num)
-        #     model.train()
+        if iter_num % sample_interval == 0 and master_process:
+            with ctx:
+                save_samples(iter_num)
         
         if wandb_log and not (init_from == 'resume' and local_iter_num == 0):
             wandb.log({
