@@ -40,6 +40,7 @@ for k,v in list(state_dict.items()):
         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
 model.load_state_dict(state_dict)
 model.eval()
+model = torch.compile(model)
 
 # paths = glob.glob('/home/ubuntu/Data/measures/*')
 # with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
@@ -78,7 +79,7 @@ if True:
     all_codes = []
     all_instruments = []
     with torch.no_grad():
-        for idx, path in enumerate(tqdm(wavs)):
+        for idx, path in enumerate(tqdm(paths)):
             x, sr = librosa.load(path, sr=rate)
             
             # instruments = song_instruments[path.split('/')[-1]]
