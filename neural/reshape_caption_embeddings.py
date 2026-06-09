@@ -1,4 +1,5 @@
 import numpy as np
+from tqdm import tqdm
 
 def restructure_binary():
     # 1. Map the original source array
