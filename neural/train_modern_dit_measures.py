@@ -192,7 +192,7 @@ tokenizer.eval()
 del state_dict
 encoder_ratios = math.prod(tokenizer.encoder.ratios)
 
-ckpt_path = os.path.join('tokenizer_adapter_low_large_24576_subset_longtrain_v2_64', 'ckpt.pt')
+ckpt_path = os.path.join('tokenizer_adapter_low_large_24576_subset_longtrain_v2', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 adapter_args = checkpoint['model_args']
 
