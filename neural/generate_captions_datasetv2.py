@@ -19,16 +19,16 @@ NUM_TIERS = 3
 total_write_batches = 16
 max_tokens = 256
 
-print("Loading T5-large model and tokenizer...")
-#t5-largs
-tokenizer = T5Tokenizer.from_pretrained("google/t5-v1_1-xxl")
-model = T5EncoderModel.from_pretrained("google/t5-v1_1-xxl")
+model_id = "google/t5-v1_1-xxl" #t5-largs
+print(f"Loading {model_id} model and tokenizer...")
+tokenizer = T5Tokenizer.from_pretrained(model_id)
+model = T5EncoderModel.from_pretrained(model_id)
 model.to(device)
 model.eval()
 print(f'Hidden dim {model.config.d_model}')
 
 # Configuration prefixes matching your audio script
-text_prefix = 'caption_embeddings_expanded_shuffled_xxl'
+text_prefix = f'caption_embeddings_expanded_shuffled_{model_id.split('-')[-1]}'
 
 dir_path = '/data/binaries'
 
