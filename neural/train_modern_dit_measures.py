@@ -23,6 +23,7 @@ import pickle
 from contextlib import nullcontext
 from tqdm import tqdm
 from torchinfo import summary
+import copy
 
 from scipy.signal import medfilt
 import numpy as np
@@ -31,66 +32,93 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from diffusion_forcing import StyleConditionalModernDiT_smedium as net
 from dito import DiToV5 as Tokenizer
 from adapter import InvertibleAdapter
 from fad import BPMProbe
 import soundfile as sf
 
-import torch
-import pyrubberband as pyrb
+import argparse
+parser = argparse.ArgumentParser(description="Process a specific level argument.")
+valid_levels = [f"L{i}" for i in range(1, 6)]
 
-# 0.898376
+parser.add_argument(
+    '--level', 
+    type=str, 
+    required=True, 
+    choices=valid_levels,
+    help="Specify the level. Must be one of L1 through L5."
+)
+parser.add_argument(
+    '--device', 
+    type=str, 
+    required=True,
+    help="Specify the device. Like cuda:1."
+)
+
+args = parser.parse_args()
+print(f"Begining training for {args.level} on {args.device}")
+
+from diffusion_forcing import UnconditionalModernDiT_smedium_L1, UnconditionalModernDiT_smedium_L2, UnconditionalModernDiT_smedium_L3, UnconditionalModernDiT_smedium_L4, UnconditionalModernDiT_smedium_L5
+
+net_map = {
+    'L1': UnconditionalModernDiT_smedium_L1,
+    'L2': UnconditionalModernDiT_smedium_L2,
+    'L3': UnconditionalModernDiT_smedium_L3,
+    'L4': UnconditionalModernDiT_smedium_L4,
+    'L5': UnconditionalModernDiT_smedium_L5
+}
+assert len(net_map) == len(valid_levels)
+net = net_map[args.level]
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'StyleConditionalModernDiT_smedium_24576_subset_adapter_longtrain_32chunks'
-eval_interval = 2500
-sample_interval = 2500
+out_dir = f'UnconditionalModernDiT_smedium_{args.level}_24576_subset_adapter_longtrain_24chunks'
+eval_interval = 5000
+sample_interval = 10000
 log_interval = 100
-save_interval = 2500
+save_interval = 5000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
-always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+always_save_checkpoint = False # if True, always save a checkpoint after each eval
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = True # disabled by default
+wandb_log = False # disabled by default
 wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
 dataset = ''
 gradient_accumulation_steps = 1
-batch_size = 128
+batch_size = 64
 TARGET_SIG = 4
 TARGET_BPM = 60 * TARGET_SIG / (24576 / 16000)
 # model
 patch_size = 2
-gradient_checkpointing = True
-spatial_window = 48
-n_chunks = 32
+gradient_checkpointing = False
+spatial_window = 64
+n_chunks = 24
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
 n_style_embeddings = 256
 style_dim = 128
-use_null_token = True
+use_null_token = False
 cut_seconds = 1
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
-max_iters = 300000 # total number of training iterations
+max_iters = 100000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
-decay_lr = True # whether to decay the learning rate
-warmup_iters = 250000 # how many steps to warm up for
+decay_lr = False # whether to decay the learning rate
+warmup_iters = 5000 # how many steps to warm up for
 lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
-device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+device = args.device # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
@@ -134,20 +162,14 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
-        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_train.bin', dtype=np.float32, mode='r', shape=(3941406, spatial_window, vae_embed_dim))
-        style = np.memmap('/home/ubuntu/Data/contrast_learntmep_instance_10s_style_train.bin', dtype=np.float32, mode='r', shape=(3941406, style_dim))
-        meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_bpm_train.bin', dtype=np.float32, mode='r')
+        data = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_train.bin', dtype=np.float32, mode='r', shape=(4490789, spatial_window, vae_embed_dim))
     else:
-        data = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_val.bin', dtype=np.float32, mode='r', shape=(88303, spatial_window, vae_embed_dim))
-        style = np.memmap('/home/ubuntu/Data/contrast_learntmep_instance_10s_style_val.bin', dtype=np.float32, mode='r', shape=(88303, style_dim))
-        meta = np.memmap('/home/ubuntu/Data/low_large_24576_subset_adapter_longtrain_bpm_val.bin', dtype=np.float32, mode='r')
+        data = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_val.bin', dtype=np.float32, mode='r', shape=(99131, spatial_window, vae_embed_dim))
     
-    idxs = torch.randint(len(data) - n_chunks, (batch_size,))    
+    idxs = torch.randint(len(data) - n_chunks, (batch_size,))
     x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    style = torch.from_numpy(np.stack([style[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    meta = torch.from_numpy(np.stack([meta[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
 
-    return x, style, meta
+    return x
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
@@ -170,7 +192,7 @@ tokenizer.eval()
 del state_dict
 encoder_ratios = math.prod(tokenizer.encoder.ratios)
 
-ckpt_path = os.path.join('tokenizer_adapter_low_large_24576_subset_longtrain', 'ckpt.pt')
+ckpt_path = os.path.join('tokenizer_adapter_low_large_24576_subset_longtrain_v2_64', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 adapter_args = checkpoint['model_args']
 
@@ -187,7 +209,7 @@ adapter.eval()
 del state_dict
 max_adapter_len = adapter.max_seq_len
 
-ckpt_path = os.path.join('tokenizer_low_measures_fix_subset_longtrain_BPMProbe_small', 'ckpt.pt')
+ckpt_path = os.path.join('tokenizer_low_measures_fix_subset_longtrain_v2_64_BPMProbe_tiny', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 probe_args = checkpoint['model_args']
 
@@ -204,11 +226,28 @@ probe.eval()
 
 model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, spatial_window=spatial_window, use_null_token=use_null_token, gradient_checkpointing=gradient_checkpointing, patch_size=patch_size)
 
+class EMAModel:
+    def __init__(self, model, decay=0.9999):
+        self.decay = decay
+        self.ema_model = copy.deepcopy(model).eval()
+        self.ema_model.requires_grad_(False)
+        self.ema_model = torch.compile(self.ema_model)
+        
+    @torch.no_grad()
+    def update(self, model, step):
+        current_decay = min(self.decay, (1 + step) / (10 + step))
+        
+        for ema_param, model_param in zip(self.ema_model.parameters(), model.parameters()):
+            if model_param.requires_grad:
+                ema_param.data.mul_(current_decay).add_(model_param.data, alpha=1.0 - current_decay)
+
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
     model = net(**model_args)
     tokens_trained = 0
+    
+    ema = EMAModel(model)
 elif init_from == 'resume':
     print(f"Resuming training from {out_dir}")
     # resume training from a checkpoint.
@@ -225,6 +264,17 @@ elif init_from == 'resume':
         if k.startswith(unwanted_prefix):
             state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
     model.load_state_dict(state_dict)
+    
+    ema = EMAModel(model)
+    state_dict = checkpoint['ema']
+    # fix the keys of the state dictionary :(
+    # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+    # unwanted_prefix = '_orig_mod.'
+    # for k,v in list(state_dict.items()):
+    #     if k.startswith(unwanted_prefix):
+    #         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+    ema.ema_model.load_state_dict(state_dict)
+    
     iter_num = checkpoint['iter_num']
     tokens_trained = checkpoint['tokens']
     best_val_loss = checkpoint['best_val_loss']
@@ -238,6 +288,7 @@ elif init_from.startswith('gpt2'):
         model_args[k] = getattr(model.config, k)
 
 model.to(device)
+ema.ema_model.to(device)
 summary(model)
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
@@ -263,9 +314,9 @@ def estimate_loss():
     for i, split in enumerate(['train', 'val']):
         losses = torch.zeros(eval_iters)
         for k in tqdm(range(eval_iters)):
-            X, C, _ = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
+            X = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
-                loss = model(X, C)
+                loss = ema.ema_model(X)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -312,13 +363,47 @@ def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', win
             
     return torch.from_numpy(smoothed).to(bpm_tensor.device)
 
-@torch.no_grad()
-def predict_measures(gen_shape, c, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3):
-    with ctx:
-        net_kwargs = {'c': c}
-        uncond_net_kwargs = {'c': c, 'unconditional_mask': torch.ones(*c.shape[:-1], 1).to(device).bool()}
-        y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise)
+def crossfade_segments(segment_a, segment_b, sample_rate, crossfade_ms=15):
+    """
+    Crossfades two 1D numpy audio arrays to prevent boundary clicks.
+    
+    Args:
+        segment_a: numpy array of the first measure.
+        segment_b: numpy array of the second measure.
+        sample_rate: The sample rate of the audio (e.g., 44100 or 24000).
+        crossfade_ms: Duration of the crossfade in milliseconds.
+    """
+    # Convert milliseconds to exact sample count
+    crossfade_samples = int(sample_rate * (crossfade_ms / 1000.0))
+    
+    # Safety check: if segments are too short, just concatenate
+    if len(segment_a) < crossfade_samples or len(segment_b) < crossfade_samples:
+        return np.concatenate((segment_a, segment_b))
         
+    # Create linear fade curves (can also use np.cos for equal-power crossfades)
+    fade_out = np.linspace(1.0, 0.0, crossfade_samples)
+    fade_in = np.linspace(0.0, 1.0, crossfade_samples)
+    
+    # Apply fades to the overlapping edges
+    overlap_a = segment_a[-crossfade_samples:] * fade_out
+    overlap_b = segment_b[:crossfade_samples] * fade_in
+    
+    # Sum the overlapped audio
+    mixed_overlap = overlap_a + overlap_b
+    
+    # Stitch the untouched beginnings/ends with the mixed overlap
+    stitched_audio = np.concatenate((
+        segment_a[:-crossfade_samples],
+        mixed_overlap,
+        segment_b[crossfade_samples:]
+    ))
+    
+    return stitched_audio
+
+def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode="independent", t_dist="uniform"):
+    with ctx:
+        y = ema.ema_model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise, memory_efficient=memory_efficient, rescale_phi=rescale_phi, cfg_mode=cfg_mode, t_dist=t_dist)
+    
         bpm = probe(y)
     
     bpm = smooth_bpm_predictions(bpm, method=method, window_size=window_size)
@@ -334,10 +419,10 @@ def predict_measures(gen_shape, c, n_steps, guidance=1, gen_noise=None, decoder_
     lengths = ((target_samples + encoder_ratios - 1) // encoder_ratios).unsqueeze(-1)
     mask = indices < lengths
     mask = mask.view(gen_shape[0] * n_chunks, max_latent_len)
-    shape = (gen_shape[0] * n_chunks, 1, max_latent_len)
+    shape = (gen_shape[0] * n_chunks, vae_embed_dim, max_latent_len)
         
     with ctx:
-        y = y.transpose(2, 3).view(gen_shape[0] * n_chunks, vae_embed_dim, spatial_window)
+        y = rearrange(y, 'b t n c -> (b t) c n')
         y = adapter.decode(y, shape, mask=mask)
         y = tokenizer.decode(y, shape=(1, max_len), n_steps=n_steps, noise=decoder_noise[:, :, :max_len] if decoder_noise is not None else None)
     
@@ -345,28 +430,35 @@ def predict_measures(gen_shape, c, n_steps, guidance=1, gen_noise=None, decoder_
     y = y.squeeze().cpu().detach().numpy()
     
     target_samples = target_samples.reshape(gen_shape[0], n_chunks)
-    y = [np.concatenate([y_[:min(int(samples), max_len)] for y_, samples in zip(y[i*n_chunks:(i+1)*n_chunks], target_samples[i])], axis=0).astype(np.float32) for i in range(gen_shape[0])]
     
-    return y
+    out = []
+    for i in range(gen_shape[0]):
+        temp = y[i*n_chunks][:min(int(target_samples[i][0]), max_len)]
+        for j in range(1, n_chunks):
+            temp = crossfade_segments(temp, y[i*n_chunks+j][:min(int(target_samples[i][j]), max_len)], sample_rate=16000, crossfade_ms=20)
+        out.append(temp.astype(np.float32))
+    
+    return out
 
 @torch.no_grad()
 def save_samples(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
     
-    n_steps = 50
-    n_samples = 10
-    x, c, bpm = get_batch('val')
-    x, c, bpm = x[:n_samples], c[:n_samples], bpm[:n_samples]
+    n_steps = 100
+    n_samples = 5
+    t_dist = 'logit'
+    cfg_mode = 'joint'
+    x = get_batch('val')[:n_samples]
+
+    B, T, N, D = x.shape    
     
     gen_noise = torch.randn(x.shape).to(device)
     decoder_noise = torch.randn(n_samples * n_chunks, 1, encoder_ratios * (max_adapter_len - 1)).to(device)
-    y_cfg = predict_measures(x.shape, c, n_steps, guidance=5.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
     y = predict_measures(x.shape, c, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3)
     
     for i in range(n_samples):
         sf.write(os.path.join(batch_dir, f'{i}.wav'), y[i].flatten(), 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_cfg.wav'), y_cfg[i].flatten(), 16000)
 
 # logging
 if wandb_log and master_process:
@@ -377,7 +469,7 @@ if wandb_log and master_process:
         wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
-X, C, _ = get_batch('train') # fetch the very first batch
+X = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
@@ -428,6 +520,7 @@ while True:
                 'best_val_loss': best_val_loss,
                 'config': config,
                 'tokens': tokens_trained,
+                'ema': ema.ema_model.state_dict(),
             }
             torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
             print(f"saving new best checkpoint to {out_dir}")
@@ -437,10 +530,11 @@ while True:
                 'optimizer': optimizer.state_dict(),
                 'model_args': model_args,
                 'iter_num': iter_num,
-                'val_loss': losses['val'],
+                'val_loss': best_val_loss,
                 'best_val_loss': best_val_loss,
                 'config': config,
                 'tokens': tokens_trained,
+                'ema': ema.ema_model.state_dict(),
             }
             torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
     
@@ -457,10 +551,10 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            loss = model(X, C)
+            loss = model(X)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
-        X, C, _ = get_batch('train')
+        X = get_batch('train')
         # backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
     # clip the gradient
@@ -472,6 +566,7 @@ while True:
     scaler.update()
     # flush the gradients as soon as we can, no need for this memory anymore
     optimizer.zero_grad(set_to_none=True)
+    ema.update(model, iter_num)
 
     # timing and logging
     t1 = time.time()
