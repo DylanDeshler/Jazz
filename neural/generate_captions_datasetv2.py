@@ -12,16 +12,23 @@ import torch
 
 from transformers import T5Tokenizer, T5EncoderModel
 
-device = torch.device('cuda:1')
+device = torch.device('cuda:0')
 
-NUM_VARS = 5 + 1        # 6
-NUM_TIERS = 3           # 3
-batch_size = 32
+NUM_VARS = 5 + 1
+NUM_TIERS = 3
 total_write_batches = 16
 max_tokens = 256
 
+print("Loading T5-large model and tokenizer...")
+#t5-largs
+tokenizer = T5Tokenizer.from_pretrained("google/t5-v1_1-xxl")
+model = T5EncoderModel.from_pretrained("google/t5-v1_1-xxl")
+model.to(device)
+model.eval()
+print(f'Hidden dim {model.config.d_model}')
+
 # Configuration prefixes matching your audio script
-text_prefix = 'caption_embeddings_expanded_shuffled'
+text_prefix = 'caption_embeddings_expanded_shuffled_xxl'
 
 dir_path = '/data/binaries'
 
@@ -53,12 +60,6 @@ for cap in all_captions:
         val_captions.append((cap, path))
 
 print(f"Matched Captions Split -> Train: {len(train_captions)} songs, Val: {len(val_captions)} songs")
-
-print("Loading T5-large model and tokenizer...")
-tokenizer = T5Tokenizer.from_pretrained("t5-large")
-model = T5EncoderModel.from_pretrained("t5-large")
-model.to(device)
-model.eval()
 
 # -------------------------------------------------------------------------
 # 3. RESOURCE ALLOCATION FUNCTION (MEMMAP + PERMUTATIONS)
