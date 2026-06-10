@@ -35,7 +35,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from diffusion_forcing import MetaConditionalModernDiTV2Composer_smedium as net, MetaConditionalModernDiTV2_smedium as dit
+from diffusion_forcing import MetaConditionalModernDiTV2Composer_large as net, MetaConditionalModernDiTV2_smedium as dit
 from dito import DiToV5 as Tokenizer
 from adapter import InvertibleAdapter
 import soundfile as sf
@@ -43,7 +43,7 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'MetaConditionalModernDiTV2Composer_smedium_24576_subset_adapter_longtrain_24chunks'
+out_dir = 'MetaConditionalModernDiTV2Composer_larg_24576_subset_adapter_longtrain_24chunks'
 eval_interval = 5000
 sample_interval = 10000
 log_interval = 100
@@ -64,7 +64,7 @@ TARGET_SIG = 4
 TARGET_BPM = 60 * TARGET_SIG / (24576 / 16000)
 # model
 patch_size = 1
-gradient_checkpointing = False
+gradient_checkpointing = True
 spatial_window = 1
 n_chunks = 192
 max_seq_len = spatial_window * n_chunks
@@ -771,12 +771,12 @@ def save_samples(step):
     
     y_cfg = predict_measures(gen_shape, cfg_net_kwargs, uncond_net_kwargs, n_steps, guidance=cfg_guidances, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, memory_efficient=True, rescale_phi=0, cfg_mode=cfg_mode, t_dist=t_dist)
     y = predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, t_dist=t_dist)
-    # y_gt = decode_latents(latents, bpm, n_steps, decoder_noise=decoder_noise)
+    y_gt = decode_latents(latents[:, :24], bpm, n_steps, decoder_noise=decoder_noise)
     
     for i in range(n_samples):
         sf.write(os.path.join(batch_dir, f'{i}.wav'), y[i].flatten(), 16000)
         sf.write(os.path.join(batch_dir, f'{i}_cfg.wav'), y_cfg[i].flatten(), 16000)
-        # sf.write(os.path.join(batch_dir, f'{i}_gt.wav'), y_gt[i].flatten(), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_gt.wav'), y_gt[i].flatten(), 16000)
     
     with open(os.path.join(batch_dir, 'captions.txt'), 'w') as f:
         for i in range(n_samples):
