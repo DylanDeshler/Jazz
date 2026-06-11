@@ -10,11 +10,10 @@ from torchinfo import summary
 import numpy as np
 import torch
 import zarr
-import numcodecs
 
 from transformers import T5Tokenizer, T5EncoderModel
 
-device = torch.device('cuda:2')
+device = torch.device('cuda:0')
 
 NUM_VARS = 5 + 1
 NUM_TIERS = 3
@@ -64,7 +63,7 @@ for cap in all_captions:
 print(f"Matched Captions Split -> Train: {len(train_captions)} songs, Val: {len(val_captions)} songs")
 
 # -------------------------------------------------------------------------
-# 3. RESOURCE ALLOCATION FUNCTION (ZARR STORE + PERMUTATIONS)
+# 3. RESOURCE ALLOCATION FUNCTION (ZARR V3 COMPATIBLE)
 # -------------------------------------------------------------------------
 def setup_split_resources(split_name, split_list):
     num_songs = len(split_list)
@@ -76,20 +75,17 @@ def setup_split_resources(split_name, split_list):
     shuffled_indices = rng.permutation(total_matrices)
     inverse_mapping = np.argsort(shuffled_indices)
     
-    # Instantiate the Zarr Directory Store with variable length codecs
+    # Zarr v3 directory path
     zarr_path = os.path.join(dir_path, f'{text_prefix}_{split_name}.zarr')
     
-    # Using dynamic, variable-length storage arrays. Blosc + LZ4 offers near-instant compression
-    compressor = numcodecs.Blosc(cname='lz4', clevel=5, shuffle=numcodecs.Blosc.SHUFFLE)
-    object_codec = numcodecs.VLenArray(np.float16)
-    
+    # Zarr v3 requires explicit dimensions and standard dtypes instead of object arrays.
+    # Chunking by 1 row ensures fast retrieval and random shuffling during training batches.
     zarr_arr = zarr.open(
         store=zarr_path, 
         mode='w', 
-        shape=(total_matrices,), 
-        dtype=object, 
-        object_codec=object_codec,
-        compressor=compressor
+        shape=(total_matrices, max_tokens, model.config.d_model), 
+        chunks=(1, max_tokens, model.config.d_model),
+        dtype='float16'
     )
     
     return zarr_arr, shuffled_indices, inverse_mapping, orig_sub_shape
@@ -122,10 +118,11 @@ def process_split_embeddings(split_list, zarr_arr, inverse_mapping, orig_sub_sha
             
             texts = short_list + medium_list + long_list
             
-            # Switch padding to False so we only extract/save the authentic non-zero sequences
+            # Using max_length padding to map onto a clean Zarr array.
+            # Trailing zeros compress down to essentially nothing on disk under LZ4.
             inputs = tokenizer(
                 texts,
-                padding=False,
+                padding="max_length",
                 truncation=True,
                 max_length=max_tokens,
                 return_tensors="pt"
@@ -134,7 +131,7 @@ def process_split_embeddings(split_list, zarr_arr, inverse_mapping, orig_sub_sha
             outputs = model(**inputs)
             hidden_states = outputs.last_hidden_state.cpu().numpy().astype(np.float16)
             
-            # Get the actual token lengths of the batch items since padding is off
+            # Extract sequence attention lengths to preserve tier information in metadata
             attention_mask = inputs.attention_mask.cpu().numpy()
             actual_lengths = attention_mask.sum(axis=1)
             
@@ -147,10 +144,8 @@ def process_split_embeddings(split_list, zarr_arr, inverse_mapping, orig_sub_sha
                     new_dest_row = inverse_mapping[orig_flat_idx]
                     
                     batch_matrix_idx = (tier_j * NUM_VARS) + var_k
-                    valid_len = actual_lengths[batch_matrix_idx]
                     
-                    # Slice away trailing pad structures entirely prior to committing array
-                    zarr_arr[new_dest_row] = hidden_states[batch_matrix_idx, :valid_len, :]
+                    zarr_arr[new_dest_row] = hidden_states[batch_matrix_idx]
                     assigned_rows.append(int(new_dest_row))
             
             # Keep note of where this song's 18 rows ended up inside the text binary file
@@ -170,7 +165,7 @@ process_split_embeddings(val_captions, val_zarr, val_inverse, val_shape, text_va
 # -------------------------------------------------------------------------
 print("\nGenerating separate null embedding...")
 with torch.no_grad():
-    inputs = tokenizer([''], padding=False, truncation=True, max_length=max_tokens, return_tensors="pt").to(device)
+    inputs = tokenizer([''], padding="max_length", truncation=True, max_length=max_tokens, return_tensors="pt").to(device)
     outputs = model(**inputs)
     null_state = outputs.last_hidden_state.cpu().numpy()[0].astype(np.float16)
 np.save(os.path.join(dir_path, 'null_embedding.npy'), null_state)
