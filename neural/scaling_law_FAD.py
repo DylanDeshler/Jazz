@@ -241,7 +241,7 @@ probe = load_model(os.path.join('tokenizer_low_measures_fix_subset_longtrain_v2_
 levels = [f"L{i}" for i in range(1, 3)]
 dits = [UnconditionalModernDiT_smedium_L1, UnconditionalModernDiT_smedium_L2, UnconditionalModernDiT_smedium_L3, UnconditionalModernDiT_smedium_L4, UnconditionalModernDiT_smedium_L5]
 base_dits = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_longtrain_32chunks/ckpt.pt', DiT) for level, DiT in zip(levels, dits)]
-measure_dit = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_adapter_longtrain_24chunks/ckpt.pt', DiT) for level, DiT in zip(levels, dits)]
+measure_dits = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_adapter_longtrain_24chunks/ckpt.pt', DiT) for level, DiT in zip(levels, dits)]
 base_chunks = 32
 base_window = 48
 measure_chunks = 24
@@ -283,7 +283,7 @@ with torch.no_grad():
     for _ in tqdm(range(n_generations // batch_size), desc='Embedding Generated Samples'):
         base_gen_shape = (batch_size, base_chunks, base_window, vae_embed_dim)
         base_gen_noise = torch.randn(base_gen_shape, device=device)
-        base_decoder_noise = torch.randn(batch_size * base_chunks, 1, 24576).to(device)
+        base_decoder_noise = torch.randn((batch_size * base_chunks, 1, 24576), device=device)
         
         with ctx:
             for i, base_dit in enumerate(base_dits):
@@ -297,10 +297,10 @@ with torch.no_grad():
                 y1_embs[levels[i]].append(y1_emb.cpu().detach().numpy())
         
         measure_gen_shape = (batch_size, measure_chunks, measure_window, vae_embed_dim)
-        measure_gen_noise = torch.randn(measure_gen_shape).to(device)
-        measure_decoder_noise = torch.randn(batch_size * measure_chunks, 1, encoder_ratios * (max_seq_len - 1)).to(device)
+        measure_gen_noise = torch.randn(measure_gen_shape, device=device)
+        measure_decoder_noise = torch.randn((batch_size * measure_chunks, 1, encoder_ratios * (max_seq_len - 1)), device=device)
         for i, measure_dit in enumerate(measure_dits):
-            y2 = predict_measures(x.shape, None, None, n_steps, guidance=1.0, gen_noise=measure_gen_noise, decoder_noise=measure_decoder_noise, method='median', window_size=3)
+            y2 = predict_measures(measure_gen_shape, None, None, n_steps, guidance=1.0, gen_noise=measure_gen_noise, decoder_noise=measure_decoder_noise, method='median', window_size=3)
             with ctx:
                 y2 = drop_to_multiple(y2, 16383 * 5)
                 y2_emb = fad.forward_features(y2)
