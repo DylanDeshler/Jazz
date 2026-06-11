@@ -285,7 +285,7 @@ fad = load_model(os.path.join('FAD', 'ckpt.pt'), FAD)
 paths = glob.glob('/data/wavs/*')
 paths = paths[-int(len(paths) * 2/48):] # test set
 
-n_generations = 10
+n_generations = 8
 batch_size = 4
 n_steps = 32
 assert n_generations % batch_size == 0
