@@ -131,10 +131,6 @@ def process_split_embeddings(split_list, zarr_arr, inverse_mapping, orig_sub_sha
             outputs = model(**inputs)
             hidden_states = outputs.last_hidden_state.cpu().numpy().astype(np.float16)
             
-            # Extract sequence attention lengths to preserve tier information in metadata
-            attention_mask = inputs.attention_mask.cpu().numpy()
-            actual_lengths = attention_mask.sum(axis=1)
-            
             # Scatter each matrix row individually into its global shuffled home on disk
             assigned_rows = []
             for tier_j in range(NUM_TIERS):
