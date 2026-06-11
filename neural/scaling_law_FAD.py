@@ -39,7 +39,10 @@ def load_model(ckpt_path, ModelType):
     tokenizer_args = checkpoint['model_args']
 
     model = ModelType(**tokenizer_args).to(device)
-    state_dict = checkpoint['model']
+    if 'ema' in checkpoint:
+        state_dict = checkpoint['ema']
+    else:
+        state_dict = checkpoint['model']
     unwanted_prefix = '_orig_mod.'
     for k,v in list(state_dict.items()):
         if k.startswith(unwanted_prefix):
@@ -236,8 +239,9 @@ probe = load_model(os.path.join('tokenizer_low_measures_fix_subset_longtrain_v2_
 
 # DiTs
 levels = [f"L{i}" for i in range(1, 3)]
-base_dits = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_longtrain_32chunks/ckpt.pt', DiT) for level in levels]
-measure_dit = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_adapter_longtrain_24chunks/ckpt.pt', DiT) for level in levels]
+dits = [UnconditionalModernDiT_smedium_L1, UnconditionalModernDiT_smedium_L2, UnconditionalModernDiT_smedium_L3, UnconditionalModernDiT_smedium_L4, UnconditionalModernDiT_smedium_L5]
+base_dits = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_longtrain_32chunks/ckpt.pt', DiT) for level, DiT in zip(levels, dits)]
+measure_dit = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_adapter_longtrain_24chunks/ckpt.pt', DiT) for level, DiT in zip(levels, dits)]
 base_chunks = base_dits[0].n_chunks
 base_window = base_dits[0].spatial_window
 measure_chunks = measure_dits[0].n_chunks
