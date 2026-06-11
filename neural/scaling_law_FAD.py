@@ -270,7 +270,7 @@ max_seq_len = adapter.max_seq_len
 probe = load_model(os.path.join('tokenizer_low_measures_fix_subset_BPMProbe_tiny', 'ckpt.pt'), BPMProbe)
 
 # DiTs
-levels = [f"L{i}" for i in range(1, 6)]
+levels = [f"L{i}" for i in range(1, 3)]
 base_dits = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_longtrain_32chunks/ckpt.pt', DiT) for level in levels]
 measure_dit = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_adapter_longtrain_24chunks/ckpt.pt', DiT) for level in levels]
 base_chunks = base_dits[0].n_chunks
