@@ -281,7 +281,7 @@ with torch.no_grad():
         real_embs.append(real_emb.cpu().detach().numpy())
         
     for _ in tqdm(range(n_generations // batch_size), desc='Embedding Generated Samples'):
-        base_gen_shape = (batch_size, base_chunks, abse_window, vae_embed_dim)
+        base_gen_shape = (batch_size, base_chunks, base_window, vae_embed_dim)
         base_gen_noise = torch.randn(base_gen_shape, device=device)
         base_decoder_noise = torch.randn(batch_size * base_chunks, 1, 24576).to(device)
         
