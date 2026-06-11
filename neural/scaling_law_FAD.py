@@ -296,7 +296,7 @@ with torch.no_grad():
         
                 y1_embs[levels[i]].append(y1_emb.cpu().detach().numpy())
         
-        measure_gen_shape = measure_gen_shape.reshape(batch_size, measure_chunks, measure_window, vae_embed_dim)
+        measure_gen_shape = (batch_size, measure_chunks, measure_window, vae_embed_dim)
         measure_gen_noise = torch.randn(measure_gen_shape).to(device)
         measure_decoder_noise = torch.randn(batch_size * measure_chunks, 1, encoder_ratios * (max_seq_len - 1)).to(device)
         for i, measure_dit in enumerate(measure_dits):
