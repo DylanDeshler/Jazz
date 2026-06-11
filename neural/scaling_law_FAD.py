@@ -19,6 +19,32 @@ from dito import DiToV5 as Tokenizer
 from fad import MultiTaskFAD as FAD, BPMProbe
 from adapter import InvertibleAdapter as Adapter
 from diffusion_forcing import UnconditionalModernDiT_smedium_L1, UnconditionalModernDiT_smedium_L2, UnconditionalModernDiT_smedium_L3, UnconditionalModernDiT_smedium_L4, UnconditionalModernDiT_smedium_L5
+import argparse
+parser = argparse.ArgumentParser(description="Process a specific level argument.")
+valid_levels = [f"L{i}" for i in range(1, 6)]
+
+parser.add_argument(
+    '--batch_size', 
+    type=int, 
+    required=True, 
+)
+parser.add_argument(
+    '--n_samples', 
+    type=int, 
+    required=True, 
+)
+parser.add_argument(
+    '--n_steps', 
+    type=int, 
+    default=32,
+)
+parser.add_argument(
+    '--device', 
+    type=str, 
+    required=True,
+    help="Specify the device. Like cuda:1."
+)
+args = parser.parse_args()
 
 torch.manual_seed(0)
 np.random.seed(0)
@@ -28,7 +54,7 @@ n_samples = 24576
 TARGET_SIG = 4
 TARGET_BPM = 60 * TARGET_SIG / (n_samples / rate)
 
-device = 'cuda:2'
+device = args.device
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16'
 device_type = 'cuda' if 'cuda' in device else 'cpu'
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
@@ -256,9 +282,9 @@ fad = load_model(os.path.join('FAD', 'ckpt.pt'), FAD)
 paths = glob.glob('/data/wavs/*')
 paths = paths[-int(len(paths) * 2/48):] # test set
 
-n_generations = 8
-batch_size = 1
-n_steps = 32
+n_generations = args.n_samples
+batch_size = args.batch_size
+n_steps = args.n_steps
 assert n_generations % batch_size == 0
 
 idxs = np.random.choice(np.arange(len(paths)), size=n_generations, replace=False)
