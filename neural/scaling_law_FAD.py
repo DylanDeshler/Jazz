@@ -27,7 +27,7 @@ n_samples = 24576
 TARGET_SIG = 4
 TARGET_BPM = 60 * TARGET_SIG / (n_samples / rate)
 
-device = 'cuda'
+device = 'cuda:2'
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16'
 device_type = 'cuda' if 'cuda' in device else 'cpu'
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
@@ -49,39 +49,6 @@ def load_model(ckpt_path, ModelType):
     if 'cuda' in device:
         model = torch.compile(model)
     return model
-
-def parse_beat_file(beat_path):
-    """
-    Parses the beat_this output file.
-    Expected format per line: <timestamp> <beat_number>
-    
-    Returns a list of dictionaries: {'time': float, 'beat': int}
-    """
-    beat_data = []
-    with open(beat_path, 'r') as f:
-        for line in f:
-            parts = line.strip().split()
-            if len(parts) >= 1:
-                try:
-                    ts = float(parts[0])
-                    # specific beat number (1, 2, 3, 4)
-                    # Default to 0 if not present
-                    bn = 0 
-                    if len(parts) >= 2:
-                        try:
-                            bn = int(float(parts[1]))
-                            
-                            # found an issue where 4/4 is frequently being annotated as 8/4 this fixes it and safe because were only annotating 4/4 songs
-                            if bn > 0:
-                                bn = ((bn - 1) % 4) + 1
-                        except ValueError:
-                            pass
-                    
-                    beat_data.append({'time': ts, 'beat': bn})
-                except ValueError:
-                    continue
-    
-    return beat_data
 
 def calculate_embd_statistics(embd_lst):
     if isinstance(embd_lst, list):
@@ -152,7 +119,6 @@ def drop_to_multiple(a, multiple):
     a = a[:(a.shape[0] // (multiple)) * multiple]
     a = a.view(-1, 1, multiple)
     return a
-
 
 def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', window_size: int = 3) -> torch.Tensor:
     """
@@ -261,13 +227,12 @@ def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance
     
     return out
 
-
 # Tokenizers
 tokenizer = load_model(os.path.join('tokenizer_low_large_24576_subset_longtrain', 'ckpt.pt'), Tokenizer)
 encoder_ratios = math.prod(tokenizer.encoder.ratios)
 adapter = load_model(os.path.join('tokenizer_adapter_low_large_24576_subset_longtrain_v2', 'ckpt.pt'), Adapter)
 max_seq_len = adapter.max_seq_len
-probe = load_model(os.path.join('tokenizer_low_measures_fix_subset_BPMProbe_tiny', 'ckpt.pt'), BPMProbe)
+probe = load_model(os.path.join('tokenizer_low_measures_fix_subset_longtrain_v2_64_BPMProbe_tiny', 'ckpt.pt'), BPMProbe)
 
 # DiTs
 levels = [f"L{i}" for i in range(1, 3)]
