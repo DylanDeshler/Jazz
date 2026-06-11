@@ -198,7 +198,7 @@ def predict_measures(model, gen_shape, net_kwargs, uncond_net_kwargs, n_steps, g
     measure_duration_sec = seconds_per_beat * TARGET_SIG
     
     target_samples = (measure_duration_sec * 16000).long()
-    max_len = min(target_samples.max().item(), encoder_ratios * (max_adapter_len - 1))
+    max_len = min(target_samples.max().item(), encoder_ratios * (max_seq_len - 1))
     max_len = encoder_ratios * math.ceil(max_len / encoder_ratios)
     max_latent_len = max_len // encoder_ratios
     
