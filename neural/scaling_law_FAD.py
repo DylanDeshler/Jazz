@@ -242,11 +242,12 @@ levels = [f"L{i}" for i in range(1, 3)]
 dits = [UnconditionalModernDiT_smedium_L1, UnconditionalModernDiT_smedium_L2, UnconditionalModernDiT_smedium_L3, UnconditionalModernDiT_smedium_L4, UnconditionalModernDiT_smedium_L5]
 base_dits = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_longtrain_32chunks/ckpt.pt', DiT) for level, DiT in zip(levels, dits)]
 measure_dit = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_adapter_longtrain_24chunks/ckpt.pt', DiT) for level, DiT in zip(levels, dits)]
-base_chunks = base_dits[0].n_chunks
-base_window = base_dits[0].spatial_window
-measure_chunks = measure_dits[0].n_chunks
-measure_window = measure_dits[0].spatial_window
-vae_embed_dim = base_dits[0].in_channels
+base_chunks = 32
+base_window = 48
+measure_chunks = 24
+measure_window = 64
+vae_embed_dim = 16
+assert base_chunks * base_window * vae_embed_dim == measure_chunks * measure_window * vae_embed_dim
 
 # Feature Extractors
 fad = load_model(os.path.join('FAD', 'ckpt.pt'), FAD)
