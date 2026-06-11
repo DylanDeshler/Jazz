@@ -304,6 +304,7 @@ with torch.no_grad():
         
         with ctx:
             real_emb = fad.forward_features(x)
+            print(real_emb.shape)
         
         real_embs.append(real_emb.cpu().detach().numpy())
         
@@ -320,6 +321,7 @@ with torch.no_grad():
                 
                 y1 = drop_to_multiple(y1, 16383 * 5)
                 y1_emb = fad.forward_features(y1)
+                print(y1_emb.shape)
         
                 y1_embs[levels[i]].append(y1_emb.cpu().detach().numpy())
         
