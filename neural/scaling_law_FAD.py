@@ -289,7 +289,7 @@ with torch.no_grad():
             for i, base_dit in enumerate(base_dits):
                 y1 = base_dit.generate(base_gen_shape, n_steps=n_steps, noise=base_gen_noise)
                 y1 = y1.transpose(2, 3).view(batch_size * base_chunks, vae_embed_dim, base_window)
-                y1 = tokenizer.decode(base_dit, y1, shape=(1, 24576), n_steps=n_steps, noise=base_decoder_noise)
+                y1 = tokenizer.decode(y1, shape=(1, 24576), n_steps=n_steps, noise=base_decoder_noise)
                 
                 y1 = drop_to_multiple(y1, 16383 * 5)
                 y1_emb = fad.forward_features(y1)
@@ -300,7 +300,7 @@ with torch.no_grad():
         measure_gen_noise = torch.randn(measure_gen_shape, device=device)
         measure_decoder_noise = torch.randn((batch_size * measure_chunks, 1, encoder_ratios * (max_seq_len - 1)), device=device)
         for i, measure_dit in enumerate(measure_dits):
-            y2 = predict_measures(measure_gen_shape, None, None, n_steps, guidance=1.0, gen_noise=measure_gen_noise, decoder_noise=measure_decoder_noise, method='median', window_size=3)
+            y2 = predict_measures(measure_dit, measure_gen_shape, None, None, n_steps, guidance=1.0, gen_noise=measure_gen_noise, decoder_noise=measure_decoder_noise, method='median', window_size=3)
             with ctx:
                 y2 = drop_to_multiple(y2, 16383 * 5)
                 y2_emb = fad.forward_features(y2)
