@@ -304,7 +304,6 @@ with torch.no_grad():
         
         with ctx:
             real_emb = fad.forward_features(x)
-            print(real_emb.shape)
         
         real_embs.append(real_emb.cpu().detach().numpy())
         
@@ -321,7 +320,6 @@ with torch.no_grad():
                 
                 y1 = drop_to_multiple(y1, 16383 * 5)
                 y1_emb = fad.forward_features(y1)
-                print(y1_emb.shape)
         
                 y1_embs[levels[i]].append(y1_emb.cpu().detach().numpy())
         
@@ -338,13 +336,13 @@ with torch.no_grad():
         
 
 real_mu, real_sigma = calculate_embd_statistics(np.concatenate(real_embs, axis=0))
-for k, v in y1_embs:
+for k, v in y1_embs.items():
     y1_mu, y1_sigma = calculate_embd_statistics(np.concatenate(v, axis=0))
     y1_fad = calculate_frechet_distance(y1_mu, y1_sigma, real_mu, real_sigma)
     
     print(f'Base {k} -> Real Samples FAD: ', y1_fad)
 
-for k, v in y2_embs:
+for k, v in y2_embs.items():
     y2_mu, y2_sigma = calculate_embd_statistics(np.concatenate(v, axis=0))
     y2_fad = calculate_frechet_distance(y2_mu, y2_sigma, real_mu, real_sigma)
 
