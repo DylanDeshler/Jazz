@@ -256,7 +256,7 @@ paths = glob.glob('/data/wavs/*')
 paths = paths[-int(len(paths) * 2/48):] # test set
 
 n_generations = 8
-batch_size = 4
+batch_size = 1
 n_steps = 32
 assert n_generations % batch_size == 0
 
