@@ -60,7 +60,7 @@ max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
 # adamw optimizer
 learning_rate = 4e-3 * math.sqrt(batch_size / 4096) # max learning rate
-max_iters = 200000 # total number of training iterations
+max_iters = 300000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.999
@@ -73,7 +73,7 @@ min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
-device = 'cuda:1' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+device = 'cuda:2' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
@@ -146,11 +146,28 @@ model_args = dict(
     drop_path_rate=0.1,
 )
 
+class EMAModel:
+    def __init__(self, model, decay=0.9999):
+        self.decay = decay
+        self.ema_model = copy.deepcopy(model).eval()
+        self.ema_model.requires_grad_(False)
+        self.ema_model = torch.compile(self.ema_model)
+        
+    @torch.no_grad()
+    def update(self, model, step):
+        current_decay = min(self.decay, (1 + step) / (10 + step))
+        
+        for ema_param, model_param in zip(self.ema_model.parameters(), model.parameters()):
+            if model_param.requires_grad:
+                ema_param.data.mul_(current_decay).add_(model_param.data, alpha=1.0 - current_decay)
+
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
     model = net(**model_args)
     tokens_trained = 0
+    
+    ema = EMAModel(model)
 elif init_from == 'resume':
     print(f"Resuming training from {out_dir}")
     # resume training from a checkpoint.
@@ -167,6 +184,17 @@ elif init_from == 'resume':
         if k.startswith(unwanted_prefix):
             state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
     model.load_state_dict(state_dict)
+    
+    ema = EMAModel(model)
+    state_dict = checkpoint['ema']
+    # fix the keys of the state dictionary :(
+    # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+    # unwanted_prefix = '_orig_mod.'
+    # for k,v in list(state_dict.items()):
+    #     if k.startswith(unwanted_prefix):
+    #         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+    ema.ema_model.load_state_dict(state_dict)
+    
     iter_num = checkpoint['iter_num']
     tokens_trained = checkpoint['tokens']
     best_val_loss = checkpoint['best_val_loss']
@@ -180,6 +208,7 @@ elif init_from.startswith('gpt2'):
         model_args[k] = getattr(model.config, k)
 
 model.to(device)
+ema.ema_model.to(device)
 summary(model)
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
@@ -205,7 +234,7 @@ def estimate_loss():
         for k in tqdm(range(eval_iters)):
             X, labels = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
-                loss = model(X, labels=labels)
+                loss = ema.ema_model(X, labels=labels)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -220,7 +249,7 @@ def estimate_raw_mse():
         for k in tqdm(range(eval_iters)):
             X, labels = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
-                y = model(X)
+                y = ema.ema_model(X)
                 loss = F.mse_loss(y, labels)
             losses[k] = loss.item()
         out[split] = losses.mean()
@@ -282,7 +311,8 @@ while True:
                 "lr": lr,
                 "mfu": running_mfu*100, # convert to percentage
                 "tokens": tokens_trained,
-            })
+                "ema": ema.ema_model.state_dict(),
+            }
         if losses['val'] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses['val']
             if iter_num > 0:
@@ -294,6 +324,7 @@ while True:
                     'best_val_loss': best_val_loss,
                     'config': config,
                     'tokens': tokens_trained,
+                    'ema': ema.ema_model.state_dict(),
                 }
                 print(f"saving checkpoint to {out_dir}")
                 torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
@@ -326,6 +357,7 @@ while True:
     scaler.update()
     # flush the gradients as soon as we can, no need for this memory anymore
     optimizer.zero_grad(set_to_none=True)
+    ema.update(model, iter_num)
 
     # timing and logging
     t1 = time.time()
