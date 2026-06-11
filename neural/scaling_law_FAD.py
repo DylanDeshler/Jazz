@@ -13,6 +13,7 @@ from scipy import linalg
 from scipy.signal import medfilt
 from contextlib import nullcontext
 import torch.nn.functional as F
+from einops import rearrange
 
 from dito import DiToV5 as Tokenizer
 from fad import MultiTaskFAD as FAD, BPMProbe
