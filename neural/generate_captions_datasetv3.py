@@ -13,7 +13,7 @@ import zarr
 
 from transformers import T5Tokenizer, T5EncoderModel
 
-device = torch.device('cuda:0')
+device = torch.device('cuda:2')
 
 NUM_VARS = 5 + 1
 NUM_TIERS = 3
