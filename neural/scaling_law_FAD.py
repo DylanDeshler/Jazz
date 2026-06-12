@@ -265,10 +265,9 @@ max_seq_len = adapter.max_seq_len
 probe = load_model(os.path.join('tokenizer_low_measures_fix_subset_longtrain_v2_64_BPMProbe_tiny', 'ckpt.pt'), BPMProbe)
 
 # DiTs
-levels = [f"L{i}" for i in range(1, 3)]
 dits = [UnconditionalModernDiT_smedium_L1, UnconditionalModernDiT_smedium_L2, UnconditionalModernDiT_smedium_L3, UnconditionalModernDiT_smedium_L4, UnconditionalModernDiT_smedium_L5]
-base_dits = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_longtrain_32chunks/ckpt.pt', DiT) for level, DiT in zip(levels, dits)]
-measure_dits = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_adapter_longtrain_24chunks/ckpt.pt', DiT) for level, DiT in zip(levels, dits)]
+base_dits = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_longtrain_32chunks/ckpt.pt', DiT) for level, DiT in zip(valid_levels, dits)]
+measure_dits = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_adapter_longtrain_24chunks/ckpt.pt', DiT) for level, DiT in zip(valid_levels, dits)]
 base_chunks = 32
 base_window = 48
 measure_chunks = 24
@@ -321,7 +320,7 @@ with torch.no_grad():
                 y1 = drop_to_multiple(y1, 16383 * 5)
                 y1_emb = fad.forward_features(y1)
         
-                y1_embs[levels[i]].append(y1_emb.cpu().detach().numpy())
+                y1_embs[valid_levels[i]].append(y1_emb.cpu().detach().numpy())
         
         measure_gen_shape = (batch_size, measure_chunks, measure_window, vae_embed_dim)
         measure_gen_noise = torch.randn(measure_gen_shape, device=device)
@@ -332,7 +331,7 @@ with torch.no_grad():
                 y2 = drop_to_multiple(y2, 16383 * 5)
                 y2_emb = fad.forward_features(y2)
         
-            y2_embs[levels[i]].append(y2_emb.cpu().detach().numpy())
+            y2_embs[valid_levels[i]].append(y2_emb.cpu().detach().numpy())
         
 
 real_mu, real_sigma = calculate_embd_statistics(np.concatenate(real_embs, axis=0))
