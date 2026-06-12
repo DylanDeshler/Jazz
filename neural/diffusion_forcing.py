@@ -2378,6 +2378,12 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         self.style_embedder = nn.Linear(style_dim, hidden_size, bias=True)
         self.bpm_embedder = nn.Linear(768, hidden_size, bias=True)
         self.text_embedder = nn.Sequential(nn.LayerNorm(text_dim), nn.Linear(text_dim, hidden_size, bias=True))
+        self.text_embedder = nn.Sequential(
+            #nn.LayerNorm(text_dim),
+            nn.Linear(text_dim, hidden_size, bias=True),
+            nn.SiLU(),
+            nn.Linear(hidden_size, hidden_size, bias=True)
+        )
         
         self.pooler = PerceiverTokenPooler(hidden_size, num_heads, mlp_ratio)
         
