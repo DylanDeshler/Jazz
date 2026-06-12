@@ -2488,7 +2488,6 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
             text = signals['text']
             
             if unconditional_mask is not None:
-                print(unconditional_mask['text'].shape, null_tokens['text'].shape, text.shape)
                 text = torch.where(unconditional_mask['text'], null_tokens['text'], text)
         
         # prepend x with text
