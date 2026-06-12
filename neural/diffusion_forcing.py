@@ -2350,6 +2350,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
                  n_chunks,
                  style_dim,
                  n_text_tokens,
+                 text_dim=1024,
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4,
@@ -2376,7 +2377,7 @@ class MetaConditionalModernDiTV2Composer(nn.Module):
         self.local_embedder = Patcher(16, hidden_size, patch_size=patch_size, bias=True)
         self.style_embedder = nn.Linear(style_dim, hidden_size, bias=True)
         self.bpm_embedder = nn.Linear(768, hidden_size, bias=True)
-        self.text_embedder = nn.Sequential(nn.LayerNorm(1024), nn.Linear(1024, hidden_size, bias=True))
+        self.text_embedder = nn.Sequential(nn.LayerNorm(text_dim), nn.Linear(text_dim, hidden_size, bias=True))
         
         self.pooler = PerceiverTokenPooler(hidden_size, num_heads, mlp_ratio)
         
@@ -2579,6 +2580,9 @@ def UnconditionalModernDiT_large(**kwargs):
 
 def UnconditionalModernDiT_medium(**kwargs):
     return UnconditionalModernDiTWrapper(depth=24, hidden_size=1024, num_heads=16, **kwargs)
+
+def UnconditionalModernDiT_smedium_L6(**kwargs):
+    return UnconditionalModernDiTWrapper(depth=24, hidden_size=1152, num_heads=18, **kwargs)
 
 def UnconditionalModernDiT_smedium_L5(**kwargs):
     return UnconditionalModernDiTWrapper(depth=20, hidden_size=1024, num_heads=16, **kwargs)

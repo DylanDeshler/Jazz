@@ -51,9 +51,9 @@ save_interval = 5000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = True # disabled by default
+wandb_log = False # disabled by default
 wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
@@ -71,6 +71,7 @@ max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
 n_style_embeddings = 256
 n_text_tokens = 256
+text_dim = 4096
 style_dim = 128
 signal_dim = {'style': style_dim, 'chroma': 12, 'rms': 1, 'density': 1, 'zcr': 1, 'flatness': 1, 'bpm': 768}
 weights = {k: 1 for k in signal_dim.keys()}
@@ -92,7 +93,7 @@ min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
-device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+device = 'cuda:1' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
@@ -157,7 +158,7 @@ zcr_std = torch.tensor([0.048143145]).to(device)
 flatness_mean = torch.tensor([0.011151944]).to(device)
 flatness_std = torch.tensor([0.018700112]).to(device)
 
-with open('/data/binaries/caption_embeddings_expanded_shuffled_split_metadata.pkl', 'rb') as f:
+with open('/data/binaries/caption_embeddings_expanded_shuffled_xxl_split_metadata.pkl', 'rb') as f:
     text_meta = pickle.load(f)
 
 with open('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_train_map.json', 'r') as f:
@@ -242,19 +243,23 @@ def get_text_from_index(binary_row_idx, split='train'):
     
     return literal_text
 
+train_zarr = zarr.open(store='/data/binaries/caption_embeddings_expanded_shuffled_xxl_train.zarr', mode='r')
+val_zarr = zarr.open(store='/data/binaries/caption_embeddings_expanded_shuffled_xxl_val.zarr', mode='r')
 def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
-        data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_train.bin', dtype=np.float16, mode='r', shape=(33095 * 3 * 6, 256, 1024))
+        # data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_train.bin', dtype=np.float16, mode='r', shape=(33095 * 3 * 6, 256, 1024))
         song_idx = np.random.randint(33095 * 3 * 6 - batch_size)
         bounds = map_to_slices(song_idx, 'train', batch_size)
+        text = train_zarr[song_idx:song_idx+batch_size].astype(np.float32)
         
         style = np.memmap('/data/binaries/contrast_learntmep_instance_10s_style_train.bin', dtype=np.float32, mode='r', shape=(4490789, style_dim))
         meta = np.memmap('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_train.bin', dtype=np.float32, mode='r', shape=(4490789, 16))
         bpms = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_bpm_train.bin', dtype=np.float32, mode='r')
     else:
-        data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_val.bin', dtype=np.float16, mode='r', shape=(754 * 3 * 6, 256, 1024))
+        # data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_val.bin', dtype=np.float16, mode='r', shape=(754 * 3 * 6, 256, 1024))
         song_idx = np.random.randint(754 * 3 * 6 - batch_size)
         bounds = map_to_slices(song_idx, 'val', batch_size)
+        text = val_zarr[song_idx:song_idx+batch_size].astype(np.float32)
         
         style = np.memmap('/data/binaries/contrast_learntmep_instance_10s_style_val.bin', dtype=np.float32, mode='r', shape=(99131, style_dim))
         meta = np.memmap('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_val.bin', dtype=np.float32, mode='r', shape=(99131, 16))
@@ -270,7 +275,7 @@ def get_batch(split='train', batch_size=batch_size):
     idx_matrix = starts[:, None] + np.arange(n_chunks)
     idx_matrix = np.minimum(idx_matrix, stops[:, None])
     
-    text = data[song_idx:song_idx+batch_size].astype(np.float32)
+    # text = data[song_idx:song_idx+batch_size].astype(np.float32)
     text = torch.from_numpy(text).pin_memory().to(device, non_blocking=True)
     
     style = torch.from_numpy(style[idx_matrix]).pin_memory().to(device, non_blocking=True)
@@ -401,7 +406,7 @@ dit.load_state_dict(state_dict)
 dit.eval()
 del state_dict
 
-model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, n_text_tokens=n_text_tokens, spatial_window=spatial_window, signal_dim=signal_dim, use_null_token=use_null_token, gradient_checkpointing=gradient_checkpointing, patch_size=patch_size, drop_path_rate=drop_path_rate, weights=weights)
+model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, n_text_tokens=n_text_tokens, spatial_window=spatial_window, signal_dim=signal_dim, use_null_token=use_null_token, gradient_checkpointing=gradient_checkpointing, patch_size=patch_size, drop_path_rate=drop_path_rate, weights=weights, text_dim=text_dim)
 
 class EMAModel:
     def __init__(self, model, decay=0.9999):
@@ -706,7 +711,7 @@ def save_samples(step):
             temp_mask[k] = ~v
             cfg_net_kwargs.append(net_kwargs | {'unconditional_mask': temp_mask})
     
-    cfg_guidances = [4] * len(unconditional_mask)
+    cfg_guidances = [3] * len(unconditional_mask)
     
     with ctx:
         y = ema.ema_model.generate(x.shape, net_kwargs=cfg_net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=cfg_guidances, noise=gen_noise, memory_efficient=True, rescale_phi=0, cfg_mode=cfg_mode, t_dist=t_dist).squeeze(2)
@@ -769,7 +774,7 @@ def save_samples(step):
             temp_mask[k] = ~v
             cfg_net_kwargs.append(net_kwargs | {'unconditional_mask': temp_mask})
     
-    cfg_guidances = [4] * len(unconditional_mask)
+    cfg_guidances = [3] * len(unconditional_mask)
     
     y_cfg = predict_measures(gen_shape, cfg_net_kwargs, uncond_net_kwargs, n_steps, guidance=cfg_guidances, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, memory_efficient=True, rescale_phi=0, cfg_mode=cfg_mode, t_dist=t_dist)
     y = predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, t_dist=t_dist)
