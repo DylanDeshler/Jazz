@@ -431,7 +431,6 @@ if init_from == 'scratch':
     # model.net.bpm_embedder.load_state_dict(dit.net.bpm_embedder.state_dict())
     # model.net.bpm_embedder.requires_grad_(False)
     null_emb = np.load('/data/binaries/null_embedding.npy')
-    print(null_emb.shape)
     model.net.null_text = torch.from_numpy(null_emb.astype(np.float32)).to(device)
     tokens_trained = 0
     
