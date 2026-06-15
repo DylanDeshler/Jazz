@@ -164,7 +164,7 @@ with torch.no_grad():
     inputs = tokenizer([''], padding="max_length", truncation=True, max_length=max_tokens, return_tensors="pt").to(device)
     outputs = model(**inputs)
     null_state = outputs.last_hidden_state.cpu().numpy()[0].astype(np.float16)
-np.save(os.path.join(dir_path, 'null_embedding.npy'), null_state)
+np.save(os.path.join(dir_path, f'null_embedding_{model_id.split('-')[-1]}.npy'), null_state)
 
 # -------------------------------------------------------------------------
 # 6. SAVE COMPREHENSIVE INDEX TRACKING DICTIONARIES

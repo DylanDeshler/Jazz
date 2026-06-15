@@ -159,7 +159,7 @@ zcr_std = torch.tensor([0.048143145]).to(device)
 flatness_mean = torch.tensor([0.011151944]).to(device)
 flatness_std = torch.tensor([0.018700112]).to(device)
 
-with open('/data/binaries/caption_embeddings_expanded_shuffled_xxl_split_metadata.pkl', 'rb') as f:
+with open('/data/binaries/caption_embeddings_expanded_shuffled_split_metadata.pkl', 'rb') as f:
     text_meta = pickle.load(f)
 
 with open('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_train_map.json', 'r') as f:
@@ -244,23 +244,23 @@ def get_text_from_index(binary_row_idx, split='train'):
     
     return literal_text
 
-train_zarr = zarr.open(store='/data/binaries/caption_embeddings_expanded_shuffled_xxl_train.zarr', mode='r')
-val_zarr = zarr.open(store='/data/binaries/caption_embeddings_expanded_shuffled_xxl_val.zarr', mode='r')
+# train_zarr = zarr.open(store='/data/binaries/caption_embeddings_expanded_shuffled_xxl_train.zarr', mode='r')
+# val_zarr = zarr.open(store='/data/binaries/caption_embeddings_expanded_shuffled_xxl_val.zarr', mode='r')
 def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
-        # data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_train.bin', dtype=np.float16, mode='r', shape=(33095 * 3 * 6, 256, 1024))
+        data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_train.bin', dtype=np.float16, mode='r', shape=(33095 * 3 * 6, 256, 1024))
         song_idx = np.random.randint(33095 * 3 * 6 - batch_size)
         bounds = map_to_slices(song_idx, 'train', batch_size)
-        text = train_zarr[song_idx:song_idx+batch_size].astype(np.float32)
+        # text = train_zarr[song_idx:song_idx+batch_size].astype(np.float32)
         
         style = np.memmap('/data/binaries/contrast_learntmep_instance_10s_style_train.bin', dtype=np.float32, mode='r', shape=(4490789, style_dim))
         meta = np.memmap('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_train.bin', dtype=np.float32, mode='r', shape=(4490789, 16))
         bpms = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_bpm_train.bin', dtype=np.float32, mode='r')
     else:
-        # data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_val.bin', dtype=np.float16, mode='r', shape=(754 * 3 * 6, 256, 1024))
+        data = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_val.bin', dtype=np.float16, mode='r', shape=(754 * 3 * 6, 256, 1024))
         song_idx = np.random.randint(754 * 3 * 6 - batch_size)
         bounds = map_to_slices(song_idx, 'val', batch_size)
-        text = val_zarr[song_idx:song_idx+batch_size].astype(np.float32)
+        # text = val_zarr[song_idx:song_idx+batch_size].astype(np.float32)
         
         style = np.memmap('/data/binaries/contrast_learntmep_instance_10s_style_val.bin', dtype=np.float32, mode='r', shape=(99131, style_dim))
         meta = np.memmap('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_val.bin', dtype=np.float32, mode='r', shape=(99131, 16))
@@ -276,7 +276,7 @@ def get_batch(split='train', batch_size=batch_size):
     idx_matrix = starts[:, None] + np.arange(n_chunks)
     idx_matrix = np.minimum(idx_matrix, stops[:, None])
     
-    # text = data[song_idx:song_idx+batch_size].astype(np.float32)
+    text = data[song_idx:song_idx+batch_size].astype(np.float32)
     text = torch.from_numpy(text).pin_memory().to(device, non_blocking=True)
     
     style = torch.from_numpy(style[idx_matrix]).pin_memory().to(device, non_blocking=True)
