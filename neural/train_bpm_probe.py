@@ -45,7 +45,7 @@ save_interval = 10000
 eval_iters = 400
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir
@@ -274,7 +274,10 @@ def get_lr(it):
 # logging
 if wandb_log and master_process:
     import wandb
-    wandb.init(project=wandb_project, name=wandb_run_name, config=config)
+    if init_from == 'resume':
+        wandb.init(project=wandb_project, name=wandb_run_name, id='5a4b6fpx', resume='must', config=config)
+    else:
+        wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
 X, labels = get_batch('train') # fetch the very first batch
