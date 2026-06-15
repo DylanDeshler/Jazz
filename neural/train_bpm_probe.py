@@ -42,7 +42,7 @@ eval_interval = 10000
 sample_interval = 10000
 log_interval = 100
 save_interval = 10000
-eval_iters = 400
+eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
@@ -141,7 +141,7 @@ best_val_loss = 1e9
 
 model_args = dict(
     in_chans=16,
-    depths=[3, 3, 27, 3], #9
+    depths=[3, 3, 9, 3],
     # dims=[64, 128, 256, 512],
     dims=[96, 192, 384, 768],
     drop_path_rate=0.1,
@@ -312,6 +312,8 @@ while True:
                 "iter": iter_num,
                 "train/loss": losses['train'],
                 "val/loss": losses['val'],
+                "train/mse": raw_losses['train'],
+                "val/mse": raw_losses['val'],
                 "lr": lr,
                 "mfu": running_mfu*100, # convert to percentage
                 "tokens": tokens_trained,
@@ -325,6 +327,7 @@ while True:
                     'model_args': model_args,
                     'iter_num': iter_num,
                     'best_val_loss': best_val_loss,
+                    'val_mse': raw_losses['val'],
                     'config': config,
                     'tokens': tokens_trained,
                     'ema': ema.ema_model.state_dict(),
