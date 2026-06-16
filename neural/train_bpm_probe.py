@@ -62,7 +62,7 @@ vae_embed_dim = 16
 # adamw optimizer
 learning_rate = 4e-3 * math.sqrt(batch_size / 4096) # max learning rate
 max_iters = 300000 # total number of training iterations
-weight_decay = 1e-2
+weight_decay = 1e-3#1e-2
 beta1 = 0.9
 beta2 = 0.999
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
@@ -142,8 +142,8 @@ best_val_loss = 1e9
 model_args = dict(
     in_chans=16,
     depths=[3, 3, 9, 3],
-    # dims=[64, 128, 256, 512],
-    dims=[96, 192, 384, 768],
+    dims=[64, 128, 256, 512],
+    # dims=[96, 192, 384, 768],
     drop_path_rate=0.1,
 )
 
