@@ -144,7 +144,7 @@ model_args = dict(
     depths=[3, 3, 9, 3],
     dims=[64, 128, 256, 512],
     # dims=[96, 192, 384, 768],
-    drop_path_rate=0.1,
+    drop_path_rate=0.2,
 )
 
 class EMAModel:
