@@ -295,7 +295,7 @@ with torch.no_grad():
     for idx in tqdm(idxs, desc='Embedding Real Samples'):
         path = paths[idx]
         wav, _ = librosa.load(path, sr=rate)
-        wav = wav[:batch_size * base_chunks * rate]
+        wav = wav[:batch_size * base_chunks * n_samples]
         x_raw = wav
         
         x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
@@ -304,26 +304,24 @@ with torch.no_grad():
         with ctx:
             real_emb = fad.forward_features(x)
         
-        print('Real: ', len(real_emb))
         real_embs.append(real_emb.cpu().detach().numpy())
         
     for _ in tqdm(range(n_generations // batch_size), desc='Embedding Generated Samples'):
         base_gen_shape = (batch_size, base_chunks, base_window, vae_embed_dim)
         base_gen_noise = torch.randn(base_gen_shape, device=device)
-        base_decoder_noise = torch.randn((batch_size * base_chunks, 1, 24576), device=device)
+        base_decoder_noise = torch.randn((batch_size * base_chunks, 1, n_samples), device=device)
         
         with ctx:
             for i, base_dit in enumerate(base_dits):
                 y1 = base_dit.generate(base_gen_shape, n_steps=n_steps, noise=base_gen_noise)
                 y1 = y1.transpose(2, 3).view(batch_size * base_chunks, vae_embed_dim, base_window)
-                y1 = tokenizer.decode(y1, shape=(1, 24576), n_steps=n_steps, noise=base_decoder_noise)
+                y1 = tokenizer.decode(y1, shape=(1, n_samples), n_steps=n_steps, noise=base_decoder_noise)
                 
                 y1 = drop_to_multiple(y1, 16383 * 5)
                 y1_emb = fad.forward_features(y1)
         
                 y1_embs[valid_levels[i]].append(y1_emb.cpu().detach().numpy())
         
-                print(f'y1[{valid_levels[i]}]: ', len(y1_emb))
         measure_gen_shape = (batch_size, measure_chunks, measure_window, vae_embed_dim)
         measure_gen_noise = torch.randn(measure_gen_shape, device=device)
         measure_decoder_noise = torch.randn((batch_size * measure_chunks, 1, encoder_ratios * (max_seq_len - 1)), device=device)
@@ -332,21 +330,28 @@ with torch.no_grad():
             with ctx:
                 y2 = drop_to_multiple(y2, 16383 * 5)
                 y2_emb = fad.forward_features(y2)
-                
-                print(f'y12{valid_levels[i]}]: ', len(y2_emb))
         
             y2_embs[valid_levels[i]].append(y2_emb.cpu().detach().numpy())
-        
 
-real_mu, real_sigma = calculate_embd_statistics(np.concatenate(real_embs, axis=0))
+N = {}
+for level in valid_levels:
+    N[level] = np.min([
+        len(np.concatenate(real_embs, axis=0)),
+        len(np.concatenate(y1_embs[k], axis=0)),
+        len(np.concatenate(y2_embs[k], axis=0))
+    ]).item()
+print(N)
+
 for k, v in y1_embs.items():
-    y1_mu, y1_sigma = calculate_embd_statistics(np.concatenate(v, axis=0))
+    real_mu, real_sigma = calculate_embd_statistics(np.random.choice(np.concatenate(real_embs, axis=0), size=N[k], replace=False))
+    y1_mu, y1_sigma = calculate_embd_statistics(np.random.choice(np.concatenate(v, axis=0), size=N[k], replace=False))
     y1_fad = calculate_frechet_distance(y1_mu, y1_sigma, real_mu, real_sigma)
     
     print(f'Base {k} -> Real Samples FAD: ', y1_fad)
 
 for k, v in y2_embs.items():
-    y2_mu, y2_sigma = calculate_embd_statistics(np.concatenate(v, axis=0))
+    real_mu, real_sigma = calculate_embd_statistics(np.random.choice(np.concatenate(real_embs, axis=0), size=N[k], replace=False))
+    y2_mu, y2_sigma = calculate_embd_statistics(np.random.choice(np.concatenate(v, axis=0), size=N[k], replace=False))
     y2_fad = calculate_frechet_distance(y2_mu, y2_sigma, real_mu, real_sigma)
 
     print(f'Measure (Median BPM) {k} -> Real Samples FAD: ', y2_fad)
