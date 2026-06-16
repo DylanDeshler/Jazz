@@ -311,16 +311,17 @@ with torch.no_grad():
         base_gen_noise = torch.randn(base_gen_shape, device=device)
         base_decoder_noise = torch.randn((batch_size * base_chunks, 1, n_samples), device=device)
         
-        with ctx:
-            for i, base_dit in enumerate(base_dits):
-                y1 = base_dit.generate(base_gen_shape, n_steps=n_steps, noise=base_gen_noise)
+        for i, base_dit in enumerate(base_dits):
+            with ctx:
+                # y1 = base_dit.generate(base_gen_shape, n_steps=n_steps, noise=base_gen_noise)
+                y1 = base_dit.generate(base_gen_shape, n_steps=n_steps, noise=base_gen_noise, memory_efficient=False, cfg_mode='joint', t_dist='logit')
                 y1 = y1.transpose(2, 3).view(batch_size * base_chunks, vae_embed_dim, base_window)
                 y1 = tokenizer.decode(y1, shape=(1, n_samples), n_steps=n_steps, noise=base_decoder_noise)
                 
                 y1 = drop_to_multiple(y1, 16383 * 5)
                 y1_emb = fad.forward_features(y1)
         
-                y1_embs[valid_levels[i]].append(y1_emb.cpu().detach().numpy())
+            y1_embs[valid_levels[i]].append(y1_emb.cpu().detach().numpy())
         
         measure_gen_shape = (batch_size, measure_chunks, measure_window, vae_embed_dim)
         measure_gen_noise = torch.randn(measure_gen_shape, device=device)
