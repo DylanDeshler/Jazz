@@ -304,6 +304,7 @@ with torch.no_grad():
         with ctx:
             real_emb = fad.forward_features(x)
         
+        print('Real: ', len(real_emb))
         real_embs.append(real_emb.cpu().detach().numpy())
         
     for _ in tqdm(range(n_generations // batch_size), desc='Embedding Generated Samples'):
@@ -322,6 +323,7 @@ with torch.no_grad():
         
                 y1_embs[valid_levels[i]].append(y1_emb.cpu().detach().numpy())
         
+                print(f'y1[{valid_levels[i]}]: ', len(y1_emb))
         measure_gen_shape = (batch_size, measure_chunks, measure_window, vae_embed_dim)
         measure_gen_noise = torch.randn(measure_gen_shape, device=device)
         measure_decoder_noise = torch.randn((batch_size * measure_chunks, 1, encoder_ratios * (max_seq_len - 1)), device=device)
@@ -330,6 +332,8 @@ with torch.no_grad():
             with ctx:
                 y2 = drop_to_multiple(y2, 16383 * 5)
                 y2_emb = fad.forward_features(y2)
+                
+                print(f'y12{valid_levels[i]}]: ', len(y2_emb))
         
             y2_embs[valid_levels[i]].append(y2_emb.cpu().detach().numpy())
         
