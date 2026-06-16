@@ -333,25 +333,31 @@ with torch.no_grad():
         
             y2_embs[valid_levels[i]].append(y2_emb.cpu().detach().numpy())
 
-N = {}
+real_embs = np.concatenate(real_embs, axis=0)
+N = len(real_embs)
 for level in valid_levels:
-    N[level] = np.min([
-        len(np.concatenate(real_embs, axis=0)),
+    N = np.min([
+        N,
         len(np.concatenate(y1_embs[level], axis=0)),
         len(np.concatenate(y2_embs[level], axis=0))
     ]).item()
-print(N)
 
-for level, v in y1_embs.items():
-    real_mu, real_sigma = calculate_embd_statistics(np.random.choice(np.concatenate(real_embs, axis=0), size=N[level], replace=False))
-    y1_mu, y1_sigma = calculate_embd_statistics(np.random.choice(np.concatenate(v, axis=0), size=N[level], replace=False))
+for level in valid_levels:
+    level_real_embs = real_embs[np.random.choice(np.arange(len(real_embs)), size=N, replace=False)]
+    real_mu, real_sigma = calculate_embd_statistics(level_real_embs)
+    
+    level_y1_embs = np.concatenate(y1_embs[level], axis=0)
+    level_y1_embs = level_y1_embs[np.random.choice(np.arange(len(level_y1_embs)), size=N, replace=False)]
+    
+    y1_mu, y1_sigma = calculate_embd_statistics(level_y1_embs)
     y1_fad = calculate_frechet_distance(y1_mu, y1_sigma, real_mu, real_sigma)
     
     print(f'Base {level} -> Real Samples FAD: ', y1_fad)
 
-for level, v in y2_embs.items():
-    real_mu, real_sigma = calculate_embd_statistics(np.random.choice(np.concatenate(real_embs, axis=0), size=N[level], replace=False))
-    y2_mu, y2_sigma = calculate_embd_statistics(np.random.choice(np.concatenate(v, axis=0), size=N[level], replace=False))
+    level_y2_embs = np.concatenate(y2_embs[level], axis=0)
+    level_y2_embs = level_y2_embs[np.random.choice(np.arange(len(level_y2_embs)), size=N, replace=False)]
+    
+    y2_mu, y2_sigma = calculate_embd_statistics(level_y2_embs)
     y2_fad = calculate_frechet_distance(y2_mu, y2_sigma, real_mu, real_sigma)
 
     print(f'Measure (Median BPM) {level} -> Real Samples FAD: ', y2_fad)
