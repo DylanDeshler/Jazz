@@ -290,7 +290,7 @@ def slice_random_measure(beat_path):
 from concurrent.futures import ThreadPoolExecutor
 
 def fetch_single_sample(idx):
-    beat_path = os.path.join('/home/ubuntu/Data/beats', os.path.basename(paths[idx]))
+    beat_path = os.path.join('/data/beats', os.path.basename(paths[idx]))
     
     tries = 0
     frame_start, frame_end = slice_random_measure(beat_path)
@@ -412,7 +412,6 @@ def estimate_loss():
                     _, z = tokenizer.encode(X)
                 z_hat = model(z, latent_mask)
                 loss = F.mse_loss(z.detach(), z_hat)
-                # loss = 1.0 - F.cosine_similarity(z_hat, z.detach(), dim=-1).mean()
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -541,7 +540,6 @@ while True:
                 _, z = tokenizer.encode(X)
             z_hat = model(z, latent_mask)
             loss = F.mse_loss(z.detach(), z_hat)
-            # loss = 1.0 - F.cosine_similarity(z_hat, z.detach(), dim=-1).mean()
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, latent_mask, sample_mask = get_batch('train')
