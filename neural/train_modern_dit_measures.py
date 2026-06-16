@@ -73,7 +73,7 @@ net = net_map[args.level]
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = f'UnconditionalModernDiT_smedium_{args.level}_24576_subset_adapter_longtrain_24chunks'
+out_dir = f'UnconditionalModernDiT_smedium_{args.level}_24576_subset_adapter_longtrain_32chunks'
 eval_interval = 5000
 sample_interval = 10000
 log_interval = 100
@@ -95,8 +95,8 @@ TARGET_BPM = 60 * TARGET_SIG / (24576 / 16000)
 # model
 patch_size = 2
 gradient_checkpointing = False
-spatial_window = 64
-n_chunks = 24
+spatial_window = 48
+n_chunks = 32
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
 n_style_embeddings = 256
