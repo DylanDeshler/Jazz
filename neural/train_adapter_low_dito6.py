@@ -40,7 +40,7 @@ import glob
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'tokenizer_adapter_low_large_24576_subset_longtrain_v2'
+out_dir = 'tokenizer_adapter_low_large_24576_subset_longtrain_v2_48'
 eval_interval = 5000
 log_interval = 100
 eval_iters = 300
@@ -59,7 +59,7 @@ batch_size = 64 # if gradient_accumulation_steps > 1, this is the micro-batch si
 rate = 16000
 n_samples = 24576
 in_dim = 16
-n_queries = 64
+n_queries = 48
 max_seq_len = 128
 hidden_dim = 512
 num_heads = 8
@@ -80,7 +80,7 @@ min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/
 # DDP settings
 backend = 'gloo' # 'nccl', 'gloo', etc.
 # system
-device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+device = 'cuda:1' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
@@ -183,8 +183,7 @@ bpm_bins = torch.arange(40, 300, 5, dtype=torch.float32)
 year_bins = torch.arange(1900, 1980, 5, dtype=torch.float32)
 bpm_sigma, year_sigma = 5, 2.5
 
-# cards = pickle.load(open('/home/dylan.d/research/music/Jazz/JazzSet.0.9.pkl', "rb"))
-cards = pickle.load(open('/home/ubuntu/base/Data/JazzSet.0.9.pkl', "rb"))
+cards = pickle.load(open('/data/JazzSet.0.9.pkl', "rb"))
 cards = [card for card in cards if card]
 
 years = []
@@ -210,35 +209,6 @@ mlb = MultiLabelBinarizer().fit(record_label_names)
 record_labels = mlb.transform(record_label_names)
 record_labels = torch.from_numpy(record_labels)
 
-# Instruments
-# instrument_map_df = pd.read_csv('/home/dylan.d/research/music/Jazz/instrument_mapping.csv')
-instrument_map_df = pd.read_csv('/home/ubuntu/base/Data/instrument_mapping.csv')
-instrument_map_df = instrument_map_df.apply(lambda col: col.astype(str).str.lower())
-instrument_map = {row['Abbreviation']: row['Consolidated_Category'] for i, row in instrument_map_df.iterrows()}
-instrument_categories = set(list(instrument_map.values()))
-
-instrument_labels = defaultdict(list)
-for instrument_list in instruments:
-    categories = {instrument_map[l.lower()] for l in instrument_list if l in instrument_map}
-    for cat in instrument_categories:
-        if cat in categories:
-            instrument_labels[cat].append(True)
-        else:
-            instrument_labels[cat].append(False)
-
-props = pd.DataFrame(instrument_labels, columns=list(instrument_categories)).sum(0)
-instrument_categories = {cat for cat in instrument_categories if props[cat] >= 1000}
-
-instrument_labels = []
-for instrument_list in instruments:
-    categories = {instrument_map[l.lower()] for l in instrument_list if l in instrument_map}
-    categories = categories.intersection(instrument_categories)
-    instrument_labels.append(list(filter(None, categories)))
-
-mlb = MultiLabelBinarizer().fit(instrument_labels)
-instrument_labels = mlb.transform(instrument_labels)
-instrument_labels = torch.from_numpy(instrument_labels)
-
 import json
 import glob
 import librosa
@@ -249,10 +219,10 @@ import librosa
 # paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
 # paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in paths]
 
-paths = glob.glob('/home/ubuntu/Data/measures/*')
-with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
+paths = glob.glob('/data/wavs/*')
+with open('/data/valid_files_by_bpm.json', 'r') as f:
     beat_paths = json.load(f)
-paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
+paths = [os.path.join('/data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
 print(len(paths))
 
 from sklearn.model_selection import StratifiedGroupKFold
