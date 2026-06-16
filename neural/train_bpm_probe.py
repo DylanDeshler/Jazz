@@ -37,7 +37,7 @@ from fad import BPMProbe as net
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'tokenizer_low_measures_fix_subset_longtrain_v2_64_BPMProbe_tiny_30drop'
+out_dir = 'tokenizer_low_measures_fix_subset_longtrain_v2_64_BPMProbe_tiny'
 eval_interval = 10000
 sample_interval = 10000
 log_interval = 100
@@ -48,7 +48,7 @@ always_save_checkpoint = False # if True, always save a checkpoint after each ev
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
-wandb_project = 'tokenizer_low_measures_fix_subset_longtrain_v2_64_BPMProbe_tiny'#out_dir
+wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
 dataset = ''
