@@ -37,7 +37,7 @@ from fad import BPMProbe as net
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'tokenizer_low_measures_fix_subset_longtrain_v2_64_BPMProbe_tiny_40drop'
+out_dir = 'tokenizer_low_measures_fix_subset_longtrain_v2_64_BPMProbe_tiny_30drop'
 eval_interval = 10000
 sample_interval = 10000
 log_interval = 100
@@ -144,7 +144,7 @@ model_args = dict(
     depths=[3, 3, 9, 3],
     dims=[64, 128, 256, 512],
     # dims=[96, 192, 384, 768],
-    drop_path_rate=0.4,
+    drop_path_rate=0.3,
 )
 
 class EMAModel:
