@@ -337,21 +337,21 @@ N = {}
 for level in valid_levels:
     N[level] = np.min([
         len(np.concatenate(real_embs, axis=0)),
-        len(np.concatenate(y1_embs[k], axis=0)),
-        len(np.concatenate(y2_embs[k], axis=0))
+        len(np.concatenate(y1_embs[level], axis=0)),
+        len(np.concatenate(y2_embs[level], axis=0))
     ]).item()
 print(N)
 
-for k, v in y1_embs.items():
-    real_mu, real_sigma = calculate_embd_statistics(np.random.choice(np.concatenate(real_embs, axis=0), size=N[k], replace=False))
-    y1_mu, y1_sigma = calculate_embd_statistics(np.random.choice(np.concatenate(v, axis=0), size=N[k], replace=False))
+for level, v in y1_embs.items():
+    real_mu, real_sigma = calculate_embd_statistics(np.random.choice(np.concatenate(real_embs, axis=0), size=N[level], replace=False))
+    y1_mu, y1_sigma = calculate_embd_statistics(np.random.choice(np.concatenate(v, axis=0), size=N[level], replace=False))
     y1_fad = calculate_frechet_distance(y1_mu, y1_sigma, real_mu, real_sigma)
     
-    print(f'Base {k} -> Real Samples FAD: ', y1_fad)
+    print(f'Base {level} -> Real Samples FAD: ', y1_fad)
 
-for k, v in y2_embs.items():
-    real_mu, real_sigma = calculate_embd_statistics(np.random.choice(np.concatenate(real_embs, axis=0), size=N[k], replace=False))
-    y2_mu, y2_sigma = calculate_embd_statistics(np.random.choice(np.concatenate(v, axis=0), size=N[k], replace=False))
+for level, v in y2_embs.items():
+    real_mu, real_sigma = calculate_embd_statistics(np.random.choice(np.concatenate(real_embs, axis=0), size=N[level], replace=False))
+    y2_mu, y2_sigma = calculate_embd_statistics(np.random.choice(np.concatenate(v, axis=0), size=N[level], replace=False))
     y2_fad = calculate_frechet_distance(y2_mu, y2_sigma, real_mu, real_sigma)
 
-    print(f'Measure (Median BPM) {k} -> Real Samples FAD: ', y2_fad)
+    print(f'Measure (Median BPM) {level} -> Real Samples FAD: ', y2_fad)
