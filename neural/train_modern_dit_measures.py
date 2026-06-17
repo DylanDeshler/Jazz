@@ -73,7 +73,7 @@ net = net_map[args.level]
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = f'UnconditionalModernDiT_smedium_{args.level}_24576_subset_adapter_longtrain_32chunks'
+out_dir = f'UnconditionalModernDiT_smedium_{args.level}_24576_subset_adapter_longtrain_32chunks_v2'
 eval_interval = 5000
 sample_interval = 10000
 log_interval = 100
@@ -162,9 +162,9 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
-        data = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_48_train.bin', dtype=np.float32, mode='r', shape=(4490789, spatial_window, vae_embed_dim))
+        data = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_48_train.bin', dtype=np.float32, mode='r', shape=(4490789, spatial_window, vae_embed_dim))
     else:
-        data = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_48_val.bin', dtype=np.float32, mode='r', shape=(99131, spatial_window, vae_embed_dim))
+        data = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_48_val.bin', dtype=np.float32, mode='r', shape=(99131, spatial_window, vae_embed_dim))
     
     idxs = torch.randint(len(data) - n_chunks, (batch_size,))
     x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
@@ -209,7 +209,7 @@ adapter.eval()
 del state_dict
 max_adapter_len = adapter.max_seq_len
 
-ckpt_path = os.path.join('tokenizer_low_measures_fix_subset_longtrain_48_BPMProbe_tiny', 'ckpt.pt')
+ckpt_path = os.path.join('tokenizer_low_measures_fix_subset_longtrain_v2_48_BPMProbe_tiny', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 probe_args = checkpoint['model_args']
 
