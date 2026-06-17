@@ -37,7 +37,7 @@ from fad import BPMProbe as net
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'tokenizer_low_measures_fix_subset_longtrain_48_BPMProbe_tiny'
+out_dir = 'tokenizer_low_measures_fix_subset_longtrain_v2_48_BPMProbe_tiny'
 eval_interval = 10000
 sample_interval = 10000
 log_interval = 100
@@ -119,11 +119,11 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 # poor man's data loader
 def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
-        data = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_48_train.bin', dtype=np.float32, mode='r', shape=(4490789, spatial_window, vae_embed_dim))
-        meta = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_48_bpm_train.bin', dtype=np.float32, mode='r')
+        data = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_48_train.bin', dtype=np.float32, mode='r', shape=(4490789, spatial_window, vae_embed_dim))
+        meta = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_48_bpm_train.bin', dtype=np.float32, mode='r')
     else:
-        data = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_48_val.bin', dtype=np.float32, mode='r', shape=(99131, spatial_window, vae_embed_dim))
-        meta = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_48_bpm_val.bin', dtype=np.float32, mode='r')
+        data = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_48_val.bin', dtype=np.float32, mode='r', shape=(99131, spatial_window, vae_embed_dim))
+        meta = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_48_bpm_val.bin', dtype=np.float32, mode='r')
     
     idxs = torch.randint(len(data) - n_chunks - 1, (batch_size,))    
     x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
