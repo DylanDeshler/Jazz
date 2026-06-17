@@ -27,7 +27,7 @@ total_write_batches = 48
 
 dir_name = '/data/binaries/temp'
 os.makedirs(dir_name)
-out_prefix = 'low_large_24576_subset_adapter_longtrain_48'
+out_prefix = 'low_large_24576_subset_adapter_longtrain_v2_48'
 
 ckpt_path = os.path.join('tokenizer_low_large_24576_subset_longtrain', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
@@ -46,7 +46,7 @@ model.eval()
 model = torch.compile(model)
 encoder_ratios = math.prod(model.encoder.ratios)
 
-ckpt_path = os.path.join('tokenizer_adapter_low_large_24576_subset_longtrain', 'ckpt.pt')
+ckpt_path = os.path.join('tokenizer_adapter_low_large_24576_subset_longtrain_v2_48', 'ckpt.pt')
 checkpoint = torch.load(ckpt_path, map_location=device)
 adapter_args = checkpoint['model_args']
 adapter = InvertibleAdapter(**adapter_args).to(device)
