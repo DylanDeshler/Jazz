@@ -18,7 +18,7 @@ from einops import rearrange
 from dito import DiToV5 as Tokenizer
 from fad import MultiTaskFAD as FAD, BPMProbe
 from adapter import InvertibleAdapter as Adapter
-from diffusion_forcing import UnconditionalModernDiT_smedium_L1, UnconditionalModernDiT_smedium_L2, UnconditionalModernDiT_smedium_L3, UnconditionalModernDiT_smedium_L4, UnconditionalModernDiT_smedium_L5
+from diffusion_forcing import UnconditionalModernDiT_smedium_L1, UnconditionalModernDiT_smedium_L2, UnconditionalModernDiT_smedium_L3, UnconditionalModernDiT_smedium_L4
 import argparse
 parser = argparse.ArgumentParser(description="Process a specific level argument.")
 valid_levels = [f"L{i}" for i in range(1, 5)]
@@ -260,18 +260,18 @@ def predict_measures(model, gen_shape, net_kwargs, uncond_net_kwargs, n_steps, g
 # Tokenizers
 tokenizer = load_model(os.path.join('tokenizer_low_large_24576_subset_longtrain', 'ckpt.pt'), Tokenizer)
 encoder_ratios = math.prod(tokenizer.encoder.ratios)
-adapter = load_model(os.path.join('tokenizer_adapter_low_large_24576_subset_longtrain_v2', 'ckpt.pt'), Adapter)
+adapter = load_model(os.path.join('tokenizer_adapter_low_large_24576_subset_longtrain_v2_48', 'ckpt.pt'), Adapter)
 max_seq_len = adapter.max_seq_len
-probe = load_model(os.path.join('tokenizer_low_measures_fix_subset_longtrain_v2_64_BPMProbe_tiny', 'ckpt.pt'), BPMProbe)
+probe = load_model(os.path.join('tokenizer_low_measures_fix_subset_longtrain_v2_48_BPMProbe_tiny', 'ckpt.pt'), BPMProbe)
 
 # DiTs
-dits = [UnconditionalModernDiT_smedium_L1, UnconditionalModernDiT_smedium_L2, UnconditionalModernDiT_smedium_L3, UnconditionalModernDiT_smedium_L4, UnconditionalModernDiT_smedium_L5]
+dits = [UnconditionalModernDiT_smedium_L1, UnconditionalModernDiT_smedium_L2, UnconditionalModernDiT_smedium_L3, UnconditionalModernDiT_smedium_L4]
 base_dits = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_longtrain_32chunks/ckpt.pt', DiT) for level, DiT in zip(valid_levels, dits)]
-measure_dits = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_adapter_longtrain_24chunks/ckpt.pt', DiT) for level, DiT in zip(valid_levels, dits)]
+measure_dits = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_adapter_longtrain_32chunks_v2/ckpt.pt', DiT) for level, DiT in zip(valid_levels, dits)]
 base_chunks = 32
 base_window = 48
-measure_chunks = 24
-measure_window = 64
+measure_chunks = 32
+measure_window = 48
 vae_embed_dim = 16
 assert base_chunks * base_window * vae_embed_dim == measure_chunks * measure_window * vae_embed_dim
 
