@@ -45,7 +45,7 @@ save_interval = 10000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir
@@ -61,7 +61,7 @@ max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
 # adamw optimizer
 learning_rate = 4e-3 * math.sqrt(batch_size / 4096) # max learning rate
-max_iters = 300000 # total number of training iterations
+max_iters = 500000 # total number of training iterations
 weight_decay = 1e-3#1e-2
 beta1 = 0.9
 beta2 = 0.999
@@ -74,7 +74,7 @@ min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
-device = 'cuda:2' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+device = 'cuda:0' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
@@ -275,7 +275,7 @@ def get_lr(it):
 if wandb_log and master_process:
     import wandb
     if init_from == 'resume':
-        wandb.init(project=wandb_project, name=wandb_run_name, id='5a4b6fpx', resume='must', config=config)
+        wandb.init(project=wandb_project, name=wandb_run_name, id='omrtjsc4', resume='must', config=config)
     else:
         wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
