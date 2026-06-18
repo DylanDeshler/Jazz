@@ -21,7 +21,7 @@ from adapter import InvertibleAdapter as Adapter
 from diffusion_forcing import UnconditionalModernDiT_smedium_L1, UnconditionalModernDiT_smedium_L2, UnconditionalModernDiT_smedium_L3, UnconditionalModernDiT_smedium_L4
 import argparse
 parser = argparse.ArgumentParser(description="Process a specific level argument.")
-valid_levels = [f"L{i}" for i in range(1, 4)]
+valid_levels = [f"L{i}" for i in range(1, 5)]
 
 parser.add_argument(
     '--batch_size', 
