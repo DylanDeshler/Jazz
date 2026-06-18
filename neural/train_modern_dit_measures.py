@@ -90,15 +90,15 @@ wandb_run_name = str(time.time())
 dataset = ''
 gradient_accumulation_steps = 1
 batch_size = 64
-if int(args.level[1]) > 4:
-    gradient_accumulation_steps *= 2
-    batch_size = batch_size // 2
-    print(f'Big model {args.level} accumulating gradients!')
+# if int(args.level[1]) > 4:
+#     gradient_accumulation_steps *= 2
+#     batch_size = batch_size // 2
+#     print(f'Big model {args.level} accumulating gradients!')
 TARGET_SIG = 4
 TARGET_BPM = 60 * TARGET_SIG / (24576 / 16000)
 # model
 patch_size = 2
-gradient_checkpointing = False
+gradient_checkpointing = True
 spatial_window = 48
 n_chunks = 32
 max_seq_len = spatial_window * n_chunks
