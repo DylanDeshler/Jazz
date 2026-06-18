@@ -35,7 +35,7 @@ else
 fi
 
 # Full list of levels
-LEVELS=("L1" "L2" "L3" "L4" "L5" "L6")
+LEVELS=("L1" "L2" "L3" "L4" "L5")
 
 # Validate the start level and find its index
 START_INDEX=-1
