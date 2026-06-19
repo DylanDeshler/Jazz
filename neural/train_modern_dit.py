@@ -81,7 +81,7 @@ net_map = {
     'D4': UnconditionalModernDiT_smedium_D4,
     'D5': UnconditionalModernDiT_smedium_D5
 }
-level = f'{args.axis[0]}{args.level[1]}'
+level = f'{args.axis[0].upper()}{args.level[1]}'
 net = net_map[level]
 print(f"Begining training for {level} on {args.device}")
 
