@@ -36,7 +36,7 @@ import soundfile as sf
 
 import argparse
 parser = argparse.ArgumentParser(description="Process a specific level argument.")
-valid_levels = [f"L{i}" for i in range(1, 6)]
+valid_levels = [f"L{i}" for i in range(0, 6)]
 
 parser.add_argument(
     '--level', 
@@ -46,6 +46,13 @@ parser.add_argument(
     help="Specify the level. Must be one of L1 through L5."
 )
 parser.add_argument(
+    '--axis',
+    type=str,
+    required=True,
+    choices=['width', 'depth'],
+    help="Specify width or depth scaling experiment."
+)
+parser.add_argument(
     '--device', 
     type=str, 
     required=True,
@@ -53,24 +60,35 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
-print(f"Begining training for {args.level} on {args.device}")
 
-from diffusion_forcing import UnconditionalModernDiT_smedium_L1, UnconditionalModernDiT_smedium_L2, UnconditionalModernDiT_smedium_L3, UnconditionalModernDiT_smedium_L4, UnconditionalModernDiT_smedium_L5
+from diffusion_forcing import (
+    UnconditionalModernDiT_smedium_W0, UnconditionalModernDiT_smedium_W1, UnconditionalModernDiT_smedium_W2, UnconditionalModernDiT_smedium_W3, UnconditionalModernDiT_smedium_W4, UnconditionalModernDiT_smedium_W5,
+    UnconditionalModernDiT_smedium_D0, UnconditionalModernDiT_smedium_D1, UnconditionalModernDiT_smedium_D2, UnconditionalModernDiT_smedium_D3, UnconditionalModernDiT_smedium_D4, UnconditionalModernDiT_smedium_D5
+)
 
 net_map = {
-    'L1': UnconditionalModernDiT_smedium_L1,
-    'L2': UnconditionalModernDiT_smedium_L2,
-    'L3': UnconditionalModernDiT_smedium_L3,
-    'L4': UnconditionalModernDiT_smedium_L4,
-    'L5': UnconditionalModernDiT_smedium_L5
+    'W0': UnconditionalModernDiT_smedium_W0,
+    'W1': UnconditionalModernDiT_smedium_W1,
+    'W2': UnconditionalModernDiT_smedium_W2,
+    'W3': UnconditionalModernDiT_smedium_W3,
+    'W4': UnconditionalModernDiT_smedium_W4,
+    'W5': UnconditionalModernDiT_smedium_W5,
+    
+    'D0': UnconditionalModernDiT_smedium_D0,
+    'D1': UnconditionalModernDiT_smedium_D1,
+    'D2': UnconditionalModernDiT_smedium_D2,
+    'D3': UnconditionalModernDiT_smedium_D3,
+    'D4': UnconditionalModernDiT_smedium_D4,
+    'D5': UnconditionalModernDiT_smedium_D5
 }
-assert len(net_map) == len(valid_levels)
-net = net_map[args.level]
+level = f'{args.axis[0]}{args.level[1]}'
+net = net_map[level]
+print(f"Begining training for {level} on {args.device}")
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = f'UnconditionalModernDiT_smedium_{args.level}_24576_subset_longtrain_32chunks'
+out_dir = f'UnconditionalModernDiT_smedium_{level}_24576_subset_longtrain_32chunks'
 eval_interval = 5000
 sample_interval = 10000
 log_interval = 100
@@ -87,10 +105,10 @@ wandb_run_name = str(time.time())
 dataset = ''
 gradient_accumulation_steps = 1
 batch_size = 64
-if int(args.level[1]) > 4:
+if int(level[1]) > 4:
     gradient_accumulation_steps *= 2
     batch_size = batch_size // 2
-    print(f'Big model {args.level} accumulating gradients!')
+    print(f'Big model {level} accumulating gradients!')
 # model
 patch_size = 2
 gradient_checkpointing = False

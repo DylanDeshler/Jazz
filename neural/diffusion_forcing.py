@@ -2587,23 +2587,41 @@ def UnconditionalModernDiT_large(**kwargs):
 def UnconditionalModernDiT_medium(**kwargs):
     return UnconditionalModernDiTWrapper(depth=24, hidden_size=1024, num_heads=16, **kwargs)
 
-def UnconditionalModernDiT_smedium_L6(**kwargs):
-    return UnconditionalModernDiTWrapper(depth=20, hidden_size=1152, num_heads=18, **kwargs)
-
-def UnconditionalModernDiT_smedium_L5(**kwargs):
+def UnconditionalModernDiT_smedium_W5(**kwargs):
     return UnconditionalModernDiTWrapper(depth=20, hidden_size=1024, num_heads=16, **kwargs)
 
-def UnconditionalModernDiT_smedium_L4(**kwargs):
+def UnconditionalModernDiT_smedium_W4(**kwargs):
     return UnconditionalModernDiTWrapper(depth=20, hidden_size=768, num_heads=12, **kwargs)
 
-def UnconditionalModernDiT_smedium_L3(**kwargs):
+def UnconditionalModernDiT_smedium_W3(**kwargs):
     return UnconditionalModernDiTWrapper(depth=20, hidden_size=512, num_heads=8, **kwargs)
 
-def UnconditionalModernDiT_smedium_L2(**kwargs):
+def UnconditionalModernDiT_smedium_W2(**kwargs):
     return UnconditionalModernDiTWrapper(depth=20, hidden_size=384, num_heads=6, **kwargs)
 
-def UnconditionalModernDiT_smedium_L1(**kwargs):
+def UnconditionalModernDiT_smedium_W1(**kwargs):
     return UnconditionalModernDiTWrapper(depth=20, hidden_size=256, num_heads=4, **kwargs)
+
+def UnconditionalModernDiT_smedium_W0(**kwargs):
+    return UnconditionalModernDiTWrapper(depth=20, hidden_size=128, num_heads=2, **kwargs)
+
+def UnconditionalModernDiT_smedium_D5(**kwargs):
+    return UnconditionalModernDiTWrapper(depth=28, hidden_size=768, num_heads=12, **kwargs)
+
+def UnconditionalModernDiT_smedium_D4(**kwargs):
+    return UnconditionalModernDiTWrapper(depth=24, hidden_size=768, num_heads=12, **kwargs)
+
+def UnconditionalModernDiT_smedium_D3(**kwargs):
+    return UnconditionalModernDiTWrapper(depth=20, hidden_size=768, num_heads=12, **kwargs)
+
+def UnconditionalModernDiT_smedium_D2(**kwargs):
+    return UnconditionalModernDiTWrapper(depth=16, hidden_size=768, num_heads=12, **kwargs)
+
+def UnconditionalModernDiT_smedium_D1(**kwargs):
+    return UnconditionalModernDiTWrapper(depth=12, hidden_size=768, num_heads=12, **kwargs)
+
+def UnconditionalModernDiT_smedium_D0(**kwargs):
+    return UnconditionalModernDiTWrapper(depth=8, hidden_size=768, num_heads=12, **kwargs)
 
 def UnconditionalModernDiT_smedium(**kwargs):
     return UnconditionalModernDiTWrapper(depth=20, hidden_size=768, num_heads=12, **kwargs)

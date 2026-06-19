@@ -5,15 +5,16 @@ set -e
 
 # Help message function
 print_usage() {
-    echo "Usage: $0 <device> <mode> [start_level]"
+    echo "Usage: $0 <device> <mode> <axis> [start_level]"
     echo "  <device>      : e.g., cuda:0, cpu"
     echo "  <mode>        : baseline | measure"
-    echo "  [start_level] : (Optional) L1, L2, L3, L4, or L5. Defaults to L1."
-    echo "Example       : $0 cuda:0 measure L3"
+    echo "  <axis>        : depth | width"
+    echo "  [start_level] : (Optional) L0, L1, L2, L3, L4, or L5. Defaults to L0."
+    echo "Example       : $0 cuda:0 measure depth L3"
 }
 
-# Check if required arguments were provided
-if [ -z "$1" ] || [ -z "$2" ]; then
+# Check if required arguments were provided (now 3 required arguments)
+if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ]; then
     echo "Error: Missing required arguments."
     print_usage
     exit 1
@@ -21,7 +22,8 @@ fi
 
 DEVICE=$1
 MODE=$2
-START_LEVEL=${3:-"L1"} # Defaults to L1 if not provided
+AXIS=$3
+START_LEVEL=${4:-"L0"} # Shifted to 4th position, defaults to L1 if not provided
 
 # Determine which script to run based on the mode
 if [ "$MODE" = "baseline" ]; then
@@ -34,8 +36,15 @@ else
     exit 1
 fi
 
+# Validate the axis argument
+if [ "$AXIS" != "depth" ] && [ "$AXIS" != "width" ]; then
+    echo "Error: Invalid axis '$AXIS'. Must be 'depth' or 'width'."
+    print_usage
+    exit 1
+fi
+
 # Full list of levels
-LEVELS=("L1" "L2" "L3" "L4" "L5")
+LEVELS=("L0" "L1" "L2" "L3" "L4" "L5")
 
 # Validate the start level and find its index
 START_INDEX=-1
@@ -47,7 +56,7 @@ for i in "${!LEVELS[@]}"; do
 done
 
 if [ "$START_INDEX" -eq -1 ]; then
-    echo "Error: Invalid start level '$START_LEVEL'. Must be one of: L1, L2, L3, L4, L5"
+    echo "Error: Invalid start level '$START_LEVEL'. Must be one of: L0, L1, L2, L3, L4, L5"
     print_usage
     exit 1
 fi
@@ -55,6 +64,7 @@ fi
 echo "Target Script : ${SCRIPT_TO_RUN}"
 echo "Target Device : ${DEVICE}"
 echo "Target Mode   : ${MODE}"
+echo "Target Axis   : ${AXIS}"
 echo "Starting At   : ${START_LEVEL}"
 echo ""
 
@@ -66,8 +76,8 @@ for ((i=START_INDEX; i<${#LEVELS[@]}; i++)); do
     echo " Starting training for level: ${LVL} "
     echo "========================================="
     
-    # Executes the selected script with the parameters
-    python "$SCRIPT_TO_RUN" --level "$LVL" --device "$DEVICE"
+    # Executes the selected script with the parameters, including --axis
+    python "$SCRIPT_TO_RUN" --level "$LVL" --device "$DEVICE" --axis "$AXIS"
     
     echo " Finished training for level: ${LVL}"
     echo "========================================="
