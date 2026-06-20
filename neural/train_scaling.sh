@@ -5,15 +5,16 @@ set -e
 
 # Help message function
 print_usage() {
-    echo "Usage: $0 <device> <mode> <axis> [start_level]"
+    echo "Usage: $0 <device> <mode> <axis> [start_level] [chunks]"
     echo "  <device>      : e.g., cuda:0, cpu"
     echo "  <mode>        : baseline | measure"
     echo "  <axis>        : depth | width"
     echo "  [start_level] : (Optional) L0, L1, L2, L3, L4, or L5. Defaults to L0."
-    echo "Example       : $0 cuda:0 measure depth L3"
+    echo "  [chunks]      : (Optional) Number of chunks. Defaults to 32."
+    echo "Example       : $0 cuda:0 measure depth L3 64"
 }
 
-# Check if required arguments were provided (now 3 required arguments)
+# Check if required arguments were provided
 if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ]; then
     echo "Error: Missing required arguments."
     print_usage
@@ -23,7 +24,8 @@ fi
 DEVICE=$1
 MODE=$2
 AXIS=$3
-START_LEVEL=${4:-"L0"} # Shifted to 4th position, defaults to L1 if not provided
+START_LEVEL=${4:-"L0"} # Defaults to L0 if not provided
+CHUNKS=${5:-32}        # Defaults to 32 if not provided
 
 # Determine which script to run based on the mode
 if [ "$MODE" = "baseline" ]; then
@@ -66,6 +68,7 @@ echo "Target Device : ${DEVICE}"
 echo "Target Mode   : ${MODE}"
 echo "Target Axis   : ${AXIS}"
 echo "Starting At   : ${START_LEVEL}"
+echo "Chunks Count  : ${CHUNKS}"
 echo ""
 
 # Loop through each level starting from the requested index
@@ -76,8 +79,8 @@ for ((i=START_INDEX; i<${#LEVELS[@]}; i++)); do
     echo " Starting training for level: ${LVL} "
     echo "========================================="
     
-    # Executes the selected script with the parameters, including --axis
-    python "$SCRIPT_TO_RUN" --level "$LVL" --device "$DEVICE" --axis "$AXIS"
+    # Executes the selected script with the parameters, including --axis and --chunks
+    python "$SCRIPT_TO_RUN" --level "$LVL" --device "$DEVICE" --axis "$AXIS" --chunks "$CHUNKS"
     
     echo " Finished training for level: ${LVL}"
     echo "========================================="
