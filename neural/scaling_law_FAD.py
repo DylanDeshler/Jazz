@@ -342,7 +342,10 @@ for level in valid_levels:
         len(np.concatenate(y1_embs[level], axis=0)),
         len(np.concatenate(y2_embs[level], axis=0))
     ]).item()
+    print(level, real_embs.shape, np.concatenate(y1_embs[level], axis=0).shape, np.concatenate(y2_embs[level], axis=0).shape)
+hours = N * 5 / 60 / 60
 
+print(f'Using {N} embeddings which is approximately {hours:.2f} hours')
 for level in valid_levels:
     level_real_embs = real_embs[np.random.choice(np.arange(len(real_embs)), size=N, replace=False)]
     real_mu, real_sigma = calculate_embd_statistics(level_real_embs)
