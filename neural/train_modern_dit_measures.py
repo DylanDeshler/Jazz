@@ -56,6 +56,12 @@ parser.add_argument(
     help="Specify width or depth scaling experiment."
 )
 parser.add_argument(
+    '--chunks',
+    type=int,
+    required=True,
+    help="Specify the number of chunks defining the context length."
+)
+parser.add_argument(
     '--device', 
     type=str, 
     required=True,
@@ -85,13 +91,14 @@ net_map = {
     'D5': UnconditionalModernDiT_smedium_D5
 }
 level = f'{args.axis[0].upper()}{args.level[1]}'
+n_chunks = args.chunks
 net = net_map[level]
 print(f"Begining training for {level} on {args.device}")
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = f'UnconditionalModernDiT_smedium_{level}_24576_subset_adapter_longtrain_32chunks_v2'
+out_dir = f'UnconditionalModernDiT_smedium_{level}_24576_subset_adapter_longtrain_{n_chunks}chunks_v2'
 eval_interval = 5000
 sample_interval = 10000
 log_interval = 100
@@ -118,7 +125,6 @@ TARGET_BPM = 60 * TARGET_SIG / (24576 / 16000)
 patch_size = 2
 gradient_checkpointing = False
 spatial_window = 48
-n_chunks = 32
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
 n_style_embeddings = 256
