@@ -56,7 +56,7 @@ parser.add_argument(
     help="Specify width or depth scaling experiment."
 )
 parser.add_argument(
-    '--chunks',
+    '--n_chunks',
     type=int,
     required=True,
     help="Specify the number of chunks defining the context length."
@@ -91,7 +91,7 @@ net_map = {
     'D5': UnconditionalModernDiT_smedium_D5
 }
 level = f'{args.axis[0].upper()}{args.level[1]}'
-n_chunks = args.chunks
+n_chunks = args.n_chunks
 net = net_map[level]
 print(f"Begining training for {level} on {args.device}")
 

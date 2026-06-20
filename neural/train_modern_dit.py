@@ -53,7 +53,7 @@ parser.add_argument(
     help="Specify width or depth scaling experiment."
 )
 parser.add_argument(
-    '--chunks',
+    '--n_chunks',
     type=int,
     required=True,
     help="Specify the number of chunks defining the context length."
