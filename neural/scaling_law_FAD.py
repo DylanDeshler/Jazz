@@ -18,7 +18,7 @@ from einops import rearrange
 from dito import DiToV5 as Tokenizer
 from fad import MultiTaskFAD as FAD, BPMProbe
 from adapter import InvertibleAdapter as Adapter
-from diffusion_forcing import UnconditionalModernDiT_smedium_L1, UnconditionalModernDiT_smedium_L2, UnconditionalModernDiT_smedium_L3, UnconditionalModernDiT_smedium_L4
+from diffusion_forcing import UnconditionalModernDiT_smedium_W1, UnconditionalModernDiT_smedium_W2, UnconditionalModernDiT_smedium_W3, UnconditionalModernDiT_smedium_W4, UnconditionalModernDiT_smedium_W5
 import argparse
 parser = argparse.ArgumentParser(description="Process a specific level argument.")
 valid_levels = [f"L{i}" for i in range(1, 5)]
