@@ -79,8 +79,8 @@ for ((i=START_INDEX; i<${#LEVELS[@]}; i++)); do
     echo " Starting training for level: ${LVL} "
     echo "========================================="
     
-    # Executes the selected script with the parameters, including --axis and --chunks
-    python "$SCRIPT_TO_RUN" --level "$LVL" --device "$DEVICE" --axis "$AXIS" --chunks "$CHUNKS"
+    # Executes the selected script with the parameters, including --axis and --n_chunks
+    python "$SCRIPT_TO_RUN" --level "$LVL" --device "$DEVICE" --axis "$AXIS" --n_chunks "$CHUNKS"
     
     echo " Finished training for level: ${LVL}"
     echo "========================================="
