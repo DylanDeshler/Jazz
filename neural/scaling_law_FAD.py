@@ -47,7 +47,7 @@ parser.add_argument(
     '--axis',
     type=str,
     required=True,
-    choice=['width', 'depth']
+    choices=['width', 'depth']
 )
 args = parser.parse_args()
 
