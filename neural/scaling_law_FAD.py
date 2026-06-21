@@ -21,7 +21,6 @@ from adapter import InvertibleAdapter as Adapter
 from diffusion_forcing import UnconditionalModernDiT_smedium_W1, UnconditionalModernDiT_smedium_W2, UnconditionalModernDiT_smedium_W3, UnconditionalModernDiT_smedium_W4, UnconditionalModernDiT_smedium_W5
 import argparse
 parser = argparse.ArgumentParser(description="Process a specific level argument.")
-valid_levels = [f"L{i}" for i in range(1, 6)]
 
 parser.add_argument(
     '--batch_size', 
@@ -44,7 +43,15 @@ parser.add_argument(
     required=True,
     help="Specify the device. Like cuda:1."
 )
+parser.add_argument(
+    '--axis',
+    type=str,
+    required=True,
+    choice=['width', 'depth']
+)
 args = parser.parse_args()
+
+valid_levels = [f"{args.axis[0].upper()}{i}" for i in range(1, 6)]
 
 torch.manual_seed(0)
 np.random.seed(0)
