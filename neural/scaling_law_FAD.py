@@ -84,7 +84,7 @@ def load_model(ckpt_path, ModelType):
     model.load_state_dict(state_dict)
     model.eval()
     if 'cuda' in device:
-        model = torch.compile(model)
+        model = torch.compile(model, mode="reduce-overhead")
     return model
 
 def calculate_embd_statistics(embd_lst):
