@@ -387,6 +387,7 @@ class FMEulerSampler:
         rescale_phi=0,
         cfg_mode="independent",
         t_dist="uniform",
+        uniform_t=False
     ):
         """
         Implements simple uniform noise sampling for bidirectional generation
@@ -407,7 +408,7 @@ class FMEulerSampler:
 
         with torch.no_grad():
             for i in range(n_steps):
-                t = t_steps[i].repeat(x_t.shape[0], x_t.shape[1])
+                t = t_steps[i].expand(x_t.shape[0]) if uniform_t else t_steps[i].repeat(x_t.shape[0], x_t.shape[1])
                 neg_v = self.diffusion.get_prediction(
                     net,
                     x_t,
@@ -580,12 +581,19 @@ class Attention(nn.Module):
             is_causal: bool = False
     ) -> torch.Tensor:
         B, N, C = x.shape
-        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv.unbind(0)
-        # RoPE
+        # qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+        # q, k, v = qkv.unbind(0)
+        # # RoPE
+        # if freqs_cis is not None:
+        #     q = apply_rotary_emb(q.transpose(1, 2), freqs_cis).transpose(1, 2)
+        #     k = apply_rotary_emb(k.transpose(1, 2), freqs_cis).transpose(1, 2)
+        
+        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim)
+        q, k, v = qkv.unbind(2)                       # each (B, N, H, D)
         if freqs_cis is not None:
-            q = apply_rotary_emb(q.transpose(1, 2), freqs_cis).transpose(1, 2)
-            k = apply_rotary_emb(k.transpose(1, 2), freqs_cis).transpose(1, 2)
+            q = apply_rotary_emb(q, freqs_cis)        # apply_rotary_emb expects (B, N, H, D)
+            k = apply_rotary_emb(k, freqs_cis)
+        q, k, v = q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2)  # (B, H, N, D)
 
         if self.fused_attn:
             x = F.scaled_dot_product_attention(
@@ -744,6 +752,17 @@ class DiTBlock(nn.Module):
         x = x + self.drop_path(gate_msa * rearrange(self.attn(rearrange(modulate(self.norm1(x), shift_msa, scale_msa), 'b t n c -> b (t n) c'), freqs_cis=freqs_cis, attn_mask=attn_mask), 'b (t n) c -> b t n c', t=T, n=N))
         x = x + self.drop_path(gate_mlp * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp)))
         x = rearrange(x, 'b t n c -> b (t n) c')
+        return x
+
+    def forward_uniform(self, x, t, freqs_cis=None, attn_mask=None):
+        # x: (B, T*N, C);  t: (B, 6C) -- one timestep per batch item, shared over all tokens
+        B = x.shape[0]; C = x.shape[-1]
+        biases = self.scale_shift_table + t.reshape(B, 6, C)              # (B, 6, C)
+        sh_msa, sc_msa, g_msa, sh_mlp, sc_mlp, g_mlp = biases.unbind(1)   # each (B, C)
+        sh_msa, sc_msa, g_msa = sh_msa[:, None], sc_msa[:, None], g_msa[:, None]   # (B,1,C)
+        sh_mlp, sc_mlp, g_mlp = sh_mlp[:, None], sc_mlp[:, None], g_mlp[:, None]
+        x = x + g_msa * self.attn(modulate(self.norm1(x), sh_msa, sc_msa), freqs_cis=freqs_cis, attn_mask=attn_mask)
+        x = x + g_mlp * self.mlp(modulate(self.norm2(x), sh_mlp, sc_mlp))
         return x
 
 class DiTAirBlock(nn.Module):
@@ -1327,10 +1346,23 @@ class UnconditionalModernDiT(nn.Module):
         x = self.x_embedder(x)
         x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
         
+        freqs_cis = self.freqs_cis[:x.shape[1]]
+        
+        if t.ndim == 1:
+            t = self.t_embedder(t)
+            t0 = self.t_block(t)
+            
+            for block in self.blocks:
+                x = block.forward_uniform(x, t0, freqs_cis=freqs_cis)
+                
+            shift, scale = (self.final_layer_scale_shift_table[None] + F.silu(t)[:, None]).chunk(2, dim=1)
+            x = modulate(self.norm(x), shift, scale)
+            x = self.fc(x)
+            
+            return rearrange(x, 'b (t n) (p c) -> b t (n p) c', t=T, n=x.shape[1] // T, p=self.patch_size, c=C)
+        
         t = self.t_embedder(t.flatten()).view(B, T, -1)
         t0 = self.t_block(t)
-        
-        freqs_cis = self.freqs_cis[:x.shape[1]]
         
         for block in self.blocks:
             if self.gradient_checkpointing and self.training:
@@ -1360,7 +1392,7 @@ class UnconditionalModernDiTWrapper(nn.Module):
     def forward(self, x, t=None):
         return self.diffusion.loss(self.net, x, t=t)
     
-    def generate(self, shape, net_kwargs=None, uncond_net_kwargs=None, n_steps=50, guidance=1.0, noise=None, memory_efficient=True, rescale_phi=0, cfg_mode="independent", t_dist="uniform"):
+    def generate(self, shape, net_kwargs=None, uncond_net_kwargs=None, n_steps=50, guidance=1.0, noise=None, memory_efficient=True, rescale_phi=0, cfg_mode="independent", t_dist="uniform", uniform_t=False):
         return self.sampler.sample(
             self.net, 
             shape, 
@@ -1372,7 +1404,8 @@ class UnconditionalModernDiTWrapper(nn.Module):
             memory_efficient=memory_efficient,
             rescale_phi=rescale_phi,
             cfg_mode=cfg_mode,
-            t_dist=t_dist
+            t_dist=t_dist,
+            uniform_t=uniform_t
         )
 
 class StyleConditionalModernDiT(nn.Module):
