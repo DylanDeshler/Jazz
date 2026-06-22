@@ -221,9 +221,9 @@ def crossfade_segments(segment_a, segment_b, sample_rate, crossfade_ms=15):
     
     return stitched_audio
 
-def predict_measures(model, gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode="independent", t_dist="uniform", uniform_t=False):
+def predict_measures(model, gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode="independent", t_dist="uniform"):
     with ctx:
-        y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise, memory_efficient=memory_efficient, rescale_phi=rescale_phi, cfg_mode=cfg_mode, t_dist=t_dist, uniform_t=uniform_t)
+        y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise, memory_efficient=memory_efficient, rescale_phi=rescale_phi, cfg_mode=cfg_mode, t_dist=t_dist)
     
         bpm = probe(y)
     
@@ -320,7 +320,6 @@ with torch.inference_mode():
         
         for i, base_dit in enumerate(base_dits):
             with ctx:
-                # y1 = base_dit.generate(base_gen_shape, n_steps=n_steps, noise=base_gen_noise)
                 y1 = base_dit.generate(base_gen_shape, n_steps=n_steps, noise=base_gen_noise, memory_efficient=False, cfg_mode='joint', t_dist='logit')
                 y1 = y1.transpose(2, 3).view(batch_size * base_chunks, vae_embed_dim, base_window)
                 y1 = tokenizer.decode(y1, shape=(1, n_samples), n_steps=n_steps, noise=base_decoder_noise)
