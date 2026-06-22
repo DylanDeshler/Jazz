@@ -298,7 +298,7 @@ idxs = np.random.choice(np.arange(len(paths)), size=n_generations, replace=False
 real_embs = []
 y1_embs = defaultdict(list)
 y2_embs = defaultdict(list)
-with torch.no_grad():
+with torch.inference_mode():
     for idx in tqdm(idxs, desc='Embedding Real Samples'):
         path = paths[idx]
         wav, _ = librosa.load(path, sr=rate)
