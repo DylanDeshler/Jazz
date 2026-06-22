@@ -51,7 +51,7 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-valid_levels = [f"{args.axis[0].upper()}{i}" for i in range(1, 6)]
+valid_levels = [f"{args.axis[0].upper()}{i}" for i in range(0, 6)]
 
 torch.manual_seed(0)
 np.random.seed(0)
@@ -272,7 +272,7 @@ max_seq_len = adapter.max_seq_len
 probe = load_model(os.path.join('tokenizer_low_measures_fix_subset_longtrain_v2_48_BPMProbe_tiny', 'ckpt.pt'), BPMProbe)
 
 # DiTs
-dits = [UnconditionalModernDiT_smedium_W1, UnconditionalModernDiT_smedium_W2, UnconditionalModernDiT_smedium_W3, UnconditionalModernDiT_smedium_W4, UnconditionalModernDiT_smedium_W5]
+dits = [UnconditionalModernDiT_smedium_W0, UnconditionalModernDiT_smedium_W1, UnconditionalModernDiT_smedium_W2, UnconditionalModernDiT_smedium_W3, UnconditionalModernDiT_smedium_W4, UnconditionalModernDiT_smedium_W5]
 base_dits = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_longtrain_32chunks/ckpt.pt', DiT) for level, DiT in zip(valid_levels, dits)]
 measure_dits = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_adapter_longtrain_32chunks_v2/ckpt.pt', DiT) for level, DiT in zip(valid_levels, dits)]
 base_chunks = 32
