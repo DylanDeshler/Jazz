@@ -271,7 +271,6 @@ def get_batch(split='train'):
         idxs = np.random.choice(train_idx, batch_size, p=train_probs).tolist()
     else:
         idxs = np.random.choice(test_idx, batch_size, p=test_probs).tolist()
-    print(frames[idxs])
     starts = np.random.randint(low=0, high=frames[idxs] - n_samples, size=batch_size)
     
     x = []
@@ -281,7 +280,6 @@ def get_batch(split='train'):
     inst = []
     for start, idx in zip(starts, idxs):
         wav, file_sample_rate = sf.read(paths[idx], start=start, frames=n_samples)
-        print(wav.shape, start, durations[idx], durations[idx] - start - n_samples)
         beat_path = os.path.join('/data/beats', os.path.basename(paths[idx]))
         url = paths[idx].split('/')[-1].split('.')[0]
         
