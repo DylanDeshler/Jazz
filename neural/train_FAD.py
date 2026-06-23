@@ -208,8 +208,11 @@ def calculate_subset_bpm(timestamps, start_time, end_time):
 
 import glob
 import librosa
-paths = glob.glob('/data/wavs/*.wav')
-wavs = []
+paths = glob.glob('/data/wavs/*')
+with open('/data/valid_files_by_bpm.json', 'r') as f:
+    beat_paths = json.load(f)
+paths = [os.path.join('/data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
+print(len(paths))
 
 from sklearn.model_selection import StratifiedGroupKFold
 kf = StratifiedGroupKFold(n_splits=20, shuffle=True, random_state=0)
