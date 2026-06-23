@@ -256,8 +256,10 @@ durations = []
 for path in tqdm(paths):
     durations.append(sf.info(path).duration)
 durations = np.asarray(durations)
-train_durations = durations[train_idx] / np.sum(durations[train_idx])
-test_durations = durations[test_idx] / np.sum(durations[test_idx])
+train_durations = durations[train_idx]
+train_probs = train_durations / np.sum(durations[train_idx])
+test_durations = durations[test_idx]
+test_probs = test_durations / np.sum(durations[test_idx])
 del durations
 
 from concurrent.futures import ThreadPoolExecutor
@@ -265,18 +267,19 @@ executor = ThreadPoolExecutor(max_workers=16)
 
 def get_batch(split='train'):
     if split == 'train':
-        idxs = np.random.choice(train_idx, batch_size, p=train_durations).tolist()
+        idxs = np.random.choice(train_idx, batch_size, p=train_probs).tolist()
+        starts = np.random.randint(train_durations[idxs] - n_samples, batch_size)
     else:
-        idxs = np.random.choice(test_idx, batch_size, p=test_durations).tolist()
+        idxs = np.random.choice(test_idx, batch_size, p=test_probs).tolist()
+        starts = np.random.randint(test_durations[idxs] - n_samples, batch_size)
     
     x = []
     bpm = []
     year = []
     label = []
     inst = []
-    for idx in idxs:
-        # wav = wavs[idx]
-        wav, _ = librosa.load(paths[idx], sr=sample_rate)
+    for i, idx in enumerate(idxs):
+        wav, _ = sf.read(paths[idx], start=starts[i], frames=starts[i] + n_samples, samplerate=sample_rate, dtype='float32')
         beat_path = os.path.join('/data/beats', os.path.basename(paths[idx]))
         url = paths[idx].split('/')[-1].split('.')[0]
         
