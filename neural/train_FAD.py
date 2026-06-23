@@ -276,13 +276,12 @@ def get_batch(split='train'):
     year = []
     label = []
     inst = []
-    for i, idx in enumerate(idxs):
-        wav, file_sample_rate = sf.read(paths[idx], start=starts[i], frames=n_samples)
+    for start, idx in zip(starts, idxs):
+        wav, file_sample_rate = sf.read(paths[idx], start=start, frames=n_samples)
         print(wav.dtype, file_sample_rate)
         beat_path = os.path.join('/data/beats', os.path.basename(paths[idx]))
         url = paths[idx].split('/')[-1].split('.')[0]
         
-        start = np.random.randint(len(wav) - n_samples)
         timestamps = read_beat_timestamps(beat_path)
         label.append(record_labels[url_map[url]])
         year.append(years[url_map[url]])
