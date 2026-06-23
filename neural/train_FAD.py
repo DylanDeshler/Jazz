@@ -260,7 +260,6 @@ train_durations = durations[train_idx]
 train_probs = train_durations / np.sum(durations[train_idx])
 test_durations = durations[test_idx]
 test_probs = test_durations / np.sum(durations[test_idx])
-del durations
 
 from concurrent.futures import ThreadPoolExecutor
 executor = ThreadPoolExecutor(max_workers=16)
