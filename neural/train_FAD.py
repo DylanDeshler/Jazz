@@ -272,7 +272,7 @@ def get_batch(split='train'):
     else:
         idxs = np.random.choice(test_idx, batch_size, p=test_probs).tolist()
     print(frames[idxs])
-    starts = np.random.randint(frames[idxs] - n_samples, batch_size)
+    starts = np.random.randint(low=0, high=frames[idxs] - n_samples, size=batch_size)
     
     x = []
     bpm = []
