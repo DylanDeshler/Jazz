@@ -253,13 +253,15 @@ train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], df['ke
 # test_durations = durations[test_idx] / np.sum(durations[test_idx])
 
 durations = []
+frames = []
 for path in tqdm(paths):
     durations.append(sf.info(path).duration)
+    frames.append(sf.info(path).frames)
 durations = np.asarray(durations)
-train_durations = durations[train_idx]
-train_probs = train_durations / np.sum(durations[train_idx])
-test_durations = durations[test_idx]
-test_probs = test_durations / np.sum(durations[test_idx])
+frames = np.asarray(frames)
+train_probs = durations[train_idx] / np.sum(durations[train_idx])
+test_probs = durations[test_idx] / np.sum(durations[test_idx])
+del durations
 
 from concurrent.futures import ThreadPoolExecutor
 executor = ThreadPoolExecutor(max_workers=16)
@@ -269,7 +271,7 @@ def get_batch(split='train'):
         idxs = np.random.choice(train_idx, batch_size, p=train_probs).tolist()
     else:
         idxs = np.random.choice(test_idx, batch_size, p=test_probs).tolist()
-    starts = np.random.randint(durations[idxs] - n_samples, batch_size)
+    starts = np.random.randint(frames[idxs] - n_samples, batch_size)
     
     x = []
     bpm = []
@@ -277,7 +279,7 @@ def get_batch(split='train'):
     label = []
     inst = []
     for start, idx in zip(starts, idxs):
-        wav, file_sample_rate = sf.read(paths[idx], start=start, stop=start+n_samples)
+        wav, file_sample_rate = sf.read(paths[idx], start=start, frames=n_samples)
         print(wav.shape, start, durations[idx], durations[idx] - start - n_samples)
         beat_path = os.path.join('/data/beats', os.path.basename(paths[idx]))
         url = paths[idx].split('/')[-1].split('.')[0]
