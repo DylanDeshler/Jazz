@@ -271,6 +271,7 @@ def get_batch(split='train'):
         idxs = np.random.choice(train_idx, batch_size, p=train_probs).tolist()
     else:
         idxs = np.random.choice(test_idx, batch_size, p=test_probs).tolist()
+    print(frames[idxs])
     starts = np.random.randint(frames[idxs] - n_samples, batch_size)
     
     x = []
