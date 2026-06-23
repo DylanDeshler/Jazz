@@ -22,11 +22,11 @@ from sklearn.preprocessing import MultiLabelBinarizer
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'FAD'
-eval_interval = 2500
-sample_interval = 2500
+out_dir = 'FAD_v2'
+eval_interval = 5000
+sample_interval = 5000
 log_interval = 100
-save_interval = 2500
+save_interval = 5000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
@@ -60,7 +60,7 @@ min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
-device = 'cuda:1' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+device = 'cuda:0' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
@@ -73,7 +73,7 @@ bpm_bins = torch.arange(40, 300, 5, dtype=torch.float32)
 year_bins = torch.arange(1900, 1980, 5, dtype=torch.float32)
 bpm_sigma, year_sigma = 5, 2.5
 
-cards = pickle.load(open('/home/dylan.d/research/music/Jazz/JazzSet.0.9.pkl', "rb"))
+cards = pickle.load(open('/data/JazzSet.0.9.pkl', "rb"))
 cards = [card for card in cards if card]
 
 years = []
@@ -100,7 +100,7 @@ record_labels = mlb.transform(record_label_names)
 record_labels = torch.from_numpy(record_labels)
 
 # Instruments
-instrument_map_df = pd.read_csv('/home/dylan.d/research/music/Jazz/instrument_mapping.csv')
+instrument_map_df = pd.read_csv('/home/dylandeshler/Jazz/neural/instrument_mapping.csv')
 instrument_map_df = instrument_map_df.apply(lambda col: col.astype(str).str.lower())
 instrument_map = {row['Abbreviation']: row['Consolidated_Category'] for i, row in instrument_map_df.iterrows()}
 instrument_categories = set(list(instrument_map.values()))
@@ -208,7 +208,7 @@ def calculate_subset_bpm(timestamps, start_time, end_time):
 
 import glob
 import librosa
-paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
+paths = glob.glob('/data/wavs/*.wav')
 wavs = []
 
 from sklearn.model_selection import StratifiedGroupKFold
@@ -261,7 +261,7 @@ def get_batch(split='train'):
     inst = []
     for idx in idxs:
         wav = wavs[idx]
-        beat_path = paths[idx].replace('jazz_data_16000_full_clean', 'jazz_data_16000_full_clean_beats').replace('.wav', '.beats')
+        beat_path = os.path.join('/data/beats', os.path.basename(paths[idx]))
         url = paths[idx].split('/')[-1].split('.')[0]
         
         start = np.random.randint(len(wav) - n_samples)
