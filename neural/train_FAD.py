@@ -278,7 +278,6 @@ def get_batch(split='train'):
     inst = []
     for start, idx in zip(starts, idxs):
         wav, file_sample_rate = sf.read(paths[idx], start=start, frames=n_samples)
-        print(wav.dtype, file_sample_rate)
         beat_path = os.path.join('/data/beats', os.path.basename(paths[idx]))
         url = paths[idx].split('/')[-1].split('.')[0]
         
@@ -287,7 +286,7 @@ def get_batch(split='train'):
         year.append(years[url_map[url]])
         inst.append(instrument_labels[url_map[url]])
         bpm.append(calculate_subset_bpm(timestamps, start / sample_rate, (start + n_samples) / sample_rate))
-        x.append(wav[start:start+n_samples])
+        x.append(wav)
         
     x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
     bpm = torch.from_numpy(np.asarray(bpm).astype(np.float32)).pin_memory().to(device, non_blocking=True)
