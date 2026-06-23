@@ -100,7 +100,7 @@ record_labels = mlb.transform(record_label_names)
 record_labels = torch.from_numpy(record_labels)
 
 # Instruments
-instrument_map_df = pd.read_csv('/home/dylandeshler/Jazz/neural/instrument_mapping.csv')
+instrument_map_df = pd.read_csv('/home/dylandeshler/Jazz/instrument_mapping.csv')
 instrument_map_df = instrument_map_df.apply(lambda col: col.astype(str).str.lower())
 instrument_map = {row['Abbreviation']: row['Consolidated_Category'] for i, row in instrument_map_df.iterrows()}
 instrument_categories = set(list(instrument_map.values()))
