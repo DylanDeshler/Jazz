@@ -268,10 +268,9 @@ executor = ThreadPoolExecutor(max_workers=16)
 def get_batch(split='train'):
     if split == 'train':
         idxs = np.random.choice(train_idx, batch_size, p=train_probs).tolist()
-        starts = np.random.randint(train_durations[idxs] - n_samples, batch_size)
     else:
         idxs = np.random.choice(test_idx, batch_size, p=test_probs).tolist()
-        starts = np.random.randint(test_durations[idxs] - n_samples, batch_size)
+    starts = np.random.randint(durations[idxs] - n_samples, batch_size)
     
     x = []
     bpm = []
