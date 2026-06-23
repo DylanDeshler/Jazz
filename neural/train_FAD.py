@@ -277,8 +277,8 @@ def get_batch(split='train'):
     label = []
     inst = []
     for i, idx in enumerate(idxs):
-        wav, _ = sf.read(paths[idx], start=starts[i], frames=starts[i] + n_samples, samplerate=sample_rate)
-        print(wav.dtype)
+        wav, file_sample_rate = sf.read(paths[idx], start=starts[i], frames=n_samples)
+        print(wav.dtype, file_sample_rate)
         beat_path = os.path.join('/data/beats', os.path.basename(paths[idx]))
         url = paths[idx].split('/')[-1].split('.')[0]
         
