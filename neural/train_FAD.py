@@ -256,6 +256,7 @@ train_durations = durations[train_idx] / np.sum(durations[train_idx])
 test_durations = durations[test_idx] / np.sum(durations[test_idx])
 del durations
 
+from concurrent.futures import ThreadPoolExecutor
 executor = ThreadPoolExecutor(max_workers=16)
 
 def get_batch(split='train'):
