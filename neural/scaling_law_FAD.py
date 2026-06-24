@@ -6,6 +6,8 @@ import librosa
 import soundfile as sf
 from tqdm import tqdm
 from collections import defaultdict
+from datetime import datetime
+import time
 
 import torch
 import numpy as np
@@ -20,6 +22,7 @@ from fad import MultiTaskFAD as FAD, BPMProbe
 from adapter import InvertibleAdapter as Adapter
 from diffusion_forcing import UnconditionalModernDiT_smedium_W0, UnconditionalModernDiT_smedium_W1, UnconditionalModernDiT_smedium_W2, UnconditionalModernDiT_smedium_W3, UnconditionalModernDiT_smedium_W4, UnconditionalModernDiT_smedium_W5
 import argparse
+
 parser = argparse.ArgumentParser(description="Process a specific level argument.")
 
 parser.add_argument(
@@ -49,6 +52,12 @@ parser.add_argument(
     required=True,
     choices=['width', 'depth']
 )
+parser.add_argument(
+    '--recompute_only',
+    action='store_true',
+    help="If set, aggregates all saved embeddings across any batch_size/n_samples matching this axis and n_steps."
+)
+
 args = parser.parse_args()
 
 valid_levels = [f"{args.axis[0].upper()}{i}" for i in range(0, 6)]
@@ -96,27 +105,6 @@ def calculate_embd_statistics(embd_lst):
     return mu, sigma
 
 def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
-    """
-    Adapted from: https://github.com/mseitzer/pytorch-fid/blob/master/src/pytorch_fid/fid_score.py
-
-    Numpy implementation of the Frechet Distance.
-    The Frechet distance between two multivariate Gaussians X_1 ~ N(mu_1, C_1)
-    and X_2 ~ N(mu_2, C_2) is
-            d^2 = ||mu_1 - mu_2||^2 + Tr(C_1 + C_2 - 2*sqrt(C_1*C_2)).
-    Stable version by Dougal J. Sutherland.
-    Params:
-    -- mu1   : Numpy array containing the activations of a layer of the
-            inception net (like returned by the function 'get_predictions')
-            for generated samples.
-    -- mu2   : The sample mean over activations, precalculated on an
-            representative data set.
-    -- sigma1: The covariance matrix over activations for generated samples.
-    -- sigma2: The covariance matrix over activations, precalculated on an
-            representative data set.
-    Returns:
-    --   : The Frechet Distance.
-    """
-
     mu1 = np.atleast_1d(mu1)
     mu2 = np.atleast_1d(mu2)
 
@@ -130,7 +118,6 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
 
     diff = mu1 - mu2
 
-    # Product might be almost singular
     covmean, _ = linalg.sqrtm(sigma1.dot(sigma2).astype(complex), disp=False)
     if not np.isfinite(covmean).all():
         msg = ('fid calculation produces singular product; '
@@ -139,7 +126,6 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
         offset = np.eye(sigma1.shape[0]) * eps
         covmean = linalg.sqrtm((sigma1 + offset).dot(sigma2 + offset).astype(complex))
 
-    # Numerical error might give slight imaginary component
     if np.iscomplexobj(covmean):
         if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
             m = np.max(np.abs(covmean.imag))
@@ -158,13 +144,7 @@ def drop_to_multiple(a, multiple):
     return a
 
 def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', window_size: int = 3) -> torch.Tensor:
-    """
-    Smooths the instantaneous BPM predictions across the chunk dimension.
-    bpm_tensor: shape (Batch, Chunks)
-    method: One of median, global, moving_average
-    """
     if method == 'global':
-        # Collapse the sequence to the mean tempo per batch item
         mean_bpm = bpm_tensor.mean(dim=1, keepdim=True)
         return mean_bpm.expand_as(bpm_tensor)
     
@@ -173,58 +153,36 @@ def smooth_bpm_predictions(bpm_tensor: torch.Tensor, method: str = 'median', win
     
     for i in range(bpm_np.shape[0]):
         if method == 'median':
-            # medfilt requires odd window sizes
             smoothed[i] = medfilt(bpm_np[i], kernel_size=window_size)
-            
         elif method == 'moving_average':
             kernel = np.ones(window_size) / window_size
-            # Pad edges so the sequence length stays 15
             padded = np.pad(bpm_np[i], (window_size//2, window_size//2), mode='edge')
             smoothed[i] = np.convolve(padded, kernel, mode='valid')
             
     return torch.from_numpy(smoothed).to(bpm_tensor.device)
 
 def crossfade_segments(segment_a, segment_b, sample_rate, crossfade_ms=15):
-    """
-    Crossfades two 1D numpy audio arrays to prevent boundary clicks.
-    
-    Args:
-        segment_a: numpy array of the first measure.
-        segment_b: numpy array of the second measure.
-        sample_rate: The sample rate of the audio (e.g., 44100 or 24000).
-        crossfade_ms: Duration of the crossfade in milliseconds.
-    """
-    # Convert milliseconds to exact sample count
     crossfade_samples = int(sample_rate * (crossfade_ms / 1000.0))
-    
-    # Safety check: if segments are too short, just concatenate
     if len(segment_a) < crossfade_samples or len(segment_b) < crossfade_samples:
         return np.concatenate((segment_a, segment_b))
         
-    # Create linear fade curves (can also use np.cos for equal-power crossfades)
     fade_out = np.linspace(1.0, 0.0, crossfade_samples)
     fade_in = np.linspace(0.0, 1.0, crossfade_samples)
     
-    # Apply fades to the overlapping edges
     overlap_a = segment_a[-crossfade_samples:] * fade_out
     overlap_b = segment_b[:crossfade_samples] * fade_in
-    
-    # Sum the overlapped audio
     mixed_overlap = overlap_a + overlap_b
     
-    # Stitch the untouched beginnings/ends with the mixed overlap
     stitched_audio = np.concatenate((
         segment_a[:-crossfade_samples],
         mixed_overlap,
         segment_b[crossfade_samples:]
     ))
-    
     return stitched_audio
 
 def predict_measures(model, gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode="independent", t_dist="uniform"):
     with ctx:
         y = model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise, memory_efficient=memory_efficient, rescale_phi=rescale_phi, cfg_mode=cfg_mode, t_dist=t_dist)
-    
         bpm = probe(y)
     
     bpm = smooth_bpm_predictions(bpm, method=method, window_size=window_size)
@@ -249,7 +207,6 @@ def predict_measures(model, gen_shape, net_kwargs, uncond_net_kwargs, n_steps, g
     
     target_samples = target_samples.flatten().cpu().detach().numpy()
     y = y.squeeze().cpu().detach().numpy()
-    
     target_samples = target_samples.reshape(gen_shape[0], measure_chunks)
     
     out = []
@@ -261,113 +218,151 @@ def predict_measures(model, gen_shape, net_kwargs, uncond_net_kwargs, n_steps, g
         
     out = np.concatenate(out, axis=0)
     out = torch.from_numpy(out.astype(np.float32)).to(device, non_blocking=True)
-    
     return out
-
-# Tokenizers
-tokenizer = load_model(os.path.join('tokenizer_low_large_24576_subset_longtrain', 'ckpt.pt'), Tokenizer)
-encoder_ratios = math.prod(tokenizer.encoder.ratios)
-adapter = load_model(os.path.join('tokenizer_adapter_low_large_24576_subset_longtrain_v2_48', 'ckpt.pt'), Adapter)
-max_seq_len = adapter.max_seq_len
-probe = load_model(os.path.join('tokenizer_low_measures_fix_subset_longtrain_v2_48_BPMProbe_tiny', 'ckpt.pt'), BPMProbe)
-
-# DiTs
-dits = [UnconditionalModernDiT_smedium_W0, UnconditionalModernDiT_smedium_W1, UnconditionalModernDiT_smedium_W2, UnconditionalModernDiT_smedium_W3, UnconditionalModernDiT_smedium_W4, UnconditionalModernDiT_smedium_W5]
-base_dits = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_longtrain_32chunks/ckpt.pt', DiT) for level, DiT in zip(valid_levels, dits)]
-measure_dits = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_adapter_longtrain_32chunks_v2/ckpt.pt', DiT) for level, DiT in zip(valid_levels, dits)]
-base_chunks = 32
-base_window = 48
-measure_chunks = 32
-measure_window = 48
-vae_embed_dim = 16
-assert base_chunks * base_window * vae_embed_dim == measure_chunks * measure_window * vae_embed_dim
-
-# Feature Extractors
-fad = load_model(os.path.join('FAD_v2', 'ckpt.pt'), FAD)
-
-paths = glob.glob('/data/wavs/*')
-paths = paths[-int(len(paths) * 2/48):] # test set
-
-n_generations = args.n_samples
-batch_size = args.batch_size
-n_steps = args.n_steps
-assert n_generations % batch_size == 0
-
-idxs = np.random.choice(np.arange(len(paths)), size=n_generations, replace=False)
 
 real_embs = []
 y1_embs = defaultdict(list)
 y2_embs = defaultdict(list)
-with torch.inference_mode():
-    for idx in tqdm(idxs, desc='Embedding Real Samples'):
-        path = paths[idx]
-        wav, _ = librosa.load(path, sr=rate)
-        wav = wav[:batch_size * base_chunks * n_samples]
-        x_raw = wav
+
+if args.recompute_only:
+    print(f">>> Mode: [Recompute Only] Aggregating all runs matching axis={args.axis} and n_steps={args.n_steps}")
+    
+    # Match any batch_size and n_samples parameters, as long as axis, n_steps match.
+    search_pattern = os.path.join("/data/binaries/FAD_embeddings", f"axis_{args.axis}_nsteps_{args.n_steps}_nsamples_*_*")
+    matching_dirs = glob.glob(search_pattern)
+    
+    if not matching_dirs:
+        raise FileNotFoundError(f"No output folders found matching axis={args.axis} and n_steps={args.n_steps}")
         
-        x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
-        x = drop_to_multiple(x, 16383 * 5)
-        
-        with ctx:
-            real_emb = fad.forward_features(x)
-        
-        real_embs.append(real_emb.cpu().detach().numpy())
-        
-    for _ in tqdm(range(n_generations // batch_size), desc='Embedding Generated Samples'):
-        base_gen_shape = (batch_size, base_chunks, base_window, vae_embed_dim)
-        base_gen_noise = torch.randn(base_gen_shape, device=device)
-        base_decoder_noise = torch.randn((batch_size * base_chunks, 1, n_samples), device=device)
-        
-        for i, base_dit in enumerate(base_dits):
+    print(f"Found {len(matching_dirs)} directories to aggregate.")
+    
+    for run_dir in matching_dirs:
+        real_path = os.path.join(run_dir, "real_embs.npy")
+        if os.path.exists(real_path):
+            real_embs.append(np.load(real_path))
+            
+        for level in valid_levels:
+            y1_path = os.path.join(run_dir, f"y1_embs_{level}.npy")
+            y2_path = os.path.join(run_dir, f"y2_embs_{level}.npy")
+            
+            if os.path.exists(y1_path):
+                y1_embs[level].append(np.load(y1_path))
+            if os.path.exists(y2_path):
+                y2_embs[level].append(np.load(y2_path))
+
+    # Validate that we successfully grabbed data
+    if not real_embs:
+        raise FileNotFoundError("Could not find any 'real_embs.npy' files across the matched directories.")
+
+else:
+    # Mode: Standard Compute & Save
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_dir = os.path.join("/data/binaries/FAD_embeddings", f"axis_{args.axis}_nsteps_{args.n_steps}_{nsamples_{args.n_samples}_timestamp}")
+    os.makedirs(run_dir, exist_ok=True)
+    print(f">>> Mode: [Compute Embeddings & FAD] Creating unique output folder: {run_dir}")
+
+    real_embs_path = os.path.join(run_dir, "real_embs.npy")
+    y1_embs_path = {level: os.path.join(run_dir, f"y1_embs_{level}.npy") for level in valid_levels}
+    y2_embs_path = {level: os.path.join(run_dir, f"y2_embs_{level}.npy") for level in valid_levels}
+
+    # Tokenizers
+    tokenizer = load_model(os.path.join('tokenizer_low_large_24576_subset_longtrain', 'ckpt.pt'), Tokenizer)
+    encoder_ratios = math.prod(tokenizer.encoder.ratios)
+    adapter = load_model(os.path.join('tokenizer_adapter_low_large_24576_subset_longtrain_v2_48', 'ckpt.pt'), Adapter)
+    max_seq_len = adapter.max_seq_len
+    probe = load_model(os.path.join('tokenizer_low_measures_fix_subset_longtrain_v2_48_BPMProbe_tiny', 'ckpt.pt'), BPMProbe)
+
+    # DiTs
+    dits = [UnconditionalModernDiT_smedium_W0, UnconditionalModernDiT_smedium_W1, UnconditionalModernDiT_smedium_W2, UnconditionalModernDiT_smedium_W3, UnconditionalModernDiT_smedium_W4, UnconditionalModernDiT_smedium_W5]
+    base_dits = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_longtrain_32chunks/ckpt.pt', DiT) for level, DiT in zip(valid_levels, dits)]
+    measure_dits = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_adapter_longtrain_32chunks_v2/ckpt.pt', DiT) for level, DiT in zip(valid_levels, dits)]
+    base_chunks, base_window, measure_chunks, measure_window, vae_embed_dim = 32, 48, 32, 48, 16
+    assert base_chunks * base_window * vae_embed_dim == measure_chunks * measure_window * vae_embed_dim
+
+    # Feature Extractors
+    fad = load_model(os.path.join('FAD_v2', 'ckpt.pt'), FAD)
+
+    paths = glob.glob('/data/wavs/*')
+    paths = paths[-int(len(paths) * 2/48):] # test set
+
+    n_generations = args.n_samples
+    batch_size = args.batch_size
+    n_steps = args.n_steps
+    assert n_generations % batch_size == 0
+
+    idxs = np.random.choice(np.arange(len(paths)), size=n_generations, replace=False)
+
+    with torch.inference_mode():
+        for idx in tqdm(idxs, desc='Embedding Real Samples'):
+            path = paths[idx]
+            wav, _ = librosa.load(path, sr=rate)
+            wav = wav[:batch_size * base_chunks * n_samples]
+            x_raw = wav
+            
+            x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
+            x = drop_to_multiple(x, 16383 * 5)
+            
             with ctx:
-                y1 = base_dit.generate(base_gen_shape, n_steps=n_steps, noise=base_gen_noise, memory_efficient=False, cfg_mode='joint', t_dist='logit')
-                y1 = y1.transpose(2, 3).view(batch_size * base_chunks, vae_embed_dim, base_window)
-                y1 = tokenizer.decode(y1, shape=(1, n_samples), n_steps=n_steps, noise=base_decoder_noise)
-                
-                y1 = drop_to_multiple(y1, 16383 * 5)
-                y1_emb = fad.forward_features(y1)
-        
-            y1_embs[valid_levels[i]].append(y1_emb.cpu().detach().numpy())
-        
-        measure_gen_shape = (batch_size, measure_chunks, measure_window, vae_embed_dim)
-        measure_gen_noise = torch.randn(measure_gen_shape, device=device)
-        measure_decoder_noise = torch.randn((batch_size * measure_chunks, 1, encoder_ratios * (max_seq_len - 1)), device=device)
-        for i, measure_dit in enumerate(measure_dits):
-            y2 = predict_measures(measure_dit, measure_gen_shape, None, None, n_steps, guidance=1.0, gen_noise=measure_gen_noise, decoder_noise=measure_decoder_noise, method='median', window_size=3)
-            with ctx:
-                y2 = drop_to_multiple(y2, 16383 * 5)
-                y2_emb = fad.forward_features(y2)
-        
-            y2_embs[valid_levels[i]].append(y2_emb.cpu().detach().numpy())
+                real_emb = fad.forward_features(x)
+            
+            real_embs.append(real_emb.cpu().detach().numpy())
+        np.save(real_embs_path, np.concatenate(real_embs, axis=0))
+
+        total_batches = n_generations // batch_size
+        for b in tqdm(range(total_batches), desc='Embedding Generated Samples'):
+            base_gen_shape = (batch_size, base_chunks, base_window, vae_embed_dim)
+            base_gen_noise = torch.randn(base_gen_shape, device=device)
+            base_decoder_noise = torch.randn((batch_size * base_chunks, 1, n_samples), device=device)
+            
+            t0 = time.time()
+            for i, base_dit in enumerate(base_dits):
+                with ctx:
+                    y1 = base_dit.generate(base_gen_shape, n_steps=n_steps, noise=base_gen_noise, memory_efficient=False, cfg_mode='joint', t_dist='logit')
+                    y1 = y1.transpose(2, 3).view(batch_size * base_chunks, vae_embed_dim, base_window)
+                    y1 = tokenizer.decode(y1, shape=(1, n_samples), n_steps=n_steps, noise=base_decoder_noise)
+                    
+                    y1 = drop_to_multiple(y1, 16383 * 5)
+                    y1_emb = fad.forward_features(y1)
+            
+                y1_embs[valid_levels[i]].append(y1_emb.cpu().detach().numpy())
+                np.save(y1_embs_path[valid_levels[i]], np.concatenate(y1_embs[valid_levels[i]], axis=0))
+            print('baseline: ', time.time() - t0)
+            measure_gen_shape = (batch_size, measure_chunks, measure_window, vae_embed_dim)
+            measure_gen_noise = torch.randn(measure_gen_shape, device=device)
+            measure_decoder_noise = torch.randn((batch_size * measure_chunks, 1, encoder_ratios * (max_seq_len - 1)), device=device)
+            t0 = time.time()
+            for i, measure_dit in enumerate(measure_dits):
+                y2 = predict_measures(measure_dit, measure_gen_shape, None, None, n_steps, guidance=1.0, gen_noise=measure_gen_noise, decoder_noise=measure_decoder_noise, method='median', window_size=3)
+                with ctx:
+                    y2 = drop_to_multiple(y2, 16383 * 5)
+                    y2_emb = fad.forward_features(y2)
+            
+                y2_embs[valid_levels[i]].append(y2_emb.cpu().detach().numpy())
+                np.save(y2_embs_path[valid_levels[i]], np.concatenate(y2_embs[valid_levels[i]], axis=0))
+            print('measure: ', time.time() - t0)
 
 real_embs = np.concatenate(real_embs, axis=0)
 N = len(real_embs)
 for level in valid_levels:
-    N = np.min([
-        N,
-        len(np.concatenate(y1_embs[level], axis=0)),
-        len(np.concatenate(y2_embs[level], axis=0))
-    ]).item()
-    print(level, real_embs.shape, np.concatenate(y1_embs[level], axis=0).shape, np.concatenate(y2_embs[level], axis=0).shape)
-hours = N * 5 / 60 / 60
+    y1_embs[level] = np.concatenate(y1_embs[level], axis=0)
+    y2_embs[level] = np.concatenate(y2_embs[level], axis=0)
+        
+    N = np.min([N, len(y1_embs[level]), len(y2_embs[level])]).item()
+    print(level, f"Real matrix: {real_embs.shape} | Y1 matrix: {y1_embs[level].shape} | Y2 matrix: {y2_embs[level].shape}")
 
-print(f'Using {N} embeddings which is approximately {hours:.2f} hours')
+hours = N * 5 / 60 / 60
+print(f'\nAggregated down to {N} common embeddings (approx {hours:.2f} hours of data)')
+
 for level in valid_levels:
     level_real_embs = real_embs[np.random.choice(np.arange(len(real_embs)), size=N, replace=False)]
     real_mu, real_sigma = calculate_embd_statistics(level_real_embs)
     
-    level_y1_embs = np.concatenate(y1_embs[level], axis=0)
-    level_y1_embs = level_y1_embs[np.random.choice(np.arange(len(level_y1_embs)), size=N, replace=False)]
-    
+    level_y1_embs = y1_embs[level][np.random.choice(np.arange(len(y1_embs[level])), size=N, replace=False)]
     y1_mu, y1_sigma = calculate_embd_statistics(level_y1_embs)
     y1_fad = calculate_frechet_distance(y1_mu, y1_sigma, real_mu, real_sigma)
-    
     print(f'Base {level} -> Real Samples FAD: ', y1_fad)
 
-    level_y2_embs = np.concatenate(y2_embs[level], axis=0)
-    level_y2_embs = level_y2_embs[np.random.choice(np.arange(len(level_y2_embs)), size=N, replace=False)]
-    
+    level_y2_embs = y2_embs[level][np.random.choice(np.arange(len(y2_embs[level])), size=N, replace=False)]
     y2_mu, y2_sigma = calculate_embd_statistics(level_y2_embs)
     y2_fad = calculate_frechet_distance(y2_mu, y2_sigma, real_mu, real_sigma)
-
     print(f'Measure (Median BPM) {level} -> Real Samples FAD: ', y2_fad)
