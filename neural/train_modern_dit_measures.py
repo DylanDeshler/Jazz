@@ -52,7 +52,7 @@ parser.add_argument(
     '--axis',
     type=str,
     required=True,
-    choices=['width', 'depth'],
+    choices=['width', 'depth', 'chunks'],
     help="Specify width or depth scaling experiment."
 )
 parser.add_argument(
@@ -90,7 +90,10 @@ net_map = {
     'D4': UnconditionalModernDiT_smedium_D4,
     'D5': UnconditionalModernDiT_smedium_D5
 }
-level = f'{args.axis[0].upper()}{args.level[1]}'
+if args.axis == 'chunks':
+    level = 'D3' # W4 and D3 are identical
+else:
+    level = f'{args.axis[0].upper()}{args.level[1]}'
 n_chunks = args.n_chunks
 net = net_map[level]
 print(f"Begining training for {level} on {args.device}")
@@ -106,7 +109,7 @@ save_interval = 5000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir
@@ -492,7 +495,7 @@ def save_samples(step):
 if wandb_log and master_process:
     import wandb
     if init_from == 'resume':
-        wandb.init(project=wandb_project, name=wandb_run_name, id='vibscpta', config=config)
+        wandb.init(project=wandb_project, name=wandb_run_name, id='jzvnjfn8', config=config)
     else:
         wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
