@@ -111,10 +111,8 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
     sigma1 = np.atleast_2d(sigma1)
     sigma2 = np.atleast_2d(sigma2)
 
-    assert mu1.shape == mu2.shape, \
-        'Training and test mean vectors have different lengths'
-    assert sigma1.shape == sigma2.shape, \
-        'Training and test covariances have different dimensions'
+    assert mu1.shape == mu2.shape, 'Training and test mean vectors have different lengths'
+    assert sigma1.shape == sigma2.shape, 'Training and test covariances have different dimensions'
 
     diff = mu1 - mu2
 
@@ -257,7 +255,7 @@ if args.recompute_only:
 else:
     # Mode: Standard Compute & Save
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = os.path.join("/data/binaries/FAD_embeddings", f"axis_{args.axis}_nsteps_{args.n_steps}_{nsamples_{args.n_samples}_timestamp}")
+    run_dir = os.path.join("/data/binaries/FAD_embeddings", f"axis_{args.axis}_nsteps_{args.n_steps}_nsamples_{args.n_samples}_{timestamp}")
     os.makedirs(run_dir, exist_ok=True)
     print(f">>> Mode: [Compute Embeddings & FAD] Creating unique output folder: {run_dir}")
 
