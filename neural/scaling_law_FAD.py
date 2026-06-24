@@ -315,29 +315,36 @@ else:
             t0 = time.time()
             for i, base_dit in enumerate(base_dits):
                 with ctx:
+                    t0 = time.time()
                     y1 = base_dit.generate(base_gen_shape, n_steps=n_steps, noise=base_gen_noise, memory_efficient=False, cfg_mode='joint', t_dist='logit')
                     y1 = y1.transpose(2, 3).view(batch_size * base_chunks, vae_embed_dim, base_window)
                     y1 = tokenizer.decode(y1, shape=(1, n_samples), n_steps=n_steps, noise=base_decoder_noise)
+                    t1 = time.time()
                     
                     y1 = drop_to_multiple(y1, 16383 * 5)
                     y1_emb = fad.forward_features(y1)
+                t2 = time.time()
             
                 y1_embs[valid_levels[i]].append(y1_emb.cpu().detach().numpy())
+                print(f'baseline[{i}]: ', t2 - t1, t1 - t0)
                 np.save(y1_embs_path[valid_levels[i]], np.concatenate(y1_embs[valid_levels[i]], axis=0))
-            print('baseline: ', time.time() - t0)
+            
             measure_gen_shape = (batch_size, measure_chunks, measure_window, vae_embed_dim)
             measure_gen_noise = torch.randn(measure_gen_shape, device=device)
             measure_decoder_noise = torch.randn((batch_size * measure_chunks, 1, encoder_ratios * (max_seq_len - 1)), device=device)
-            t0 = time.time()
+            
             for i, measure_dit in enumerate(measure_dits):
+                t0 = time.time()
                 y2 = predict_measures(measure_dit, measure_gen_shape, None, None, n_steps, guidance=1.0, gen_noise=measure_gen_noise, decoder_noise=measure_decoder_noise, method='median', window_size=3)
+                t1 = time.time()
                 with ctx:
                     y2 = drop_to_multiple(y2, 16383 * 5)
                     y2_emb = fad.forward_features(y2)
+                t2 = time.time()
             
                 y2_embs[valid_levels[i]].append(y2_emb.cpu().detach().numpy())
                 np.save(y2_embs_path[valid_levels[i]], np.concatenate(y2_embs[valid_levels[i]], axis=0))
-            print('measure: ', time.time() - t0)
+                print(f'measure[{i}]: ', t2 - t1, t1 - t0)
 
 real_embs = np.concatenate(real_embs, axis=0)
 N = len(real_embs)
