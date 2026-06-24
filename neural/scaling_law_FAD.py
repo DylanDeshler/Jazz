@@ -92,8 +92,8 @@ def load_model(ckpt_path, ModelType):
             state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
     model.load_state_dict(state_dict)
     model.eval()
-    if 'cuda' in device:
-        model = torch.compile(model, mode="reduce-overhead")
+    # if 'cuda' in device:
+    #     model = torch.compile(model, mode="reduce-overhead")
     return model
 
 def calculate_embd_statistics(embd_lst):
@@ -256,7 +256,7 @@ else:
     # Mode: Standard Compute & Save
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_dir = os.path.join("/data/binaries/FAD_embeddings", f"axis_{args.axis}_nsteps_{args.n_steps}_nsamples_{args.n_samples}_{timestamp}")
-    os.makedirs(run_dir, exist_ok=True)
+    os.makedirs(run_dir, exist_ok=False)
     print(f">>> Mode: [Compute Embeddings & FAD] Creating unique output folder: {run_dir}")
 
     real_embs_path = os.path.join(run_dir, "real_embs.npy")
