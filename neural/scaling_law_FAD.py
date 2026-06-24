@@ -283,7 +283,7 @@ vae_embed_dim = 16
 assert base_chunks * base_window * vae_embed_dim == measure_chunks * measure_window * vae_embed_dim
 
 # Feature Extractors
-fad = load_model(os.path.join('FAD', 'ckpt.pt'), FAD)
+fad = load_model(os.path.join('FAD_v2', 'ckpt.pt'), FAD)
 
 paths = glob.glob('/data/wavs/*')
 paths = paths[-int(len(paths) * 2/48):] # test set
