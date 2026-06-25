@@ -21,6 +21,7 @@ from dito import DiToV5 as Tokenizer
 from fad import MultiTaskFAD as FAD, BPMProbe
 from adapter import InvertibleAdapter as Adapter
 from diffusion_forcing import UnconditionalModernDiT_smedium_W0, UnconditionalModernDiT_smedium_W1, UnconditionalModernDiT_smedium_W2, UnconditionalModernDiT_smedium_W3, UnconditionalModernDiT_smedium_W4, UnconditionalModernDiT_smedium_W5
+from diffusion_forcing import UnconditionalModernDiT_smedium_D0, UnconditionalModernDiT_smedium_D1, UnconditionalModernDiT_smedium_D2, UnconditionalModernDiT_smedium_D3, UnconditionalModernDiT_smedium_D4, UnconditionalModernDiT_smedium_D5
 import argparse
 
 parser = argparse.ArgumentParser(description="Process a specific level argument.")
@@ -271,7 +272,11 @@ else:
     probe = load_model(os.path.join('tokenizer_low_measures_fix_subset_longtrain_v2_48_BPMProbe_tiny', 'ckpt.pt'), BPMProbe)
 
     # DiTs
-    dits = [UnconditionalModernDiT_smedium_W0, UnconditionalModernDiT_smedium_W1, UnconditionalModernDiT_smedium_W2, UnconditionalModernDiT_smedium_W3, UnconditionalModernDiT_smedium_W4, UnconditionalModernDiT_smedium_W5]
+    if args.axis == 'width':
+        dits = [UnconditionalModernDiT_smedium_W0, UnconditionalModernDiT_smedium_W1, UnconditionalModernDiT_smedium_W2, UnconditionalModernDiT_smedium_W3, UnconditionalModernDiT_smedium_W4, UnconditionalModernDiT_smedium_W5]
+    else:
+        dits = [UnconditionalModernDiT_smedium_D0, UnconditionalModernDiT_smedium_D1, UnconditionalModernDiT_smedium_D2, UnconditionalModernDiT_smedium_D3, UnconditionalModernDiT_smedium_D4, UnconditionalModernDiT_smedium_D5]
+    
     base_dits = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_longtrain_32chunks/ckpt.pt', DiT) for level, DiT in zip(valid_levels, dits)]
     measure_dits = [load_model(f'UnconditionalModernDiT_smedium_{level}_24576_subset_adapter_longtrain_32chunks_v2/ckpt.pt', DiT) for level, DiT in zip(valid_levels, dits)]
     base_chunks, base_window, measure_chunks, measure_window, vae_embed_dim = 32, 48, 32, 48, 16
