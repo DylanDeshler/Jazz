@@ -122,6 +122,8 @@ if int(level[1]) > 4:
 # model
 patch_size = 2
 gradient_checkpointing = False
+if args.axis == 'chunks' and n_chunks > 32:
+    gradient_checkpointing = True
 spatial_window = 48
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
