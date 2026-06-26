@@ -37,7 +37,7 @@ from fad import BPMProbe as net
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'tokenizer_low_measures_fix_subset_longtrain_v2_48_BPMProbe_xtiny'
+out_dir = 'tokenizer_low_measures_fix_subset_longtrain_v2_48_BPMProbe_tiny_lstm'
 eval_interval = 10000
 sample_interval = 10000
 log_interval = 100
@@ -142,8 +142,8 @@ best_val_loss = 1e9
 model_args = dict(
     in_chans=16,
     depths=[3, 3, 9, 3],
-    dims=[48, 96, 192, 384],
-    # dims=[64, 128, 256, 512],
+    # dims=[48, 96, 192, 384],
+    dims=[64, 128, 256, 512],
     # dims=[96, 192, 384, 768],
     drop_path_rate=0.3,
 )
