@@ -335,12 +335,24 @@ class BPMProbe(nn.Module):
         self.norm = nn.LayerNorm(dims[-1], eps=1e-6)
         self.proj = nn.Linear(dims[-1], 1)
         
+        self.temporal_processor = nn.LSTM(
+            input_size=dims[-1],
+            hidden_size=dims[-1] // 2,
+            num_layers=2,
+            batch_first=True,
+            bidirectional=True
+        )
+        
         self.apply(self._init_weights)
+        
+        nn.init.trunc_normal_(self.proj.weight, std=0.1) 
+        nn.init.constant_(self.proj.bias, 0.0)
     
     def _init_weights(self, m):
         if isinstance(m, (nn.Conv2d, nn.Linear)):
             nn.init.trunc_normal_(m.weight, std=.02)
-            nn.init.constant_(m.bias, 0)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
 
     def forward(self, x, labels=None):
         x = x.permute(0, 3, 2, 1)
@@ -360,6 +372,7 @@ class BPMProbe(nn.Module):
             
         x = x.mean(-2).transpose(1, 2)
         x = self.norm(x)
+        x, _ = self.temporal_processor(x)
         x = self.proj(x).squeeze(-1)
         
         if labels is not None:
