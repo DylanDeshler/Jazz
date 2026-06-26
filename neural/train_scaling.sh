@@ -62,7 +62,7 @@ echo "Target Axis   : ${AXIS}"
 if [ "$AXIS" = "chunks" ]; then
     # Define the chunk loop sequence
     # CHUNK_ITEMS=(8 16 24 32 40 48)
-    CHUNK_ITEMS=(8 16 24 40 48)
+    CHUNK_ITEMS=(40 48)
     
     echo "Fixed Level   : ${START_LEVEL}"
     echo "Cycling Chunks: ${CHUNK_ITEMS[*]}"
