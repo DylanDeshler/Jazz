@@ -37,7 +37,7 @@ from fad import BPMProbe as net
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'tokenizer_low_measures_fix_subset_longtrain_v2_48_BPMProbe_tiny'
+out_dir = 'tokenizer_low_measures_fix_subset_longtrain_v2_48_BPMProbe_xtiny'
 eval_interval = 10000
 sample_interval = 10000
 log_interval = 100
@@ -45,7 +45,7 @@ save_interval = 10000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir
@@ -74,7 +74,7 @@ min_lr = learning_rate / 10 # minimum learning rate, should be ~= learning_rate/
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
-device = 'cuda:0' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+device = 'cuda:2' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
@@ -142,7 +142,8 @@ best_val_loss = 1e9
 model_args = dict(
     in_chans=16,
     depths=[3, 3, 9, 3],
-    dims=[64, 128, 256, 512],
+    dims=[48, 96, 192, 384],
+    # dims=[64, 128, 256, 512],
     # dims=[96, 192, 384, 768],
     drop_path_rate=0.3,
 )
