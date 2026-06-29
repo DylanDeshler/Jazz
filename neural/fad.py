@@ -389,7 +389,7 @@ class BPMProbe(nn.Module):
         x = self.temporal_processor(x)
         
         # lstm
-        x, _ = self.temporal_processor(x)
+        # x, _ = self.temporal_processor(x)
         
         x = self.norm(x)
         x = self.proj(x).squeeze(-1)
