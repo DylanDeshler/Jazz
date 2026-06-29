@@ -40,7 +40,7 @@ from fad import BPMProbe as net
 out_dir = 'tokenizer_low_measures_fix_subset_longtrain_v2_48_BPMProbe_tiny_lstm'
 eval_interval = 10000
 sample_interval = 10000
-log_interval = 100
+log_interval = 1000
 save_interval = 10000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
@@ -60,8 +60,7 @@ n_chunks = 32
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
 # adamw optimizer
-learning_rate = 4e-3 * batch_size / 4096 # max learning rate
-# learning_rate = 4e-3 * math.sqrt(batch_size / 4096) # max learning rate
+learning_rate = 4e-3 * math.sqrt(batch_size / 4096) # max learning rate
 max_iters = 400000 # total number of training iterations
 weight_decay = 1e-3#1e-2
 beta1 = 0.9
