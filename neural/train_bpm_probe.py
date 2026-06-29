@@ -60,7 +60,8 @@ n_chunks = 32
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
 # adamw optimizer
-learning_rate = 4e-3 * math.sqrt(batch_size / 4096) # max learning rate
+learning_rate = 4e-3 * batch_size / 4096 # max learning rate
+# learning_rate = 4e-3 * math.sqrt(batch_size / 4096) # max learning rate
 max_iters = 400000 # total number of training iterations
 weight_decay = 1e-3#1e-2
 beta1 = 0.9
