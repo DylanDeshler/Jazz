@@ -242,20 +242,20 @@ adapter.eval()
 del state_dict
 max_adapter_len = adapter.max_seq_len
 
-ckpt_path = os.path.join('tokenizer_low_measures_fix_subset_longtrain_v2_48_BPMProbe_tiny', 'ckpt.pt')
-checkpoint = torch.load(ckpt_path, map_location=device)
-probe_args = checkpoint['model_args']
+# ckpt_path = os.path.join('tokenizer_low_measures_fix_subset_longtrain_v2_48_BPMProbe_tiny', 'ckpt.pt')
+# checkpoint = torch.load(ckpt_path, map_location=device)
+# probe_args = checkpoint['model_args']
 
-probe = BPMProbe(**probe_args).to(device)
-state_dict = checkpoint['model']
-# fix the keys of the state dictionary :(
-# honestly no idea how checkpoints sometimes get this prefix, have to debug more
-unwanted_prefix = '_orig_mod.'
-for k,v in list(state_dict.items()):
-    if k.startswith(unwanted_prefix):
-        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-probe.load_state_dict(state_dict)
-probe.eval()
+# probe = BPMProbe(**probe_args).to(device)
+# state_dict = checkpoint['model']
+# # fix the keys of the state dictionary :(
+# # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+# unwanted_prefix = '_orig_mod.'
+# for k,v in list(state_dict.items()):
+#     if k.startswith(unwanted_prefix):
+#         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+# probe.load_state_dict(state_dict)
+# probe.eval()
 
 model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, spatial_window=spatial_window, use_null_token=use_null_token, gradient_checkpointing=gradient_checkpointing, patch_size=patch_size)
 
