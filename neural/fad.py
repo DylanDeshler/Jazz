@@ -387,7 +387,7 @@ class BPMProbe(nn.Module):
         x = x.mean(-2).transpose(1, 2)
         
         # conv
-        x = self.temporal_processor(x)
+        x = self.temporal_processor(x.transpose(1, 2)).transpose(1, 2)
         
         # transformer
         # x = x + self.pos_embed
