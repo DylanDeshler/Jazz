@@ -335,17 +335,19 @@ class BPMProbe(nn.Module):
         self.norm = nn.LayerNorm(dims[-1], eps=1e-6)
         self.proj = nn.Linear(dims[-1], 1)
         
-        self.pos_embed = nn.Parameter(torch.zeros(1, 32, dims[-1]))
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=dims[-1],
-            nhead=dims[-1] // 64,              # 512 dims / 8 heads = 64 dim per head
-            dim_feedforward=dims[-1] * 4,
-            dropout=drop_path_rate,
-            activation='gelu',
-            batch_first=True,     # Keeps input formatting as [B, T, C]
-            norm_first=True       # Pre-norm architecture mirrors ConvNeXt and stabilizes training
-        )
-        self.temporal_processor = nn.TransformerEncoder(encoder_layer, num_layers=2)
+        self.temporal_processor = nn.Conv1d(dims[-1], dims[-1], kernel_size=11, padding=5)
+        
+        # self.pos_embed = nn.Parameter(torch.zeros(1, 32, dims[-1]))
+        # encoder_layer = nn.TransformerEncoderLayer(
+        #     d_model=dims[-1],
+        #     nhead=dims[-1] // 64,              # 512 dims / 8 heads = 64 dim per head
+        #     dim_feedforward=dims[-1] * 4,
+        #     dropout=drop_path_rate,
+        #     activation='gelu',
+        #     batch_first=True,     # Keeps input formatting as [B, T, C]
+        #     norm_first=True       # Pre-norm architecture mirrors ConvNeXt and stabilizes training
+        # )
+        # self.temporal_processor = nn.TransformerEncoder(encoder_layer, num_layers=2)
         
         # self.temporal_processor = nn.LSTM(
         #     input_size=dims[-1],
@@ -384,9 +386,12 @@ class BPMProbe(nn.Module):
             
         x = x.mean(-2).transpose(1, 2)
         
-        # transformer
-        x = x + self.pos_embed
+        # conv
         x = self.temporal_processor(x)
+        
+        # transformer
+        # x = x + self.pos_embed
+        # x = self.temporal_processor(x)
         
         # lstm
         # x, _ = self.temporal_processor(x)

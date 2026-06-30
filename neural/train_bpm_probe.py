@@ -131,7 +131,7 @@ def get_batch(split='train', batch_size=batch_size):
     try:
         meta = torch.from_numpy(np.stack([scipy.signal.medfilt(meta[idx:idx+n_chunks], kernel_size=3) for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     except Exception as e:
-        print(f'{e} for {np.min(iexs)} {np.max(idxs)}')
+        print(f'{e} for {np.min(idxs)} {np.max(idxs)}')
 
     return x, meta
 
