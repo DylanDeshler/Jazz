@@ -226,7 +226,6 @@ y2_embs = defaultdict(list)
 if args.recompute_only:
     print(f">>> Mode: [Recompute Only] Aggregating all runs matching axis={args.axis} and n_steps={args.n_steps}")
     
-    # Match any batch_size and n_samples parameters, as long as axis, n_steps match.
     search_pattern = os.path.join("/data/binaries/FAD_embeddings", f"axis_{args.axis}_nsteps_{args.n_steps}_nsamples_*_*")
     matching_dirs = glob.glob(search_pattern)
     
@@ -269,7 +268,7 @@ else:
     encoder_ratios = math.prod(tokenizer.encoder.ratios)
     adapter = load_model(os.path.join('tokenizer_adapter_low_large_24576_subset_longtrain_v2_48', 'ckpt.pt'), Adapter)
     max_seq_len = adapter.max_seq_len
-    probe = load_model(os.path.join('tokenizer_low_measures_fix_subset_longtrain_v2_48_BPMProbe_tiny', 'ckpt.pt'), BPMProbe)
+    probe = load_model(os.path.join('tokenizer_low_measures_fix_subset_longtrain_v2_48_BPMProbe_tiny_lstm', 'ckpt.pt'), BPMProbe)
 
     # DiTs
     if args.axis == 'width':
@@ -283,7 +282,7 @@ else:
     assert base_chunks * base_window * vae_embed_dim == measure_chunks * measure_window * vae_embed_dim
 
     # Feature Extractors
-    fad = load_model(os.path.join('FAD_v2', 'ckpt.pt'), FAD)
+    fad = load_model(os.path.join('FAD_v2_30drop', 'ckpt.pt'), FAD)
 
     paths = glob.glob('/data/wavs/*')
     paths = paths[-int(len(paths) * 2/48):] # test set
@@ -293,7 +292,11 @@ else:
     n_steps = args.n_steps
     assert n_generations % batch_size == 0
 
-    idxs = np.random.choice(np.arange(len(paths)), size=n_generations, replace=False)
+    durations = []
+    for path in tqdm(paths):
+        durations.append(sf.info(path).duration)
+    durations = np.asarray(durations)
+    idxs = np.random.choice(np.arange(len(paths)), size=n_generations, p=durations / np.sum(durations))
 
     with torch.inference_mode():
         for idx in tqdm(idxs, desc='Embedding Real Samples'):
