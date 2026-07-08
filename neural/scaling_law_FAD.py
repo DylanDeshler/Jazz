@@ -337,7 +337,7 @@ else:
             measure_decoder_noise = torch.randn((batch_size * measure_chunks, 1, encoder_ratios * (max_seq_len - 1)), device=device)
             
             for i, measure_dit in enumerate(measure_dits):
-                y2 = predict_measures(measure_dit, measure_gen_shape, None, None, n_steps, guidance=1.0, gen_noise=measure_gen_noise, decoder_noise=measure_decoder_noise, method='median', window_size=3)
+                y2 = predict_measures(measure_dit, measure_gen_shape, None, None, n_steps, guidance=1.0, gen_noise=measure_gen_noise, decoder_noise=measure_decoder_noise, method='median', window_size=3, memory_efficient=False, cfg_mode='joint', t_dist='logit')
                 with ctx:
                     y2 = drop_to_multiple(y2, 16383 * 5)
                     y2_emb = fad.forward_features(y2)
