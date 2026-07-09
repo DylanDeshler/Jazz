@@ -248,7 +248,7 @@ def fad_infinity(gen_embs, real_mu, real_sigma, n_points=20, rng=None):
     M, D = gen_embs.shape
     Ns = np.linspace(min(2 * D, M // 2), M, n_points).astype(int)
     inv_N, fads = [], []
-    for N in tqdm(Ns):
+    for N in tqdm(Ns, desc='Regressing Fad-infinity'):
         idx = rng.choice(M, size=N, replace=False)
         mu, sigma = calculate_embd_statistics(gen_embs[idx])
         fads.append(calculate_frechet_distance(mu, sigma, real_mu, real_sigma))
