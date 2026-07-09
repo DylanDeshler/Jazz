@@ -248,7 +248,7 @@ def fad_infinity(gen_embs, real_mu, real_sigma, n_points=20, rng=None):
     M, D = gen_embs.shape
     Ns = np.linspace(min(2 * D, M // 2), M, n_points).astype(int)
     inv_N, fads = [], []
-    for N in Ns:
+    for N in tqdm(Ns):
         idx = rng.choice(M, size=N, replace=False)
         mu, sigma = calculate_embd_statistics(gen_embs[idx])
         fads.append(calculate_frechet_distance(mu, sigma, real_mu, real_sigma))
@@ -409,9 +409,9 @@ print(f'\nAggregated down to {N} common embeddings (approx {hours:.2f} hours of 
 # level_real_embs = real_embs[np.random.choice(np.arange(len(real_embs)), size=N, replace=False)]
 real_mu, real_sigma = calculate_embd_statistics(real_embs)
 for level in valid_levels:
-    y1_fad, y1_r2, y1_slope = fad_infinity(y1_embs[level], real_mu, real_sigma)
+    y1_fad, y1_r2, y1_slope = fad_infinity(y1_embs[level], real_mu, real_sigma, n_points=10)
     print(f"{level:<6} {'Base':<10} {y1_fad:>10.4f} {y1_r2:>8.4f} {y1_slope:>10.2f}")
-    y2_fad, y2_r2, y2_slope = fad_infinity(y2_embs[level], real_mu, real_sigma)
+    y2_fad, y2_r2, y2_slope = fad_infinity(y2_embs[level], real_mu, real_sigma, n_points=10)
     print(f"{level:<6} {'Measure':<10} {y2_fad:>10.4f} {y2_r2:>8.4f} {y2_slope:>10.2f}")
     
     # level_y1_embs = y1_embs[level][np.random.choice(np.arange(len(y1_embs[level])), size=N, replace=False)]
