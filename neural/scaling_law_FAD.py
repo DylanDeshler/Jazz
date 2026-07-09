@@ -357,8 +357,8 @@ for level in valid_levels:
 hours = N * 5 / 60 / 60
 print(f'\nAggregated down to {N} common embeddings (approx {hours:.2f} hours of data)')
 
+level_real_embs = real_embs[np.random.choice(np.arange(len(real_embs)), size=N, replace=False)]
 for level in valid_levels:
-    level_real_embs = real_embs[np.random.choice(np.arange(len(real_embs)), size=N, replace=False)]
     real_mu, real_sigma = calculate_embd_statistics(level_real_embs)
     
     level_y1_embs = y1_embs[level][np.random.choice(np.arange(len(y1_embs[level])), size=N, replace=False)]
