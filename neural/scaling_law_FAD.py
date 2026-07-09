@@ -58,6 +58,11 @@ parser.add_argument(
     action='store_true',
     help="If set, aggregates all saved embeddings across any batch_size/n_samples matching this axis and n_steps."
 )
+parser.add_argument(
+    '--recompute_real',
+    action='store_true',
+    help="Re-extract real embeddings",
+)
 
 args = parser.parse_args()
 
@@ -219,9 +224,52 @@ def predict_measures(model, gen_shape, net_kwargs, uncond_net_kwargs, n_steps, g
     out = torch.from_numpy(out.astype(np.float32)).to(device, non_blocking=True)
     return out
 
+def compute_real_embeddings():
+    paths = sorted(glob.glob('/data/wavs/*'))
+    paths = paths[-int(len(paths) * 2/48):]  # test set
+    embs = []
+    with torch.inference_mode():
+        for path in tqdm(paths, desc='Embedding Real'):
+            wav, _ = librosa.load(path, sr=rate)
+            if len(wav) < 16383 * 5:
+                continue
+            x = torch.from_numpy(wav.astype(np.float32)).to(device, non_blocking=True)
+            x = drop_to_multiple(x, 16383 * 5)
+            with ctx:
+                emb = fad.forward_features(x)
+            embs.append(emb.cpu().detach().numpy())
+    return np.concatenate(embs, axis=0)
+
+def fad_infinity(gen_embs, real_mu, real_sigma, n_points=20, rng=None):
+    """FAD-inf (Chong & Forsyth 2020): fit FAD ~ a*(1/N) + b over many N,
+    return (intercept b at N->inf, R^2 of the 1/N fit, slope a)."""
+    if rng is None:
+        rng = np.random.default_rng(0)
+    M, D = gen_embs.shape
+    Ns = np.linspace(min(2 * D, M // 2), M, n_points).astype(int)
+    inv_N, fads = [], []
+    for N in Ns:
+        idx = rng.choice(M, size=N, replace=False)
+        mu, sigma = calculate_embd_statistics(gen_embs[idx])
+        fads.append(calculate_frechet_distance(mu, sigma, real_mu, real_sigma))
+        inv_N.append(1.0 / N)
+    inv_N, fads = np.asarray(inv_N), np.asarray(fads)
+
+    slope, intercept = np.polyfit(inv_N, fads, 1)
+    pred = slope * inv_N + intercept
+    ss_res = np.sum((fads - pred) ** 2)
+    ss_tot = np.sum((fads - fads.mean()) ** 2)
+    r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else float('nan')
+    return float(intercept), float(r2), float(slope)
+
 real_embs = []
 y1_embs = defaultdict(list)
 y2_embs = defaultdict(list)
+
+if args.recompute_real:
+    print(">>> Mode: [Recompute Real] Re-extracting real embeddings")
+    fad = load_model(os.path.join('FAD_v2_30drop', 'ckpt.pt'), FAD)
+    real_embs = [compute_real_embeddings()]
 
 if args.recompute_only:
     print(f">>> Mode: [Recompute Only] Aggregating all runs matching axis={args.axis} and n_steps={args.n_steps}")
@@ -235,9 +283,10 @@ if args.recompute_only:
     print(f"Found {len(matching_dirs)} directories to aggregate.")
     
     for run_dir in matching_dirs:
-        real_path = os.path.join(run_dir, "real_embs.npy")
-        if os.path.exists(real_path):
-            real_embs.append(np.load(real_path))
+        if not args.recompute_real:
+            real_path = os.path.join(run_dir, "real_embs.npy")
+            if os.path.exists(real_path) and not args.recompute:
+                real_embs.append(np.load(real_path))
             
         for level in valid_levels:
             y1_path = os.path.join(run_dir, f"y1_embs_{level}.npy")
@@ -357,16 +406,20 @@ for level in valid_levels:
 hours = N * 5 / 60 / 60
 print(f'\nAggregated down to {N} common embeddings (approx {hours:.2f} hours of data)')
 
-level_real_embs = real_embs[np.random.choice(np.arange(len(real_embs)), size=N, replace=False)]
+# level_real_embs = real_embs[np.random.choice(np.arange(len(real_embs)), size=N, replace=False)]
+real_mu, real_sigma = calculate_embd_statistics(real_embs)
 for level in valid_levels:
-    real_mu, real_sigma = calculate_embd_statistics(level_real_embs)
+    y1_fad, y1_r2, y1_slope = fad_infinity(y1_embs[level], real_mu, real_sigma)
+    print(f"{level:<6} {'Base':<10} {y1_fad:>10.4f} {y1_r2:>8.4f} {y1_slope:>10.2f}")
+    y2_fad, y2_r2, y2_slope = fad_infinity(y2_embs[level], real_mu, real_sigma)
+    print(f"{level:<6} {'Measure':<10} {y2_fad:>10.4f} {y2_r2:>8.4f} {y2_slope:>10.2f}")
     
-    level_y1_embs = y1_embs[level][np.random.choice(np.arange(len(y1_embs[level])), size=N, replace=False)]
-    y1_mu, y1_sigma = calculate_embd_statistics(level_y1_embs)
-    y1_fad = calculate_frechet_distance(y1_mu, y1_sigma, real_mu, real_sigma)
+    # level_y1_embs = y1_embs[level][np.random.choice(np.arange(len(y1_embs[level])), size=N, replace=False)]
+    # y1_mu, y1_sigma = calculate_embd_statistics(level_y1_embs)
+    # y1_fad = calculate_frechet_distance(y1_mu, y1_sigma, real_mu, real_sigma)
     print(f'Base {level} -> Real Samples FAD: ', y1_fad)
 
-    level_y2_embs = y2_embs[level][np.random.choice(np.arange(len(y2_embs[level])), size=N, replace=False)]
-    y2_mu, y2_sigma = calculate_embd_statistics(level_y2_embs)
-    y2_fad = calculate_frechet_distance(y2_mu, y2_sigma, real_mu, real_sigma)
+    # level_y2_embs = y2_embs[level][np.random.choice(np.arange(len(y2_embs[level])), size=N, replace=False)]
+    # y2_mu, y2_sigma = calculate_embd_statistics(level_y2_embs)
+    # y2_fad = calculate_frechet_distance(y2_mu, y2_sigma, real_mu, real_sigma)
     print(f'Measure (Median BPM) {level} -> Real Samples FAD: ', y2_fad)
