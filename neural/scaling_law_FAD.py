@@ -246,7 +246,7 @@ def fad_infinity(gen_embs, real_mu, real_sigma, n_points=20, rng=None):
     if rng is None:
         rng = np.random.default_rng(0)
     M, D = gen_embs.shape
-    Ns = np.linspace(min(2 * D, M // 2), M, n_points).astype(int)
+    Ns = np.linspace(min(8 * D, M // 2), M, n_points).astype(int)
     inv_N, fads = [], []
     for N in tqdm(Ns, desc='Regressing Fad-infinity'):
         idx = rng.choice(M, size=N, replace=False)
@@ -395,23 +395,23 @@ else:
                 np.save(y2_embs_path[valid_levels[i]], np.concatenate(y2_embs[valid_levels[i]], axis=0))
 
 real_embs = np.concatenate(real_embs, axis=0)
-N = len(real_embs)
-for level in valid_levels:
-    y1_embs[level] = np.concatenate(y1_embs[level], axis=0)
-    y2_embs[level] = np.concatenate(y2_embs[level], axis=0)
+# N = len(real_embs)
+# for level in valid_levels:
+#     y1_embs[level] = np.concatenate(y1_embs[level], axis=0)
+#     y2_embs[level] = np.concatenate(y2_embs[level], axis=0)
         
-    N = np.min([N, len(y1_embs[level]), len(y2_embs[level])]).item()
-    print(level, f"Real matrix: {real_embs.shape} | Y1 matrix: {y1_embs[level].shape} | Y2 matrix: {y2_embs[level].shape}")
+#     N = np.min([N, len(y1_embs[level]), len(y2_embs[level])]).item()
+#     print(level, f"Real matrix: {real_embs.shape} | Y1 matrix: {y1_embs[level].shape} | Y2 matrix: {y2_embs[level].shape}")
 
-hours = N * 5 / 60 / 60
-print(f'\nAggregated down to {N} common embeddings (approx {hours:.2f} hours of data)')
+# hours = N * 5 / 60 / 60
+# print(f'\nAggregated down to {N} common embeddings (approx {hours:.2f} hours of data)')
 
 # level_real_embs = real_embs[np.random.choice(np.arange(len(real_embs)), size=N, replace=False)]
 real_mu, real_sigma = calculate_embd_statistics(real_embs)
 for level in valid_levels:
-    y1_fad, y1_r2, y1_slope = fad_infinity(y1_embs[level], real_mu, real_sigma, n_points=10)
+    y1_fad, y1_r2, y1_slope = fad_infinity(np.concatenate(y1_embs[level], axis=0), real_mu, real_sigma, n_points=10)
     print(f"{level:<6} {'Base':<10} {y1_fad:>10.4f} {y1_r2:>8.4f} {y1_slope:>10.2f}")
-    y2_fad, y2_r2, y2_slope = fad_infinity(y2_embs[level], real_mu, real_sigma, n_points=10)
+    y2_fad, y2_r2, y2_slope = fad_infinity(np.concatenate(y2_embs[level], axis=0), real_mu, real_sigma, n_points=10)
     print(f"{level:<6} {'Measure':<10} {y2_fad:>10.4f} {y2_r2:>8.4f} {y2_slope:>10.2f}")
     
     # level_y1_embs = y1_embs[level][np.random.choice(np.arange(len(y1_embs[level])), size=N, replace=False)]
