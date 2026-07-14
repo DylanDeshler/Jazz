@@ -9,6 +9,8 @@ from collections import defaultdict
 from datetime import datetime
 import time
 
+import matplotlib.pyplot as plt
+
 import torch
 import numpy as np
 from scipy import linalg
@@ -240,27 +242,84 @@ def compute_real_embeddings():
             embs.append(emb.cpu().detach().numpy())
     return np.concatenate(embs, axis=0)
 
-def fad_infinity(gen_embs, real_mu, real_sigma, n_points=20, rng=None):
-    """FAD-inf (Chong & Forsyth 2020): fit FAD ~ a*(1/N) + b over many N,
-    return (intercept b at N->inf, R^2 of the 1/N fit, slope a)."""
-    if rng is None:
-        rng = np.random.default_rng(0)
-    M, D = gen_embs.shape
-    Ns = np.linspace(min(8 * D, M // 2), M, n_points).astype(int)
-    inv_N, fads = [], []
-    for N in tqdm(Ns, desc='Regressing Fad-infinity'):
-        idx = rng.choice(M, size=N, replace=False)
-        mu, sigma = calculate_embd_statistics(gen_embs[idx])
-        fads.append(calculate_frechet_distance(mu, sigma, real_mu, real_sigma))
-        inv_N.append(1.0 / N)
-    inv_N, fads = np.asarray(inv_N), np.asarray(fads)
+# def fad_infinity(gen_embs, real_mu, real_sigma, n_points=20, rng=None):
+#     """FAD-inf (Chong & Forsyth 2020): fit FAD ~ a*(1/N) + b over many N,
+#     return (intercept b at N->inf, R^2 of the 1/N fit, slope a)."""
+#     if rng is None:
+#         rng = np.random.default_rng(0)
+#     M, D = gen_embs.shape
+#     Ns = np.linspace(min(8 * D, M // 2), M, n_points).astype(int)
+#     inv_N, fads = [], []
+#     for N in tqdm(Ns, desc='Regressing Fad-infinity'):
+#         idx = rng.choice(M, size=N, replace=False)
+#         mu, sigma = calculate_embd_statistics(gen_embs[idx])
+#         fads.append(calculate_frechet_distance(mu, sigma, real_mu, real_sigma))
+#         inv_N.append(1.0 / N)
+#     inv_N, fads = np.asarray(inv_N), np.asarray(fads)
 
-    slope, intercept = np.polyfit(inv_N, fads, 1)
-    pred = slope * inv_N + intercept
-    ss_res = np.sum((fads - pred) ** 2)
-    ss_tot = np.sum((fads - fads.mean()) ** 2)
-    r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else float('nan')
-    return float(intercept), float(r2), float(slope)
+#     slope, intercept = np.polyfit(inv_N, fads, 1)
+#     pred = slope * inv_N + intercept
+#     ss_res = np.sum((fads - pred) ** 2)
+#     ss_tot = np.sum((fads - fads.mean()) ** 2)
+#     r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else float('nan')
+#     return float(intercept), float(r2), float(slope)
+
+def fad_infinity(gen_embs, real_mu, real_sigma, n_points=15, n_runs=10, seed=0,
+                 plot_path=None, label=""):
+    """FAD-inf with n_runs averaging. Fits FAD ~ a*(1/N) + b per run over N >> D,
+    returns (mean intercept, std of intercept, mean R^2). Optionally saves a plot."""
+    M, D = gen_embs.shape
+    floor = max(8 * D, M // 3)          # stay in the N >> D linear regime
+    Ns = np.linspace(floor, M, n_points).astype(int)
+    inv_N = 1.0 / Ns
+
+    all_fads, intercepts, slopes, r2s = [], [], [], []
+    for run in range(n_runs):
+        rng = np.random.default_rng(seed + run)
+        fads = []
+        for N in Ns:
+            idx = rng.choice(M, size=N, replace=False)
+            mu, sigma = calculate_embd_statistics(gen_embs[idx])
+            fads.append(calculate_frechet_distance(mu, sigma, real_mu, real_sigma))
+        fads = np.asarray(fads)
+        slope, b = np.polyfit(inv_N, fads, 1, w=Ns.astype(float))  # down-weight small-N
+        pred = slope * inv_N + b
+        r2 = 1 - np.sum((fads - pred) ** 2) / np.sum((fads - fads.mean()) ** 2)
+        all_fads.append(fads); intercepts.append(b); slopes.append(slope); r2s.append(r2)
+
+    all_fads = np.asarray(all_fads)                 # (n_runs, n_points)
+    intercepts = np.asarray(intercepts)
+    b_mean, b_std = intercepts.mean(), intercepts.std()
+    slope_mean = np.mean(slopes)
+    r2_mean = np.mean(r2s)
+
+    if plot_path is not None:
+        fig, ax = plt.subplots(figsize=(7, 5))
+        # every run's points (faint) + mean±std per N
+        for fads in all_fads:
+            ax.scatter(inv_N, fads, s=12, color='steelblue', alpha=0.25)
+        fad_mean = all_fads.mean(axis=0)
+        fad_std = all_fads.std(axis=0)
+        ax.errorbar(inv_N, fad_mean, yerr=fad_std, fmt='o', color='steelblue',
+                    capsize=3, label='FAD(N)  mean ± std')
+        # averaged fit line, extended to 1/N = 0
+        xline = np.linspace(0, inv_N.max(), 100)
+        ax.plot(xline, slope_mean * xline + b_mean, 'r-',
+                label=f'fit: {slope_mean:.0f}/N + {b_mean:.2f}')
+        # the intercept with its across-run error bar
+        ax.errorbar(0, b_mean, yerr=b_std, fmt='s', color='red', capsize=4,
+                    label=f'FAD_inf = {b_mean:.3f} ± {b_std:.3f}')
+        ax.axvline(0, color='grey', lw=0.8, ls='--')
+        ax.set_xlabel('1 / N')
+        ax.set_ylabel('FAD')
+        ax.set_xlim(left=-inv_N.max() * 0.05)
+        ax.set_title(f'{label}   R²={r2_mean:.3f}   (n_runs={n_runs}, n_points={n_points})')
+        ax.legend(fontsize=8)
+        fig.tight_layout()
+        fig.savefig(plot_path, dpi=120)
+        plt.close(fig)
+
+    return float(b_mean), float(b_std), float(r2_mean)
 
 real_embs = []
 y1_embs = defaultdict(list)
@@ -394,6 +453,8 @@ else:
                 y2_embs[valid_levels[i]].append(y2_emb.cpu().detach().numpy())
                 np.save(y2_embs_path[valid_levels[i]], np.concatenate(y2_embs[valid_levels[i]], axis=0))
 
+plot_dir = "/data/binaries/FAD_embeddings/plots"
+os.makedirs(plot_dir, exist_ok=True)
 real_embs = np.concatenate(real_embs, axis=0)
 # N = len(real_embs)
 # for level in valid_levels:
@@ -409,17 +470,22 @@ real_embs = np.concatenate(real_embs, axis=0)
 # level_real_embs = real_embs[np.random.choice(np.arange(len(real_embs)), size=N, replace=False)]
 real_mu, real_sigma = calculate_embd_statistics(real_embs)
 for level in valid_levels:
-    y1_fad, y1_r2, y1_slope = fad_infinity(np.concatenate(y1_embs[level], axis=0), real_mu, real_sigma, n_points=10)
-    print(f"{level:<6} {'Base':<10} {y1_fad:>10.4f} {y1_r2:>8.4f} {y1_slope:>10.2f}")
-    y2_fad, y2_r2, y2_slope = fad_infinity(np.concatenate(y2_embs[level], axis=0), real_mu, real_sigma, n_points=10)
-    print(f"{level:<6} {'Measure':<10} {y2_fad:>10.4f} {y2_r2:>8.4f} {y2_slope:>10.2f}")
+    y1_fad, y1_std, y1_r2 = fad_infinity(
+        y1_embs[level], real_mu, real_sigma,
+        plot_path=os.path.join(plot_dir, f"{level}_base.png"), label=f"{level} Base")
+    print(f"{level:<6} {'Base':<10} {y1_fad:>10.4f} ± {y1_std:<7.4f} R²={y1_r2:.4f}")
+    
+    y2_fad, y2_std, y2_r2 = fad_infinity(
+        y2_embs[level], real_mu, real_sigma,
+        plot_path=os.path.join(plot_dir, f"{level}_measure.png"), label=f"{level} Measure")
+    print(f"{level:<6} {'Measure':<10} {y2_fad:>10.4f} ± {y2_std:<7.4f} R²={y2_r2:.4f}")
     
     # level_y1_embs = y1_embs[level][np.random.choice(np.arange(len(y1_embs[level])), size=N, replace=False)]
     # y1_mu, y1_sigma = calculate_embd_statistics(level_y1_embs)
     # y1_fad = calculate_frechet_distance(y1_mu, y1_sigma, real_mu, real_sigma)
-    print(f'Base {level} -> Real Samples FAD: ', y1_fad)
+    # print(f'Base {level} -> Real Samples FAD: ', y1_fad)
 
     # level_y2_embs = y2_embs[level][np.random.choice(np.arange(len(y2_embs[level])), size=N, replace=False)]
     # y2_mu, y2_sigma = calculate_embd_statistics(level_y2_embs)
     # y2_fad = calculate_frechet_distance(y2_mu, y2_sigma, real_mu, real_sigma)
-    print(f'Measure (Median BPM) {level} -> Real Samples FAD: ', y2_fad)
+    # print(f'Measure (Median BPM) {level} -> Real Samples FAD: ', y2_fad)
