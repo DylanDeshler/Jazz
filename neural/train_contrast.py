@@ -243,8 +243,12 @@ train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], df['ke
 durations = []
 frames = []
 for path in tqdm(paths):
+    n_frames = sf.info(path).frames
+    if n_frames < 2 * n_samples:
+        durations.append(0)
+        frames.append(0)
     durations.append(sf.info(path).duration)
-    frames.append(sf.info(path).frames)
+    frames.append(n_frames)
 durations = np.asarray(durations)
 frames = np.asarray(frames)
 train_probs = durations[train_idx] / np.sum(durations[train_idx])
