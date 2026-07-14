@@ -346,7 +346,7 @@ if args.recompute_real:
 if args.recompute_only:
     print(f">>> Mode: [Recompute Only] Aggregating all runs matching axis={args.axis} and n_steps={args.n_steps}")
     
-    search_pattern = os.path.join("/data/binaries/FAD_embeddings", f"axis_{args.axis}_nsteps_{args.n_steps}_nsamples_*_*")
+    search_pattern = os.path.join("/data/binaries/FAD_embeddings", f"axis_{args.axis}_nsteps_{args.n_steps}_nsamples_*_contrast{args.contrast}_*")
     matching_dirs = glob.glob(search_pattern)
     
     if not matching_dirs:
@@ -376,7 +376,7 @@ if args.recompute_only:
 else:
     # Mode: Standard Compute & Save
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = os.path.join("/data/binaries/FAD_embeddings", f"axis_{args.axis}_nsteps_{args.n_steps}_nsamples_{args.n_samples}_{timestamp}")
+    run_dir = os.path.join("/data/binaries/FAD_embeddings", f"axis_{args.axis}_nsteps_{args.n_steps}_nsamples_{args.n_samples}_contrast{args.contrast}_{timestamp}")
     os.makedirs(run_dir, exist_ok=False)
     print(f">>> Mode: [Compute Embeddings & FAD] Creating unique output folder: {run_dir}")
 
