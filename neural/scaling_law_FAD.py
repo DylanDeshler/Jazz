@@ -470,12 +470,12 @@ for level in valid_levels:
 real_mu, real_sigma = calculate_embd_statistics(real_embs)
 for level in tqdm(valid_levels, desc='Regressing FAD'):
     y1_fad, y1_std, y1_r2 = fad_infinity(
-        np.concatenate(y1_embs[level], axis=0), real_mu, real_sigma,
+        y1_embs[level], real_mu, real_sigma,
         plot_path=os.path.join(plot_dir, f"{level}_base.png"), label=f"{level} Base")
     print(f"{level:<6} {'Base':<10} {y1_fad:>10.4f} ± {y1_std:<7.4f} R²={y1_r2:.4f}")
     
     y2_fad, y2_std, y2_r2 = fad_infinity(
-        np.concatenate(y2_embs[level], axis=0), real_mu, real_sigma,
+        y2_embs[level], real_mu, real_sigma,
         plot_path=os.path.join(plot_dir, f"{level}_measure.png"), label=f"{level} Measure")
     print(f"{level:<6} {'Measure':<10} {y2_fad:>10.4f} ± {y2_std:<7.4f} R²={y2_r2:.4f}")
     
