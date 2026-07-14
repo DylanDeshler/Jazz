@@ -469,7 +469,7 @@ real_embs = np.concatenate(real_embs, axis=0)
 
 # level_real_embs = real_embs[np.random.choice(np.arange(len(real_embs)), size=N, replace=False)]
 real_mu, real_sigma = calculate_embd_statistics(real_embs)
-for level in valid_levels:
+for level in tqdm(valid_levels, desc='Regressing FAD'):
     y1_fad, y1_std, y1_r2 = fad_infinity(
         y1_embs[level], real_mu, real_sigma,
         plot_path=os.path.join(plot_dir, f"{level}_base.png"), label=f"{level} Base")
