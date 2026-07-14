@@ -19,6 +19,7 @@ from contextlib import nullcontext
 import torch.nn.functional as F
 from einops import rearrange
 
+from contrast import Transformer as Contrast
 from dito import DiToV5 as Tokenizer
 from fad import MultiTaskFAD as FAD, BPMProbe
 from adapter import InvertibleAdapter as Adapter
@@ -64,6 +65,11 @@ parser.add_argument(
     '--recompute_real',
     action='store_true',
     help="Re-extract real embeddings",
+)
+parser.add_argument(
+    '--contrast',
+    action='store_true',
+    help='To extract features from a contrastive model'
 )
 
 args = parser.parse_args()
@@ -233,10 +239,10 @@ def compute_real_embeddings():
     with torch.inference_mode():
         for path in tqdm(paths, desc='Embedding Real'):
             wav, _ = librosa.load(path, sr=rate)
-            if len(wav) < 16383 * 5:
+            if len(wav) < 16383 * samples_mult:
                 continue
             x = torch.from_numpy(wav.astype(np.float32)).to(device, non_blocking=True)
-            x = drop_to_multiple(x, 16383 * 5)
+            x = drop_to_multiple(x, 16383 * samples_mult)
             with ctx:
                 emb = fad.forward_features(x)
             embs.append(emb.cpu().detach().numpy())
@@ -325,9 +331,16 @@ real_embs = []
 y1_embs = defaultdict(list)
 y2_embs = defaultdict(list)
 
+# Feature Extractors
+if args.contrast:
+    fad = load_model(os.path.join('contrast_learntmep_instance_10s', 'ckpt.pt'), Contrast)
+    samples_mult = 10
+else:
+    fad = load_model(os.path.join('FAD_v2_30drop', 'ckpt.pt'), FAD)
+    samples_mult = 5
+
 if args.recompute_real:
     print(">>> Mode: [Recompute Real] Re-extracting real embeddings")
-    fad = load_model(os.path.join('FAD_v2_30drop', 'ckpt.pt'), FAD)
     real_embs = [compute_real_embeddings()]
 
 if args.recompute_only:
@@ -389,9 +402,6 @@ else:
     base_chunks, base_window, measure_chunks, measure_window, vae_embed_dim = 32, 48, 32, 48, 16
     assert base_chunks * base_window * vae_embed_dim == measure_chunks * measure_window * vae_embed_dim
 
-    # Feature Extractors
-    fad = load_model(os.path.join('FAD_v2_30drop', 'ckpt.pt'), FAD)
-
     paths = glob.glob('/data/wavs/*')
     paths = paths[-int(len(paths) * 2/48):] # test set
 
@@ -414,7 +424,7 @@ else:
             x_raw = wav
             
             x = torch.from_numpy(x_raw.astype(np.float32)).to(device, non_blocking=True)
-            x = drop_to_multiple(x, 16383 * 5)
+            x = drop_to_multiple(x, 16383 * samples_mult)
             
             with ctx:
                 real_emb = fad.forward_features(x)
@@ -434,7 +444,7 @@ else:
                     y1 = y1.transpose(2, 3).view(batch_size * base_chunks, vae_embed_dim, base_window)
                     y1 = tokenizer.decode(y1, shape=(1, n_samples), n_steps=n_steps, noise=base_decoder_noise)
                     
-                    y1 = drop_to_multiple(y1, 16383 * 5)
+                    y1 = drop_to_multiple(y1, 16383 * samples_mult)
                     y1_emb = fad.forward_features(y1)
             
                 y1_embs[valid_levels[i]].append(y1_emb.cpu().detach().numpy())
@@ -447,7 +457,7 @@ else:
             for i, measure_dit in enumerate(measure_dits):
                 y2 = predict_measures(measure_dit, measure_gen_shape, None, None, n_steps, guidance=1.0, gen_noise=measure_gen_noise, decoder_noise=measure_decoder_noise, method='median', window_size=3, memory_efficient=False, cfg_mode='joint', t_dist='logit')
                 with ctx:
-                    y2 = drop_to_multiple(y2, 16383 * 5)
+                    y2 = drop_to_multiple(y2, 16383 * samples_mult)
                     y2_emb = fad.forward_features(y2)
             
                 y2_embs[valid_levels[i]].append(y2_emb.cpu().detach().numpy())

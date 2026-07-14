@@ -451,6 +451,46 @@ class Transformer(nn.Module):
     @torch.compiler.disable
     def _compute_mel(self, x):
         return self.to_mel(x)
+
+    def forward_features(self, x):
+        x = self._compute_mel(x)
+        
+        if self.training:
+            x = self.augment(x)
+        
+        # x = (x + 40) / 40
+        mu = x.mean((-1, -2), keepdims=True)
+        std = x.std((-1, -2), keepdims=True)
+        # mu = -34.36543
+        # std = 15.82586
+        x = (x - mu) / (std + 1e-6)
+        
+        B, C, H, W = x.shape
+        
+        x = rearrange(x, 'b c (h p1) (w p2) -> b (h w) (c p1 p2)', p1=self.patch_size, p2=self.patch_size)
+        x = self.x_embedder(x)
+        
+        freqs_cis = precompute_freqs_cis_2d(
+            dim=self.head_dim, 
+            height=H // self.patch_size, 
+            width=W // self.patch_size
+        ).to(x.device)
+        for block in self.blocks:
+            x = block(x, freqs_cis=freqs_cis)
+        
+        x = self.pool_norm(x)
+        x = self.pool(x.mean(1, keepdims=True), x).squeeze(1)
+        
+        x = self.mlp_norm(x)
+        x = self.mlp(x)
+        
+        x = self.fc_norm(x)
+        x = self.fc(x)
+        
+        features = x.clone().detach()
+        features = F.normalize(features, dim=1)
+        
+        return features
     
     def forward(self, x, features_only=False):
         x = self._compute_mel(x)
