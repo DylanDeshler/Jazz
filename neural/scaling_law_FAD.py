@@ -457,13 +457,12 @@ plot_dir = "/data/binaries/FAD_embeddings/plots"
 os.makedirs(plot_dir, exist_ok=True)
 real_embs = np.concatenate(real_embs, axis=0)
 # N = len(real_embs)
-# for level in valid_levels:
-#     y1_embs[level] = np.concatenate(y1_embs[level], axis=0)
-#     y2_embs[level] = np.concatenate(y2_embs[level], axis=0)
+for level in valid_levels:
+    y1_embs[level] = np.concatenate(y1_embs[level], axis=0)
+    y2_embs[level] = np.concatenate(y2_embs[level], axis=0)
         
-#     N = np.min([N, len(y1_embs[level]), len(y2_embs[level])]).item()
-#     print(level, f"Real matrix: {real_embs.shape} | Y1 matrix: {y1_embs[level].shape} | Y2 matrix: {y2_embs[level].shape}")
-
+    # N = np.min([N, len(y1_embs[level]), len(y2_embs[level])]).item()
+    print(level, f"Real matrix: {real_embs.shape} | Y1 matrix: {y1_embs[level].shape} | Y2 matrix: {y2_embs[level].shape}")
 # hours = N * 5 / 60 / 60
 # print(f'\nAggregated down to {N} common embeddings (approx {hours:.2f} hours of data)')
 
