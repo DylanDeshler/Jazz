@@ -257,16 +257,16 @@ def get_batch(split='train', batch_size=batch_size):
         idxs = np.random.choice(train_idx, batch_size, p=train_probs).tolist()
     else:
         idxs = np.random.choice(test_idx, batch_size, p=test_probs).tolist()
-    starts = np.random.randint(low=0, high=frames[idxs] - n_samples, size=batch_size)
+    starts1 = np.random.randint(low=0, high=frames[idxs] - n_samples, size=batch_size)
+    starts2 = np.random.randint(low=0, high=frames[idxs] - n_samples, size=batch_size)
     
     x = []
-    for start, idx in zip(starts, idxs):
-        wav, file_sample_rate = sf.read(paths[idx], start=start, frames=n_samples)
+    for start1, start2, idx in zip(starts1, starts2, idxs):
+        wav1, file_sample_rate = sf.read(paths[idx], start=start1, frames=n_samples)
+        wav2, file_sample_rate = sf.read(paths[idx], start=start2, frames=n_samples)
         
-        start = np.random.randint(len(wav) - n_samples * 2)
-        x.append(wav[start:start+n_samples])
-        start = np.random.randint(start, len(wav) - n_samples)
-        x.append(wav[start:start+n_samples])
+        x.append(wav1)
+        x.append(wav2)
         
     x = torch.from_numpy(np.asarray(x).astype(np.float32)).unsqueeze(1).pin_memory().to(device, non_blocking=True)
     return x
