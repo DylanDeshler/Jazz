@@ -41,7 +41,7 @@ import matplotlib.patches as mpatches
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'contrast_learntmep_instance_2s'
+out_dir = 'contrast_learntmep_instance_10s'
 eval_interval = 10000
 sample_interval = 10000
 log_interval = 100
@@ -59,7 +59,7 @@ dataset = ''
 gradient_accumulation_steps = 1
 batch_size = 1024
 # model
-n_samples = 16383 * 2
+n_samples = 16383 * 10
 depth = 12
 hidden_size = 768
 proj_size = 128
@@ -137,8 +137,7 @@ bpm_bins = torch.arange(40, 300, 5, dtype=torch.float32)
 year_bins = torch.arange(1900, 1980, 5, dtype=torch.float32)
 bpm_sigma, year_sigma = 5, 2.5
 
-# cards = pickle.load(open('/home/dylan.d/research/music/Jazz/JazzSet.0.9.pkl', "rb"))
-cards = pickle.load(open('/home/ubuntu/base/Data/JazzSet.0.9.pkl', "rb"))
+cards = pickle.load(open('/data/JazzSet.0.9.pkl', "rb"))
 cards = [card for card in cards if card]
 
 years = []
@@ -165,8 +164,7 @@ record_labels = mlb.transform(record_label_names)
 record_labels = torch.from_numpy(record_labels)
 
 # Instruments
-# instrument_map_df = pd.read_csv('/home/dylan.d/research/music/Jazz/instrument_mapping.csv')
-instrument_map_df = pd.read_csv('/home/ubuntu/base/Data/instrument_mapping.csv')
+instrument_map_df = pd.read_csv('/home/dylandeshler/Jazz/instrument_mapping.csv')
 instrument_map_df = instrument_map_df.apply(lambda col: col.astype(str).str.lower())
 instrument_map = {row['Abbreviation']: row['Consolidated_Category'] for i, row in instrument_map_df.iterrows()}
 instrument_categories = set(list(instrument_map.values()))
@@ -197,18 +195,17 @@ import json
 import glob
 import librosa
 # all data
-# paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean/*.wav')
-# paths = glob.glob('/home/ubuntu/Data/wavs/*')
+paths = glob.glob('/data/wavs/*')
 # 2 std BPM data
 # paths = glob.glob('/home/dylan.d/research/music/Jazz/jazz_data_16000_full_clean_measures/*.wav')
 # paths = [path.replace('jazz_data_16000_full_clean_measures', 'jazz_data_16000_full_clean') for path in paths]
 
-paths = glob.glob('/home/ubuntu/Data/measures/*')
-with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
-    beat_paths = json.load(f)
-paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
+# paths = glob.glob('/home/ubuntu/Data/measures/*')
+# with open('/home/ubuntu/Data/valid_files_by_bpm.json', 'r') as f:
+#     beat_paths = json.load(f)
+# paths = [os.path.join('/home/ubuntu/Data/wavs', os.path.basename(path)) for path in paths if os.path.basename(path) in beat_paths]
 print(len(paths))
-wavs = []
+# wavs = []
 
 from sklearn.model_selection import StratifiedGroupKFold
 kf = StratifiedGroupKFold(n_splits=20, shuffle=True, random_state=0)
@@ -228,34 +225,42 @@ rare_keys = key_counts[key_counts < 2].index
 df.loc[df['key'].isin(rare_keys), 'key'] = 'rare_combo'
 train_idx, test_idx = next(kf.split(np.arange(len(paths))[:, np.newaxis], df['key'], artists))
 
-import concurrent.futures
-from multiprocessing import cpu_count
-wavs = [None] * len(paths)
+# import concurrent.futures
+# from multiprocessing import cpu_count
+# wavs = [None] * len(paths)
 
-with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
-    future_to_index = {
-        executor.submit(lambda x: librosa.load(x, sr=sample_rate)[0], path): i 
-        for i, path in enumerate(paths)
-    }
+# with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count() // 2) as executor:
+#     future_to_index = {
+#         executor.submit(lambda x: librosa.load(x, sr=sample_rate)[0], path): i 
+#         for i, path in enumerate(paths)
+#     }
     
-    for future in tqdm(concurrent.futures.as_completed(future_to_index), desc='Loading wav files', total=len(paths)):
-        original_index = future_to_index[future]
-        wav = future.result()
-        wavs[original_index] = wav
+#     for future in tqdm(concurrent.futures.as_completed(future_to_index), desc='Loading wav files', total=len(paths)):
+#         original_index = future_to_index[future]
+#         wav = future.result()
+#         wavs[original_index] = wav
 
-durations = np.asarray([len(wav) for wav in wavs])
-train_durations = durations[train_idx] / np.sum(durations[train_idx])
-test_durations = durations[test_idx] / np.sum(durations[test_idx])
+durations = []
+frames = []
+for path in tqdm(paths):
+    durations.append(sf.info(path).duration)
+    frames.append(sf.info(path).frames)
+durations = np.asarray(durations)
+frames = np.asarray(frames)
+train_probs = durations[train_idx] / np.sum(durations[train_idx])
+test_probs = durations[test_idx] / np.sum(durations[test_idx])
+del durations
 
 def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
-        idxs = np.random.choice(train_idx, batch_size // 2, p=train_durations, replace=False).tolist()
+        idxs = np.random.choice(train_idx, batch_size, p=train_probs).tolist()
     else:
-        idxs = np.random.choice(test_idx, batch_size // 2, p=test_durations, replace=False).tolist()
+        idxs = np.random.choice(test_idx, batch_size, p=test_probs).tolist()
+    starts = np.random.randint(low=0, high=frames[idxs] - n_samples, size=batch_size)
     
     x = []
-    for idx in idxs:
-        wav = wavs[idx]
+    for start, idx in zip(starts, idxs):
+        wav, file_sample_rate = sf.read(paths[idx], start=start, frames=n_samples)
         
         start = np.random.randint(len(wav) - n_samples * 2)
         x.append(wav[start:start+n_samples])
