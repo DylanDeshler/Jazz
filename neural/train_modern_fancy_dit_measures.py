@@ -62,7 +62,7 @@ TARGET_SIG = 4
 TARGET_BPM = 60 * TARGET_SIG / (24576 / 16000)
 # model
 patch_size = 2
-gradient_checkpointing = False
+gradient_checkpointing = True
 spatial_window = 64
 n_chunks = 24
 max_seq_len = spatial_window * n_chunks
