@@ -21,7 +21,6 @@ import os
 import time
 import math
 import copy
-import pickle
 from contextlib import nullcontext
 from tqdm import tqdm
 from torchinfo import summary
@@ -36,11 +35,7 @@ from einops import rearrange
 from diffusion_forcing import MetaConditionalModernDiTV2_smedium as net
 from dito import DiToV5 as Tokenizer
 from adapter import InvertibleAdapter
-from fad import BPMProbe
 import soundfile as sf
-
-import torch
-import pyrubberband as pyrb
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
