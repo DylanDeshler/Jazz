@@ -535,12 +535,26 @@ def save_samples(step):
     
     y_cfg = predict_measures(x.shape, cfg_net_kwargs, uncond_net_kwargs, n_steps, guidance=cfg_guidances, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode=cfg_mode, t_dist=t_dist)
     y = predict_measures(x.shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, t_dist=t_dist)
+    bpm_only_mask = {k: (torch.zeros_like(v) if k == 'bpm' else v) for k, v in unconditional_mask.items()}
+    bpm_only_net_kwargs = net_kwargs | {'unconditional_mask': bpm_only_mask}
+    y_uncond = predict_measures(x.shape, bpm_only_net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, t_dist=t_dist)
     y_gt = decode_latents(x, bpm, n_steps, decoder_noise=decoder_noise)
-    
+
     for i in range(n_samples):
-        sf.write(os.path.join(batch_dir, f'{i}.wav'), y[i].flatten(), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_cond.wav'), y[i].flatten(), 16000)
         sf.write(os.path.join(batch_dir, f'{i}_cfg.wav'), y_cfg[i].flatten(), 16000)
+        sf.write(os.path.join(batch_dir, f'{i}_bpm_only.wav'), y_uncond[i].flatten(), 16000)
         sf.write(os.path.join(batch_dir, f'{i}_gt.wav'), y_gt[i].flatten(), 16000)
+        np.savez(
+            os.path.join(batch_dir, f'{i}_cond.npz'),
+            bpm=bpm[i].detach().cpu().numpy(),
+            rms=rms[i].detach().cpu().numpy(),
+            density=density[i].detach().cpu().numpy(),
+            zcr=zcr[i].detach().cpu().numpy(),
+            flatness=flatness[i].detach().cpu().numpy(),
+            chroma=chroma[i].detach().cpu().numpy(),
+            style=style[i].detach().cpu().numpy(),
+        )
 
 # logging
 if wandb_log and master_process:
