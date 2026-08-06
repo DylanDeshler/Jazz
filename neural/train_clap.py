@@ -41,7 +41,7 @@ from clap import CLAP as net
 out_dir = 'clap_jazz_lit'
 eval_interval = 2000
 log_interval = 100
-eval_iters = 200
+eval_iters = 10
 eval_only = False
 always_save_checkpoint = True
 init_from = 'scratch'  # 'scratch' or 'resume'
