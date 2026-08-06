@@ -1941,6 +1941,11 @@ class MetaConditionalModernDiTV2(nn.Module):
         if self.use_null_token:
             self.null_style = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
             self.null_bpm = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
+            self.null_chroma = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
+            self.null_rms = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
+            self.null_density = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
+            self.null_zcr = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
+            self.null_flatness = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
         
         self.t_block = nn.Sequential(
             nn.SiLU(),
@@ -2079,11 +2084,16 @@ class MetaConditionalModernDiTV2(nn.Module):
             null_tokens = {
                 'style': self.null_style, 
                 'bpm': self.null_bpm, 
-                'chroma': torch.zeros_like(chroma[0, 0]), 
-                'rms': torch.zeros_like(rms[0, 0]), 
-                'density': torch.zeros_like(density[0, 0]), 
-                'zcr': torch.zeros_like(zcr[0, 0]),
-                'flatness': torch.zeros_like(flatness[0, 0]),
+                'chroma': self.null_chroma,
+                'rms': self.null_rms,
+                'density': self.null_density,
+                'zcr': self.null_zcr,
+                'flatness': self.null_flatness,
+                # 'chroma': torch.zeros_like(chroma[0, 0]), # retrain with learned null tokens
+                # 'rms': torch.zeros_like(rms[0, 0]), 
+                # 'density': torch.zeros_like(density[0, 0]), 
+                # 'zcr': torch.zeros_like(zcr[0, 0]),
+                # 'flatness': torch.zeros_like(flatness[0, 0]),
             }
             if self.stage == 1:
                 signals = multi_token_drop(
