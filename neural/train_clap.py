@@ -526,6 +526,7 @@ t0 = time.time()
 local_iter_num = 0
 raw_model = model.module if ddp else model
 running_mfu = -1.0
+running_dt = -1.0  # EMA of step time (ms), smooths out page-cache I/O jitter
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, betas=(beta1, beta2), weight_decay=weight_decay)
 if init_from == 'resume':
@@ -593,9 +594,14 @@ while True:
     t1 = time.time()
     dt = t1 - t0
     t0 = t1
+    # rolling (EMA) step time; skip the first few iters so compile / warmup
+    # don't skew the average.
+    if local_iter_num >= 5:
+        running_dt = dt if running_dt == -1.0 else 0.9 * running_dt + 0.1 * dt
     if iter_num % log_interval == 0 and master_process:
         lossf = loss.item() * gradient_accumulation_steps
-        print(f"iter {iter_num}: loss {lossf:.4f}, acc {res['acc'].item():.3f}, time {dt*1000:.2f}ms")
+        avg_ms = (running_dt if running_dt > 0 else dt) * 1000
+        print(f"iter {iter_num}: loss {lossf:.4f}, acc {res['acc'].item():.3f}, time {avg_ms:.2f}ms (avg)")
     iter_num += 1
     local_iter_num += 1
 
