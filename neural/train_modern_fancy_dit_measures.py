@@ -210,7 +210,7 @@ class EMAModel:
 
 if init_from == 'scratch':
     if stage == 2:
-        stage1_ckpt = torch.load(os.path.join(out_dir.replace('Stage2', 'Stage1'), 'ckpt.pt'), map_location=device)
+        stage1_ckpt = torch.load(os.path.join(out_dir.replace('Stage2', 'Stage1').replace('_nulltokens', ''), 'ckpt.pt'), map_location=device)
 
         model = net(**model_args)
         state_dict = stage1_ckpt['model']
