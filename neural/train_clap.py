@@ -51,7 +51,7 @@ wandb_project = 'clap_jazz'
 wandb_run_name = str(time.time())
 # data
 gradient_accumulation_steps = 1
-batch_size = 512          # large batches matter for contrastive learning
+batch_size = 256          # large batches matter for contrastive learning
 n_measures = 64           # audio measures pooled per song (temporal context)
 style_dim = 128           # contrast.py feature dim
 text_dim = 1024           # T5-v1.1-xxl hidden dim
