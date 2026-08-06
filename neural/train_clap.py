@@ -286,7 +286,7 @@ def estimate_loss():
     for split in ['train', 'val']:
         losses = torch.zeros(eval_iters)
         accs = torch.zeros(eval_iters)
-        for k in range(eval_iters):
+        for k in tqdm(range(eval_iters), desc=f'Estimatiing loss for {split}'):
             batch = get_batch(split, batch_size=batch_size)
             with ctx:
                 res = model(*batch)
