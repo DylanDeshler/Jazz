@@ -99,7 +99,7 @@ class AttentionPool(nn.Module):
 class Tower(nn.Module):
     """in_proj -> transformer -> attention pool -> projection -> L2 normalize."""
 
-    def __init__(self, in_dim, hidden_size, proj_dim, depth, num_heads, mlp_ratio=4.0, use_rope=True):
+    def __init__(self, in_dim, hidden_size, proj_dim, depth, num_heads, mlp_ratio=4.0, use_rope=True, max_seq_len=512):
         super().__init__()
         self.use_rope = use_rope
         self.head_dim = hidden_size // num_heads
@@ -108,11 +108,17 @@ class Tower(nn.Module):
         self.pool = AttentionPool(hidden_size, num_heads)
         self.out_norm = RMSNorm(hidden_size)
         self.out_proj = nn.Linear(hidden_size, proj_dim, bias=False)
+        # Precompute the RoPE table ONCE as a (real-valued) buffer. This runs
+        # torch.polar at init time in eager mode, keeping complex ops out of the
+        # torch.compile graph (Inductor can't codegen complex), and avoids
+        # rebuilding the table + host->device copy on every forward pass.
+        if use_rope:
+            self.register_buffer('freqs_cis', precompute_freqs_cis(self.head_dim, max_seq_len), persistent=False)
 
     def forward(self, x, key_padding=None):
         B, N, C = x.shape
         x = self.in_proj(x)
-        freqs_cis = precompute_freqs_cis(self.head_dim, N).to(x.device) if self.use_rope else None
+        freqs_cis = self.freqs_cis[:N] if self.use_rope else None
         attn_mask = key_padding[:, None, None, :] if key_padding is not None else None
         for blk in self.blocks:
             x = blk(x, freqs_cis=freqs_cis, attn_mask=attn_mask)

@@ -502,7 +502,6 @@ def save_retrieval_samples(step, split='val', n_show=8, pool=512):
     with open(os.path.join(batch_dir, 'retrieval.txt'), 'w') as f:
         f.write('\n'.join(lines) + '\n')
     model.train()
-    model.train()
 
 
 def get_lr(it):
@@ -549,6 +548,12 @@ while True:
               f"val t2a R@1 {losses['val/t2a/R@1']:.3f} R@10 {losses['val/t2a/R@10']:.3f} "
               f"medrank {losses['val/t2a/medrank']:.0f} | gap {losses['val/sim_gap']:.3f} "
               f"erank(a/t) {losses['val/erank_audio']:.0f}/{losses['val/erank_text']:.0f}")
+        tier_str = ' '.join(
+            f"{tname[:3]} R@1 {losses[f'val/R@1_{tname}']:.3f} R@10 {losses[f'val/R@10_{tname}']:.3f}"
+            for tname in ('short', 'medium', 'long') if f'val/R@1_{tname}' in losses
+        )
+        if tier_str:
+            print(f"    per-tier t2a: {tier_str}")
         if wandb_log:
             wandb.log({'iter': iter_num, 'lr': lr, 'tokens': tokens_trained,
                        'temperature': torch.exp(raw_model.log_temperature).clamp(max=100).item(),
