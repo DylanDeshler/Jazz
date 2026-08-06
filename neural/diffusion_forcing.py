@@ -938,26 +938,37 @@ def token_drop(labels, null_token, training, p_uncond=0.1, p_full=0.3, p_ind_low
 #     return output_signals
 
 def multi_token_drop(
-    signals: dict, 
-    null_tokens: dict, 
-    training: bool, 
-    p_joint_uncond=0.10, 
-    p_joint_full=0.40, 
+    signals: dict,
+    null_tokens: dict,
+    training: bool,
+    p_joint_uncond=0.10,
+    p_joint_full=0.40,
     p_one_hot=0.30,
-    p_ind_uncond=0.20, 
-    p_ind_low=0.05, 
-    p_ind_high=0.30
+    p_ind_uncond=0.20,
+    p_ind_low=0.05,
+    p_ind_high=0.30,
+    return_masks=False,
 ):
     """
     Applies hierarchical CFG dropping optimized for Compositional CFG inference.
-    
+
     Hierarchy (Batched Partitioning):
     1. Joint Uncond (10%): Drops ALL signals.
     2. Joint Full (40%): Keeps ALL signals pristine.
     3. One-Hot Mode (30%): Keeps EXACTLY 1 signal, drops the rest.
     4. Independent Mode (20%): Binomial dropping per signal, plus partial sequence drops.
+
+    If return_masks=True, also returns a dict of per-signal boolean drop masks of
+    shape (B, T) (True = the token was dropped/nulled). Useful for building presence
+    channels for signals whose null value is not otherwise distinguishable.
     """
     if not training:
+        if return_masks:
+            masks = {
+                k: torch.zeros(v.shape[:2], dtype=torch.bool, device=v.device)
+                for k, v in signals.items()
+            }
+            return signals, masks
         return signals
     
     first_key = list(signals.keys())[0]
@@ -983,7 +994,8 @@ def multi_token_drop(
     one_hot_keep_idx = torch.randint(0, num_signals, (B,), device=device)
     
     output_signals = {}
-    
+    drop_masks = {}
+
     # --- PROCESS EACH SIGNAL ---
     for idx, (key, labels) in enumerate(signals.items()):
         null_t = null_tokens[key].to(labels.dtype).to(device)
@@ -1020,15 +1032,20 @@ def multi_token_drop(
         # --- COMBINE MASKS & APPLY ---
         # Broadcast the 1D full drop mask to 2D, then combine with token drops: Shape (B, T)
         final_mask = full_drop_mask.unsqueeze(1) | mask_token_drop
-        
+
+        # Keep the (B, T) boolean drop mask before we align dims for torch.where
+        drop_masks[key] = final_mask
+
         # Safely align dimensions for torch.where
         # Expands (B, T) into (B, T, 1) or (B, T, 1, 1) based on target label shape
         while final_mask.ndim < labels.ndim:
             final_mask = final_mask.unsqueeze(-1)
-            
+
         # Swap the dropped tokens for the learned null vectors
         output_signals[key] = torch.where(final_mask, null_t, labels)
-        
+
+    if return_masks:
+        return output_signals, drop_masks
     return output_signals
 
 class ConvBlock1d(nn.Module):
@@ -1042,12 +1059,16 @@ class ConvBlock1d(nn.Module):
         dilation: int = 1,
         num_groups: int = 8,
         bias: bool = True,
+        use_norm: bool = True,
     ) -> None:
         super().__init__()
 
+        # Composer does not normalize raw conditioning before injecting it; when
+        # use_norm=False we skip GroupNorm so channels (notably the binary presence
+        # channels) aren't mixed together across the group.
         self.groupnorm = nn.GroupNorm(
             num_groups=num_groups, num_channels=in_channels
-        )
+        ) if use_norm else nn.Identity()
         self.activation = nn.SiLU()
         self.project = nn.Conv1d(
             in_channels=in_channels,
@@ -1078,6 +1099,7 @@ class ResnetBlock1d(nn.Module):
         dilation: int = 1,
         num_groups: int = 8,
         bias: bool = True,
+        use_norm: bool = True,
     ) -> None:
         super().__init__()
 
@@ -1085,10 +1107,11 @@ class ResnetBlock1d(nn.Module):
             in_channels=in_channels,
             out_channels=out_channels,
             kernel_size=kernel_size,
-            stride=stride, 
+            stride=stride,
             dilation=dilation,
             num_groups=num_groups,
-            bias=bias
+            bias=bias,
+            use_norm=use_norm,
         )
 
         self.block2 = ConvBlock1d(
@@ -1098,7 +1121,8 @@ class ResnetBlock1d(nn.Module):
             stride=1,
             dilation=dilation,
             num_groups=num_groups,
-            bias=BpmRmsChromaStyleConditionalModernDiT_smedium
+            bias=bias,
+            use_norm=use_norm,
         )
 
         if in_channels != out_channels or stride != 1:
@@ -1124,16 +1148,18 @@ class Patcher(torch.nn.Module):
         out_channels: int,
         patch_size: int = 2,
         bias: bool = True,
+        use_norm: bool = True,
     ):
         super().__init__()
         self.patch_size = patch_size
-        
+
         self.block = ResnetBlock1d(
             in_channels=in_channels,
             out_channels=out_channels,
             stride=patch_size,
             num_groups=1,
-            bias=bias
+            bias=bias,
+            use_norm=use_norm,
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -1934,18 +1960,15 @@ class MetaConditionalModernDiTV2(nn.Module):
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
         self.x_embedder = Patcher(in_channels, hidden_size, patch_size=patch_size, bias=True)
-        self.local_embedder = Patcher(16, hidden_size, patch_size=patch_size, bias=True)
+        # 16 value channels (12 chroma + rms + density + zcr + flatness) plus 5
+        # presence-mask channels (1 shared for chroma, 1 each for the 4 scalars).
+        self.local_embedder = Patcher(16 + 5, hidden_size, patch_size=1, bias=True, use_norm=False)
         self.style_embedder = nn.Linear(style_dim, hidden_size, bias=True)
         self.bpm_embedder = nn.Embedding(350, hidden_size)
-        
+
         if self.use_null_token:
             self.null_style = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
             self.null_bpm = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
-            self.null_chroma = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
-            self.null_rms = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
-            self.null_density = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
-            self.null_zcr = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
-            self.null_flatness = nn.Parameter(torch.randn(hidden_size) / hidden_size ** 0.5)
         
         self.t_block = nn.Sequential(
             nn.SiLU(),
@@ -2071,7 +2094,14 @@ class MetaConditionalModernDiTV2(nn.Module):
         style = self.style_embedder(style)
         bpm = self.bpm_embedder(torch.clamp(torch.round(bpm), min=0, max=349).long())
         
+        # local (per-measure acoustic) signals: dropped to their normalized mean (0),
+        # with a presence-mask channel carrying the "absent" information instead.
+        local_keys = ['chroma', 'rms', 'density', 'zcr', 'flatness']
+        # (B, T) boolean drop masks, default = nothing dropped
+        local_drop = {k: torch.zeros(B, T, dtype=torch.bool, device=x.device) for k in local_keys}
+
         if self.use_null_token:
+            scalar_zero = torch.tensor(0.0, device=x.device, dtype=x.dtype)
             signals = {
                 'style': style,
                 'chroma': chroma,
@@ -2082,45 +2112,44 @@ class MetaConditionalModernDiTV2(nn.Module):
                 'flatness': flatness,
             }
             null_tokens = {
-                'style': self.null_style, 
-                'bpm': self.null_bpm, 
-                'chroma': self.null_chroma,
-                'rms': self.null_rms,
-                'density': self.null_density,
-                'zcr': self.null_zcr,
-                'flatness': self.null_flatness,
-                # 'chroma': torch.zeros_like(chroma[0, 0]), # retrain with learned null tokens
-                # 'rms': torch.zeros_like(rms[0, 0]), 
-                # 'density': torch.zeros_like(density[0, 0]), 
-                # 'zcr': torch.zeros_like(zcr[0, 0]),
-                # 'flatness': torch.zeros_like(flatness[0, 0]),
+                'style': self.null_style,
+                'bpm': self.null_bpm,
+                # local signals drop to their normalized mean; the presence channel
+                # (built below) is what encodes absence, so the null value is just 0.
+                'chroma': scalar_zero,
+                'rms': scalar_zero,
+                'density': scalar_zero,
+                'zcr': scalar_zero,
+                'flatness': scalar_zero,
             }
             if self.stage == 1:
-                signals = multi_token_drop(
-                    signals, 
-                    null_tokens, 
+                signals, drop_masks = multi_token_drop(
+                    signals,
+                    null_tokens,
                     self.training,
-                    p_joint_uncond=0.1, 
+                    p_joint_uncond=0.1,
                     p_joint_full=0.9,
-                    p_one_hot=0, 
-                    p_ind_uncond=0, 
-                    p_ind_low=0, 
-                    p_ind_high=0
+                    p_one_hot=0,
+                    p_ind_uncond=0,
+                    p_ind_low=0,
+                    p_ind_high=0,
+                    return_masks=True,
                 )
             elif self.stage == 2:
                 # probabilities taken from Composer https://arxiv.org/pdf/2302.09778
-                signals = multi_token_drop(
-                    signals, 
-                    null_tokens, 
+                signals, drop_masks = multi_token_drop(
+                    signals,
+                    null_tokens,
                     self.training,
-                    p_joint_uncond=0.1, 
+                    p_joint_uncond=0.1,
                     p_joint_full=0.1,
-                    p_one_hot=0, 
-                    p_ind_uncond=0.5, 
-                    p_ind_low=0, 
-                    p_ind_high=0
+                    p_one_hot=0,
+                    p_ind_uncond=0.5,
+                    p_ind_low=0,
+                    p_ind_high=0,
+                    return_masks=True,
                 )
-            
+
             style = signals['style']
             chroma = signals['chroma']
             bpm = signals['bpm']
@@ -2128,29 +2157,49 @@ class MetaConditionalModernDiTV2(nn.Module):
             density = signals['density']
             zcr = signals['zcr']
             flatness = signals['flatness']
-            
+
+            for k in local_keys:
+                local_drop[k] = drop_masks[k]
+
             if unconditional_mask is not None:
-                scalar_zero = torch.tensor(0.0, device=x.device, dtype=x.dtype)
-                
-                style = torch.where(unconditional_mask['style'], null_tokens['style'], style)
-                bpm = torch.where(unconditional_mask['bpm'], null_tokens['bpm'], bpm)
-                
+                # style/bpm live in embedding space -> swap in learned null vectors
+                style = torch.where(unconditional_mask['style'], self.null_style, style)
+                bpm = torch.where(unconditional_mask['bpm'], self.null_bpm, bpm)
+
+                # local signals -> zero the value AND fold the request into the drop
+                # mask so the presence channel is turned off too.
                 chroma = torch.where(unconditional_mask['chroma'], scalar_zero, chroma)
-                rms = torch.where(unconditional_mask['rms'].squeeze(), scalar_zero, rms)
-                density = torch.where(unconditional_mask['density'].squeeze(), scalar_zero, density)
-                zcr = torch.where(unconditional_mask['zcr'].squeeze(), scalar_zero, zcr)
-                flatness = torch.where(unconditional_mask['flatness'].squeeze(), scalar_zero, flatness)
-        
+                rms = torch.where(unconditional_mask['rms'].squeeze(-1), scalar_zero, rms)
+                density = torch.where(unconditional_mask['density'].squeeze(-1), scalar_zero, density)
+                zcr = torch.where(unconditional_mask['zcr'].squeeze(-1), scalar_zero, zcr)
+                flatness = torch.where(unconditional_mask['flatness'].squeeze(-1), scalar_zero, flatness)
+
+                for k in local_keys:
+                    local_drop[k] = local_drop[k] | unconditional_mask[k].squeeze(-1)
+
         x = rearrange(x, 'b t n c -> (b t) c n')
         x = self.x_embedder(x)
-        
+        x = rearrange(x, '(b t) c n -> b t n c', b=B, t=T)
+
         if self.stage == 2:
-            c = torch.cat([chroma, rms.unsqueeze(-1), density.unsqueeze(-1), zcr.unsqueeze(-1), flatness.unsqueeze(-1)], dim=-1)
-            c = c.unsqueeze(2).repeat(1, 1, N, 1)
-            c = rearrange(c, 'b t n c -> (b t) c n')
+            # presence channels: 1 where the signal is present, 0 where dropped.
+            # chroma shares a single mask; each scalar gets its own.
+            presence = torch.stack([
+                (~local_drop['chroma']).to(x.dtype),
+                (~local_drop['rms']).to(x.dtype),
+                (~local_drop['density']).to(x.dtype),
+                (~local_drop['zcr']).to(x.dtype),
+                (~local_drop['flatness']).to(x.dtype),
+            ], dim=-1)  # (B, T, 5)
+            c = torch.cat([chroma, rms.unsqueeze(-1), density.unsqueeze(-1), zcr.unsqueeze(-1), flatness.unsqueeze(-1), presence], dim=-1)  # (B, T, 21)
+            # convolve over the measure axis T (stride 1, kernel 3) so each measure's
+            # descriptors smear into its neighbours, then broadcast the per-measure
+            # embedding across the N within-measure latent positions.
+            c = rearrange(c, 'b t f -> b f t')
             c = self.local_embedder(c)
-            x = x + c
-        x = rearrange(x, '(b t) c n -> b (t n) c', b=B, t=T)
+            c = rearrange(c, 'b h t -> b t h')
+            x = x + c.unsqueeze(2)
+        x = rearrange(x, 'b t n c -> b (t n) c', b=B, t=T)
         
         t = t + style + bpm
         t0 = self.t_block(t)
