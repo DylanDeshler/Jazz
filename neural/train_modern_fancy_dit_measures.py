@@ -56,8 +56,8 @@ wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
 dataset = ''
-gradient_accumulation_steps = 2
-batch_size = 64
+gradient_accumulation_steps = 4
+batch_size = 32
 TARGET_SIG = 4
 TARGET_BPM = 60 * TARGET_SIG / (24576 / 16000)
 # model
@@ -560,7 +560,7 @@ def save_samples(step):
 if wandb_log and master_process:
     import wandb
     if init_from == 'resume':
-        wandb.init(project=wandb_project, name=wandb_run_name, id='ows76kwp', resume='must', config=config)
+        wandb.init(project=wandb_project, name=wandb_run_name, id='mbmpguwm', resume='must', config=config)
     else:
         wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
