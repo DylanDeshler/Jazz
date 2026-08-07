@@ -227,11 +227,9 @@ def get_batch(split='train', batch_size=batch_size, return_start=False):
     bounds, song_ids, tiers = map_rows(start, split, batch_size)
 
     # --- text: contiguous slab of shuffled rows -> [B, 256, 1024] ---
-    text = torch.from_numpy(text_mm[start:start + batch_size].astype(np.float32))
-    # T5 padded to max_length with zeros; valid token == any nonzero feature
-    text_mask = (text.abs().sum(-1) > 0)
-    # guard: never fully-empty (would nan the pooling softmax)
-    text_mask[:, 0] = True
+    # Keep fp16 and transfer as-is: autocast casts it for the in_proj matmul, so a
+    # CPU fp32 upcast just doubles the copied bytes (536MB vs 268MB) and burns CPU.
+    text = torch.from_numpy(np.ascontiguousarray(text_mm[start:start + batch_size]))
 
     # --- audio: one random raw-wav crop per song (full audio tower) ---
     # song_ids are song indices into song_paths_list; resolve to file paths and
@@ -244,7 +242,10 @@ def get_batch(split='train', batch_size=batch_size, return_start=False):
     tiers = torch.from_numpy(tiers)
 
     text = text.pin_memory().to(device, non_blocking=True)
-    text_mask = text_mask.pin_memory().to(device, non_blocking=True)
+    # mask on-device: abs().sum over 134M elems is ~free on GPU, costly on CPU.
+    # T5 padded to max_length with zeros; valid token == any nonzero feature.
+    text_mask = (text.abs().sum(-1) > 0)
+    text_mask[:, 0] = True   # guard: never fully-empty (would nan pooling softmax)
     song_ids = song_ids.pin_memory().to(device, non_blocking=True)
     tiers = tiers.pin_memory().to(device, non_blocking=True)
     if return_start:
