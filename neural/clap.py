@@ -151,26 +151,14 @@ class Block(nn.Module):
         return x
 
 
-class AttentionPool(nn.Module):
-    """Pool a variable-length sequence into a single vector via a learned query."""
-
-    def __init__(self, hidden_size, num_heads):
-        super().__init__()
-        self.norm = RMSNorm(hidden_size)
-        self.query = nn.Parameter(torch.zeros(1, 1, hidden_size))
-        nn.init.normal_(self.query, std=0.02)
-        self.pool = CrossAttention(hidden_size, num_heads, qkv_bias=False, proj_bias=False)
-
-    def forward(self, x, key_padding=None):
-        # x: [B, N, C]; key_padding: [B, N] bool, True == valid token
-        x = self.norm(x)
-        q = self.query.expand(x.shape[0], -1, -1)
-        attn_mask = key_padding[:, None, None, :] if key_padding is not None else None  # True == attend
-        return self.pool(q, x, attn_mask=attn_mask).squeeze(1)
-
-
 class TextTower(nn.Module):
-    """in_proj -> transformer -> attention pool -> projection -> L2 normalize."""
+    """in_proj -> transformer -> pool -> mlp -> fc -> L2 normalize.
+
+    The output head (pool_norm/pool/mlp_norm/mlp/fc_norm/fc) mirrors AudioTower's
+    exactly so both modalities share the same pooling+projection structure; the
+    only difference is that text carries a key-padding mask (T5 zero-padding),
+    which is applied to both the mean query and the cross-attention keys.
+    """
 
     def __init__(self, in_dim, hidden_size, proj_dim, depth, num_heads, mlp_ratio=4.0,
                  use_rope=True, max_seq_len=512, drop=0.0):
@@ -179,9 +167,13 @@ class TextTower(nn.Module):
         self.head_dim = hidden_size // num_heads
         self.in_proj = nn.Linear(in_dim, hidden_size, bias=False)
         self.blocks = nn.ModuleList([Block(hidden_size, num_heads, mlp_ratio, drop=drop) for _ in range(depth)])
-        self.pool = AttentionPool(hidden_size, num_heads)
-        self.out_norm = RMSNorm(hidden_size)
-        self.out_proj = nn.Linear(hidden_size, proj_dim, bias=False)
+        # output head -- identical structure to AudioTower
+        self.pool_norm = RMSNorm(hidden_size)
+        self.pool = CrossAttention(hidden_size, num_heads, qkv_bias=False, proj_bias=False)
+        self.mlp_norm = RMSNorm(hidden_size)
+        self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), bias=False)
+        self.fc_norm = RMSNorm(hidden_size)
+        self.fc = nn.Linear(hidden_size, proj_dim, bias=False)
         if use_rope:
             self.register_buffer('freqs_cis', precompute_freqs_cis(self.head_dim, max_seq_len), persistent=False)
 
@@ -192,9 +184,19 @@ class TextTower(nn.Module):
         attn_mask = key_padding[:, None, None, :] if key_padding is not None else None
         for blk in self.blocks:
             x = blk(x, freqs_cis=freqs_cis, attn_mask=attn_mask)
-        x = self.pool(x, key_padding=key_padding)
-        x = self.out_norm(x)
-        x = self.out_proj(x)
+
+        x = self.pool_norm(x)
+        # masked mean query over valid tokens (matches AudioTower's x.mean(1))
+        if key_padding is not None:
+            m = key_padding[:, :, None].to(x.dtype)          # [B, N, 1], 1 == valid
+            q = (x * m).sum(1, keepdims=True) / m.sum(1, keepdims=True).clamp(min=1.0)
+        else:
+            q = x.mean(1, keepdims=True)
+        x = self.pool(q, x, attn_mask=attn_mask).squeeze(1)
+        x = self.mlp_norm(x)
+        x = self.mlp(x)
+        x = self.fc_norm(x)
+        x = self.fc(x)
         return F.normalize(x, dim=-1)
 
 
