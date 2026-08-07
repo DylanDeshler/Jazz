@@ -238,10 +238,24 @@ class AudioTower(nn.Module):
         self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), bias=False)
         self.fc_norm = RMSNorm(hidden_size)
         self.fc = nn.Linear(hidden_size, proj_dim, bias=False)  # -> shared CLAP space
+        self._freqs_cache = {}
 
     @torch.compiler.disable
     def _compute_mel(self, x):
         return self.to_mel(x)
+
+    @torch.compiler.disable
+    def _get_freqs_cis(self, H, W, device):
+        # mel shape is fixed (n_samples constant) so this is built once, cached,
+        # and reused -- avoids rebuilding a complex tensor + H2D copy every forward.
+        key = (H, W, str(device))
+        fc = self._freqs_cache.get(key)
+        if fc is None:
+            fc = precompute_freqs_cis_2d(
+                dim=self.head_dim, height=H // self.patch_size, width=W // self.patch_size
+            ).to(device)
+            self._freqs_cache[key] = fc
+        return fc
 
     def forward(self, x):
         # x: raw waveform [B, 1, T]
@@ -258,9 +272,7 @@ class AudioTower(nn.Module):
         x = rearrange(x, 'b c (h p1) (w p2) -> b (h w) (c p1 p2)', p1=self.patch_size, p2=self.patch_size)
         x = self.x_embedder(x)
 
-        freqs_cis = precompute_freqs_cis_2d(
-            dim=self.head_dim, height=H // self.patch_size, width=W // self.patch_size
-        ).to(x.device)
+        freqs_cis = self._get_freqs_cis(H, W, x.device)
         for block in self.blocks:
             x = block(x, freqs_cis=freqs_cis)
 
