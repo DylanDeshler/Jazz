@@ -566,7 +566,11 @@ if init_from == 'resume':
 checkpoint = None
 
 while True:
-    lr = get_lr(iter_num) if decay_lr else learning_rate
+    # always go through get_lr: warmup must run regardless of decay_lr, else the
+    # contrastive temperature/projection see full LR at step 0 and collapse to
+    # uniform logits (loss pinned at ln(batch_size)). get_lr already returns a
+    # constant post-warmup LR when decay_lr is False.
+    lr = get_lr(iter_num)
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
