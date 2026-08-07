@@ -277,7 +277,7 @@ class AudioTower(nn.Module):
 class CLAP(nn.Module):
     def __init__(
         self,
-        audio_cfg,                 # audio-specific front-end args (mel/patch/depth); see below
+        audio_cfg,                 # audio-specific front-end args (mel/patch); see below
         text_dim=1024,
         # shared transformer size -- BOTH towers use these (only depth differs)
         hidden_size=768,
