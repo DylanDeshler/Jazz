@@ -4,35 +4,108 @@ CLAP-style audio<->text contrastive model for the jazz dataset.
 Design notes
 ------------
 Both modalities are aligned in a shared embedding space via a symmetric InfoNCE
-(CLIP) loss. Unlike vanilla CLAP we do NOT reuse any pretrained CLAP weights
-(our data - 1800s-1900s jazz - is heavily OOD for AudioSet-trained encoders).
-Instead both "towers" consume *already-extracted, frozen* features:
+(CLIP) loss. The TEXT tower consumes *frozen precomputed* T5-v1.1-xxl token
+features (small trainable head). The AUDIO tower is a FULL raw-audio encoder
+trained end-to-end on raw waveforms.
 
-  * audio: per-measure 128-d vectors from the in-domain `contrast.py` encoder
-           (`forward_features`), i.e. `..._style_*.bin` memmaps. Shape [B, M, 128].
-  * text:  T5-v1.1-xxl encoder `last_hidden_state` token sequences, i.e. the
-           `caption_embeddings_*` memmaps. Shape [B, 256, 1024].
+Why raw audio (and not the frozen contrast per-measure style vectors)?
+  The contrast.py vectors were trained for *instance discrimination* -- they are
+  near-unique per-song fingerprints. Aligning those to per-song captions lets
+  CLAP memorize a fingerprint->caption lookup that cannot generalize to val
+  songs (severe overfitting). Training a raw-audio tower restores the crop +
+  SpecAugment stochasticity that made the original contrastive model
+  un-overfittable: the only crop-invariant signal that also predicts the caption
+  is song-level *style*, which is exactly what we want the embedding to encode.
 
-Each tower is a small trainable transformer (1D RoPE) + learned attention pool +
-projection into the shared space. This is "locked-tuning" (LiT) taken to its
-cheap limit: frozen precomputed towers, trainable heads only.
+Everything messy (the raw-audio backbone, its non-detaching embedding path, the
+DDP gradient-preserving all-gather, and a raw-wav batch loader) lives here so
+contrast.py / train_contrast.py stay untouched. We only *import* primitives from
+contrast.py; we never modify it.
 
-To upgrade to a fine-tunable raw-audio tower later, swap `audio_tower` for a
-wrapper around `contrast.Transformer` (feeding raw wav) - the loss / training
-loop are unchanged.
+Audio tower init (two schemes, see `CLAP(audio_init=...)`):
+  * 'scratch'  : random init from `audio_cfg`.
+  * 'contrast' : reuse the pretrained contrast.py backbone (mel/patch/blocks/
+                 pool/mlp), re-initializing only the final projection to
+                 `proj_dim`. Call `model.load_audio_backbone(ckpt)` after build.
+
+Towers: (audio) mel -> patch -> 2D-RoPE transformer -> attn pool -> proj -> L2
+        (text)  in_proj -> 1D-RoPE transformer -> attn pool -> proj -> L2
 """
 
+import os
+import glob as _glob
 import math
+import random
 from typing import Optional
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.distributed as dist
 
 # reuse the primitives from the contrastive model so both codebases stay in sync
-from contrast import RMSNorm, SwiGLUMlp, CrossAttention, precompute_freqs_cis, apply_rotary_emb
+# (importing does NOT modify contrast.py)
+from contrast import (
+    RMSNorm, SwiGLUMlp, CrossAttention,
+    SelfAttentionBlock, ToMel, SpecAugment,
+    precompute_freqs_cis, apply_rotary_emb, precompute_freqs_cis_2d,
+)
+
+try:
+    import soundfile as sf
+except Exception:  # pragma: no cover - only needed for the raw loader
+    sf = None
+from einops import rearrange
 
 
+# =============================================================================
+# DDP: gradient-preserving all-gather (SimCLR/MoCo-v3 style)
+# =============================================================================
+class GatherLayer(torch.autograd.Function):
+    """all_gather that lets gradients flow back to the local shard.
+
+    Plain dist.all_gather detaches the gathered copies; here backward sums the
+    per-rank grads and returns this rank's slice, so contrastive logits computed
+    over the *global* batch still train the *local* samples correctly.
+    """
+
+    @staticmethod
+    def forward(ctx, x):
+        out = [torch.zeros_like(x) for _ in range(dist.get_world_size())]
+        dist.all_gather(out, x.contiguous())
+        return tuple(out)
+
+    @staticmethod
+    def backward(ctx, *grads):
+        g = torch.stack(grads, dim=0)
+        dist.all_reduce(g)                      # sum grads across ranks
+        return g[dist.get_rank()]
+
+
+def _ddp_active():
+    return dist.is_available() and dist.is_initialized() and dist.get_world_size() > 1
+
+
+def all_gather_grad(x):
+    """Gather `x` across ranks with grad; returns [world*B, ...]. No-op if 1 rank."""
+    if not _ddp_active():
+        return x
+    return torch.cat(GatherLayer.apply(x), dim=0)
+
+
+def all_gather_nograd(x):
+    """Gather an int/label tensor across ranks (no grad). No-op if 1 rank."""
+    if not _ddp_active():
+        return x
+    out = [torch.zeros_like(x) for _ in range(dist.get_world_size())]
+    dist.all_gather(out, x.contiguous())
+    return torch.cat(out, dim=0)
+
+
+# =============================================================================
+# TEXT tower (unchanged): small trainable head over frozen T5 token features
+# =============================================================================
 class SelfAttention1D(nn.Module):
     """Self-attention with 1D RoPE and optional key-padding mask."""
 
@@ -65,10 +138,10 @@ class SelfAttention1D(nn.Module):
 
 
 class Block(nn.Module):
-    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0):
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, drop=0.0):
         super().__init__()
         self.norm1 = RMSNorm(hidden_size)
-        self.attn = SelfAttention1D(hidden_size, num_heads=num_heads)
+        self.attn = SelfAttention1D(hidden_size, num_heads=num_heads, attn_drop=drop, proj_drop=drop)
         self.norm2 = RMSNorm(hidden_size)
         self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), bias=False)
 
@@ -96,22 +169,19 @@ class AttentionPool(nn.Module):
         return self.pool(q, x, attn_mask=attn_mask).squeeze(1)
 
 
-class Tower(nn.Module):
+class TextTower(nn.Module):
     """in_proj -> transformer -> attention pool -> projection -> L2 normalize."""
 
-    def __init__(self, in_dim, hidden_size, proj_dim, depth, num_heads, mlp_ratio=4.0, use_rope=True, max_seq_len=512):
+    def __init__(self, in_dim, hidden_size, proj_dim, depth, num_heads, mlp_ratio=4.0,
+                 use_rope=True, max_seq_len=512, drop=0.0):
         super().__init__()
         self.use_rope = use_rope
         self.head_dim = hidden_size // num_heads
         self.in_proj = nn.Linear(in_dim, hidden_size, bias=False)
-        self.blocks = nn.ModuleList([Block(hidden_size, num_heads, mlp_ratio) for _ in range(depth)])
+        self.blocks = nn.ModuleList([Block(hidden_size, num_heads, mlp_ratio, drop=drop) for _ in range(depth)])
         self.pool = AttentionPool(hidden_size, num_heads)
         self.out_norm = RMSNorm(hidden_size)
         self.out_proj = nn.Linear(hidden_size, proj_dim, bias=False)
-        # Precompute the RoPE table ONCE as a (real-valued) buffer. This runs
-        # torch.polar at init time in eager mode, keeping complex ops out of the
-        # torch.compile graph (Inductor can't codegen complex), and avoids
-        # rebuilding the table + host->device copy on every forward pass.
         if use_rope:
             self.register_buffer('freqs_cis', precompute_freqs_cis(self.head_dim, max_seq_len), persistent=False)
 
@@ -128,29 +198,121 @@ class Tower(nn.Module):
         return F.normalize(x, dim=-1)
 
 
+# =============================================================================
+# AUDIO tower: full raw-waveform encoder (mirrors contrast.Transformer backbone
+# param names so a pretrained contrast checkpoint loads cleanly)
+# =============================================================================
+class AudioTower(nn.Module):
+    def __init__(self,
+                 proj_dim,
+                 in_channels=1,
+                 hidden_size=768,
+                 patch_size=16,
+                 sample_rate=16000,
+                 n_fft=1024,
+                 hop_length=512,
+                 n_mels=192,
+                 time_length=32,
+                 frequency_length=12,
+                 num_heads=12,
+                 depth=12,
+                 mlp_ratio=4.0):
+        super().__init__()
+        self.patch_size = patch_size
+        self.head_dim = hidden_size // num_heads
+
+        # NOTE: names match contrast.Transformer so load_state_dict can reuse a
+        # pretrained backbone (everything except `fc`, which changes to proj_dim).
+        self.to_mel = ToMel(sample_rate, n_fft, hop_length, n_mels)
+        self.augment = SpecAugment(time_length, frequency_length)
+        self.x_embedder = nn.Linear(in_channels * patch_size * patch_size, hidden_size, bias=False)
+        self.blocks = nn.ModuleList([
+            SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+        ])
+        self.pool_norm = RMSNorm(hidden_size)
+        self.pool = CrossAttention(hidden_size, num_heads, qkv_bias=False, proj_bias=False)
+        self.mlp_norm = RMSNorm(hidden_size)
+        self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), bias=False)
+        self.fc_norm = RMSNorm(hidden_size)
+        self.fc = nn.Linear(hidden_size, proj_dim, bias=False)  # -> shared CLAP space
+
+    @torch.compiler.disable
+    def _compute_mel(self, x):
+        return self.to_mel(x)
+
+    def forward(self, x):
+        # x: raw waveform [B, 1, T]
+        x = self._compute_mel(x)
+        if self.training:
+            x = self.augment(x)
+
+        # per-sample instance normalization (matches contrast.py)
+        mu = x.mean((-1, -2), keepdims=True)
+        std = x.std((-1, -2), keepdims=True)
+        x = (x - mu) / (std + 1e-6)
+
+        B, C, H, W = x.shape
+        x = rearrange(x, 'b c (h p1) (w p2) -> b (h w) (c p1 p2)', p1=self.patch_size, p2=self.patch_size)
+        x = self.x_embedder(x)
+
+        freqs_cis = precompute_freqs_cis_2d(
+            dim=self.head_dim, height=H // self.patch_size, width=W // self.patch_size
+        ).to(x.device)
+        for block in self.blocks:
+            x = block(x, freqs_cis=freqs_cis)
+
+        x = self.pool_norm(x)
+        x = self.pool(x.mean(1, keepdims=True), x).squeeze(1)
+        x = self.mlp_norm(x)
+        x = self.mlp(x)
+        x = self.fc_norm(x)
+        x = self.fc(x)
+        # NON-detaching (unlike contrast.forward_features): grads must flow.
+        return F.normalize(x, dim=-1)
+
+
+# =============================================================================
+# CLAP
+# =============================================================================
 class CLAP(nn.Module):
     def __init__(
         self,
-        audio_dim=128,
+        audio_cfg,                 # audio-specific front-end args (mel/patch/depth); see below
         text_dim=1024,
-        hidden_size=512,
-        proj_dim=512,
-        audio_depth=4,
-        text_depth=4,
-        num_heads=8,
+        # shared transformer size -- BOTH towers use these (only depth differs)
+        hidden_size=768,
+        num_heads=12,
         mlp_ratio=4.0,
+        proj_dim=512,
+        audio_depth=12,            # audio tower depth (symmetric with text_depth)
+        text_depth=4,
+        text_drop=0.1,
         init_temperature=0.07,
+        audio_init='scratch',      # 'scratch' | 'contrast' (informational; weights loaded separately)
+        n_text_tokens=256,
     ):
         super().__init__()
-        self.audio_tower = Tower(audio_dim, hidden_size, proj_dim, audio_depth, num_heads, mlp_ratio)
-        self.text_tower = Tower(text_dim, hidden_size, proj_dim, text_depth, num_heads, mlp_ratio)
-        # learnable log temperature (CLIP-style), init at 1/0.07
+        self.audio_init = audio_init
+        # audio_cfg holds ONLY audio front-end params (mel/patch). Depth and the
+        # transformer body size (hidden_size/num_heads/mlp_ratio) are passed
+        # explicitly: body size is SHARED with the text tower so both live in the
+        # same representational space, and depth is a first-class arg (like
+        # text_depth) so it can never go missing regardless of audio_init.
+        self.audio_cfg = dict(audio_cfg)
+        self.audio_cfg.pop('depth', None)   # tolerate/ignore a stray depth in cfg
+        self.audio_tower = AudioTower(
+            proj_dim=proj_dim, hidden_size=hidden_size, num_heads=num_heads,
+            mlp_ratio=mlp_ratio, depth=audio_depth, **self.audio_cfg,
+        )
+        self.text_tower = TextTower(
+            text_dim, hidden_size, proj_dim, text_depth, num_heads, mlp_ratio,
+            max_seq_len=n_text_tokens, drop=text_drop,
+        )
         self.log_temperature = nn.Parameter(torch.log(torch.ones(1) / init_temperature))
         self.apply(self._init_weights)
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
-            # https://arxiv.org/pdf/2310.17813 (matches contrast.py)
             fan_out = module.weight.size(0)
             fan_in = module.weight.size(1)
             std = 1.0 / math.sqrt(fan_in) * min(1.0, math.sqrt(fan_out / fan_in))
@@ -158,40 +320,76 @@ class CLAP(nn.Module):
             if module.bias is not None:
                 nn.init.zeros_(module.bias)
 
+    # ---- init scheme: reuse pretrained contrast backbone -----------------
+    @torch.no_grad()
+    def load_audio_backbone(self, contrast_ckpt_path, map_location='cpu', verbose=True):
+        """Load the pretrained contrast.py backbone into the audio tower,
+        skipping any weight whose shape doesn't match (notably `fc`, which goes
+        from proj_size to proj_dim). Returns (loaded, skipped) key lists."""
+        ckpt = torch.load(contrast_ckpt_path, map_location=map_location)
+        sd = ckpt['model']
+        unwanted = '_orig_mod.'
+        sd = {(k[len(unwanted):] if k.startswith(unwanted) else k): v for k, v in sd.items()}
+
+        tgt = self.audio_tower.state_dict()
+        loaded, skipped = [], []
+        for k, v in tgt.items():
+            if k in sd and sd[k].shape == v.shape:
+                tgt[k] = sd[k]
+                loaded.append(k)
+            else:
+                skipped.append(k)
+        self.audio_tower.load_state_dict(tgt)
+        if verbose:
+            print(f"[load_audio_backbone] loaded {len(loaded)} tensors, "
+                  f"re-init {len(skipped)}: {skipped}")
+        return loaded, skipped
+
+    # ---- encoders --------------------------------------------------------
     def encode_audio(self, audio, audio_mask=None):
-        return self.audio_tower(audio, key_padding=audio_mask)
+        # audio: raw waveform [B, 1, T]; audio_mask ignored (one crop -> one vec).
+        return self.audio_tower(audio)
 
     def encode_text(self, text, text_mask=None):
         return self.text_tower(text, key_padding=text_mask)
 
+    # ---- loss ------------------------------------------------------------
     def forward(self, text, audio, text_mask=None, audio_mask=None, song_ids=None):
-        a = self.encode_audio(audio, audio_mask)   # [B, D]
-        t = self.encode_text(text, text_mask)       # [B, D]
+        a = self.encode_audio(audio)                 # [b, D] (grad)
+        t = self.encode_text(text, text_mask)        # [b, D] (grad)
 
-        logit_scale = torch.exp(self.log_temperature).clamp(max=100)
-        logits = logit_scale * (a @ t.T)            # rows: audio, cols: text
-        B = logits.shape[0]
-        targets = torch.arange(B, device=logits.device)
+        scale = torch.exp(self.log_temperature).clamp(max=100)
 
-        # Different captions of the *same song* can co-occur in a batch (the text
-        # rows are globally shuffled). Those are false negatives - mask them out
-        # of the off-diagonal so only the true (audio_i, text_i) pair is positive.
+        # gather keys across all ranks so every local query sees world*b negatives
+        a_all = all_gather_grad(a)                    # [B, D]
+        t_all = all_gather_grad(t)                    # [B, D]
+        b = a.shape[0]
+        offset = dist.get_rank() * b if _ddp_active() else 0
+        B = a_all.shape[0]
+
+        logits_a2t = scale * (a @ t_all.T)           # [b, B]
+        logits_t2a = scale * (t @ a_all.T)           # [b, B]
+        targets = torch.arange(b, device=a.device) + offset
+
         if song_ids is not None:
-            same = song_ids[:, None] == song_ids[None, :]
-            eye = torch.eye(B, dtype=torch.bool, device=logits.device)
-            logits = logits.masked_fill(same & ~eye, float('-inf'))
+            ids_all = all_gather_nograd(song_ids)    # [B]
+            same = song_ids[:, None] == ids_all[None, :]         # [b, B]
+            pos = F.one_hot(targets, num_classes=B).bool()       # the true pair
+            fn_mask = same & ~pos                                 # same-song false negs
+            logits_a2t = logits_a2t.masked_fill(fn_mask, float('-inf'))
+            logits_t2a = logits_t2a.masked_fill(fn_mask, float('-inf'))
 
-        loss_a2t = F.cross_entropy(logits, targets)
-        loss_t2a = F.cross_entropy(logits.T, targets)
+        loss_a2t = F.cross_entropy(logits_a2t, targets)
+        loss_t2a = F.cross_entropy(logits_t2a, targets)
         loss = 0.5 * (loss_a2t + loss_t2a)
 
         with torch.no_grad():
-            acc_a2t = (logits.argmax(dim=1) == targets).float().mean()
-            acc_t2a = (logits.argmax(dim=0) == targets).float().mean()
+            acc_a2t = (logits_a2t.argmax(dim=1) == targets).float().mean()
+            acc_t2a = (logits_t2a.argmax(dim=1) == targets).float().mean()
 
         return {
             'loss': loss,
-            'logits': logits,
+            'logits': logits_a2t,
             'sim': a @ t.T,
             'acc': 0.5 * (acc_a2t + acc_t2a),
             'acc_a2t': acc_a2t,
@@ -201,18 +399,82 @@ class CLAP(nn.Module):
         }
 
 
+# =============================================================================
+# raw-wav batch loader (adapted from train_contrast.py; lives here to keep the
+# training script's data plumbing minimal)
+# =============================================================================
+_wav_index = {}     # basename(no-ext) -> path
+_frames_cache = {}  # path -> frame count
+
+
+def build_wav_index(wav_glob='/data/wavs/*'):
+    """Index available wavs by basename-without-extension for path resolution."""
+    _wav_index.clear()
+    for p in _glob.glob(wav_glob):
+        key = os.path.basename(p).split('.')[0]
+        _wav_index[key] = p
+    print(f"[clap] indexed {len(_wav_index)} wavs from {wav_glob}")
+    return _wav_index
+
+
+def _resolve(file_path):
+    """Map a caption/audio-map `file_path` to an actual wav path."""
+    if os.path.isabs(file_path) and os.path.exists(file_path):
+        return file_path
+    key = os.path.basename(file_path).split('.')[0]
+    if key in _wav_index:
+        return _wav_index[key]
+    raise KeyError(f"could not resolve wav for '{file_path}' "
+                   f"(call build_wav_index() first, or check the glob)")
+
+
+def _frames(path):
+    if path not in _frames_cache:
+        _frames_cache[path] = sf.info(path).frames
+    return _frames_cache[path]
+
+
+def load_wav_crops(file_paths, n_samples, device='cuda', pin=True):
+    """Read one random `n_samples` crop per file -> [B, 1, n_samples] float32.
+
+    Mirrors train_contrast.py's random-crop loading, but ONE view per song
+    (the CLAP positive is (audio_i, caption_i), not two-crop instance disc.).
+    """
+    xs = []
+    for fp in file_paths:
+        path = _resolve(fp)
+        nf = _frames(path)
+        start = random.randint(0, max(0, nf - n_samples))
+        wav, _ = sf.read(path, start=start, frames=min(n_samples, nf), dtype='float32')
+        if wav.ndim > 1:
+            wav = wav.mean(axis=1)
+        if len(wav) < n_samples:
+            wav = np.pad(wav, (0, n_samples - len(wav)))
+        xs.append(wav)
+    x = torch.from_numpy(np.asarray(xs, dtype=np.float32)).unsqueeze(1)
+    if pin:
+        x = x.pin_memory()
+    return x.to(device, non_blocking=True)
+
+
 if __name__ == '__main__':
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    model = CLAP().to(device)
+    audio_cfg = dict(
+        in_channels=1, patch_size=16, sample_rate=16000,
+        n_fft=1024, hop_length=512, n_mels=192, time_length=32,
+        frequency_length=12,
+    )
+    model = CLAP(
+        audio_cfg=audio_cfg, hidden_size=768, num_heads=12, mlp_ratio=4.0,
+        proj_dim=512, audio_depth=12, text_depth=4,
+    ).to(device)
     from torchinfo import summary
     summary(model)
 
-    B, M, T = 8, 64, 256
-    text = torch.randn(B, T, 1024, device=device)
-    audio = torch.randn(B, M, 128, device=device)
-    text_mask = torch.ones(B, T, dtype=torch.bool, device=device)
-    audio_mask = torch.ones(B, M, dtype=torch.bool, device=device)
+    B, T = 4, 163830
+    text = torch.randn(B, 256, 1024, device=device)
+    audio = torch.randn(B, 1, T, device=device)
+    text_mask = torch.ones(B, 256, dtype=torch.bool, device=device)
     song_ids = torch.arange(B, device=device)
-
-    out = model(text, audio, text_mask=text_mask, audio_mask=audio_mask, song_ids=song_ids)
+    out = model(text, audio, text_mask=text_mask, song_ids=song_ids)
     print({k: (v.item() if v.ndim == 0 else tuple(v.shape)) for k, v in out.items()})

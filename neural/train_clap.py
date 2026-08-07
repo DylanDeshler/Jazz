@@ -35,6 +35,7 @@ import matplotlib.pyplot as plt
 import soundfile as sf
 
 from clap import CLAP as net
+from clap import build_wav_index, load_wav_crops
 
 # -----------------------------------------------------------------------------
 # I/O
@@ -51,22 +52,36 @@ wandb_project = 'clap_jazz'
 wandb_run_name = str(time.time())
 # data
 gradient_accumulation_steps = 1
-batch_size = 512          # large batches matter for contrastive learning
-n_measures = 24           # audio measures pooled per song (temporal context)
-style_dim = 128           # contrast.py feature dim
+batch_size = 512          # per-GPU batch; DDP all-gather makes negatives = world*batch
+n_samples = 16383 * 10    # raw-audio crop length (~10s @ 16kHz) fed to the audio tower
 text_dim = 1024           # T5-v1.1-xxl hidden dim
 n_text_tokens = 256
+wav_glob = '/data/wavs/*' # raw wavs, indexed by basename for path resolution
+# audio tower init: 'scratch' (random) or 'contrast' (reuse pretrained backbone)
+audio_init = 'contrast'
+contrast_ckpt = 'contrast_learntmep_instance_10s/ckpt.pt'   # used when audio_init=='contrast'
 # retrieval-audio dump (item 4): save the wavs of top-k retrieved songs to listen to
 sample_rate = 16000       # raw wavs are 16 kHz
 retrieval_clip_seconds = 15   # seconds of audio to write per retrieved song
 retrieval_n_queries = 6       # number of text queries to dump audio for
 retrieval_topk = 3            # top-k retrieved songs per query
 # model
-hidden_size = 512
-proj_dim = 512
-audio_depth = 4
-text_depth = 4
-num_heads = 8
+# shared transformer body: BOTH towers use these, only depth differs.
+# NOTE: for audio_init=='contrast' these MUST match the contrast.py backbone
+# (hidden 768 / heads 12 / mlp_ratio 4) or the pretrained weights won't load.
+hidden_size = 768         # shared audio+text hidden dim
+num_heads = 12            # shared audio+text heads
+mlp_ratio = 4.0           # shared audio+text mlp ratio
+proj_dim = 512            # shared CLAP space
+audio_depth = 12          # audio tower depth
+text_depth = 4            # text tower depth
+# audio front-end (mirrors contrast.py)
+patch_size = 16
+n_fft = 1024
+hop_length = 512
+n_mels = 192
+time_length = 32
+frequency_length = 12
 # optimizer
 learning_rate = 5e-4
 max_iters = 100000
@@ -146,6 +161,9 @@ N_TRAIN_ROWS = len(train_raw_paths) * 3 * 6
 N_VAL_ROWS = len(val_raw_paths) * 3 * 6
 print(f'Text rows -> train: {N_TRAIN_ROWS}, val: {N_VAL_ROWS}')
 
+# index raw wavs by basename so get_batch can resolve song file_path -> wav path
+build_wav_index(wav_glob)
+
 
 def map_rows(idx, split, count):
     """For a run of `count` shuffled text rows starting at `idx`, return
@@ -197,14 +215,12 @@ def get_batch(split='train', batch_size=batch_size, return_start=False):
     if split == 'train':
         text_mm = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_train.bin',
                             dtype=np.float16, mode='r', shape=(N_TRAIN_ROWS, n_text_tokens, text_dim))
-        style_mm = np.memmap('/data/binaries/contrast_learntmep_instance_10s_style_train.bin',
-                             dtype=np.float32, mode='r', shape=(4490789, style_dim))
+        song_paths_list = train_raw_paths
         n_rows = N_TRAIN_ROWS
     else:
         text_mm = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_val.bin',
                             dtype=np.float16, mode='r', shape=(N_VAL_ROWS, n_text_tokens, text_dim))
-        style_mm = np.memmap('/data/binaries/contrast_learntmep_instance_10s_style_val.bin',
-                             dtype=np.float32, mode='r', shape=(99131, style_dim))
+        song_paths_list = val_raw_paths
         n_rows = N_VAL_ROWS
 
     start = np.random.randint(n_rows - batch_size)
@@ -217,27 +233,18 @@ def get_batch(split='train', batch_size=batch_size, return_start=False):
     # guard: never fully-empty (would nan the pooling softmax)
     text_mask[:, 0] = True
 
-    # --- audio: sample a window of measures within each song ---
-    song_starts = bounds[:, 0]
-    song_stops = bounds[:, 1] - 1
-    song_len = np.maximum(song_stops - song_starts, 1)
-    highs = np.maximum(song_stops - n_measures, song_starts + 1)
-    offsets = np.floor(np.random.rand(batch_size) * (highs - song_starts)).astype(int)
-    starts = song_starts + offsets
-    idx_matrix = starts[:, None] + np.arange(n_measures)          # [B, M]
-    valid = idx_matrix <= song_stops[:, None]                     # measures that exist
-    idx_matrix = np.minimum(idx_matrix, song_stops[:, None])      # clamp for gather
-    audio = torch.from_numpy(style_mm[idx_matrix])               # [B, M, 128]
-    audio_mask = torch.from_numpy(valid)
-    audio_mask[:, 0] = True
+    # --- audio: one random raw-wav crop per song (full audio tower) ---
+    # song_ids are song indices into song_paths_list; resolve to file paths and
+    # read a random ~10s crop each. augmentation lives inside the audio tower.
+    file_paths = [song_paths_list[int(s)] for s in song_ids]
+    audio = load_wav_crops(file_paths, n_samples, device=device)   # [B, 1, n_samples]
+    audio_mask = None                                              # one crop -> one vector
 
     song_ids = torch.from_numpy(song_ids)
     tiers = torch.from_numpy(tiers)
 
     text = text.pin_memory().to(device, non_blocking=True)
     text_mask = text_mask.pin_memory().to(device, non_blocking=True)
-    audio = audio.pin_memory().to(device, non_blocking=True)
-    audio_mask = audio_mask.pin_memory().to(device, non_blocking=True)
     song_ids = song_ids.pin_memory().to(device, non_blocking=True)
     tiers = tiers.pin_memory().to(device, non_blocking=True)
     if return_start:
@@ -249,14 +256,25 @@ def get_batch(split='train', batch_size=batch_size, return_start=False):
 iter_num = 0
 best_val_loss = 1e9
 
+# audio_cfg carries ONLY audio front-end params (mel/patch). Depth and the
+# shared body size (hidden_size/num_heads/mlp_ratio) are passed to CLAP directly.
+audio_cfg = dict(
+    in_channels=1, patch_size=patch_size,
+    sample_rate=sample_rate, n_fft=n_fft, hop_length=hop_length, n_mels=n_mels,
+    time_length=time_length, frequency_length=frequency_length,
+)
 model_args = dict(
-    audio_dim=style_dim, text_dim=text_dim, hidden_size=hidden_size, proj_dim=proj_dim,
-    audio_depth=audio_depth, text_depth=text_depth, num_heads=num_heads,
+    audio_cfg=audio_cfg, text_dim=text_dim,
+    hidden_size=hidden_size, num_heads=num_heads, mlp_ratio=mlp_ratio,
+    proj_dim=proj_dim, audio_depth=audio_depth, text_depth=text_depth,
+    n_text_tokens=n_text_tokens, audio_init=audio_init,
 )
 
 if init_from == 'scratch':
-    print("Initializing a new CLAP model from scratch")
+    print(f"Initializing a new CLAP model from scratch (audio_init={audio_init})")
     model = net(**model_args)
+    if audio_init == 'contrast':
+        model.load_audio_backbone(contrast_ckpt, map_location='cpu')
     tokens_trained = 0
 elif init_from == 'resume':
     print(f"Resuming training from {out_dir}")
