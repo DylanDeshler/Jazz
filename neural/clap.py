@@ -37,6 +37,7 @@ import glob as _glob
 import math
 import random
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 import torch
@@ -436,27 +437,38 @@ def _frames(path):
     return _frames_cache[path]
 
 
-def load_wav_crops(file_paths, n_samples, device='cuda', pin=True):
+# libsndfile releases the GIL inside sf.read, so a thread pool genuinely
+# overlaps the (seek + decode) of a whole batch instead of doing it serially.
+_read_pool = ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 8)))
+
+
+def _read_one_crop(fp, n_samples):
+    path = _resolve(fp)
+    nf = _frames(path)
+    start = random.randint(0, max(0, nf - n_samples))
+    wav, _ = sf.read(path, start=start, frames=min(n_samples, nf), dtype='float32')
+    if wav.ndim > 1:
+        wav = wav.mean(axis=1)
+    if len(wav) < n_samples:
+        wav = np.pad(wav, (0, n_samples - len(wav)))
+    return wav
+
+
+def load_wav_crops(file_paths, n_samples, device='cuda', pin=True, to_device=True):
     """Read one random `n_samples` crop per file -> [B, 1, n_samples] float32.
 
+    Reads the whole batch in parallel (thread pool; sf.read drops the GIL).
     Mirrors train_contrast.py's random-crop loading, but ONE view per song
     (the CLAP positive is (audio_i, caption_i), not two-crop instance disc.).
+    With to_device=False the tensor stays on CPU (pinned) for background prefetch.
     """
-    xs = []
-    for fp in file_paths:
-        path = _resolve(fp)
-        nf = _frames(path)
-        start = random.randint(0, max(0, nf - n_samples))
-        wav, _ = sf.read(path, start=start, frames=min(n_samples, nf), dtype='float32')
-        if wav.ndim > 1:
-            wav = wav.mean(axis=1)
-        if len(wav) < n_samples:
-            wav = np.pad(wav, (0, n_samples - len(wav)))
-        xs.append(wav)
+    xs = list(_read_pool.map(lambda fp: _read_one_crop(fp, n_samples), file_paths))
     x = torch.from_numpy(np.asarray(xs, dtype=np.float32)).unsqueeze(1)
     if pin:
         x = x.pin_memory()
-    return x.to(device, non_blocking=True)
+    if to_device:
+        x = x.to(device, non_blocking=True)
+    return x
 
 
 if __name__ == '__main__':
