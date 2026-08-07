@@ -20,6 +20,7 @@ import math
 import json
 import pickle
 from contextlib import nullcontext
+from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 from torchinfo import summary
 
@@ -44,11 +45,11 @@ eval_interval = 2000
 log_interval = 100
 eval_iters = 100
 eval_only = False
-profile = True  # if True, print a per-stage timing breakdown each log_interval
+profile = False  # if True, print a per-stage timing breakdown each log_interval
 always_save_checkpoint = True
 init_from = 'scratch'  # 'scratch' or 'resume'
 # wandb
-wandb_log = False
+wandb_log = True
 wandb_project = 'clap_jazz'
 wandb_run_name = str(time.time())
 # data
@@ -91,7 +92,7 @@ beta1 = 0.9
 beta2 = 0.98
 grad_clip = 1.0
 # lr schedule
-decay_lr = True
+decay_lr = False
 warmup_iters = 2000
 lr_decay_iters = max_iters
 min_lr = learning_rate / 10
@@ -99,7 +100,7 @@ min_lr = learning_rate / 10
 backend = 'nccl'
 device = 'cuda:2'
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16'
-compile = False
+compile = True
 # -----------------------------------------------------------------------------
 config_keys = [k for k, v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 config = {k: globals()[k] for k in config_keys}
@@ -235,7 +236,7 @@ def get_batch(split='train', batch_size=batch_size, return_start=False):
     # --- text: contiguous slab of shuffled rows -> [B, 256, 1024] ---
     # Keep fp16 and transfer as-is: autocast casts it for the in_proj matmul, so a
     # CPU fp32 upcast just doubles the copied bytes (536MB vs 268MB) and burns CPU.
-    text = torch.from_numpy(np.ascontiguousarray(text_mm[start:start + batch_size]))
+    text = torch.from_numpy(np.ascontiguousarray(text_mm[start:start + batch_size].copy()))
     if profile:
         _batch_times['text_read'] = (time.time() - _t) * 1000; _t = time.time()
 
@@ -553,7 +554,10 @@ if wandb_log and master_process:
     import wandb
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
-batch = get_batch('train')
+# single-worker prefetch: the next batch's wav I/O (~700ms) overlaps this step's
+# fwd/bwd compute (~800ms) instead of running serially after it.
+_prefetch_pool = ThreadPoolExecutor(max_workers=1)
+next_future = _prefetch_pool.submit(get_batch, 'train')
 t0 = time.time()
 local_iter_num = 0
 raw_model = model.module if ddp else model
@@ -612,14 +616,19 @@ while True:
     for micro_step in range(gradient_accumulation_steps):
         if ddp:
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
+        # take the batch the background thread loaded during the previous step,
+        # then immediately queue the next one so its I/O overlaps this fwd/bwd.
+        if profile:
+            _tf = time.time()
+        batch = next_future.result()
+        if profile:
+            _fetch = (time.time() - _tf) * 1000   # time spent WAITING (ideally ~0)
+        next_future = _prefetch_pool.submit(get_batch, 'train')
         with ctx:
             res = model(*batch)
             loss = res['loss'] / gradient_accumulation_steps
         if profile:
             torch.cuda.synchronize(); _fwd = (time.time() - _tc) * 1000; _tc = time.time()
-        batch = get_batch('train')
-        if profile:
-            _fetch = (time.time() - _tc) * 1000; _tc = time.time()
         scaler.scale(loss).backward()
         if profile:
             torch.cuda.synchronize(); _bwd = (time.time() - _tc) * 1000; _tc = time.time()
