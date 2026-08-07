@@ -20,7 +20,6 @@ import math
 import json
 import pickle
 from contextlib import nullcontext
-from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 from torchinfo import summary
 
@@ -216,19 +215,7 @@ def get_text_from_index(row_idx, split='train'):
 _batch_times = {}  # populated by get_batch when profile=True
 
 
-def _to_device(batch):
-    """Move a CPU (pinned) batch to the GPU and compute the text mask on-device.
-    Called on the MAIN thread only -- all CUDA work must stay off prefetch threads."""
-    text, audio, _unused_mask, audio_mask, song_ids = batch
-    text = text.to(device, non_blocking=True)
-    audio = audio.to(device, non_blocking=True)
-    song_ids = song_ids.to(device, non_blocking=True)
-    text_mask = (text.abs().sum(-1) > 0)
-    text_mask[:, 0] = True   # guard: never fully-empty (would nan pooling softmax)
-    return text, audio, text_mask, audio_mask, song_ids
-
-
-def get_batch(split='train', batch_size=batch_size, return_start=False, to_device=True):
+def get_batch(split='train', batch_size=batch_size, return_start=False):
     if split == 'train':
         text_mm = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_train.bin',
                             dtype=np.float16, mode='r', shape=(N_TRAIN_ROWS, n_text_tokens, text_dim))
@@ -255,33 +242,28 @@ def get_batch(split='train', batch_size=batch_size, return_start=False, to_devic
     # --- audio: one random raw-wav crop per song (full audio tower) ---
     # song_ids are song indices into song_paths_list; resolve to file paths and
     # read a random ~10s crop each. augmentation lives inside the audio tower.
-    # to_device=False keeps everything on CPU (pinned) so this can run safely on a
-    # background prefetch thread; the main thread does the H2D copy via _to_device.
     file_paths = [song_paths_list[int(s)] for s in song_ids]
-    audio = load_wav_crops(file_paths, n_samples, device=device, to_device=to_device)
+    audio = load_wav_crops(file_paths, n_samples, device=device)   # [B, 1, n_samples]
     audio_mask = None                                              # one crop -> one vector
     if profile:
         _batch_times['audio_read'] = (time.time() - _t) * 1000; _t = time.time()
 
     song_ids = torch.from_numpy(song_ids)
     tiers = torch.from_numpy(tiers)
-    text = text.pin_memory()
-    song_ids = song_ids.pin_memory()
 
-    if to_device:
-        # CUDA work only happens when called on the MAIN thread.
-        batch = _to_device((text, audio, None, audio_mask, song_ids))
-        tiers = tiers.to(device, non_blocking=True)
-        if profile:
-            torch.cuda.synchronize()
-            _batch_times['text_h2d'] = (time.time() - _t) * 1000
-    else:
-        # CPU-only: text_mask is computed later, on-device, by _to_device.
-        batch = (text, audio, None, audio_mask, song_ids)
-
+    text = text.pin_memory().to(device, non_blocking=True)
+    # mask on-device: abs().sum over 134M elems is ~free on GPU, costly on CPU.
+    # T5 padded to max_length with zeros; valid token == any nonzero feature.
+    text_mask = (text.abs().sum(-1) > 0)
+    text_mask[:, 0] = True   # guard: never fully-empty (would nan pooling softmax)
+    song_ids = song_ids.pin_memory().to(device, non_blocking=True)
+    tiers = tiers.pin_memory().to(device, non_blocking=True)
+    if profile:
+        torch.cuda.synchronize()
+        _batch_times['text_h2d'] = (time.time() - _t) * 1000
     if return_start:
-        return batch, start, tiers
-    return batch
+        return (text, audio, text_mask, audio_mask, song_ids), start, tiers
+    return text, audio, text_mask, audio_mask, song_ids
 
 
 # -----------------------------------------------------------------------------
@@ -571,12 +553,7 @@ if wandb_log and master_process:
     import wandb
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
-# single-worker prefetch: the next batch's wav I/O (~700ms) overlaps this step's
-# fwd/bwd compute (~800ms) instead of running serially after it. The thread does
-# CPU-ONLY work (to_device=False); the main thread does the CUDA H2D copy, so no
-# CUDA calls ever run off the main thread (that races fwd/bwd and corrupts pairs).
-_prefetch_pool = ThreadPoolExecutor(max_workers=1)
-next_future = _prefetch_pool.submit(get_batch, 'train', to_device=False)
+batch = get_batch('train')
 t0 = time.time()
 local_iter_num = 0
 raw_model = model.module if ddp else model
@@ -635,20 +612,14 @@ while True:
     for micro_step in range(gradient_accumulation_steps):
         if ddp:
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
-        # take the CPU batch the background thread loaded during the previous
-        # step, queue the next one, then do the H2D copy here on the main thread.
-        if profile:
-            _tf = time.time()
-        cpu_batch = next_future.result()
-        if profile:
-            _fetch = (time.time() - _tf) * 1000   # time spent WAITING (ideally ~0)
-        next_future = _prefetch_pool.submit(get_batch, 'train', to_device=False)
-        batch = _to_device(cpu_batch)
         with ctx:
             res = model(*batch)
             loss = res['loss'] / gradient_accumulation_steps
         if profile:
             torch.cuda.synchronize(); _fwd = (time.time() - _tc) * 1000; _tc = time.time()
+        batch = get_batch('train')
+        if profile:
+            _fetch = (time.time() - _tc) * 1000; _tc = time.time()
         scaler.scale(loss).backward()
         if profile:
             torch.cuda.synchronize(); _bwd = (time.time() - _tc) * 1000; _tc = time.time()
