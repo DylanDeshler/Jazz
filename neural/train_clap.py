@@ -39,7 +39,7 @@ from clap import build_wav_index, load_wav_crops
 
 # -----------------------------------------------------------------------------
 # I/O
-out_dir = 'clap_jazz_lit'
+out_dir = 'clap'
 eval_interval = 2000
 log_interval = 100
 eval_iters = 100
@@ -47,7 +47,7 @@ eval_only = False
 always_save_checkpoint = True
 init_from = 'scratch'  # 'scratch' or 'resume'
 # wandb
-wandb_log = True
+wandb_log = False
 wandb_project = 'clap_jazz'
 wandb_run_name = str(time.time())
 # data
@@ -66,16 +66,14 @@ retrieval_clip_seconds = 15   # seconds of audio to write per retrieved song
 retrieval_n_queries = 6       # number of text queries to dump audio for
 retrieval_topk = 3            # top-k retrieved songs per query
 # model
-# shared transformer body: BOTH towers use these, only depth differs.
-# NOTE: for audio_init=='contrast' these MUST match the contrast.py backbone
-# (hidden 768 / heads 12 / mlp_ratio 4) or the pretrained weights won't load.
-hidden_size = 768         # shared audio+text hidden dim
-num_heads = 12            # shared audio+text heads
-mlp_ratio = 4.0           # shared audio+text mlp ratio
+hidden_size = 512         # TEXT tower hidden dim
 proj_dim = 512            # shared CLAP space
-audio_depth = 12          # audio tower depth
-text_depth = 4            # text tower depth
-# audio front-end (mirrors contrast.py)
+text_depth = 4
+num_heads = 8             # text tower heads
+# audio tower backbone (mirrors contrast.py so a pretrained ckpt can be reused)
+audio_hidden_size = 768
+audio_depth = 12
+audio_num_heads = 12
 patch_size = 16
 n_fft = 1024
 hop_length = 512
@@ -256,18 +254,16 @@ def get_batch(split='train', batch_size=batch_size, return_start=False):
 iter_num = 0
 best_val_loss = 1e9
 
-# audio_cfg carries ONLY audio front-end params (mel/patch). Depth and the
-# shared body size (hidden_size/num_heads/mlp_ratio) are passed to CLAP directly.
 audio_cfg = dict(
-    in_channels=1, patch_size=patch_size,
+    in_channels=1, hidden_size=audio_hidden_size, patch_size=patch_size,
     sample_rate=sample_rate, n_fft=n_fft, hop_length=hop_length, n_mels=n_mels,
     time_length=time_length, frequency_length=frequency_length,
+    num_heads=audio_num_heads, depth=audio_depth,
 )
 model_args = dict(
-    audio_cfg=audio_cfg, text_dim=text_dim,
-    hidden_size=hidden_size, num_heads=num_heads, mlp_ratio=mlp_ratio,
-    proj_dim=proj_dim, audio_depth=audio_depth, text_depth=text_depth,
-    n_text_tokens=n_text_tokens, audio_init=audio_init,
+    audio_cfg=audio_cfg, text_dim=text_dim, hidden_size=hidden_size, proj_dim=proj_dim,
+    text_depth=text_depth, num_heads=num_heads, n_text_tokens=n_text_tokens,
+    audio_init=audio_init,
 )
 
 if init_from == 'scratch':
