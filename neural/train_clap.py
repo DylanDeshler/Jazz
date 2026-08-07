@@ -44,6 +44,7 @@ eval_interval = 2000
 log_interval = 100
 eval_iters = 100
 eval_only = False
+profile = True  # if True, print a per-stage timing breakdown each log_interval
 always_save_checkpoint = True
 init_from = 'scratch'  # 'scratch' or 'resume'
 # wandb
@@ -211,6 +212,9 @@ def get_text_from_index(row_idx, split='train'):
     return caption_list[var_k]
 
 
+_batch_times = {}  # populated by get_batch when profile=True
+
+
 def get_batch(split='train', batch_size=batch_size, return_start=False):
     if split == 'train':
         text_mm = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_train.bin',
@@ -226,10 +230,14 @@ def get_batch(split='train', batch_size=batch_size, return_start=False):
     start = np.random.randint(n_rows - batch_size)
     bounds, song_ids, tiers = map_rows(start, split, batch_size)
 
+    _t = time.time() if profile else None
+
     # --- text: contiguous slab of shuffled rows -> [B, 256, 1024] ---
     # Keep fp16 and transfer as-is: autocast casts it for the in_proj matmul, so a
     # CPU fp32 upcast just doubles the copied bytes (536MB vs 268MB) and burns CPU.
     text = torch.from_numpy(np.ascontiguousarray(text_mm[start:start + batch_size]))
+    if profile:
+        _batch_times['text_read'] = (time.time() - _t) * 1000; _t = time.time()
 
     # --- audio: one random raw-wav crop per song (full audio tower) ---
     # song_ids are song indices into song_paths_list; resolve to file paths and
@@ -237,6 +245,8 @@ def get_batch(split='train', batch_size=batch_size, return_start=False):
     file_paths = [song_paths_list[int(s)] for s in song_ids]
     audio = load_wav_crops(file_paths, n_samples, device=device)   # [B, 1, n_samples]
     audio_mask = None                                              # one crop -> one vector
+    if profile:
+        _batch_times['audio_read'] = (time.time() - _t) * 1000; _t = time.time()
 
     song_ids = torch.from_numpy(song_ids)
     tiers = torch.from_numpy(tiers)
@@ -248,6 +258,9 @@ def get_batch(split='train', batch_size=batch_size, return_start=False):
     text_mask[:, 0] = True   # guard: never fully-empty (would nan pooling softmax)
     song_ids = song_ids.pin_memory().to(device, non_blocking=True)
     tiers = tiers.pin_memory().to(device, non_blocking=True)
+    if profile:
+        torch.cuda.synchronize()
+        _batch_times['text_h2d'] = (time.time() - _t) * 1000
     if return_start:
         return (text, audio, text_mask, audio_mask, song_ids), start, tiers
     return text, audio, text_mask, audio_mask, song_ids
@@ -595,14 +608,21 @@ while True:
     if eval_only:
         break
 
+    _tc = time.time() if profile else None
     for micro_step in range(gradient_accumulation_steps):
         if ddp:
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
             res = model(*batch)
             loss = res['loss'] / gradient_accumulation_steps
+        if profile:
+            torch.cuda.synchronize(); _fwd = (time.time() - _tc) * 1000; _tc = time.time()
         batch = get_batch('train')
+        if profile:
+            _fetch = (time.time() - _tc) * 1000; _tc = time.time()
         scaler.scale(loss).backward()
+        if profile:
+            torch.cuda.synchronize(); _bwd = (time.time() - _tc) * 1000; _tc = time.time()
     if grad_clip != 0.0:
         scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
@@ -621,6 +641,11 @@ while True:
         lossf = loss.item() * gradient_accumulation_steps
         avg_ms = (running_dt if running_dt > 0 else dt) * 1000
         print(f"iter {iter_num}: loss {lossf:.4f}, acc {res['acc'].item():.3f}, time {avg_ms:.2f}ms (avg)")
+        if profile:
+            print(f"    [profile] fwd {_fwd:.0f} bwd {_bwd:.0f} | next-batch fetch {_fetch:.0f} "
+                  f"(text_read {_batch_times.get('text_read',0):.0f} "
+                  f"audio_read {_batch_times.get('audio_read',0):.0f} "
+                  f"text_h2d {_batch_times.get('text_h2d',0):.0f}) ms")
     iter_num += 1
     local_iter_num += 1
 
