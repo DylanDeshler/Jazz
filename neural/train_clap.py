@@ -39,7 +39,7 @@ from clap import build_wav_index, load_wav_crops
 
 # -----------------------------------------------------------------------------
 # I/O
-out_dir = 'clap'
+out_dir = 'clap_pre'
 eval_interval = 2000
 log_interval = 100
 eval_iters = 100
@@ -59,7 +59,7 @@ text_dim = 1024           # T5-v1.1-xxl hidden dim
 n_text_tokens = 256
 wav_glob = '/data/wavs/*' # raw wavs, indexed by basename for path resolution
 # audio tower init: 'scratch' (random) or 'contrast' (reuse pretrained backbone)
-audio_init = 'scratch'
+audio_init = 'contrast'
 contrast_ckpt = 'contrast_learntmep_instance_10s/ckpt.pt'   # used when audio_init=='contrast'
 # retrieval-audio dump (item 4): save the wavs of top-k retrieved songs to listen to
 sample_rate = 16000       # raw wavs are 16 kHz
@@ -104,7 +104,7 @@ lr_decay_iters = max_iters
 min_lr = learning_rate / 10
 # DDP / system
 backend = 'nccl'
-device = 'cuda:2'
+device = 'cuda:3'
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16'
 compile = True
 # -----------------------------------------------------------------------------
