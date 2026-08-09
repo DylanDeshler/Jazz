@@ -48,10 +48,11 @@ import torch.distributed as dist
 # reuse the primitives from the contrastive model so both codebases stay in sync
 # (importing does NOT modify contrast.py)
 from contrast import (
-    RMSNorm, SwiGLUMlp, CrossAttention,
+    RMSNorm, SwiGLUMlp, CrossAttention, SelfAttention,
     SelfAttentionBlock, ToMel, SpecAugment,
     precompute_freqs_cis, apply_rotary_emb, precompute_freqs_cis_2d,
 )
+from torch.utils.checkpoint import checkpoint
 
 try:
     import soundfile as sf
@@ -138,18 +139,70 @@ class SelfAttention1D(nn.Module):
         return x
 
 
+class DropPath(nn.Module):
+    """Stochastic depth: randomly zero the whole residual branch per-sample.
+
+    In train mode each sample's branch output is dropped with prob `drop_prob`
+    and the survivors are rescaled by 1/(1-drop_prob) so the expectation is
+    preserved. A no-op at eval or when drop_prob==0 (no params, adds no ckpt keys).
+    """
+
+    def __init__(self, drop_prob=0.0):
+        super().__init__()
+        self.drop_prob = drop_prob
+
+    def forward(self, x):
+        if self.drop_prob == 0.0 or not self.training:
+            return x
+        keep = 1.0 - self.drop_prob
+        # per-sample mask, broadcast over all non-batch dims
+        shape = (x.shape[0],) + (1,) * (x.ndim - 1)
+        mask = x.new_empty(shape).bernoulli_(keep)
+        return x * mask / keep
+
+
 class Block(nn.Module):
-    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, drop=0.0):
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, drop=0.0, drop_path=0.0):
         super().__init__()
         self.norm1 = RMSNorm(hidden_size)
         self.attn = SelfAttention1D(hidden_size, num_heads=num_heads, attn_drop=drop, proj_drop=drop)
         self.norm2 = RMSNorm(hidden_size)
         self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), bias=False)
+        self.drop_path = DropPath(drop_path)
 
     def forward(self, x, freqs_cis=None, attn_mask=None):
-        x = x + self.attn(self.norm1(x), freqs_cis=freqs_cis, attn_mask=attn_mask)
-        x = x + self.mlp(self.norm2(x))
+        x = x + self.drop_path(self.attn(self.norm1(x), freqs_cis=freqs_cis, attn_mask=attn_mask))
+        x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
+
+
+class AudioBlock(nn.Module):
+    """2D-RoPE transformer block for the audio tower, with stochastic depth.
+
+    Reimplements contrast.SelfAttentionBlock here (same submodule names
+    norm1/attn/norm2/mlp, same gradient-checkpointing) so a pretrained contrast
+    backbone still loads, but adds a DropPath on each residual branch. DropPath
+    has no parameters, so it introduces no new checkpoint keys.
+    """
+
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, drop_path=0.0):
+        super().__init__()
+        self.norm1 = RMSNorm(hidden_size)
+        self.attn = SelfAttention(hidden_size, num_heads=num_heads, qkv_bias=False)
+        self.norm2 = RMSNorm(hidden_size)
+        self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), bias=False)
+        self.drop_path = DropPath(drop_path)
+
+    def _forward_impl(self, x, freqs_cis=None, is_causal=False):
+        fc = freqs_cis[:x.shape[1]] if freqs_cis is not None else None
+        x = x + self.drop_path(self.attn(self.norm1(x), is_causal=is_causal, freqs_cis=fc))
+        x = x + self.drop_path(self.mlp(self.norm2(x)))
+        return x
+
+    def forward(self, x, freqs_cis=None, is_causal=False):
+        if self.training and x.requires_grad:
+            return checkpoint(self._forward_impl, x, freqs_cis, is_causal, use_reentrant=False)
+        return self._forward_impl(x, freqs_cis, is_causal)
 
 
 class TextTower(nn.Module):
@@ -162,12 +215,15 @@ class TextTower(nn.Module):
     """
 
     def __init__(self, in_dim, hidden_size, proj_dim, depth, num_heads, mlp_ratio=4.0,
-                 use_rope=True, max_seq_len=512, drop=0.0):
+                 use_rope=True, max_seq_len=512, drop=0.0, drop_path=0.0):
         super().__init__()
         self.use_rope = use_rope
         self.head_dim = hidden_size // num_heads
         self.in_proj = nn.Linear(in_dim, hidden_size, bias=False)
-        self.blocks = nn.ModuleList([Block(hidden_size, num_heads, mlp_ratio, drop=drop) for _ in range(depth)])
+        self.blocks = nn.ModuleList([
+            Block(hidden_size, num_heads, mlp_ratio, drop=drop, drop_path=drop_path)
+            for _ in range(depth)
+        ])
         # output head -- identical structure to AudioTower
         self.pool_norm = RMSNorm(hidden_size)
         self.pool = CrossAttention(hidden_size, num_heads, qkv_bias=False, proj_bias=False)
@@ -219,18 +275,22 @@ class AudioTower(nn.Module):
                  frequency_length=12,
                  num_heads=12,
                  depth=12,
-                 mlp_ratio=4.0):
+                 mlp_ratio=4.0,
+                 drop_path=0.0):
         super().__init__()
         self.patch_size = patch_size
         self.head_dim = hidden_size // num_heads
 
         # NOTE: names match contrast.Transformer so load_state_dict can reuse a
         # pretrained backbone (everything except `fc`, which changes to proj_dim).
+        # AudioBlock mirrors contrast.SelfAttentionBlock (same submodule names) but
+        # adds stochastic depth; DropPath has no params so the ckpt still loads.
         self.to_mel = ToMel(sample_rate, n_fft, hop_length, n_mels)
         self.augment = SpecAugment(time_length, frequency_length)
         self.x_embedder = nn.Linear(in_channels * patch_size * patch_size, hidden_size, bias=False)
         self.blocks = nn.ModuleList([
-            SelfAttentionBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+            AudioBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio, drop_path=drop_path)
+            for _ in range(depth)
         ])
         self.pool_norm = RMSNorm(hidden_size)
         self.pool = CrossAttention(hidden_size, num_heads, qkv_bias=False, proj_bias=False)
@@ -290,6 +350,7 @@ class CLAP(nn.Module):
         audio_depth=12,            # audio tower depth (symmetric with text_depth)
         text_depth=4,
         text_drop=0.1,
+        drop_path=0.1,             # stochastic depth rate, applied to BOTH towers
         init_temperature=0.07,
         audio_init='scratch',      # 'scratch' | 'contrast' (informational; weights loaded separately)
         n_text_tokens=256,
@@ -305,11 +366,11 @@ class CLAP(nn.Module):
         self.audio_cfg.pop('depth', None)   # tolerate/ignore a stray depth in cfg
         self.audio_tower = AudioTower(
             proj_dim=proj_dim, hidden_size=hidden_size, num_heads=num_heads,
-            mlp_ratio=mlp_ratio, depth=audio_depth, **self.audio_cfg,
+            mlp_ratio=mlp_ratio, depth=audio_depth, drop_path=drop_path, **self.audio_cfg,
         )
         self.text_tower = TextTower(
             text_dim, hidden_size, proj_dim, text_depth, num_heads, mlp_ratio,
-            max_seq_len=n_text_tokens, drop=text_drop,
+            max_seq_len=n_text_tokens, drop=text_drop, drop_path=drop_path,
         )
         self.log_temperature = nn.Parameter(torch.log(torch.ones(1) / init_temperature))
         self.apply(self._init_weights)
