@@ -46,7 +46,7 @@ eval_iters = 100
 eval_only = False
 profile = False  # if True, print a per-stage timing breakdown each log_interval
 always_save_checkpoint = True
-init_from = 'resume'  # 'scratch' or 'resume'
+init_from = 'scratch'  # 'scratch' or 'resume'
 # wandb
 wandb_log = True
 wandb_project = 'clap_jazz'
@@ -59,7 +59,7 @@ text_dim = 1024           # T5-v1.1-xxl hidden dim
 n_text_tokens = 256
 wav_glob = '/data/wavs/*' # raw wavs, indexed by basename for path resolution
 # audio tower init: 'scratch' (random) or 'contrast' (reuse pretrained backbone)
-audio_init = 'contrast'
+audio_init = 'scratch'
 contrast_ckpt = 'contrast_learntmep_instance_10s/ckpt.pt'   # used when audio_init=='contrast'
 # retrieval-audio dump (item 4): save the wavs of top-k retrieved songs to listen to
 sample_rate = 16000       # raw wavs are 16 kHz
