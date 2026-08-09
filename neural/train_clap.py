@@ -76,12 +76,19 @@ mlp_ratio = 4.0           # shared audio+text mlp ratio
 proj_dim = 512            # shared CLAP space
 audio_depth = 12          # audio tower depth
 text_depth = 4            # text tower depth
+drop_path = 0.1           # stochastic depth rate, applied to BOTH towers (regularization)
 # audio front-end (mirrors contrast.py)
 patch_size = 16
 n_fft = 1024
 hop_length = 512
 n_mels = 192
-time_length = 32
+# SpecAugment mask WIDTHS are absolute (frames/mels), but the 10s window has ~5x
+# more time frames than the 2s window these were tuned for (~320 vs ~64), so the
+# original time_length=32 masked ~5x less of the clip -> weak regularization ->
+# overfitting. Scale time_length by the window ratio to restore ~50% expected
+# time coverage (torchaudio draws each mask width in [0, time_length]).
+# freq masking is unchanged (mel dim is still 192, so coverage is unaffected).
+time_length = 160
 frequency_length = 12
 # optimizer
 learning_rate = 5e-4
@@ -281,7 +288,7 @@ model_args = dict(
     audio_cfg=audio_cfg, text_dim=text_dim,
     hidden_size=hidden_size, num_heads=num_heads, mlp_ratio=mlp_ratio,
     proj_dim=proj_dim, audio_depth=audio_depth, text_depth=text_depth,
-    n_text_tokens=n_text_tokens, audio_init=audio_init,
+    drop_path=drop_path, n_text_tokens=n_text_tokens, audio_init=audio_init,
 )
 
 if init_from == 'scratch':
