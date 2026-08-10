@@ -46,7 +46,7 @@ eval_iters = 100
 eval_only = False
 profile = False  # if True, print a per-stage timing breakdown each log_interval
 always_save_checkpoint = True
-init_from = 'scratch'  # 'scratch' or 'resume'
+init_from = 'resume'  # 'scratch' or 'resume'
 # wandb
 wandb_log = True
 wandb_project = 'clap_jazz'
@@ -558,7 +558,7 @@ def get_lr(it):
 if wandb_log and master_process:
     import wandb
     if init_from == 'resume':
-        wandb.init(project=wandb_project, name=wandb_run_name, id='rimcfdy2', resume='must', config=config)
+        wandb.init(project=wandb_project, name=wandb_run_name, id='7icuag4d', resume='must', config=config)
     else:
         wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
