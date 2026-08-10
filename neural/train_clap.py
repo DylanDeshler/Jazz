@@ -104,7 +104,7 @@ lr_decay_iters = max_iters
 min_lr = learning_rate / 10
 # DDP / system
 backend = 'nccl'
-device = 'cuda:3'
+device = 'cuda:2'
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16'
 compile = True
 # -----------------------------------------------------------------------------
