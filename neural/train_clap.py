@@ -39,7 +39,7 @@ from clap import build_wav_index, load_wav_crops
 
 # -----------------------------------------------------------------------------
 # I/O
-out_dir = 'clap_pre'
+out_dir = 'clap'
 eval_interval = 2000
 log_interval = 100
 eval_iters = 100
@@ -59,7 +59,7 @@ text_dim = 1024           # T5-v1.1-xxl hidden dim
 n_text_tokens = 256
 wav_glob = '/data/wavs/*' # raw wavs, indexed by basename for path resolution
 # audio tower init: 'scratch' (random) or 'contrast' (reuse pretrained backbone)
-audio_init = 'contrast'
+audio_init = 'scratch'
 contrast_ckpt = 'contrast_learntmep_instance_10s/ckpt.pt'   # used when audio_init=='contrast'
 # retrieval-audio dump (item 4): save the wavs of top-k retrieved songs to listen to
 sample_rate = 16000       # raw wavs are 16 kHz
@@ -558,7 +558,7 @@ def get_lr(it):
 if wandb_log and master_process:
     import wandb
     if init_from == 'resume':
-        wandb.init(project=wandb_project, name=wandb_run_name, id='7icuag4d', resume='must', config=config)
+        wandb.init(project=wandb_project, name=wandb_run_name, id='rimcfdy2', resume='must', config=config)
     else:
         wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
