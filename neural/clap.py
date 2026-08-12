@@ -220,10 +220,16 @@ class TextTower(nn.Module):
     """
 
     def __init__(self, in_dim, hidden_size, proj_dim, depth, num_heads, mlp_ratio=4.0,
-                 use_rope=True, max_seq_len=512, drop=0.0, drop_path=0.0):
+                 use_rope=True, max_seq_len=512, drop=0.0, drop_path=0.0, in_drop=0.0):
         super().__init__()
         self.use_rope = use_rope
         self.head_dim = hidden_size // num_heads
+        # Dropout on the FROZEN T5 features, before in_proj. `drop` above only
+        # reaches attention (attn_drop/proj_drop); the tower's input is otherwise
+        # perfectly deterministic -- the same 18 vectors per song every epoch --
+        # which is the surface the text side memorizes. This is the one knob that
+        # makes that input stochastic. Param-free, so it adds no checkpoint keys.
+        self.in_drop = nn.Dropout(in_drop)
         self.in_proj = nn.Linear(in_dim, hidden_size, bias=False)
         self.blocks = nn.ModuleList([
             Block(hidden_size, num_heads, mlp_ratio, drop=drop, drop_path=drop_path)
@@ -241,7 +247,7 @@ class TextTower(nn.Module):
 
     def forward(self, x, key_padding=None):
         B, N, C = x.shape
-        x = self.in_proj(x)
+        x = self.in_proj(self.in_drop(x))
         freqs_cis = self.freqs_cis[:N] if self.use_rope else None
         attn_mask = key_padding[:, None, None, :] if key_padding is not None else None
         for blk in self.blocks:
@@ -364,7 +370,8 @@ class CLAP(nn.Module):
         proj_dim=512,
         audio_depth=12,            # audio tower depth (symmetric with text_depth)
         text_depth=4,
-        text_drop=0.1,
+        text_drop=0.1,             # attn/proj dropout inside the text blocks
+        text_in_drop=0.0,          # dropout on the frozen T5 features (see TextTower)
         drop_path=0.1,             # stochastic depth rate, applied to BOTH towers
         audio_checkpoint=False,    # activation-checkpoint the audio blocks (memory<->speed)
         init_temperature=0.07,
@@ -388,6 +395,7 @@ class CLAP(nn.Module):
         self.text_tower = TextTower(
             text_dim, hidden_size, proj_dim, text_depth, num_heads, mlp_ratio,
             max_seq_len=n_text_tokens, drop=text_drop, drop_path=drop_path,
+            in_drop=text_in_drop,
         )
         self.log_temperature = nn.Parameter(torch.log(torch.ones(1) / init_temperature))
         self.apply(self._init_weights)
