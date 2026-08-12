@@ -19,6 +19,8 @@ import time
 import math
 import json
 import pickle
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
 from tqdm import tqdm
 from torchinfo import summary
@@ -228,7 +230,15 @@ def get_text_from_index(row_idx, split='train'):
 _batch_times = {}  # populated by get_batch when profile=True
 
 
-def get_batch(split='train', batch_size=batch_size, return_start=False):
+def _read_batch_cpu(split='train', batch_size=batch_size):
+    """DISK/CPU-only half of a batch load: read text slab + wav crops, pin them.
+
+    Returns a dict of pinned CPU tensors plus (start, tiers). Deliberately does
+    NO CUDA ops (no .to(device)), so it is safe to call from a background thread
+    without racing the main thread's default CUDA stream. text/audio/song_ids all
+    derive from the SAME `start`+`song_ids`, so the tuple is atomic -- row i of
+    each always describes the same (caption, song) pair; the linkage cannot be
+    broken by prefetch as long as this dict travels together."""
     if split == 'train':
         text_mm = np.memmap('/data/binaries/caption_embeddings_expanded_shuffled_train.bin',
                             dtype=np.float16, mode='r', shape=(N_TRAIN_ROWS, n_text_tokens, text_dim))
@@ -248,35 +258,79 @@ def get_batch(split='train', batch_size=batch_size, return_start=False):
     # --- text: contiguous slab of shuffled rows -> [B, 256, 1024] ---
     # Keep fp16 and transfer as-is: autocast casts it for the in_proj matmul, so a
     # CPU fp32 upcast just doubles the copied bytes (536MB vs 268MB) and burns CPU.
-    text = torch.from_numpy(np.ascontiguousarray(text_mm[start:start + batch_size].copy()))
+    text = torch.from_numpy(np.ascontiguousarray(text_mm[start:start + batch_size].copy())).pin_memory()
     if profile:
         _batch_times['text_read'] = (time.time() - _t) * 1000; _t = time.time()
 
     # --- audio: one random raw-wav crop per song (full audio tower) ---
-    # song_ids are song indices into song_paths_list; resolve to file paths and
-    # read a random ~10s crop each. augmentation lives inside the audio tower.
+    # song_ids index song_paths_list; resolve to paths and read a random ~10s
+    # crop each. to_device=False -> stays pinned CPU (no CUDA op in this thread).
     file_paths = [song_paths_list[int(s)] for s in song_ids]
-    audio = load_wav_crops(file_paths, n_samples, device=device)   # [B, 1, n_samples]
-    audio_mask = None                                              # one crop -> one vector
+    audio = load_wav_crops(file_paths, n_samples, to_device=False)   # pinned CPU [B, 1, n_samples]
     if profile:
-        _batch_times['audio_read'] = (time.time() - _t) * 1000; _t = time.time()
+        _batch_times['audio_read'] = (time.time() - _t) * 1000
 
-    song_ids = torch.from_numpy(song_ids)
-    tiers = torch.from_numpy(tiers)
+    return {
+        'text': text,
+        'audio': audio,
+        'song_ids': torch.from_numpy(song_ids).pin_memory(),
+        'tiers': torch.from_numpy(tiers).pin_memory(),
+        'start': int(start),
+    }
 
-    text = text.pin_memory().to(device, non_blocking=True)
+
+def _to_device_batch(cpu, return_start=False):
+    """CUDA half: move a pinned-CPU batch dict to the GPU (main thread only)."""
+    _t = time.time() if profile else None
+    text = cpu['text'].to(device, non_blocking=True)
+    audio = cpu['audio'].to(device, non_blocking=True)
+    audio_mask = None                                             # one crop -> one vector
     # mask on-device: abs().sum over 134M elems is ~free on GPU, costly on CPU.
     # T5 padded to max_length with zeros; valid token == any nonzero feature.
     text_mask = (text.abs().sum(-1) > 0)
     text_mask[:, 0] = True   # guard: never fully-empty (would nan pooling softmax)
-    song_ids = song_ids.pin_memory().to(device, non_blocking=True)
-    tiers = tiers.pin_memory().to(device, non_blocking=True)
+    song_ids = cpu['song_ids'].to(device, non_blocking=True)
     if profile:
         torch.cuda.synchronize()
         _batch_times['text_h2d'] = (time.time() - _t) * 1000
     if return_start:
-        return (text, audio, text_mask, audio_mask, song_ids), start, tiers
+        tiers = cpu['tiers'].to(device, non_blocking=True)
+        return (text, audio, text_mask, audio_mask, song_ids), cpu['start'], tiers
     return text, audio, text_mask, audio_mask, song_ids
+
+
+def get_batch(split='train', batch_size=batch_size, return_start=False):
+    """Synchronous read+to-device. Used by eval; the train loop uses Prefetcher."""
+    return _to_device_batch(_read_batch_cpu(split, batch_size), return_start=return_start)
+
+
+class Prefetcher:
+    """Single-worker background reader for the TRAIN loop.
+
+    A background thread runs _read_batch_cpu (disk + host-pin ONLY, no CUDA) and
+    pushes atomic batch dicts into a bounded queue; next() pops one and does the
+    GPU transfer on the MAIN thread. This overlaps the page-cache-jittery reads
+    (which spike to ~1s on cold misses) with the ~1.5s fwd+bwd, so the GPU stops
+    stalling on I/O. Because each queued dict is a self-contained (text, audio,
+    song_ids) unit from one _read_batch_cpu call, the text<->audio pairing is
+    always intact regardless of prefetch depth."""
+
+    def __init__(self, split='train', depth=2):
+        self.split = split
+        self.q = deque()
+        self.pool = ThreadPoolExecutor(max_workers=1)
+        self.futures = deque()
+        for _ in range(depth):
+            self._submit()
+
+    def _submit(self):
+        self.futures.append(self.pool.submit(_read_batch_cpu, self.split, batch_size))
+
+    def next(self):
+        fut = self.futures.popleft()
+        cpu = fut.result()      # block only if the read hasn't finished yet
+        self._submit()          # immediately queue the next read to refill depth
+        return _to_device_batch(cpu)
 
 
 # -----------------------------------------------------------------------------
@@ -607,12 +661,22 @@ if wandb_log and master_process:
     else:
         wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
-batch = get_batch('train')
+prefetcher = Prefetcher('train', depth=2)
+batch = prefetcher.next()
 t0 = time.time()
 local_iter_num = 0
 raw_model = model.module if ddp else model
 running_mfu = -1.0
 running_dt = -1.0  # EMA of step time (ms), smooths out page-cache I/O jitter
+# EMAs of the per-stage profiler timings (ms). Single-iter samples are noisy --
+# read times in particular spike on page-cache misses -- so smooth like running_dt.
+_prof_ema = {}
+
+
+def _ema(key, val):
+    prev = _prof_ema.get(key, -1.0)
+    _prof_ema[key] = val if prev == -1.0 else 0.9 * prev + 0.1 * val
+    return _prof_ema[key]
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, betas=(beta1, beta2), weight_decay=weight_decay)
 if init_from == 'resume':
@@ -674,13 +738,18 @@ while True:
             res = model(*batch)
             loss = res['loss'] / gradient_accumulation_steps
         if profile:
-            torch.cuda.synchronize(); _fwd = (time.time() - _tc) * 1000; _tc = time.time()
-        batch = get_batch('train')
+            torch.cuda.synchronize(); _fwd = _ema('fwd', (time.time() - _tc) * 1000); _tc = time.time()
+        batch = prefetcher.next()
         if profile:
-            _fetch = (time.time() - _tc) * 1000; _tc = time.time()
+            _fetch = _ema('fetch', (time.time() - _tc) * 1000); _tc = time.time()
         scaler.scale(loss).backward()
         if profile:
-            torch.cuda.synchronize(); _bwd = (time.time() - _tc) * 1000; _tc = time.time()
+            torch.cuda.synchronize(); _bwd = _ema('bwd', (time.time() - _tc) * 1000); _tc = time.time()
+            # the read-stage timings are filled by the (background) batch read;
+            # fold them into EMAs here so every iter contributes, not just logs.
+            _ema('text_read', _batch_times.get('text_read', 0))
+            _ema('audio_read', _batch_times.get('audio_read', 0))
+            _ema('text_h2d', _batch_times.get('text_h2d', 0))
     if grad_clip != 0.0:
         scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
@@ -700,10 +769,10 @@ while True:
         avg_ms = (running_dt if running_dt > 0 else dt) * 1000
         print(f"iter {iter_num}: loss {lossf:.4f}, acc {res['acc'].item():.3f}, time {avg_ms:.2f}ms (avg)")
         if profile:
-            print(f"    [profile] fwd {_fwd:.0f} bwd {_bwd:.0f} | next-batch fetch {_fetch:.0f} "
-                  f"(text_read {_batch_times.get('text_read',0):.0f} "
-                  f"audio_read {_batch_times.get('audio_read',0):.0f} "
-                  f"text_h2d {_batch_times.get('text_h2d',0):.0f}) ms")
+            print(f"    [profile avg] fwd {_fwd:.0f} bwd {_bwd:.0f} | next-batch fetch {_fetch:.0f} "
+                  f"(text_read {_prof_ema.get('text_read',0):.0f} "
+                  f"audio_read {_prof_ema.get('audio_read',0):.0f} "
+                  f"text_h2d {_prof_ema.get('text_h2d',0):.0f}) ms")
     iter_num += 1
     local_iter_num += 1
 
