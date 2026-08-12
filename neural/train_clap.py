@@ -306,10 +306,12 @@ elif init_from == 'resume':
     model_args = checkpoint['model_args']
     model = net(**model_args)
     state_dict = checkpoint['model']
-    unwanted_prefix = '_orig_mod.'
+    # torch.compile inserts '_orig_mod.' -- when compiling submodules (towers)
+    # rather than the whole model it lands MID-key (audio_tower._orig_mod.blocks
+    # ...), so strip every occurrence, not just a leading one.
     for k, v in list(state_dict.items()):
-        if k.startswith(unwanted_prefix):
-            state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+        if '_orig_mod.' in k:
+            state_dict[k.replace('_orig_mod.', '')] = state_dict.pop(k)
     model.load_state_dict(state_dict)
     iter_num = checkpoint['iter_num']
     tokens_trained = checkpoint['tokens']
@@ -321,17 +323,18 @@ summary(model)
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 
 if compile and 'cuda' in device:
-    print("compiling the model... (takes a ~minute)")
-    # DDP + compile + the cross-rank all_gather inside CLAP.forward: Dynamo's
-    # DDPOptimizer splits the forward graph at bucket boundaries to overlap comm.
-    # Splitting around the in-graph collective (plus the RoPE/mel graph breaks)
-    # desyncs NCCL collective order across ranks -> hang. Disabling the splitter
-    # makes the whole forward one graph and lets DDP's normal backward hooks do
-    # the grad all-reduce. Must be set BEFORE torch.compile.
-    if ddp:
-        torch._dynamo.config.optimize_ddp = False
+    print("compiling the towers... (first iter takes ~a minute)")
+    # Compile ONLY the two towers, not the whole model. All the FLOPs -- and the
+    # backward that compile actually speeds up (1678ms -> 16ms) -- live in the
+    # towers. Compiling the whole CLAP.forward instead traced the custom
+    # GatherLayer all_gather collective + the grad-checkpointed blocks into one
+    # graph, which made each *training* step pathologically slow (eval was fast
+    # only because it calls the uncompiled encode_* methods). Leaving forward
+    # eager keeps the collective + loss out of the graph; encode_audio/encode_text
+    # (used by eval) call these compiled towers too, so eval benefits as well.
+    model.audio_tower = torch.compile(model.audio_tower)
+    model.text_tower = torch.compile(model.text_tower)
     unoptimized_model = model
-    model = torch.compile(model)
 
 if ddp:
     model = DDP(model, device_ids=[ddp_local_rank])
