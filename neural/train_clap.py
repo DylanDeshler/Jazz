@@ -322,6 +322,14 @@ scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 
 if compile and 'cuda' in device:
     print("compiling the model... (takes a ~minute)")
+    # DDP + compile + the cross-rank all_gather inside CLAP.forward: Dynamo's
+    # DDPOptimizer splits the forward graph at bucket boundaries to overlap comm.
+    # Splitting around the in-graph collective (plus the RoPE/mel graph breaks)
+    # desyncs NCCL collective order across ranks -> hang. Disabling the splitter
+    # makes the whole forward one graph and lets DDP's normal backward hooks do
+    # the grad all-reduce. Must be set BEFORE torch.compile.
+    if ddp:
+        torch._dynamo.config.optimize_ddp = False
     unoptimized_model = model
     model = torch.compile(model)
 
