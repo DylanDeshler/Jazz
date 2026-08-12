@@ -52,8 +52,10 @@ wandb_log = True
 wandb_project = 'clap_jazz'
 wandb_run_name = str(time.time())
 # data
-gradient_accumulation_steps = 1
-batch_size = 512          # per-GPU batch; DDP all-gather makes negatives = world*batch
+# GLOBAL micro-step count; DDP splits it across ranks (must be divisible by
+# world_size). For N GPUs with NO accumulation set this to N -> 1 micro-step/rank.
+gradient_accumulation_steps = 4
+batch_size = 128          # per-GPU batch; DDP all-gather makes negatives = world*batch
 n_samples = 16383 * 10    # raw-audio crop length (~10s @ 16kHz) fed to the audio tower
 text_dim = 1024           # T5-v1.1-xxl hidden dim
 n_text_tokens = 256
@@ -333,6 +335,33 @@ retrieval_pool = 1024
 
 
 @torch.no_grad()
+def _local_infonce(text, audio, text_mask, audio_mask, song_ids):
+    """Collapse-diagnostic InfoNCE over the LOCAL batch only -- no cross-rank
+    all_gather. Eval runs master-only, so routing through model.forward (which
+    all_gathers) would deadlock NCCL against the other ranks' training gathers.
+    Uses the same false-negative masking as forward, just over the local 512."""
+    enc_a = model.module.encode_audio if ddp else model.encode_audio
+    enc_t = model.module.encode_text if ddp else model.encode_text
+    a = enc_a(audio, audio_mask)
+    t = enc_t(text, text_mask)
+    scale = torch.exp(raw_model.log_temperature).clamp(max=100)
+    b = a.shape[0]
+    logits_a2t = scale * (a @ t.T)
+    logits_t2a = scale * (t @ a.T)
+    targets = torch.arange(b, device=a.device)
+    if song_ids is not None:
+        same = song_ids[:, None] == song_ids[None, :]
+        pos = torch.eye(b, dtype=torch.bool, device=a.device)
+        fn_mask = same & ~pos
+        logits_a2t = logits_a2t.masked_fill(fn_mask, float('-inf'))
+        logits_t2a = logits_t2a.masked_fill(fn_mask, float('-inf'))
+    loss = 0.5 * (F.cross_entropy(logits_a2t, targets) + F.cross_entropy(logits_t2a, targets))
+    acc = 0.5 * ((logits_a2t.argmax(1) == targets).float().mean()
+                 + (logits_t2a.argmax(1) == targets).float().mean())
+    return loss, acc
+
+
+@torch.no_grad()
 def estimate_loss():
     out = {}
     model.eval()
@@ -342,9 +371,9 @@ def estimate_loss():
         for k in tqdm(range(eval_iters), desc=f'Estimatiing loss for {split}'):
             batch = get_batch(split, batch_size=batch_size)
             with ctx:
-                res = model(*batch)
-            losses[k] = res['loss'].item()
-            accs[k] = res['acc'].item()
+                loss, acc = _local_infonce(*batch)
+            losses[k] = loss.item()
+            accs[k] = acc.item()
         out[f'{split}/loss'] = losses.mean()
         out[f'{split}/acc'] = accs.mean()
     out.update(retrieval_metrics('val'))
