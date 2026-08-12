@@ -47,7 +47,7 @@ log_interval = 100
 eval_iters = 100
 eval_only = False
 profile = False
-always_save_checkpoint = True
+always_save_checkpoint = False
 init_from = 'scratch'  # 'scratch' or 'resume'
 # wandb
 wandb_log = True
@@ -78,6 +78,13 @@ proj_dim = 512            # shared CLAP space
 audio_depth = 12          # audio tower depth
 text_depth = 4            # text tower depth
 drop_path = 0.1           # stochastic depth rate, applied to BOTH towers (regularization)
+# text-side regularization. text_drop was previously inherited silently from
+# CLAP's default (0.1) and never logged -- it is explicit here so it shows up in
+# the wandb config. NOTE it only reaches attention (attn_drop/proj_drop); the
+# frozen T5 input is deterministic, so text_in_drop is the knob that actually
+# makes the text tower's input stochastic and fights caption memorization.
+text_drop = 0.1           # attn/proj dropout inside the 4 text blocks
+text_in_drop = 0.1        # dropout on the frozen T5 features before in_proj
 audio_checkpoint = False
 patch_size = 16
 n_fft = 1024
@@ -335,7 +342,8 @@ model_args = dict(
     audio_cfg=audio_cfg, text_dim=text_dim,
     hidden_size=hidden_size, num_heads=num_heads, mlp_ratio=mlp_ratio,
     proj_dim=proj_dim, audio_depth=audio_depth, text_depth=text_depth,
-    drop_path=drop_path, audio_checkpoint=audio_checkpoint,
+    drop_path=drop_path, text_drop=text_drop, text_in_drop=text_in_drop,
+    audio_checkpoint=audio_checkpoint,
     n_text_tokens=n_text_tokens, audio_init=audio_init,
 )
 
@@ -350,6 +358,15 @@ elif init_from == 'resume':
     ckpt_path = os.path.join(out_dir, 'ckpt.pt')
     checkpoint = torch.load(ckpt_path, map_location=device)
     model_args = checkpoint['model_args']
+    # Dropout rates are TRAINING hyperparameters, not architecture -- nn.Dropout is
+    # param-free, so changing them cannot break state_dict loading. Take them from
+    # the live config rather than the checkpoint, otherwise resuming an older run
+    # silently reverts to whatever it was trained with (and pre-text_in_drop
+    # checkpoints have no such key at all, so it would fall back to 0.0).
+    for _k in ('text_drop', 'text_in_drop', 'drop_path'):
+        if model_args.get(_k) != globals()[_k]:
+            print(f"  resume: overriding {_k} {model_args.get(_k)} -> {globals()[_k]}")
+        model_args[_k] = globals()[_k]
     model = net(**model_args)
     state_dict = checkpoint['model']
     # torch.compile inserts '_orig_mod.' -- when compiling submodules (towers)
