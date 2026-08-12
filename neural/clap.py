@@ -185,13 +185,14 @@ class AudioBlock(nn.Module):
     has no parameters, so it introduces no new checkpoint keys.
     """
 
-    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, drop_path=0.0):
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, drop_path=0.0, use_checkpoint=False):
         super().__init__()
         self.norm1 = RMSNorm(hidden_size)
         self.attn = SelfAttention(hidden_size, num_heads=num_heads, qkv_bias=False)
         self.norm2 = RMSNorm(hidden_size)
         self.mlp = SwiGLUMlp(hidden_size, int(2 / 3 * mlp_ratio * hidden_size), bias=False)
         self.drop_path = DropPath(drop_path)
+        self.use_checkpoint = use_checkpoint
 
     def _forward_impl(self, x, freqs_cis=None, is_causal=False):
         fc = freqs_cis[:x.shape[1]] if freqs_cis is not None else None
@@ -200,7 +201,11 @@ class AudioBlock(nn.Module):
         return x
 
     def forward(self, x, freqs_cis=None, is_causal=False):
-        if self.training and x.requires_grad:
+        # Activation checkpointing recomputes the whole block forward during
+        # backward -- a memory/speed trade only worth paying near the memory
+        # ceiling. At small per-GPU batch it just doubles the fwd cost, so it is
+        # OFF by default and enabled explicitly (see AudioTower(use_checkpoint=)).
+        if self.use_checkpoint and self.training and x.requires_grad:
             return checkpoint(self._forward_impl, x, freqs_cis, is_causal, use_reentrant=False)
         return self._forward_impl(x, freqs_cis, is_causal)
 
@@ -276,7 +281,8 @@ class AudioTower(nn.Module):
                  num_heads=12,
                  depth=12,
                  mlp_ratio=4.0,
-                 drop_path=0.0):
+                 drop_path=0.0,
+                 use_checkpoint=False):
         super().__init__()
         self.patch_size = patch_size
         self.head_dim = hidden_size // num_heads
@@ -289,7 +295,8 @@ class AudioTower(nn.Module):
         self.augment = SpecAugment(time_length, frequency_length)
         self.x_embedder = nn.Linear(in_channels * patch_size * patch_size, hidden_size, bias=False)
         self.blocks = nn.ModuleList([
-            AudioBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio, drop_path=drop_path)
+            AudioBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio, drop_path=drop_path,
+                       use_checkpoint=use_checkpoint)
             for _ in range(depth)
         ])
         self.pool_norm = RMSNorm(hidden_size)
@@ -359,6 +366,7 @@ class CLAP(nn.Module):
         text_depth=4,
         text_drop=0.1,
         drop_path=0.1,             # stochastic depth rate, applied to BOTH towers
+        audio_checkpoint=False,    # activation-checkpoint the audio blocks (memory<->speed)
         init_temperature=0.07,
         audio_init='scratch',      # 'scratch' | 'contrast' (informational; weights loaded separately)
         n_text_tokens=256,
@@ -374,7 +382,8 @@ class CLAP(nn.Module):
         self.audio_cfg.pop('depth', None)   # tolerate/ignore a stray depth in cfg
         self.audio_tower = AudioTower(
             proj_dim=proj_dim, hidden_size=hidden_size, num_heads=num_heads,
-            mlp_ratio=mlp_ratio, depth=audio_depth, drop_path=drop_path, **self.audio_cfg,
+            mlp_ratio=mlp_ratio, depth=audio_depth, drop_path=drop_path,
+            use_checkpoint=audio_checkpoint, **self.audio_cfg,
         )
         self.text_tower = TextTower(
             text_dim, hidden_size, proj_dim, text_depth, num_heads, mlp_ratio,

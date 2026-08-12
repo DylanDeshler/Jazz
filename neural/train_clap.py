@@ -54,8 +54,8 @@ wandb_run_name = str(time.time())
 # data
 # GLOBAL micro-step count; DDP splits it across ranks (must be divisible by
 # world_size). For N GPUs with NO accumulation set this to N -> 1 micro-step/rank.
-gradient_accumulation_steps = 4
-batch_size = 128          # per-GPU batch; DDP all-gather makes negatives = world*batch
+gradient_accumulation_steps = 2
+batch_size = 512          # per-GPU batch; DDP all-gather makes negatives = world*batch
 n_samples = 16383 * 10    # raw-audio crop length (~10s @ 16kHz) fed to the audio tower
 text_dim = 1024           # T5-v1.1-xxl hidden dim
 n_text_tokens = 256
@@ -79,6 +79,10 @@ proj_dim = 512            # shared CLAP space
 audio_depth = 12          # audio tower depth
 text_depth = 4            # text tower depth
 drop_path = 0.1           # stochastic depth rate, applied to BOTH towers (regularization)
+# activation-checkpoint the audio blocks: recomputes the audio forward during
+# backward to save memory, but ~doubles fwd cost. Only worth it near the memory
+# ceiling (large per-GPU batch). At 128/GPU leave OFF for a much cheaper backward.
+audio_checkpoint = False
 # audio front-end (mirrors contrast.py)
 patch_size = 16
 n_fft = 1024
@@ -290,7 +294,8 @@ model_args = dict(
     audio_cfg=audio_cfg, text_dim=text_dim,
     hidden_size=hidden_size, num_heads=num_heads, mlp_ratio=mlp_ratio,
     proj_dim=proj_dim, audio_depth=audio_depth, text_depth=text_depth,
-    drop_path=drop_path, n_text_tokens=n_text_tokens, audio_init=audio_init,
+    drop_path=drop_path, audio_checkpoint=audio_checkpoint,
+    n_text_tokens=n_text_tokens, audio_init=audio_init,
 )
 
 if init_from == 'scratch':
