@@ -55,7 +55,7 @@ wandb_run_name = str(time.time())
 # GLOBAL micro-step count; DDP splits it across ranks (must be divisible by
 # world_size). For N GPUs with NO accumulation set this to N -> 1 micro-step/rank.
 gradient_accumulation_steps = 2
-batch_size = 512          # per-GPU batch; DDP all-gather makes negatives = world*batch
+batch_size = 256          # per-GPU batch; DDP all-gather makes negatives = world*batch
 n_samples = 16383 * 10    # raw-audio crop length (~10s @ 16kHz) fed to the audio tower
 text_dim = 1024           # T5-v1.1-xxl hidden dim
 n_text_tokens = 256
