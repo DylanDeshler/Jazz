@@ -44,7 +44,7 @@ eval_interval = 2000
 log_interval = 100
 eval_iters = 100
 eval_only = False
-profile = False  # if True, print a per-stage timing breakdown each log_interval
+profile = True
 always_save_checkpoint = True
 init_from = 'scratch'  # 'scratch' or 'resume'
 # wandb
