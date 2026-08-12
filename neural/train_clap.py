@@ -39,14 +39,14 @@ from clap import build_wav_index, load_wav_crops
 
 # -----------------------------------------------------------------------------
 # I/O
-out_dir = 'clap'
+out_dir = 'clap_nopre'
 eval_interval = 2000
 log_interval = 100
 eval_iters = 100
 eval_only = False
 profile = False  # if True, print a per-stage timing breakdown each log_interval
 always_save_checkpoint = True
-init_from = 'resume'  # 'scratch' or 'resume'
+init_from = 'scratch'  # 'scratch' or 'resume'
 # wandb
 wandb_log = True
 wandb_project = 'clap_jazz'
