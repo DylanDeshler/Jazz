@@ -46,7 +46,7 @@ eval_interval = 2000
 log_interval = 100
 eval_iters = 100
 eval_only = False
-profile = True
+profile = False
 always_save_checkpoint = True
 init_from = 'scratch'  # 'scratch' or 'resume'
 # wandb
@@ -71,31 +71,18 @@ retrieval_clip_seconds = 15   # seconds of audio to write per retrieved song
 retrieval_n_queries = 6       # number of text queries to dump audio for
 retrieval_topk = 3            # top-k retrieved songs per query
 # model
-# shared transformer body: BOTH towers use these, only depth differs.
-# NOTE: for audio_init=='contrast' these MUST match the contrast.py backbone
-# (hidden 768 / heads 12 / mlp_ratio 4) or the pretrained weights won't load.
 hidden_size = 768         # shared audio+text hidden dim
 num_heads = 12            # shared audio+text heads
 mlp_ratio = 4.0           # shared audio+text mlp ratio
 proj_dim = 512            # shared CLAP space
-audio_depth = 12          # audio tower depth
+audio_depth = 8          # audio tower depth
 text_depth = 4            # text tower depth
 drop_path = 0.1           # stochastic depth rate, applied to BOTH towers (regularization)
-# activation-checkpoint the audio blocks: recomputes the audio forward during
-# backward to save memory, but ~doubles fwd cost. Only worth it near the memory
-# ceiling (large per-GPU batch). At 128/GPU leave OFF for a much cheaper backward.
 audio_checkpoint = False
-# audio front-end (mirrors contrast.py)
 patch_size = 16
 n_fft = 1024
 hop_length = 512
 n_mels = 192
-# SpecAugment mask WIDTHS are absolute (frames/mels), but the 10s window has ~5x
-# more time frames than the 2s window these were tuned for (~320 vs ~64), so the
-# original time_length=32 masked ~5x less of the clip -> weak regularization ->
-# overfitting. Scale time_length by the window ratio to restore ~50% expected
-# time coverage (torchaudio draws each mask width in [0, time_length]).
-# freq masking is unchanged (mel dim is still 192, so coverage is unaffected).
 time_length = 160
 frequency_length = 12
 # optimizer
