@@ -118,32 +118,42 @@ text_batch_rows = 512         # caption rows per text forward chunk
 NUM_TIERS, NUM_VARS = 3, 6
 
 # -----------------------------------------------------------------------------
-# load frozen CLAP
+# load frozen CLAP  (lazy: --check must not claim a GPU while training runs)
 # -----------------------------------------------------------------------------
-ckpt_path = os.path.join(clap_dir, 'ckpt.pt')
-checkpoint = torch.load(ckpt_path, map_location=device)
-model_args = checkpoint['model_args']
-model = CLAP(**model_args).to(device)
-state_dict = checkpoint['model']
-# train_clap.py compiles the TOWERS (submodules), not the whole model, so the
-# '_orig_mod.' that torch.compile inserts lands MID-key:
-#   audio_tower._orig_mod.blocks.0.norm1.weight
-# A startswith() strip silently misses these and load_state_dict then fails with
-# every tower key missing+unexpected. Strip every occurrence, like train_clap.py.
-for k, v in list(state_dict.items()):
-    if '_orig_mod.' in k:
-        state_dict[k.replace('_orig_mod.', '')] = state_dict.pop(k)
-model.load_state_dict(state_dict)
-# eval() is load-bearing, not cosmetic: it disables SpecAugment (clap.py gates it
-# on self.training), DropPath, and the text-side dropout. Generating this dataset
-# in train mode would bake augmentation noise into the conditioning vectors.
-model.eval()
+model = None
 
-# validate dims so a silently-wrong memmap can never be written
-assert model_args['text_dim'] == text_dim, f"CLAP text_dim {model_args['text_dim']} != {text_dim}"
-assert model_args['proj_dim'] == proj_dim, f"CLAP proj_dim {model_args['proj_dim']} != {proj_dim}"
-print(f"Loaded CLAP from {ckpt_path} (iter {checkpoint.get('iter_num', '?')}): "
-      f"raw-audio tower -> proj_dim={proj_dim}")
+
+def load_clap():
+    global model
+    if model is not None:
+        return model
+    ckpt_path = os.path.join(clap_dir, 'ckpt.pt')
+    checkpoint = torch.load(ckpt_path, map_location=device)
+    model_args = checkpoint['model_args']
+    m = CLAP(**model_args).to(device)
+    state_dict = checkpoint['model']
+    # train_clap.py compiles the TOWERS (submodules), not the whole model, so the
+    # '_orig_mod.' that torch.compile inserts lands MID-key:
+    #   audio_tower._orig_mod.blocks.0.norm1.weight
+    # A startswith() strip silently misses these and load_state_dict then fails
+    # with every tower key missing+unexpected. Strip every occurrence, as
+    # train_clap.py does.
+    for k, v in list(state_dict.items()):
+        if '_orig_mod.' in k:
+            state_dict[k.replace('_orig_mod.', '')] = state_dict.pop(k)
+    m.load_state_dict(state_dict)
+    # eval() is load-bearing, not cosmetic: it disables SpecAugment (clap.py gates
+    # it on self.training), DropPath, and the text-side dropout. Generating this
+    # dataset in train mode would bake augmentation noise into every vector.
+    m.eval()
+
+    # validate dims so a silently-wrong memmap can never be written
+    assert model_args['text_dim'] == text_dim, f"CLAP text_dim {model_args['text_dim']} != {text_dim}"
+    assert model_args['proj_dim'] == proj_dim, f"CLAP proj_dim {model_args['proj_dim']} != {proj_dim}"
+    print(f"Loaded CLAP from {ckpt_path} (iter {checkpoint.get('iter_num', '?')}): "
+          f"raw-audio tower -> proj_dim={proj_dim}")
+    model = m
+    return model
 
 with open(TEXT_META, 'rb') as f:
     text_meta = pickle.load(f)
@@ -153,14 +163,22 @@ with open(TEXT_META, 'rb') as f:
 # song_idx recovered from shuffled_indices indexes into this list and nothing
 # else. Any divergence here silently mis-joins every caption to the wrong song.
 # -----------------------------------------------------------------------------
-with open(CAPTIONS_JSONL, 'r', encoding='utf-8') as f:
-    raw_captions = [json.loads(line) for line in f]
+_raw_captions = None
+
+
+def raw_captions():
+    """Lazy: the jsonl is large and --check has no use for it."""
+    global _raw_captions
+    if _raw_captions is None:
+        with open(CAPTIONS_JSONL, 'r', encoding='utf-8') as f:
+            _raw_captions = [json.loads(line) for line in f]
+    return _raw_captions
 
 
 def song_paths_for(split):
     with open(AUDIO_MAPS[split], 'r') as f:
         audio_map = json.load(f)
-    paths = [c.get('file_path', '') for c in raw_captions if c.get('file_path', '') in audio_map]
+    paths = [c.get('file_path', '') for c in raw_captions() if c.get('file_path', '') in audio_map]
     return paths, audio_map
 
 
@@ -179,6 +197,82 @@ def text_rows_for(split, n_songs):
         f"[{split}] {TEXT_BINS[split]} is {got} bytes, expected {want} for shape "
         f"({meta_rows}, {n_text_tokens}, {text_dim}) float16.")
     return meta_rows
+
+
+# -----------------------------------------------------------------------------
+# crash durability
+#
+# This job is long enough that a mid-run machine crash is expected. The recovery
+# contract is: the per-split modality npz is written LAST and ATOMICALLY, so
+# `check_complete(split)` is trustworthy. Without the atomic rename, a crash
+# during np.savez leaves a truncated .npz that still *exists* but fails to open,
+# which would make an existence check actively misleading.
+# -----------------------------------------------------------------------------
+def _sync_memmap(mm):
+    """flush() + fsync so the bin survives a kernel-level crash, not just a
+    process death. numpy's flush() is msync, which pushes dirty pages, but we
+    fsync the underlying file too so the write is durable before the npz marker
+    that claims it finished."""
+    mm.flush()
+    try:
+        with open(mm.filename, 'rb+') as f:
+            os.fsync(f.fileno())
+    except (OSError, AttributeError) as e:
+        print(f'  NOTE: could not fsync {getattr(mm, "filename", "?")}: {e}')
+
+
+def _atomic_savez(path, **arrays):
+    """np.savez to a temp file, fsync, then os.replace (atomic on POSIX).
+    Guarantees the file is either absent or complete -- never half-written."""
+    tmp = path + '.tmp'
+    with open(tmp, 'wb') as f:
+        np.savez(f, **arrays)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
+
+
+def check_complete(split, verbose=True):
+    """Is `split` fully generated? Safe to call after a crash.
+
+    Verifies the marker opens (not just exists), that no measure rows were left
+    zero-filled, and that the companion bins/index are present and correctly
+    sized. Returns True only if the split is genuinely usable."""
+    marker = os.path.join(bin_dir, f'{clap_prefix}_clap_modality_{split}.npz')
+    if not os.path.exists(marker):
+        if verbose:
+            print(f'[{split}] INCOMPLETE: no marker at {marker}')
+        return False
+    try:
+        z = np.load(marker)
+        n_written = int(z['audio_written'])
+        n_total = int(z['audio_total'])
+        complete = bool(z['complete'])
+    except Exception as e:                      # truncated/corrupt npz
+        if verbose:
+            print(f'[{split}] INCOMPLETE: marker exists but is unreadable ({e})')
+        return False
+
+    ok = True
+    style = os.path.join(bin_dir, f'{clap_prefix}_clap_style_{split}.bin')
+    want = n_total * proj_dim * 2               # float16
+    if not os.path.exists(style) or os.path.getsize(style) != want:
+        got = os.path.getsize(style) if os.path.exists(style) else 'missing'
+        if verbose:
+            print(f'[{split}] INCOMPLETE: style bin is {got}, expected {want}')
+        ok = False
+    for name in (f'{clap_prefix}_clap_text_{split}.bin', f'{clap_prefix}_clap_index_{split}.npz'):
+        if not os.path.exists(os.path.join(bin_dir, name)):
+            if verbose:
+                print(f'[{split}] INCOMPLETE: missing {name}')
+            ok = False
+    if not complete and verbose:
+        print(f'[{split}] FINISHED BUT NOT COMPLETE: {n_total - n_written} of {n_total} '
+              f'measure rows were never written and are zero vectors. The run did not '
+              f'crash -- these are missing wavs/beats or measure-count mismatches.')
+    if ok and complete and verbose:
+        print(f'[{split}] complete: {n_written}/{n_total} measure rows.')
+    return ok and complete
 
 
 # -----------------------------------------------------------------------------
@@ -306,14 +400,19 @@ def build_audio(split, audio_map):
         emb_sum += out.astype(np.float64).sum(0)
         written += n
 
-    dst.flush()
+    _sync_memmap(dst)
     print(f'audio[{split}]: wrote {written}/{n_measures_total} measures -> {out_path}')
     if mismatches:
         print(f'  NOTE: {mismatches} songs had a beat-derived measure count != map count '
               f'(clamped per-song; alignment preserved for other songs)')
     if written != n_measures_total:
-        print(f'  WARNING: {n_measures_total - written} rows left unwritten (missing files / count mismatch)')
-    return emb_sum / max(written, 1)
+        print(f'  WARNING: {n_measures_total - written} rows left unwritten -- these stay '
+              f'ZERO vectors in the bin (memmap w+ is zero-filled), which are NOT valid '
+              f'unit-norm conditioning. Counts are recorded in the modality npz.')
+    return emb_sum / max(written, 1), dict(
+        audio_written=written, audio_total=n_measures_total,
+        audio_missing=n_measures_total - written, audio_song_mismatches=mismatches,
+    )
 
 
 # -----------------------------------------------------------------------------
@@ -343,7 +442,7 @@ def build_text(split, n_rows):
         dst[rows] = out
         emb_sum += out.astype(np.float64).sum(0)
 
-    dst.flush()
+    _sync_memmap(dst)
     print(f'text[{split}]: wrote {n_rows} rows -> {out_path}')
     return emb_sum / max(n_rows, 1)
 
@@ -371,7 +470,7 @@ def build_index(split, song_paths, audio_map, n_rows):
         m_start[i], m_stop[i] = int(s), int(e)
 
     out_path = os.path.join(bin_dir, f'{clap_prefix}_clap_index_{split}.npz')
-    np.savez(
+    _atomic_savez(
         out_path,
         row_to_song=song_idx.astype(np.int32),
         row_to_tier=tier_idx.astype(np.int8),
@@ -382,23 +481,29 @@ def build_index(split, song_paths, audio_map, n_rows):
     print(f'index[{split}]: {n_rows} rows / {n_songs} songs -> {out_path}')
 
 
-@torch.no_grad()
-def modality_stats(split, mean_audio, mean_text):
-    """Quantify the audio<->text modality gap so the DiT stage can correct for it.
+def modality_stats(split, mean_audio, mean_text, integrity):
+    """Quantify the audio<->text modality gap AND act as the split's DONE marker.
 
     Both towers L2-normalize, but CLIP-family models still place the two
     modalities in separate cones. Training the DiT purely on audio vectors and
     prompting with text at inference feeds it an out-of-distribution vector; the
-    centroid offset saved here is what a shift correction needs."""
+    centroid offset saved here is what a shift correction needs.
+
+    This file is written LAST for the split and written ATOMICALLY, so its
+    existence is a reliable "this split finished" marker (see check_complete).
+    It also carries the row-integrity counters, because finishing and being
+    complete are different things: unwritten measure rows stay zero-filled."""
     gap = float(np.linalg.norm(mean_audio - mean_text))
     ca, ct = np.linalg.norm(mean_audio), np.linalg.norm(mean_text)
     cos_centroids = float(mean_audio @ mean_text / (ca * ct + 1e-12))
     out_path = os.path.join(bin_dir, f'{clap_prefix}_clap_modality_{split}.npz')
-    np.savez(out_path,
-             mean_audio=mean_audio.astype(np.float32),
-             mean_text=mean_text.astype(np.float32),
-             centroid_l2_gap=np.float32(gap),
-             centroid_cosine=np.float32(cos_centroids))
+    _atomic_savez(out_path,
+                  mean_audio=mean_audio.astype(np.float32),
+                  mean_text=mean_text.astype(np.float32),
+                  centroid_l2_gap=np.float32(gap),
+                  centroid_cosine=np.float32(cos_centroids),
+                  complete=np.bool_(integrity['audio_missing'] == 0),
+                  **{k: np.int64(v) for k, v in integrity.items()})
     print(f'modality[{split}]: centroid L2 gap {gap:.4f}, centroid cosine {cos_centroids:.4f}, '
           f'|mean_audio|={ca:.4f} |mean_text|={ct:.4f} -> {out_path}')
     print('  (a large gap / low cosine == text prompts are OOD for an audio-trained DiT; '
@@ -406,13 +511,35 @@ def modality_stats(split, mean_audio, mean_text):
 
 
 if __name__ == '__main__':
+    import sys
+
+    # `python generate_clap_dataset.py --check` verifies a previous (possibly
+    # crashed) run without touching the GPU or rewriting anything.
+    if '--check' in sys.argv:
+        all_ok = all(check_complete(s) for s in ('train', 'val'))
+        print('ALL SPLITS COMPLETE' if all_ok else 'NOT COMPLETE -- see above')
+        sys.exit(0 if all_ok else 1)
+
     for split in ('train', 'val'):
+        # skip splits already finished, so a crashed run resumes at split
+        # granularity instead of redoing everything
+        if check_complete(split, verbose=False):
+            print(f'[{split}] already complete, skipping')
+            continue
+
+        load_clap()
         song_paths, audio_map = song_paths_for(split)
         n_rows = text_rows_for(split, len(song_paths))
         print(f"[{split}] {len(song_paths)} songs, {n_rows} caption rows")
 
-        mean_audio = build_audio(split, audio_map)
+        mean_audio, integrity = build_audio(split, audio_map)
         mean_text = build_text(split, n_rows)
         build_index(split, song_paths, audio_map, n_rows)
-        modality_stats(split, mean_audio, mean_text)
-    print('CLAP conditioning dataset generation complete.')
+        # LAST for the split, and atomic -- this is the DONE marker
+        modality_stats(split, mean_audio, mean_text, integrity)
+
+    print('\n--- final verification ---')
+    if all(check_complete(s) for s in ('train', 'val')):
+        print('CLAP conditioning dataset generation complete.')
+    else:
+        print('CLAP conditioning dataset generation FINISHED WITH GAPS (see above).')
