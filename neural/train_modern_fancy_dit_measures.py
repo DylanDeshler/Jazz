@@ -52,7 +52,7 @@ save_interval = 5000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir
@@ -236,23 +236,39 @@ def _load_clap_index(split):
         }
     return _clap_index[split]
 
+CAPTION_TIERS = ('short_caption', 'medium_caption', 'long_caption')
+NUM_VARS = 6
 
 def _captions():
-    """file_path -> caption record. Keyed by path rather than by position so it
-    cannot silently mis-join if the jsonl and the song list ever diverge."""
+    """file_path -> {tier: [variation, ...]}.
+
+    augment_captions.py writes {'file_path': ..., 'llm_output': {tier: [...]}}:
+    the text is NESTED under llm_output, and each tier is a LIST -- the original
+    caption at index 0, then NUM_VARS-1 LLM-selected rewrites of it. A top-level
+    rec['short_caption'] therefore does not exist and silently reads as empty.
+    Some records carry a malformed llm_output (a bare list, or nothing); every
+    other consumer in the repo treats those as "no captions", so do the same.
+    Keyed by path rather than by position so it cannot silently mis-join if the
+    jsonl and the song list ever diverge."""
     global _captions_by_path
     if _captions_by_path is None:
         _captions_by_path = {}
         with open(CAPTIONS_JSONL, 'r', encoding='utf-8') as f:
             for line in f:
                 rec = json.loads(line)
-                if rec.get('file_path'):
-                    _captions_by_path[rec['file_path']] = rec
+                path = rec.get('file_path')
+                if not path:
+                    continue
+                text = rec.get('llm_output', {})
+                if isinstance(text, list) or not text:
+                    text = {}
+                _captions_by_path[path] = {
+                    tier: (list(text.get(tier, [])) + [''] * NUM_VARS)[:NUM_VARS]
+                    for tier in CAPTION_TIERS
+                }
     return _captions_by_path
 
-
 _valid_start_cache = {}
-
 
 def valid_starts(split, n_meas):
     """Every measure row where an n_meas window stays inside one song.
@@ -285,7 +301,6 @@ def valid_starts(split, n_meas):
     _valid_start_cache[key] = starts
     return starts
 
-
 def measures_to_songs(idxs, split, n_meas=1):
     """For each measure row, the owning song and its captions.
 
@@ -295,6 +310,7 @@ def measures_to_songs(idxs, split, n_meas=1):
     """
     ix = _load_clap_index(split)
     caps = _captions()
+    misses = 0
     out = []
     for idx in np.atleast_1d(idxs).astype(np.int64):
         s = int(np.searchsorted(ix['start'], idx, side='right') - 1)
@@ -303,17 +319,26 @@ def measures_to_songs(idxs, split, n_meas=1):
             continue
         last = int(np.searchsorted(ix['start'], idx + n_meas - 1, side='right') - 1)
         path = str(ix['paths'][s])
-        rec = caps.get(path, {})
+        rec = caps.get(path)
+        if rec is None:
+            misses += 1
+            rec = {}
+        # variation 0 is the caption the LLM actually wrote; 1..5 are rewrites of
+        # it that the CLAP text tower also trained on
         out.append({
             'song': path,
             'measure_row': int(idx),
             'measure_in_song': int(idx - ix['start'][s]),
             'song_measures': int(ix['stop'][s] - ix['start'][s]),
             'straddles_song_boundary': bool(last != s or idx + n_meas > ix['stop'][s]),
-            'short_caption': rec.get('short_caption', ''),
-            'medium_caption': rec.get('medium_caption', ''),
-            'long_caption': rec.get('long_caption', ''),
+            **{tier: rec.get(tier, [''])[0] for tier in CAPTION_TIERS},
         })
+    if misses:
+        # the index and the jsonl are both keyed by file_path, so a miss means
+        # they were built from different caption files -- say so rather than
+        # writing blank captions and looking like the songs have none
+        print(f'measures_to_songs: {misses} of {len(out)} songs had no caption '
+              f'record in {CAPTIONS_JSONL}')
     return out
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
@@ -833,7 +858,7 @@ def save_samples(step):
 if wandb_log and master_process:
     import wandb
     if init_from == 'resume':
-        wandb.init(project=wandb_project, name=wandb_run_name, id='mbmpguwm', resume='must', config=config)
+        wandb.init(project=wandb_project, name=wandb_run_name, id='9bohl8v3', resume='must', config=config)
     else:
         wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
