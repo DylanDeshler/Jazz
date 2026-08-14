@@ -54,7 +54,7 @@ eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = True # disabled by default
+wandb_log = False # disabled by default
 wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
@@ -74,6 +74,10 @@ n_style_embeddings = 256
 style_dim = 512
 use_null_token = True
 respect_song_boundaries = True
+# measures per consistency-decoder call during sampling. the full batch is
+# n_samples * n_chunks = 240, which needs a ~5 GiB contiguous activation block
+# and OOMs against a fragmented post-training allocator. 0 disables chunking.
+decode_chunk_size = 60
 cut_seconds = 1
 drop_path_rate = 0.1
 # adamw optimizer
@@ -585,6 +589,30 @@ def crossfade_segments(segment_a, segment_b, sample_rate, crossfade_ms=15):
     
     return stitched_audio
 
+def _decode_measures(y, shape, mask, max_len, n_steps, decoder_noise=None):
+    """adapter.decode + tokenizer.decode over `shape[0]` measures, in slices.
+
+    The whole sample batch is n_samples * n_chunks = 240 measures, and the
+    consistency decoder's activations for that in one go want a single ~5 GiB
+    contiguous block. After a few thousand training steps the caching allocator
+    is fragmented around training's shapes and cannot hand one out even with
+    plenty of total headroom, so this decodes in slices and concatenates. The
+    decoder is per-item, so slicing changes nothing about the result.
+    """
+    n = shape[0]
+    chunk = decode_chunk_size if decode_chunk_size > 0 else n
+    outs = []
+    for i in range(0, n, chunk):
+        j = min(i + chunk, n)
+        z = adapter.decode(y[i:j], (j - i, shape[1], shape[2]), mask=mask[i:j])
+        outs.append(tokenizer.decode(
+            z, shape=(1, max_len), n_steps=n_steps,
+            noise=decoder_noise[i:j, :, :max_len] if decoder_noise is not None else None,
+        ))
+        del z
+    return torch.cat(outs, dim=0) if len(outs) > 1 else outs[0]
+
+
 def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1, gen_noise=None, decoder_noise=None, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode="independent", t_dist="uniform"):
     with ctx:
         y = ema.ema_model.generate(gen_shape, net_kwargs=net_kwargs, uncond_net_kwargs=uncond_net_kwargs, n_steps=n_steps, guidance=guidance, noise=gen_noise, memory_efficient=memory_efficient, rescale_phi=rescale_phi, cfg_mode=cfg_mode, t_dist=t_dist)
@@ -607,12 +635,11 @@ def predict_measures(gen_shape, net_kwargs, uncond_net_kwargs, n_steps, guidance
     mask = indices < lengths
     mask = mask.view(gen_shape[0] * n_chunks, max_latent_len)
     shape = (gen_shape[0] * n_chunks, vae_embed_dim, max_latent_len)
-        
+
     with ctx:
         y = rearrange(y, 'b t n c -> (b t) c n')
-        y = adapter.decode(y, shape, mask=mask)
-        y = tokenizer.decode(y, shape=(1, max_len), n_steps=n_steps, noise=decoder_noise[:, :, :max_len] if decoder_noise is not None else None)
-    
+        y = _decode_measures(y, shape, mask, max_len, n_steps, decoder_noise=decoder_noise)
+
     target_samples = target_samples.flatten().cpu().detach().numpy()
     y = y.squeeze().cpu().detach().numpy()
     
@@ -642,12 +669,11 @@ def decode_latents(y, bpm, n_steps, decoder_noise=None):
     mask = indices < lengths
     mask = mask.view(bpm.shape[0] * n_chunks, max_latent_len)
     shape = (bpm.shape[0] * n_chunks, vae_embed_dim, max_latent_len)
-        
+
     with ctx:
         y = rearrange(y, 'b t n c -> (b t) c n')
-        y = adapter.decode(y, shape, mask=mask)
-        y = tokenizer.decode(y, shape=(1, max_len), n_steps=n_steps, noise=decoder_noise[:, :, :max_len] if decoder_noise is not None else None)
-    
+        y = _decode_measures(y, shape, mask, max_len, n_steps, decoder_noise=decoder_noise)
+
     target_samples = target_samples.flatten().cpu().detach().numpy()
     y = y.squeeze().cpu().detach().numpy()
     
@@ -755,6 +781,11 @@ def save_samples(step):
     # suffix, so ranks write disjoint files into the shared batch_dir and nothing
     # has to be gathered back (the audio is ragged, one array per sample).
     audio = {}
+    # training leaves ~13 GiB reserved-but-unallocated in the caching allocator,
+    # carved into training-shaped blocks. sampling wants a few large contiguous
+    # ones, so hand the cached segments back before asking. costs a slow re-warm
+    # over the first few steps after the eval, which is cheap at this interval.
+    torch.cuda.empty_cache()
     if owners['cfg'] == ddp_rank:
         audio['cfg'] = predict_measures(x.shape, cfg_net_kwargs, uncond_net_kwargs, n_steps, guidance=cfg_guidances, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode=cfg_mode, t_dist=t_dist)
     if owners['cond'] == ddp_rank:
