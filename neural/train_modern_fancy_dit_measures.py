@@ -18,6 +18,7 @@ $ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=1 --master_addr=123.456.123
 """
 
 import os
+import json
 import time
 import math
 import copy
@@ -70,6 +71,7 @@ vae_embed_dim = 16
 n_style_embeddings = 256
 style_dim = 512
 use_null_token = True
+respect_song_boundaries = True
 cut_seconds = 1
 drop_path_rate = 0.1
 # adamw optimizer
@@ -129,21 +131,28 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
-def get_batch(split='train', batch_size=batch_size):
+def get_batch(split='train', batch_size=batch_size, return_idx=False):
     if split == 'train':
         data = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_train.bin', dtype=np.float32, mode='r', shape=(4490789, spatial_window, vae_embed_dim))
-        style = np.memmap('/data/binaries/clap_nopre_clap_style_train.bin', dtype=np.float32, mode='r', shape=(4490789, style_dim))
+        style = np.memmap('/data/binaries/clap_nopre_clap_style_train.bin', dtype=np.float16, mode='r', shape=(4490789, style_dim))
         meta = np.memmap('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_train.bin', dtype=np.float32, mode='r', shape=(4490789, 16))
         bpms = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_bpm_train.bin', dtype=np.float32, mode='r')
+        print(len(bpms))
     else:
         data = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_val.bin', dtype=np.float32, mode='r', shape=(99131, spatial_window, vae_embed_dim))
-        style = np.memmap('/data/binaries/clap_nopre_clap_style_val.bin', dtype=np.float32, mode='r', shape=(99131, style_dim))
+        style = np.memmap('/data/binaries/clap_nopre_clap_style_val.bin', dtype=np.float16, mode='r', shape=(99131, style_dim))
         meta = np.memmap('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_val.bin', dtype=np.float32, mode='r', shape=(99131, 16))
         bpms = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_bpm_val.bin', dtype=np.float32, mode='r')
     
-    idxs = torch.randint(len(data) - n_chunks, (batch_size,))    
+    if respect_song_boundaries:
+        starts = valid_starts(split, n_chunks)
+        idxs = torch.from_numpy(starts[np.random.randint(len(starts), size=batch_size)])
+    else:
+        idxs = torch.randint(len(data) - n_chunks, (batch_size,))
+
     x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    style = torch.from_numpy(np.stack([style[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+    # style bin is stored fp16 by generate_clap_dataset.py; widen to match the rest of the batch
+    style = torch.from_numpy(np.stack([style[idx:idx+n_chunks] for idx in idxs], axis=0).astype(np.float32)).pin_memory().to(device, non_blocking=True)
     chroma = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, :12] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     rms = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 12] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     density = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 13] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
@@ -151,7 +160,121 @@ def get_batch(split='train', batch_size=batch_size):
     flatness = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 15] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     bpm = torch.from_numpy(np.stack([bpms[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
 
+    if return_idx:
+        return x, bpm, rms, density, zcr, flatness, chroma, style, idxs.numpy()
     return x, bpm, rms, density, zcr, flatness, chroma, style
+
+# -----------------------------------------------------------------------------
+# measure row -> song -> caption
+#
+# The style bin holds one AUDIO-tower embedding per measure, so a row has no text
+# attached to it directly. generate_clap_dataset.py writes the join we need:
+#   song_measure_start/stop[song]  -- the contiguous measure block each song owns
+#   song_paths[song]               -- that song's wav path, which keys the caption
+# so a measure row maps to a song by locating the block that contains it.
+# -----------------------------------------------------------------------------
+CLAP_INDEX = {
+    'train': '/data/binaries/clap_nopre_clap_index_train.npz',
+    'val':   '/data/binaries/clap_nopre_clap_index_val.npz',
+}
+CAPTIONS_JSONL = '/home/dylandeshler/Jazz/preprocess/final_llm_captions_expanded.jsonl'
+
+_clap_index = {}
+_captions_by_path = None
+
+
+def _load_clap_index(split):
+    if split not in _clap_index:
+        z = np.load(CLAP_INDEX[split], allow_pickle=False)
+        start = z['song_measure_start'].astype(np.int64)
+        stop = z['song_measure_stop'].astype(np.int64)
+        # blocks are not guaranteed to be listed in ascending row order, so sort
+        # before searchsorted -- an unsorted haystack returns silent nonsense
+        order = np.argsort(start)
+        _clap_index[split] = {
+            'start': start[order], 'stop': stop[order],
+            'paths': z['song_paths'][order],
+        }
+    return _clap_index[split]
+
+
+def _captions():
+    """file_path -> caption record. Keyed by path rather than by position so it
+    cannot silently mis-join if the jsonl and the song list ever diverge."""
+    global _captions_by_path
+    if _captions_by_path is None:
+        _captions_by_path = {}
+        with open(CAPTIONS_JSONL, 'r', encoding='utf-8') as f:
+            for line in f:
+                rec = json.loads(line)
+                if rec.get('file_path'):
+                    _captions_by_path[rec['file_path']] = rec
+    return _captions_by_path
+
+
+_valid_start_cache = {}
+
+
+def valid_starts(split, n_meas):
+    """Every measure row where an n_meas window stays inside one song.
+
+    get_batch's plain randint can start a window near the end of a song and run
+    it into the next one, splicing two unrelated recordings into a single
+    training example -- with conditioning (style/bpm/chroma) taken from both.
+    Sampling from this array instead makes that impossible. Built once per
+    split and cached; ~36 MB for the train split.
+    """
+    key = (split, int(n_meas))
+    if key in _valid_start_cache:
+        return _valid_start_cache[key]
+    ix = _load_clap_index(split)
+    segs, dropped, dropped_rows = [], 0, 0
+    for s, e in zip(ix['start'], ix['stop']):
+        if e - s >= n_meas:
+            segs.append(np.arange(s, e - n_meas + 1, dtype=np.int64))
+        else:
+            dropped += 1
+            dropped_rows += int(e - s)
+    if not segs:
+        raise ValueError(f'[{split}] no song has {n_meas} measures; cannot build windows')
+    starts = np.concatenate(segs)
+    total = int(ix['stop'].max())
+    print(f'[{split}] boundary-safe starts: {len(starts)} of {total} rows '
+          f'({len(starts) / total * 100:.1f}%); {dropped} songs shorter than '
+          f'{n_meas} measures excluded ({dropped_rows} rows)')
+    _valid_start_cache[key] = starts
+    return starts
+
+
+def measures_to_songs(idxs, split, n_meas=1):
+    """For each measure row, the owning song and its captions.
+
+    n_meas is the window length: get_batch slices n_chunks consecutive measures
+    and nothing stops that window from running off the end of a song, so we
+    report whether it straddles rather than pretending the first song owns it.
+    """
+    ix = _load_clap_index(split)
+    caps = _captions()
+    out = []
+    for idx in np.atleast_1d(idxs).astype(np.int64):
+        s = int(np.searchsorted(ix['start'], idx, side='right') - 1)
+        if s < 0 or idx >= ix['stop'][s]:
+            out.append({'song': None, 'note': f'measure {int(idx)} falls in no song block'})
+            continue
+        last = int(np.searchsorted(ix['start'], idx + n_meas - 1, side='right') - 1)
+        path = str(ix['paths'][s])
+        rec = caps.get(path, {})
+        out.append({
+            'song': path,
+            'measure_row': int(idx),
+            'measure_in_song': int(idx - ix['start'][s]),
+            'song_measures': int(ix['stop'][s] - ix['start'][s]),
+            'straddles_song_boundary': bool(last != s or idx + n_meas > ix['stop'][s]),
+            'short_caption': rec.get('short_caption', ''),
+            'medium_caption': rec.get('medium_caption', ''),
+            'long_caption': rec.get('long_caption', ''),
+        })
+    return out
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
@@ -497,7 +620,12 @@ def save_samples(step):
     cfg_mode = 'joint'
     n_steps = 32
     n_samples = 10
-    x, bpm, rms, density, zcr, flatness, chroma, style = get_batch('val', batch_size=n_samples)
+    x, bpm, rms, density, zcr, flatness, chroma, style, idxs = get_batch('val', batch_size=n_samples, return_idx=True)
+    try:
+        songs = measures_to_songs(idxs, 'val', n_meas=n_chunks)
+    except (OSError, KeyError, ValueError) as e:
+        print(f'save_samples: could not resolve captions ({e}); writing audio without text')
+        songs = [{} for _ in range(n_samples)]
     
     gen_noise = torch.randn(x.shape).to(device)
     decoder_noise = torch.randn(n_samples * n_chunks, 1, encoder_ratios * (max_adapter_len - 1)).to(device)
@@ -546,6 +674,7 @@ def save_samples(step):
         sf.write(os.path.join(batch_dir, f'{i}_cfg.wav'), y_cfg[i].flatten(), 16000)
         sf.write(os.path.join(batch_dir, f'{i}_bpm_only.wav'), y_uncond[i].flatten(), 16000)
         sf.write(os.path.join(batch_dir, f'{i}_gt.wav'), y_gt[i].flatten(), 16000)
+        s = songs[i] if i < len(songs) else {}
         np.savez(
             os.path.join(batch_dir, f'{i}_cond.npz'),
             bpm=bpm[i].detach().cpu().numpy(),
@@ -555,7 +684,21 @@ def save_samples(step):
             flatness=flatness[i].detach().cpu().numpy(),
             chroma=chroma[i].detach().cpu().numpy(),
             style=style[i].detach().cpu().numpy(),
+            **{k: str(v) for k, v in s.items()},
         )
+        # the text the style vector *should* correspond to -- these embeddings come
+        # from the audio tower, so this is the caption of the source song, not a
+        # prompt the model was given
+        with open(os.path.join(batch_dir, f'{i}_caption.txt'), 'w', encoding='utf-8') as f:
+            f.write(f"song:   {s.get('song')}\n")
+            f.write(f"measure {s.get('measure_in_song')} of {s.get('song_measures')} "
+                    f"(row {s.get('measure_row')}, window {n_chunks} measures)\n")
+            if s.get('straddles_song_boundary'):
+                f.write("WARNING: this window crosses a song boundary; the caption "
+                        "only describes the song it starts in\n")
+            f.write(f"\nshort:  {s.get('short_caption')}\n")
+            f.write(f"\nmedium: {s.get('medium_caption')}\n")
+            f.write(f"\nlong:   {s.get('long_caption')}\n")
 
 # logging
 if wandb_log and master_process:
