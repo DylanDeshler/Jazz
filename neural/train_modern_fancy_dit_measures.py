@@ -22,6 +22,7 @@ import json
 import time
 import math
 import copy
+from datetime import timedelta
 from contextlib import nullcontext
 from tqdm import tqdm
 from torchinfo import summary
@@ -29,6 +30,7 @@ from torchinfo import summary
 from scipy.signal import medfilt
 import numpy as np
 import torch
+import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
@@ -101,7 +103,12 @@ config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # various inits, derived attributes, I/O setup
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
 if ddp:
-    init_process_group(backend=backend)
+    # eval/sampling runs on rank 0 ONLY (see the `and master_process` guard in the
+    # training loop) while ranks 1..N-1 block in the next backward's all-reduce.
+    # eval_iters=600 over two splits plus three diffusion sampling passes can
+    # easily exceed the default 30-minute collective timeout, at which point the
+    # NCCL watchdog aborts the whole job. Give it a lot of headroom.
+    init_process_group(backend=backend, timeout=timedelta(hours=4))
     ddp_rank = int(os.environ['RANK'])
     ddp_local_rank = int(os.environ['LOCAL_RANK'])
     ddp_world_size = int(os.environ['WORLD_SIZE'])
@@ -131,22 +138,46 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
+_bpm_checked = set()
+
+
+def _check_bpm_alignment(split, bpms, n_rows):
+    """The bpm bin comes from generate_bpm_dataset.py, a SEPARATE pass over its own
+    path list that silently skips measures with duration <= 0. Every other array
+    here derives from the ..._map.json. If the two disagree on length they are
+    misaligned, and every row past the first divergence carries another song's
+    tempo -- silent label corruption, no crash. Fail fast instead of training on it."""
+    if split in _bpm_checked:
+        return
+    _bpm_checked.add(split)
+    assert len(bpms) == n_rows, (
+        f"[{split}] bpm bin has {len(bpms)} rows but the measure arrays have {n_rows}. "
+        f"These were built by different generators and are misaligned -- BPM labels "
+        f"would be wrong for most of the corpus. Regenerate the bpm bin against the "
+        f"same map, or set respect_song_boundaries aside and fix this first."
+    )
+
+
 def get_batch(split='train', batch_size=batch_size, return_idx=False):
     if split == 'train':
         data = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_train.bin', dtype=np.float32, mode='r', shape=(4490789, spatial_window, vae_embed_dim))
         style = np.memmap('/data/binaries/clap_nopre_clap_style_train.bin', dtype=np.float16, mode='r', shape=(4490789, style_dim))
         meta = np.memmap('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_train.bin', dtype=np.float32, mode='r', shape=(4490789, 16))
         bpms = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_bpm_train.bin', dtype=np.float32, mode='r')
-        print(len(bpms))
     else:
         data = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_val.bin', dtype=np.float32, mode='r', shape=(99131, spatial_window, vae_embed_dim))
         style = np.memmap('/data/binaries/clap_nopre_clap_style_val.bin', dtype=np.float16, mode='r', shape=(99131, style_dim))
         meta = np.memmap('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_val.bin', dtype=np.float32, mode='r', shape=(99131, 16))
         bpms = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_bpm_val.bin', dtype=np.float32, mode='r')
     
+    _check_bpm_alignment(split, bpms, data.shape[0])
+
     if respect_song_boundaries:
         starts = valid_starts(split, n_chunks)
-        idxs = torch.from_numpy(starts[np.random.randint(len(starts), size=batch_size)])
+        # draw through the TORCH rng, not numpy's: torch.manual_seed(1337 + ddp_rank)
+        # is what gives each rank a different data stream. numpy's global rng is
+        # not seeded here, so using it would put ranks' sampling outside our control.
+        idxs = torch.from_numpy(starts[torch.randint(len(starts), (batch_size,)).numpy()])
     else:
         idxs = torch.randint(len(data) - n_chunks, (batch_size,))
 
@@ -239,9 +270,10 @@ def valid_starts(split, n_meas):
         raise ValueError(f'[{split}] no song has {n_meas} measures; cannot build windows')
     starts = np.concatenate(segs)
     total = int(ix['stop'].max())
-    print(f'[{split}] boundary-safe starts: {len(starts)} of {total} rows '
-          f'({len(starts) / total * 100:.1f}%); {dropped} songs shorter than '
-          f'{n_meas} measures excluded ({dropped_rows} rows)')
+    if master_process:
+        print(f'[{split}] boundary-safe starts: {len(starts)} of {total} rows '
+              f'({len(starts) / total * 100:.1f}%); {dropped} songs shorter than '
+              f'{n_meas} measures excluded ({dropped_rows} rows)')
     _valid_start_cache[key] = starts
     return starts
 
@@ -422,7 +454,8 @@ elif init_from.startswith('gpt2'):
 
 model.to(device)
 ema.ema_model.to(device)
-summary(model)
+if master_process:
+    summary(model)
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
@@ -442,15 +475,30 @@ if ddp:
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
 def estimate_loss():
+    """Evaluate on EVERY rank, then average.
+
+    MUST be entered by all ranks -- it contains a collective. Each rank walks
+    eval_iters // world_size batches from its own (differently seeded) stream, so
+    the union is still ~eval_iters batches but the node finishes in a quarter of
+    the wall-clock instead of rank 0 grinding while the others block.
+
+    Batch size is deliberately left at batch_size * gradient_accumulation_steps:
+    that matches the training shape, so the compiled ema forward is not retraced.
+    """
+    n_local = math.ceil(eval_iters / ddp_world_size)
     out = {}
-    for i, split in enumerate(['train', 'val']):
-        losses = torch.zeros(eval_iters)
-        for k in tqdm(range(eval_iters)):
+    for split in ['train', 'val']:
+        # accumulate on-device; .item() per step would sync the GPU every batch
+        losses = torch.zeros(n_local, device=device)
+        for k in tqdm(range(n_local), desc=f'eval {split}', disable=not master_process):
             X = get_batch(split, batch_size=batch_size * gradient_accumulation_steps)
             with ctx:
                 loss = ema.ema_model(*X)
-            losses[k] = loss.item()
-        out[split] = losses.mean()
+            losses[k] = loss.detach().float()
+        mean = losses.mean()
+        if ddp:
+            dist.all_reduce(mean, op=dist.ReduceOp.AVG)
+        out[split] = mean.item()
     return out
 
 # learning rate decay scheduler (cosine with warmup)
@@ -737,55 +785,65 @@ while True:
     tokens_trained += batch_size * gradient_accumulation_steps * max_seq_len
 
     # evaluate the loss on train/val sets and write checkpoints
-    if iter_num % eval_interval == 0 and master_process:
-        if iter_num % sample_interval == 0 and master_process:
-            with ctx:
-                save_samples(iter_num)
-            
+    if iter_num % eval_interval == 0:
+        # EVERY rank enters estimate_loss -- it ends in an all_reduce, so gating it
+        # on master_process would deadlock the collective.
         losses = estimate_loss()
-        print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
-        
-        if eval_only:
-            break
-        
-        if wandb_log and not (init_from == 'resume' and local_iter_num == 0):
-            wandb.log({
-                "iter": iter_num,
-                "train/loss": losses['train'],
-                "val/loss": losses['val'],
-                "lr": lr,
-                "mfu": running_mfu*100, # convert to percentage
-                "tokens": tokens_trained,
-            })
-        if iter_num > 0 and losses['val'] < best_val_loss:
-            best_val_loss = losses['val']
-            checkpoint = {
-                'model': raw_model.state_dict(),
-                'optimizer': optimizer.state_dict(),
-                'model_args': model_args,
-                'iter_num': iter_num,
-                'val_loss': best_val_loss,
-                'best_val_loss': best_val_loss,
-                'config': config,
-                'tokens': tokens_trained,
-                'ema': ema.ema_model.state_dict(),
-            }
-            torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
-            print(f"saving new best checkpoint to {out_dir}")
-        if iter_num > 0 and always_save_checkpoint:
-            checkpoint = {
-                'model': raw_model.state_dict(),
-                'optimizer': optimizer.state_dict(),
-                'model_args': model_args,
-                'iter_num': iter_num,
-                'val_loss': losses['val'],
-                'best_val_loss': best_val_loss,
-                'config': config,
-                'tokens': tokens_trained,
-                'ema': ema.ema_model.state_dict(),
-            }
-            torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
-    
+
+        if master_process:
+            # sampling and checkpointing stay rank-0 only
+            if iter_num % sample_interval == 0:
+                with ctx:
+                    save_samples(iter_num)
+
+            print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
+
+            if wandb_log and not (init_from == 'resume' and local_iter_num == 0):
+                wandb.log({
+                    "iter": iter_num,
+                    "train/loss": losses['train'],
+                    "val/loss": losses['val'],
+                    "lr": lr,
+                    "mfu": running_mfu*100, # convert to percentage
+                    "tokens": tokens_trained,
+                })
+            if iter_num > 0 and losses['val'] < best_val_loss:
+                best_val_loss = losses['val']
+                checkpoint = {
+                    'model': raw_model.state_dict(),
+                    'optimizer': optimizer.state_dict(),
+                    'model_args': model_args,
+                    'iter_num': iter_num,
+                    'val_loss': best_val_loss,
+                    'best_val_loss': best_val_loss,
+                    'config': config,
+                    'tokens': tokens_trained,
+                    'ema': ema.ema_model.state_dict(),
+                }
+                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+                print(f"saving new best checkpoint to {out_dir}")
+            if iter_num > 0 and always_save_checkpoint:
+                checkpoint = {
+                    'model': raw_model.state_dict(),
+                    'optimizer': optimizer.state_dict(),
+                    'model_args': model_args,
+                    'iter_num': iter_num,
+                    'val_loss': losses['val'],
+                    'best_val_loss': best_val_loss,
+                    'config': config,
+                    'tokens': tokens_trained,
+                    'ema': ema.ema_model.state_dict(),
+                }
+                torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
+
+        # resync: ranks 1..N-1 wait here while rank 0 samples and writes
+        # checkpoints, instead of racing into the next backward and blocking
+        # inside its all-reduce (which is far harder to diagnose from a stack dump)
+        if ddp:
+            dist.barrier()
+
+    # eval_only is a config constant, identical on every rank, so this break is
+    # collective -- no rank is left waiting on a partner that already exited
     if eval_only:
         break
 
