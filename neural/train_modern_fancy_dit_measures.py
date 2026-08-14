@@ -54,7 +54,7 @@ eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = False # disabled by default
+wandb_log = True # disabled by default
 wandb_project = out_dir
 wandb_run_name = str(time.time())
 # data
@@ -103,11 +103,11 @@ config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # various inits, derived attributes, I/O setup
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
 if ddp:
-    # eval/sampling runs on rank 0 ONLY (see the `and master_process` guard in the
-    # training loop) while ranks 1..N-1 block in the next backward's all-reduce.
-    # eval_iters=600 over two splits plus three diffusion sampling passes can
-    # easily exceed the default 30-minute collective timeout, at which point the
-    # NCCL watchdog aborts the whole job. Give it a lot of headroom.
+    # eval is split across ranks and sampling is sharded by variant, but rank 0
+    # still carries the checkpoint writes on its own. eval_iters=600 over two
+    # splits plus the sampling passes can exceed the default 30-minute collective
+    # timeout, at which point the NCCL watchdog aborts the whole job. Give it a
+    # lot of headroom.
     init_process_group(backend=backend, timeout=timedelta(hours=4))
     ddp_rank = int(os.environ['RANK'])
     ddp_local_rank = int(os.environ['LOCAL_RANK'])
@@ -124,6 +124,7 @@ else:
     # if not ddp, we are running on a single gpu, and one process
     master_process = True
     seed_offset = 0
+    ddp_rank = 0
     ddp_world_size = 1
 tokens_per_iter = gradient_accumulation_steps * ddp_world_size * batch_size * max_seq_len
 print(f"tokens per iteration will be: {tokens_per_iter:,}")
@@ -659,25 +660,59 @@ def decode_latents(y, bpm, n_steps, decoder_noise=None):
     
     return out
 
+# the four generation passes save_samples makes, with a rough relative cost used
+# only to balance the static assignment below. joint-cfg runs cond+uncond through
+# one generate, so it costs ~2x a plain pass; gt skips diffusion generation
+# entirely and only pays the adapter/tokenizer decode.
+_SAMPLE_VARIANTS = (('cfg', 2.0), ('cond', 1.0), ('bpm_only', 1.0), ('gt', 0.3))
+
+
+def _variant_owners():
+    """Greedy longest-processing-time split of the sampling passes across ranks.
+    Purely a function of world size, so every rank derives the same assignment
+    without communicating. At world_size=1 rank 0 owns all four."""
+    loads = [0.0] * ddp_world_size
+    owners = {}
+    for name, cost in sorted(_SAMPLE_VARIANTS, key=lambda kv: -kv[1]):
+        r = min(range(ddp_world_size), key=lambda i: loads[i])
+        owners[name] = r
+        loads[r] += cost
+    return owners
+
+
 @torch.no_grad()
 def save_samples(step):
     batch_dir = os.path.join(out_dir, str(step))
     os.makedirs(batch_dir, exist_ok=True)
-    
+
     t_dist = 'logit'
     cfg_mode = 'joint'
     n_steps = 32
     n_samples = 10
+    owners = _variant_owners()
     x, bpm, rms, density, zcr, flatness, chroma, style, idxs = get_batch('val', batch_size=n_samples, return_idx=True)
-    try:
-        songs = measures_to_songs(idxs, 'val', n_meas=n_chunks)
-    except (OSError, KeyError, ValueError) as e:
-        print(f'save_samples: could not resolve captions ({e}); writing audio without text')
-        songs = [{} for _ in range(n_samples)]
-    
+
     gen_noise = torch.randn(x.shape).to(device)
     decoder_noise = torch.randn(n_samples * n_chunks, 1, encoder_ratios * (max_adapter_len - 1)).to(device)
-    
+
+    if ddp:
+        # every rank must condition on the SAME batch and the SAME noise, otherwise
+        # the four variants describe four different songs and are not comparable.
+        # torch.manual_seed(1337 + ddp_rank) gives each rank its own draw, so rank
+        # 0's wins and everyone else's is overwritten in place.
+        for t in (x, bpm, rms, density, zcr, flatness, chroma, style, gen_noise, decoder_noise):
+            dist.broadcast(t, src=0)
+
+    # captions are text-only and only rank 0 writes them, so don't make every rank
+    # pay for the jsonl load. idxs is rank 0's draw, matching the broadcast batch.
+    songs = []
+    if master_process:
+        try:
+            songs = measures_to_songs(idxs, 'val', n_meas=n_chunks)
+        except (OSError, KeyError, ValueError) as e:
+            print(f'save_samples: could not resolve captions ({e}); writing audio without text')
+            songs = [{} for _ in range(n_samples)]
+
     unconditional_mask = {
         'bpm': torch.ones(*bpm.shape, 1).to(device).bool(),
         'rms': torch.ones(*rms.shape, 1).to(device).bool(),
@@ -709,19 +744,31 @@ def save_samples(step):
             cfg_net_kwargs.append(net_kwargs | {'unconditional_mask': temp_mask})
     
     cfg_guidances = [3] * len(unconditional_mask)
-    
-    y_cfg = predict_measures(x.shape, cfg_net_kwargs, uncond_net_kwargs, n_steps, guidance=cfg_guidances, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode=cfg_mode, t_dist=t_dist)
-    y = predict_measures(x.shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, t_dist=t_dist)
+
     bpm_only_mask = {k: (torch.zeros_like(v) if k == 'bpm' else v) for k, v in unconditional_mask.items()}
     bpm_only_net_kwargs = net_kwargs | {'unconditional_mask': bpm_only_mask}
-    y_uncond = predict_measures(x.shape, bpm_only_net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, t_dist=t_dist)
-    y_gt = decode_latents(x, bpm, n_steps, decoder_noise=decoder_noise)
+
+    # each rank runs only the passes it owns. the variant name doubles as the wav
+    # suffix, so ranks write disjoint files into the shared batch_dir and nothing
+    # has to be gathered back (the audio is ragged, one array per sample).
+    audio = {}
+    if owners['cfg'] == ddp_rank:
+        audio['cfg'] = predict_measures(x.shape, cfg_net_kwargs, uncond_net_kwargs, n_steps, guidance=cfg_guidances, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode=cfg_mode, t_dist=t_dist)
+    if owners['cond'] == ddp_rank:
+        audio['cond'] = predict_measures(x.shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, t_dist=t_dist)
+    if owners['bpm_only'] == ddp_rank:
+        audio['bpm_only'] = predict_measures(x.shape, bpm_only_net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, t_dist=t_dist)
+    if owners['gt'] == ddp_rank:
+        audio['gt'] = decode_latents(x, bpm, n_steps, decoder_noise=decoder_noise)
+
+    for name, waves in audio.items():
+        for i in range(n_samples):
+            sf.write(os.path.join(batch_dir, f'{i}_{name}.wav'), waves[i].flatten(), 16000)
+
+    if not master_process:
+        return
 
     for i in range(n_samples):
-        sf.write(os.path.join(batch_dir, f'{i}_cond.wav'), y[i].flatten(), 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_cfg.wav'), y_cfg[i].flatten(), 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_bpm_only.wav'), y_uncond[i].flatten(), 16000)
-        sf.write(os.path.join(batch_dir, f'{i}_gt.wav'), y_gt[i].flatten(), 16000)
         s = songs[i] if i < len(songs) else {}
         np.savez(
             os.path.join(batch_dir, f'{i}_cond.npz'),
@@ -790,12 +837,15 @@ while True:
         # on master_process would deadlock the collective.
         losses = estimate_loss()
 
-        if master_process:
-            # sampling and checkpointing stay rank-0 only
-            if iter_num % sample_interval == 0:
-                with ctx:
-                    save_samples(iter_num)
+        # sampling is sharded by variant across ranks (see _variant_owners), and it
+        # starts with a broadcast, so EVERY rank has to enter save_samples. the
+        # branch is on iter_num, which is identical everywhere, so it stays collective.
+        if iter_num % sample_interval == 0:
+            with ctx:
+                save_samples(iter_num)
 
+        if master_process:
+            # checkpointing stays rank-0 only
             print(f"iter {iter_num}: train loss {losses['train']:.6f}, val loss {losses['val']:.6f}")
 
             if wandb_log and not (init_from == 'resume' and local_iter_num == 0):
@@ -836,9 +886,10 @@ while True:
                 }
                 torch.save(checkpoint, os.path.join(out_dir, f'ckpt_{iter_num}.pt'))
 
-        # resync: ranks 1..N-1 wait here while rank 0 samples and writes
-        # checkpoints, instead of racing into the next backward and blocking
-        # inside its all-reduce (which is far harder to diagnose from a stack dump)
+        # resync: ranks that finished their sampling pass early wait here while the
+        # rest finish and rank 0 writes checkpoints, instead of racing into the next
+        # backward and blocking inside its all-reduce (which is far harder to
+        # diagnose from a stack dump). also guarantees every wav is on disk here.
         if ddp:
             dist.barrier()
 
