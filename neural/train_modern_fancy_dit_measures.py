@@ -108,12 +108,15 @@ if ddp:
     # splits plus the sampling passes can exceed the default 30-minute collective
     # timeout, at which point the NCCL watchdog aborts the whole job. Give it a
     # lot of headroom.
-    init_process_group(backend=backend, timeout=timedelta(hours=4))
     ddp_rank = int(os.environ['RANK'])
     ddp_local_rank = int(os.environ['LOCAL_RANK'])
     ddp_world_size = int(os.environ['WORLD_SIZE'])
     device = f'cuda:{ddp_local_rank}'
     torch.cuda.set_device(device)
+    # bind the process group to this rank's device explicitly. without device_id,
+    # device-less collectives (barrier) guess from the ambient context and warn,
+    # and the nccl communicator is built lazily on first use instead of here.
+    init_process_group(backend=backend, timeout=timedelta(hours=4), device_id=torch.device(device))
     master_process = ddp_rank == 0 # this process will do logging, checkpointing etc.
     seed_offset = ddp_rank # each process gets a different seed
     # world_size number of processes will be training simultaneously, so we can scale
