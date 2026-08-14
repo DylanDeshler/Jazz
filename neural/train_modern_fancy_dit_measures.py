@@ -40,8 +40,8 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-stage = 2
-out_dir = f'Stage{stage}_MetaConditionalModernDiTV2_smedium_24576_subset_adapter_longtrain_24chunks_nulltokens'
+stage = 1
+out_dir = f'Stage{stage}_MetaConditionalModernDiTV2_smedium_24576_subset_adapter_longtrain_24chunks_nulltokens_clap'
 eval_interval = 5000
 sample_interval = 5000
 log_interval = 100
@@ -49,7 +49,7 @@ save_interval = 5000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir
@@ -68,7 +68,7 @@ n_chunks = 24
 max_seq_len = spatial_window * n_chunks
 vae_embed_dim = 16
 n_style_embeddings = 256
-style_dim = 128
+style_dim = 512
 use_null_token = True
 cut_seconds = 1
 drop_path_rate = 0.1
@@ -132,12 +132,12 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 def get_batch(split='train', batch_size=batch_size):
     if split == 'train':
         data = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_train.bin', dtype=np.float32, mode='r', shape=(4490789, spatial_window, vae_embed_dim))
-        style = np.memmap('/data/binaries/contrast_learntmep_instance_10s_style_train.bin', dtype=np.float32, mode='r', shape=(4490789, style_dim))
+        style = np.memmap('/data/binaries/clap_nopre_clap_style_train.bin', dtype=np.float32, mode='r', shape=(4490789, style_dim))
         meta = np.memmap('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_train.bin', dtype=np.float32, mode='r', shape=(4490789, 16))
         bpms = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_bpm_train.bin', dtype=np.float32, mode='r')
     else:
         data = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_val.bin', dtype=np.float32, mode='r', shape=(99131, spatial_window, vae_embed_dim))
-        style = np.memmap('/data/binaries/contrast_learntmep_instance_10s_style_val.bin', dtype=np.float32, mode='r', shape=(99131, style_dim))
+        style = np.memmap('/data/binaries/clap_nopre_clap_style_val.bin', dtype=np.float32, mode='r', shape=(99131, style_dim))
         meta = np.memmap('/data/binaries/low_large_24576_subset_chroma_rms_density_zcr_flatness_val.bin', dtype=np.float32, mode='r', shape=(99131, 16))
         bpms = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_bpm_val.bin', dtype=np.float32, mode='r')
     
