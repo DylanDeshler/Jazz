@@ -384,12 +384,15 @@ model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chu
 class EMAModel:
     def __init__(self, model, decay=0.9999, step_offset=0):
         self.decay = decay
-        # steps of averaging this EMA already carries. The (1+s)/(10+s) ramp below
-        # exists so a from-scratch EMA isn't pinned to its random init; at a stage
-        # boundary that ramp is actively harmful, because step 0 gives decay 0.1
-        # and the loaded stage-1 EMA is 90% overwritten by the raw model on the
-        # very first update. Carrying stage 1's step count forward keeps it at the
-        # full 0.9999 ceiling, which is what the averaging history actually earns.
+        # steps of averaging to credit this EMA with at startup. The (1+s)/(10+s)
+        # ramp below exists so a from-scratch EMA isn't pinned to its random init;
+        # at a stage boundary it is harmful, because step 0 gives decay 0.1 and the
+        # loaded stage-1 EMA is 90% overwritten by the raw model on the very first
+        # update. Offsetting by 5000 gives decay 0.998 immediately -- the loaded
+        # weights are safe -- while keeping a ~500-step tracking window so the EMA
+        # still follows stage 2's fast initial adaptation. Jumping straight to the
+        # 0.9999 ceiling is the opposite failure: a 6.9k-step half-life leaves the
+        # EMA ~61% stage-1 weights after 5k steps and it barely moves.
         self.step_offset = step_offset
         self.ema_model = copy.deepcopy(model).eval()
         self.ema_model.requires_grad_(False)
@@ -455,7 +458,7 @@ if init_from == 'scratch':
         # point of loading stage1_ckpt['ema'] is that the averaged weights are
         # better, and estimate_loss reports the EMA, so getting this wrong shows
         # up directly as a worse stage-2 starting loss.
-        ema = EMAModel(model, step_offset=stage1_ckpt.get('iter_num', 0))
+        ema = EMAModel(model, step_offset=5000)
         load_stage1_weights(ema.ema_model, stage1_ckpt['ema'], 'stage2 <- stage1 ema')
         _zero_local_embedder(ema.ema_model)
         if master_process:
