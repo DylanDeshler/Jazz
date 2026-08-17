@@ -1166,6 +1166,18 @@ class Patcher(torch.nn.Module):
         x = self.block(x)
         return x
 
+def zero_init_local_embedder(patcher: Patcher) -> None:
+    """Make a Patcher emit exactly zero while staying trainable.
+
+    ResnetBlock1d returns `block2(block1(x)) + to_out(x)`, so zeroing the two
+    output-side projections is sufficient for a true no-op. block1 keeps its
+    normal init on purpose -- see the note in ModernDiT.initialize_weights.
+    """
+    for layer in (patcher.block.block2.project, patcher.block.to_out):
+        nn.init.zeros_(layer.weight)
+        if layer.bias is not None:
+            nn.init.zeros_(layer.bias)
+
 class ModernDiT(nn.Module):
     def __init__(self,
                  in_channels,
@@ -1960,8 +1972,7 @@ class MetaConditionalModernDiTV2(nn.Module):
         
         self.t_embedder = TimestepEmbedder(hidden_size, bias=False, swiglu=True)
         self.x_embedder = Patcher(in_channels, hidden_size, patch_size=patch_size, bias=True)
-        # 16 value channels (12 chroma + rms + density + zcr + flatness) plus 5
-        # presence-mask channels (1 shared for chroma, 1 each for the 4 scalars).
+        # 16 value channels (12 chroma + rms + density + zcr + flatness) plus 5 presence-mask channels (1 shared for chroma, 1 each for the 4 scalars).
         self.local_embedder = Patcher(16 + 5, hidden_size, patch_size=1, bias=True, use_norm=False)
         self.style_embedder = nn.Linear(style_dim, hidden_size, bias=True)
         self.bpm_embedder = nn.Embedding(350, hidden_size)
@@ -2060,13 +2071,17 @@ class MetaConditionalModernDiTV2(nn.Module):
         for block in self.blocks:
             nn.init.zeros_(block.mlp.w3.weight)
             nn.init.zeros_(block.attn.proj.weight)
-        # zero out un-trained weights
-        nn.init.zeros_(self.local_embedder.block.block1.project.weight)
-        nn.init.zeros_(self.local_embedder.block.block2.project.weight)
-        nn.init.zeros_(self.local_embedder.block.to_out.weight)
-        nn.init.zeros_(self.local_embedder.block.block1.project.bias)
-        nn.init.zeros_(self.local_embedder.block.block2.project.bias)
-        nn.init.zeros_(self.local_embedder.block.to_out.bias)
+        # ControlNet-style identity init: zero the two paths that MEET at the
+        # output -- block2.project (main) and to_out (skip) -- so the block emits
+        # exactly 0 and stage 2 starts equivalent to stage 1.
+        #
+        # block1.project is deliberately left at normal init. Zeroing it too is a
+        # trap: block1 out = 0 => silu(0) = 0 => grad(block2.project.weight) = 0,
+        # and grad(block1) flows back through block2.project.weight = 0, so the two
+        # lock each other at zero for the whole run. Both kernel-3 convs would stay
+        # dead and the block would degenerate to to_out (a kernel-1 pointwise map)
+        # plus a constant bias -- no temporal smearing, no nonlinearity.
+        zero_init_local_embedder(self.local_embedder)
     
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
@@ -2114,8 +2129,7 @@ class MetaConditionalModernDiTV2(nn.Module):
             null_tokens = {
                 'style': self.null_style,
                 'bpm': self.null_bpm,
-                # local signals drop to their normalized mean; the presence channel
-                # (built below) is what encodes absence, so the null value is just 0.
+                # local signals drop to their normalized mean; the presence channel (built below) is what encodes absence, so the null value is just 0.
                 'chroma': scalar_zero,
                 'rms': scalar_zero,
                 'density': scalar_zero,
@@ -2166,8 +2180,7 @@ class MetaConditionalModernDiTV2(nn.Module):
                 style = torch.where(unconditional_mask['style'], self.null_style, style)
                 bpm = torch.where(unconditional_mask['bpm'], self.null_bpm, bpm)
 
-                # local signals -> zero the value AND fold the request into the drop
-                # mask so the presence channel is turned off too.
+                # local signals -> zero the value AND fold the request into the drop mask so the presence channel is turned off too.
                 chroma = torch.where(unconditional_mask['chroma'], scalar_zero, chroma)
                 rms = torch.where(unconditional_mask['rms'].squeeze(-1), scalar_zero, rms)
                 density = torch.where(unconditional_mask['density'].squeeze(-1), scalar_zero, density)
@@ -2183,7 +2196,7 @@ class MetaConditionalModernDiTV2(nn.Module):
 
         if self.stage == 2:
             # presence channels: 1 where the signal is present, 0 where dropped.
-            # chroma shares a single mask; each scalar gets its own.
+            # chroma shares a single mask, each scalar gets its own.
             presence = torch.stack([
                 (~local_drop['chroma']).to(x.dtype),
                 (~local_drop['rms']).to(x.dtype),

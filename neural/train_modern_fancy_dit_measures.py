@@ -35,7 +35,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 
-from diffusion_forcing import MetaConditionalModernDiTV2_smedium as net
+from diffusion_forcing import MetaConditionalModernDiTV2_smedium as net, zero_init_local_embedder
 from dito import DiToV5 as Tokenizer
 from adapter import InvertibleAdapter
 import soundfile as sf
@@ -382,63 +382,85 @@ max_adapter_len = adapter.max_seq_len
 model_args = dict(in_channels=vae_embed_dim, style_dim=style_dim, n_chunks=n_chunks, spatial_window=spatial_window, use_null_token=use_null_token, gradient_checkpointing=gradient_checkpointing, patch_size=patch_size, stage=stage, drop_path_rate=drop_path_rate)
 
 class EMAModel:
-    def __init__(self, model, decay=0.9999):
+    def __init__(self, model, decay=0.9999, step_offset=0):
         self.decay = decay
+        # steps of averaging this EMA already carries. The (1+s)/(10+s) ramp below
+        # exists so a from-scratch EMA isn't pinned to its random init; at a stage
+        # boundary that ramp is actively harmful, because step 0 gives decay 0.1
+        # and the loaded stage-1 EMA is 90% overwritten by the raw model on the
+        # very first update. Carrying stage 1's step count forward keeps it at the
+        # full 0.9999 ceiling, which is what the averaging history actually earns.
+        self.step_offset = step_offset
         self.ema_model = copy.deepcopy(model).eval()
         self.ema_model.requires_grad_(False)
         self.ema_model = torch.compile(self.ema_model)
-        
+
     @torch.no_grad()
     def update(self, model, step):
+        step = step + self.step_offset
         current_decay = min(self.decay, (1 + step) / (10 + step))
-        
+
         for ema_param, model_param in zip(self.ema_model.parameters(), model.parameters()):
             if model_param.requires_grad:
                 ema_param.data.mul_(current_decay).add_(model_param.data, alpha=1.0 - current_decay)
+
+def _zero_local_embedder(m):
+    """Re-zero the stage-2 adapter after loading stage-1 weights over it.
+
+    ModernDiT.initialize_weights already did this at construction, but the
+    load_state_dict above can overwrite it, so redo it here. Shares the model's
+    own helper rather than re-listing layers, so the two can't drift -- zeroing
+    block1.project as well would silently freeze both kernel-3 convs forever.
+    """
+    m = getattr(m, '_orig_mod', m)
+    zero_init_local_embedder(m.net.local_embedder)
+
+
+def load_stage1_weights(module, state_dict, what, skip='local_embedder'):
+    """Load a stage-1 checkpoint into `module`, reporting what did NOT land.
+
+    The trap this exists to close: torch.compile registers the real model as a
+    '_orig_mod' child, so a COMPILED module's own keys carry that prefix while
+    an uncompiled one's do not. Stripping the prefix and loading into a compiled
+    module (which is what `ema.ema_model` is) matches nothing at all, and with
+    strict=False that is completely silent -- you keep whatever weights the
+    module was constructed with. Unwrap to _orig_mod so both targets take the
+    same stripped keys, then assert on the leftovers instead of trusting it.
+    """
+    target = getattr(module, '_orig_mod', module)      # undo torch.compile
+    # .replace, not .startswith: compiling a submodule puts the prefix MID-key
+    sd = {k.replace('_orig_mod.', ''): v for k, v in state_dict.items()}
+    sd = {k: v for k, v in sd.items() if skip not in k}
+    missing, unexpected = target.load_state_dict(sd, strict=False)
+    real_missing = [k for k in missing if skip not in k]
+    assert not unexpected, (
+        f'[{what}] checkpoint carries {len(unexpected)} keys the model has no slot '
+        f'for, e.g. {unexpected[:3]}. These weights were NOT loaded.')
+    assert not real_missing, (
+        f'[{what}] model has {len(real_missing)} params the checkpoint did not '
+        f'fill, e.g. {real_missing[:3]}. These are still at random init.')
+    if master_process:
+        print(f'[{what}] loaded {len(sd)} tensors, {len(missing)} left at init ({skip})')
+
 
 if init_from == 'scratch':
     if stage == 2:
         stage1_ckpt = torch.load(os.path.join(out_dir.replace('Stage2', 'Stage1'), 'ckpt.pt'), map_location=device)
 
         model = net(**model_args)
-        state_dict = stage1_ckpt['model']
+        load_stage1_weights(model, stage1_ckpt['model'], 'stage2 <- stage1 model')
+        _zero_local_embedder(model)
 
-        # fix the keys of the state dictionary :(
-        # honestly no idea how checkpoints sometimes get this prefix, have to debug more
-        unwanted_prefix = '_orig_mod.'
-        for k,v in list(state_dict.items()):
-            if k.startswith(unwanted_prefix):
-                state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-            if 'local_embedder' in k:
-                state_dict.pop(k[len(unwanted_prefix):])
-        model.load_state_dict(state_dict, strict=False)
-        
-        torch.nn.init.zeros_(model.net.local_embedder.block.block1.project.weight)
-        torch.nn.init.zeros_(model.net.local_embedder.block.block2.project.weight)
-        torch.nn.init.zeros_(model.net.local_embedder.block.to_out.weight)
-        torch.nn.init.zeros_(model.net.local_embedder.block.block1.project.bias)
-        torch.nn.init.zeros_(model.net.local_embedder.block.block2.project.bias)
-        torch.nn.init.zeros_(model.net.local_embedder.block.to_out.bias)
-        
-        ema = EMAModel(model)
-        state_dict = stage1_ckpt['ema']
-
-        # fix the keys of the state dictionary :(
-        # honestly no idea how checkpoints sometimes get this prefix, have to debug more
-        unwanted_prefix = '_orig_mod.'
-        for k,v in list(state_dict.items()):
-            if k.startswith(unwanted_prefix):
-                state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-            if 'local_embedder' in k:
-                state_dict.pop(k[len(unwanted_prefix):])
-        ema.ema_model.load_state_dict(state_dict, strict=False)
-        
-        torch.nn.init.zeros_(ema.ema_model.net.local_embedder.block.block1.project.weight)
-        torch.nn.init.zeros_(ema.ema_model.net.local_embedder.block.block2.project.weight)
-        torch.nn.init.zeros_(ema.ema_model.net.local_embedder.block.to_out.weight)
-        torch.nn.init.zeros_(ema.ema_model.net.local_embedder.block.block1.project.bias)
-        torch.nn.init.zeros_(ema.ema_model.net.local_embedder.block.block2.project.bias)
-        torch.nn.init.zeros_(ema.ema_model.net.local_embedder.block.to_out.bias)
+        # deepcopy(model) would seed the EMA with the RAW stage-1 weights; the
+        # point of loading stage1_ckpt['ema'] is that the averaged weights are
+        # better, and estimate_loss reports the EMA, so getting this wrong shows
+        # up directly as a worse stage-2 starting loss.
+        ema = EMAModel(model, step_offset=stage1_ckpt.get('iter_num', 0))
+        load_stage1_weights(ema.ema_model, stage1_ckpt['ema'], 'stage2 <- stage1 ema')
+        _zero_local_embedder(ema.ema_model)
+        if master_process:
+            print(f'stage2: EMA resumes at step_offset={ema.step_offset} '
+                  f'(decay {min(ema.decay, (1 + ema.step_offset) / (10 + ema.step_offset)):.6f})')
     elif stage == 1:
         # init a new model from scratch
         print("Initializing a new model from scratch")
@@ -877,7 +899,7 @@ checkpoint = None # free up memory
 while True:
 
     # determine and set the learning rate for this iteration
-    lr = get_lr(iter_num) if decay_lr else learning_rate
+    lr = get_lr(iter_num)
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
     
