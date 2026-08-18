@@ -880,12 +880,13 @@ def decode_latents(y, bpm, n_steps, decoder_noise=None):
     
     return out
 
-# the four generation passes save_samples makes, with a rough relative cost used
-# only to balance the static assignment below. joint-cfg runs cond+uncond through
-# one generate, so it costs ~2x a plain pass; gt skips diffusion generation
-# entirely and only pays the adapter/tokenizer decode.
-_SAMPLE_VARIANTS = (('cfg', 2.0), ('cond', 1.0), ('bpm_only', 1.0),
-                    ('text', 1.0), ('text_only', 1.0), ('gt', 0.3))
+# the generation passes save_samples makes, with a rough relative cost used only
+# to balance the static assignment below. joint-cfg runs cond+uncond through one
+# generate, so it costs ~2x a plain pass; the two text variants are guided the
+# same way and cost the same; gt skips diffusion generation entirely and only
+# pays the adapter/tokenizer decode.
+_SAMPLE_VARIANTS = (('cfg', 2.0), ('text', 2.0), ('text_only', 2.0),
+                    ('cond', 1.0), ('bpm_only', 1.0), ('gt', 0.3))
 
 
 def _variant_owners():
@@ -988,15 +989,38 @@ def save_samples(step):
     bpm_only_mask = {k: (torch.zeros_like(v) if k == 'bpm' else v) for k, v in unconditional_mask.items()}
     bpm_only_net_kwargs = net_kwargs | {'unconditional_mask': bpm_only_mask}
 
-    # 'text' is 'cond' with the style vector swapped for the caption's text-tower
+    def text_cfg_terms(keys):
+        """CFG terms offering only `keys`, prompted from the text tower.
+
+        Built the same way as cfg_net_kwargs above so the text passes differ from
+        'cfg' in exactly two places: which signals are offered, and which tower the
+        style vector came from. Guidance matters more here than anywhere else --
+        text is the weakest conditioning signal the model has (it is seen on only
+        text_cond_prob of samples, and carries no per-measure detail), so at
+        guidance 1.0 the caption barely steers the sample away from the
+        unconditional prior. Returns (net_kwargs_list, guidances); the
+        unconditional baseline is shared with every other variant, and its style is
+        fully masked, so the text override can never leak into it.
+        """
+        base = net_kwargs | {'style': text_style}
+        if cfg_mode == 'joint':
+            mask = {k: (torch.zeros_like(v) if k in keys else v)
+                    for k, v in unconditional_mask.items()}
+            return [base | {'unconditional_mask': mask}], cfg_guidances[:1]
+        terms = []
+        for k in keys:
+            mask = unconditional_mask.copy()
+            mask[k] = ~mask[k]
+            terms.append(base | {'unconditional_mask': mask})
+        return terms, cfg_guidances[:len(terms)]
+
+    # 'text' is 'cfg' with the style vector swapped for the caption's text-tower
     # embedding and nothing else touched, so the pair isolates the modality gap.
-    text_net_kwargs = net_kwargs | {'style': text_style}
+    text_cfg_net_kwargs, text_guidances = text_cfg_terms(tuple(unconditional_mask))
     # 'text_only' is the deployment path: a caption and a tempo, with every
     # per-measure acoustic descriptor dropped, because at inference you have none
     # of them. (mask False == keep, True == drop.)
-    text_only_mask = {k: (torch.zeros_like(v) if k in ('bpm', 'style') else v)
-                      for k, v in unconditional_mask.items()}
-    text_only_net_kwargs = net_kwargs | {'style': text_style, 'unconditional_mask': text_only_mask}
+    text_only_net_kwargs, text_only_guidances = text_cfg_terms(('bpm', 'style'))
 
     # each rank runs only the passes it owns. the variant name doubles as the wav
     # suffix, so ranks write disjoint files into the shared batch_dir and nothing
@@ -1014,9 +1038,9 @@ def save_samples(step):
     if owners['bpm_only'] == ddp_rank:
         audio['bpm_only'] = predict_measures(x.shape, bpm_only_net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, t_dist=t_dist)
     if have_text and owners['text'] == ddp_rank:
-        audio['text'] = predict_measures(x.shape, text_net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, t_dist=t_dist)
+        audio['text'] = predict_measures(x.shape, text_cfg_net_kwargs, uncond_net_kwargs, n_steps, guidance=text_guidances, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode=cfg_mode, t_dist=t_dist)
     if have_text and owners['text_only'] == ddp_rank:
-        audio['text_only'] = predict_measures(x.shape, text_only_net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, t_dist=t_dist)
+        audio['text_only'] = predict_measures(x.shape, text_only_net_kwargs, uncond_net_kwargs, n_steps, guidance=text_only_guidances, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, memory_efficient=False, rescale_phi=0, cfg_mode=cfg_mode, t_dist=t_dist)
     if owners['gt'] == ddp_rank:
         audio['gt'] = decode_latents(x, bpm, n_steps, decoder_noise=decoder_noise)
 
@@ -1060,7 +1084,10 @@ def save_samples(step):
                 # embedding is not recoverable here -- only its tier is.
                 f.write(f"\n*_text.wav and *_text_only.wav were prompted with a "
                         f"{sample_text_tier} text embedding for this song "
-                        f"(one of the {NUM_VARS} variations of the line above).\n")
+                        f"(one of the {NUM_VARS} variations of the line above), "
+                        f"both guided at {cfg_guidances[0]} like *_cfg.wav. "
+                        f"text_only additionally drops every per-measure "
+                        f"descriptor, keeping only the caption and the tempo.\n")
 
 # logging
 if wandb_log and master_process:
