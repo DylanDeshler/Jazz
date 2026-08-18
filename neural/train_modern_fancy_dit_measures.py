@@ -43,7 +43,7 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-stage = 2
+stage = 1
 out_dir = f'Stage{stage}_MetaConditionalModernDiTV2_smedium_24576_subset_adapter_longtrain_24chunks_nulltokens_clap'
 eval_interval = 5000
 sample_interval = 5000
@@ -52,7 +52,7 @@ save_interval = 5000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir
@@ -80,6 +80,23 @@ respect_song_boundaries = True
 decode_chunk_size = 60
 cut_seconds = 1
 drop_path_rate = 0.1
+# fraction of TRAINING samples whose style vector is drawn from the CLAP text
+# tower instead of the audio tower. The style bin holds audio-tower embeddings
+# only, so a model trained purely on it never sees the text side of the shared
+# space -- and CLAP's modality gap is wide enough that a text embedding at
+# inference is out of distribution, which is what makes pure-text generation
+# fall apart. Mixing them in closes the gap from the model's side.
+#
+# Kept low because a text embedding is fixed across the whole window, so these
+# samples carry no per-measure style signal -- they teach the text mode at the
+# cost of the temporal one. This is also the NOMINAL rate: multi_token_drop nulls
+# style before the net sees it, so effective exposure is p * P(style survives),
+# which is p*0.90 in stage 1 (p_joint_full=0.9) but only p*0.50 in stage 2
+# (p_ind_uncond=0.5). 0.15 gives 13.5% / 7.5%, in the same range as the 10% CFG
+# unconditional-dropout rate that suffices to train a whole extra mode.
+text_cond_prob = 0.15
+# caption tier the text-conditioned sampling variants prompt with
+sample_text_tier = 'medium_caption'
 # adamw optimizer
 learning_rate = 1e-4 # max learning rate
 max_iters = 1000000 # total number of training iterations
@@ -166,7 +183,7 @@ def _check_bpm_alignment(split, bpms, n_rows):
     )
 
 
-def get_batch(split='train', batch_size=batch_size, return_idx=False):
+def get_batch(split='train', batch_size=batch_size, return_idx=False, text_prob=None):
     if split == 'train':
         data = np.memmap('/data/binaries/low_large_24576_subset_adapter_longtrain_v2_64_train.bin', dtype=np.float32, mode='r', shape=(4490789, spatial_window, vae_embed_dim))
         style = np.memmap('/data/binaries/clap_nopre_clap_style_train.bin', dtype=np.float16, mode='r', shape=(4490789, style_dim))
@@ -182,15 +199,11 @@ def get_batch(split='train', batch_size=batch_size, return_idx=False):
 
     if respect_song_boundaries:
         starts = valid_starts(split, n_chunks)
-        # draw through the TORCH rng, not numpy's: torch.manual_seed(1337 + ddp_rank)
-        # is what gives each rank a different data stream. numpy's global rng is
-        # not seeded here, so using it would put ranks' sampling outside our control.
         idxs = torch.from_numpy(starts[torch.randint(len(starts), (batch_size,)).numpy()])
     else:
         idxs = torch.randint(len(data) - n_chunks, (batch_size,))
 
     x = torch.from_numpy(np.stack([data[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
-    # style bin is stored fp16 by generate_clap_dataset.py; widen to match the rest of the batch
     style = torch.from_numpy(np.stack([style[idx:idx+n_chunks] for idx in idxs], axis=0).astype(np.float32)).pin_memory().to(device, non_blocking=True)
     chroma = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, :12] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     rms = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 12] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
@@ -198,6 +211,13 @@ def get_batch(split='train', batch_size=batch_size, return_idx=False):
     zcr = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 14] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     flatness = torch.from_numpy(np.stack([meta[idx:idx+n_chunks, 15] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
     bpm = torch.from_numpy(np.stack([bpms[idx:idx+n_chunks] for idx in idxs], axis=0)).pin_memory().to(device, non_blocking=True)
+
+    # applied to val too, so the reported loss is measured under the same
+    # conditioning distribution the model is trained on. save_samples passes
+    # text_prob=0 explicitly when it wants the untouched audio embeddings.
+    style = _swap_in_text_style(
+        style, idxs.numpy(), split,
+        text_cond_prob if text_prob is None else text_prob)
 
     if return_idx:
         return x, bpm, rms, density, zcr, flatness, chroma, style, idxs.numpy()
@@ -233,6 +253,10 @@ def _load_clap_index(split):
         _clap_index[split] = {
             'start': start[order], 'stop': stop[order],
             'paths': z['song_paths'][order],
+            # sorted position -> position in the ORIGINAL song_paths order, which
+            # is the space row_to_song speaks in. Without this the text-embedding
+            # join silently reads a different song's captions.
+            'orig': order,
         }
     return _clap_index[split]
 
@@ -340,6 +364,123 @@ def measures_to_songs(idxs, split, n_meas=1):
         print(f'measures_to_songs: {misses} of {len(out)} songs had no caption '
               f'record in {CAPTIONS_JSONL}')
     return out
+
+# -----------------------------------------------------------------------------
+# text-tower conditioning
+#
+# generate_clap_dataset.py already wrote everything needed:
+#   {prefix}_clap_text_{split}.bin  (n_rows, 512) fp16, L2-normalized
+# holding one embedding per (song, tier, variation) = NUM_TIERS * NUM_VARS rows
+# per song, in the caption bin's SHUFFLED row order. row_to_song / row_to_tier in
+# the index npz undo that shuffle.
+# -----------------------------------------------------------------------------
+NUM_TIERS = len(CAPTION_TIERS)
+CLAP_TEXT_BIN = {
+    'train': '/data/binaries/clap_nopre_clap_text_train.bin',
+    'val':   '/data/binaries/clap_nopre_clap_text_val.bin',
+}
+_text_index = {}
+
+
+def _load_text_index(split):
+    """song (ORIGINAL index) -> its NUM_TIERS*NUM_VARS text rows, plus the memmap."""
+    if split in _text_index:
+        return _text_index[split]
+    z = np.load(CLAP_INDEX[split], allow_pickle=False)
+    row_to_song = z['row_to_song'].astype(np.int64)
+    row_to_tier = z['row_to_tier'].astype(np.int64)
+    n_songs = len(z['song_paths'])
+    n_rows = len(row_to_song)
+    per_song = NUM_TIERS * NUM_VARS
+
+    counts = np.bincount(row_to_song, minlength=n_songs)
+    assert counts.min() == counts.max() == per_song, (
+        f'[{split}] expected exactly {per_song} caption rows per song, got '
+        f'{counts.min()}..{counts.max()}. The reshape below assumes a dense '
+        f'(n_songs, {per_song}) block and would mis-join otherwise.')
+    want = n_rows * style_dim * 2                      # fp16
+    got = os.path.getsize(CLAP_TEXT_BIN[split])
+    assert got == want, (
+        f'[{split}] {CLAP_TEXT_BIN[split]} is {got} bytes, expected {want} for '
+        f'({n_rows}, {style_dim}) fp16. This bin and the index npz came from '
+        f'different runs and the row join would be garbage.')
+
+    # a stable sort groups each song's rows contiguously, in ascending row order
+    rows = np.argsort(row_to_song, kind='stable').reshape(n_songs, per_song)
+    tiers = row_to_tier[rows]
+    # generate_captions_dataset.py flattens short+medium+long, so tier is 0/1/2 in
+    # CAPTION_TIERS order and every song must carry NUM_VARS of each. text_style_for
+    # picks a tier with argmax over a boolean, which returns slot 0 when nothing
+    # matches -- that would silently prompt with the wrong tier, so check here.
+    per_tier = np.stack([(tiers == t).sum(axis=1) for t in range(NUM_TIERS)], axis=1)
+    assert (per_tier == NUM_VARS).all(), (
+        f'[{split}] every song should have {NUM_VARS} rows of each of the '
+        f'{NUM_TIERS} tiers; got per-song counts ranging '
+        f'{per_tier.min(axis=0).tolist()}..{per_tier.max(axis=0).tolist()}.')
+
+    _text_index[split] = {
+        'rows': rows,
+        'tiers': tiers,
+        'emb': np.memmap(CLAP_TEXT_BIN[split], dtype=np.float16, mode='r',
+                         shape=(n_rows, style_dim)),
+    }
+    return _text_index[split]
+
+
+def _songs_of(idxs, split):
+    """measure row -> ORIGINAL song index, or -1 if the row belongs to no song."""
+    ix = _load_clap_index(split)
+    idxs = np.asarray(idxs, dtype=np.int64)
+    pos = np.searchsorted(ix['start'], idxs, side='right') - 1
+    safe = np.clip(pos, 0, None)
+    ok = (pos >= 0) & (idxs < ix['stop'][safe])
+    return np.where(ok, ix['orig'][safe], -1)
+
+
+def text_style_for(idxs, split, tier=None):
+    """(len(idxs), style_dim) float32 text embeddings + a resolved-ok mask.
+
+    tier=None draws uniformly over every tier and variation, which is what
+    training wants. Naming a tier picks its first variation deterministically so
+    successive sampling runs prompt with the same text and stay comparable.
+    """
+    songs = _songs_of(idxs, split)
+    out = np.zeros((len(songs), style_dim), dtype=np.float32)
+    ok = songs >= 0
+    if not ok.any():
+        return out, ok
+    ti = _load_text_index(split)
+    s = songs[ok]
+    if tier is None:
+        slot = torch.randint(ti['rows'].shape[1], (int(ok.sum()),)).numpy()
+    else:
+        # argmax over the boolean gives the first slot carrying this tier
+        slot = (ti['tiers'][s] == CAPTION_TIERS.index(tier)).argmax(axis=1)
+    out[ok] = ti['emb'][ti['rows'][s, slot]].astype(np.float32)
+    return out, ok
+
+
+def _swap_in_text_style(style, idxs, split, p):
+    """Replace a random fraction p of the batch's style with text embeddings.
+
+    Two things change at once for a swapped sample: the tower (audio -> text) and
+    the time profile (one embedding per measure -> one constant across the whole
+    window). Both are true of a real text prompt at inference, so training them
+    together is the point -- but it does mean this cannot separate "model can't
+    read text embeddings" from "model expects style to vary over the window".
+    """
+    if p <= 0:
+        return style
+    picked = np.flatnonzero((torch.rand(len(idxs)) < p).numpy())
+    if not len(picked):
+        return style
+    emb, ok = text_style_for(idxs[picked], split)
+    picked, emb = picked[ok], emb[ok]
+    if not len(picked):
+        return style
+    style[torch.from_numpy(picked).to(style.device)] = (
+        torch.from_numpy(emb).to(style.device)[:, None, :])
+    return style
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
@@ -743,7 +884,8 @@ def decode_latents(y, bpm, n_steps, decoder_noise=None):
 # only to balance the static assignment below. joint-cfg runs cond+uncond through
 # one generate, so it costs ~2x a plain pass; gt skips diffusion generation
 # entirely and only pays the adapter/tokenizer decode.
-_SAMPLE_VARIANTS = (('cfg', 2.0), ('cond', 1.0), ('bpm_only', 1.0), ('gt', 0.3))
+_SAMPLE_VARIANTS = (('cfg', 2.0), ('cond', 1.0), ('bpm_only', 1.0),
+                    ('text', 1.0), ('text_only', 1.0), ('gt', 0.3))
 
 
 def _variant_owners():
@@ -769,18 +911,37 @@ def save_samples(step):
     n_steps = 32
     n_samples = 10
     owners = _variant_owners()
-    x, bpm, rms, density, zcr, flatness, chroma, style, idxs = get_batch('val', batch_size=n_samples, return_idx=True)
+    # text_prob=0: the audio-conditioned variants must see untouched audio-tower
+    # embeddings, and the text variants get theirs from text_style below, so the
+    # two differ in exactly one thing.
+    x, bpm, rms, density, zcr, flatness, chroma, style, idxs = get_batch('val', batch_size=n_samples, return_idx=True, text_prob=0.0)
 
     gen_noise = torch.randn(x.shape).to(device)
     decoder_noise = torch.randn(n_samples * n_chunks, 1, encoder_ratios * (max_adapter_len - 1)).to(device)
+
+    # built from rank 0's idxs only, then broadcast with the rest of the batch.
+    # Left as zeros if the text bin is missing -- embeddings are L2-normalized so
+    # an all-zero tensor can't occur naturally, which makes it a safe sentinel
+    # every rank can test after the broadcast without another collective.
+    text_style = torch.zeros_like(style)
+    if master_process:
+        try:
+            emb, ok = text_style_for(idxs, 'val', tier=sample_text_tier)
+            if ok.any():
+                text_style = torch.from_numpy(emb).to(device)[:, None, :].expand_as(style).contiguous()
+            else:
+                print('save_samples: no val row resolved to a song; skipping text variants')
+        except (OSError, KeyError, ValueError, AssertionError) as e:
+            print(f'save_samples: no text embeddings ({e}); skipping text variants')
 
     if ddp:
         # every rank must condition on the SAME batch and the SAME noise, otherwise
         # the four variants describe four different songs and are not comparable.
         # torch.manual_seed(1337 + ddp_rank) gives each rank its own draw, so rank
         # 0's wins and everyone else's is overwritten in place.
-        for t in (x, bpm, rms, density, zcr, flatness, chroma, style, gen_noise, decoder_noise):
+        for t in (x, bpm, rms, density, zcr, flatness, chroma, style, text_style, gen_noise, decoder_noise):
             dist.broadcast(t, src=0)
+    have_text = bool(text_style.abs().sum() > 0)
 
     # captions are text-only and only rank 0 writes them, so don't make every rank
     # pay for the jsonl load. idxs is rank 0's draw, matching the broadcast batch.
@@ -827,6 +988,16 @@ def save_samples(step):
     bpm_only_mask = {k: (torch.zeros_like(v) if k == 'bpm' else v) for k, v in unconditional_mask.items()}
     bpm_only_net_kwargs = net_kwargs | {'unconditional_mask': bpm_only_mask}
 
+    # 'text' is 'cond' with the style vector swapped for the caption's text-tower
+    # embedding and nothing else touched, so the pair isolates the modality gap.
+    text_net_kwargs = net_kwargs | {'style': text_style}
+    # 'text_only' is the deployment path: a caption and a tempo, with every
+    # per-measure acoustic descriptor dropped, because at inference you have none
+    # of them. (mask False == keep, True == drop.)
+    text_only_mask = {k: (torch.zeros_like(v) if k in ('bpm', 'style') else v)
+                      for k, v in unconditional_mask.items()}
+    text_only_net_kwargs = net_kwargs | {'style': text_style, 'unconditional_mask': text_only_mask}
+
     # each rank runs only the passes it owns. the variant name doubles as the wav
     # suffix, so ranks write disjoint files into the shared batch_dir and nothing
     # has to be gathered back (the audio is ragged, one array per sample).
@@ -842,6 +1013,10 @@ def save_samples(step):
         audio['cond'] = predict_measures(x.shape, net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, t_dist=t_dist)
     if owners['bpm_only'] == ddp_rank:
         audio['bpm_only'] = predict_measures(x.shape, bpm_only_net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, t_dist=t_dist)
+    if have_text and owners['text'] == ddp_rank:
+        audio['text'] = predict_measures(x.shape, text_net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, t_dist=t_dist)
+    if have_text and owners['text_only'] == ddp_rank:
+        audio['text_only'] = predict_measures(x.shape, text_only_net_kwargs, uncond_net_kwargs, n_steps, guidance=1.0, gen_noise=gen_noise, decoder_noise=decoder_noise, method='median', window_size=3, t_dist=t_dist)
     if owners['gt'] == ddp_rank:
         audio['gt'] = decode_latents(x, bpm, n_steps, decoder_noise=decoder_noise)
 
@@ -863,6 +1038,7 @@ def save_samples(step):
             flatness=flatness[i].detach().cpu().numpy(),
             chroma=chroma[i].detach().cpu().numpy(),
             style=style[i].detach().cpu().numpy(),
+            text_style=text_style[i].detach().cpu().numpy(),
             **{k: str(v) for k, v in s.items()},
         )
         # the text the style vector *should* correspond to -- these embeddings come
@@ -878,6 +1054,13 @@ def save_samples(step):
             f.write(f"\nshort:  {s.get('short_caption')}\n")
             f.write(f"\nmedium: {s.get('medium_caption')}\n")
             f.write(f"\nlong:   {s.get('long_caption')}\n")
+            if have_text:
+                # the index npz stores row_to_song and row_to_tier but not the
+                # variation index, so the exact one of the 6 rewrites behind this
+                # embedding is not recoverable here -- only its tier is.
+                f.write(f"\n*_text.wav and *_text_only.wav were prompted with a "
+                        f"{sample_text_tier} text embedding for this song "
+                        f"(one of the {NUM_VARS} variations of the line above).\n")
 
 # logging
 if wandb_log and master_process:
