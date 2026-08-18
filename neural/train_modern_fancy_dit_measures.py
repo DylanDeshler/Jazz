@@ -43,7 +43,7 @@ import soundfile as sf
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-stage = 1
+stage = 2
 out_dir = f'Stage{stage}_MetaConditionalModernDiTV2_smedium_24576_subset_adapter_longtrain_24chunks_nulltokens_clap'
 eval_interval = 5000
 sample_interval = 5000
@@ -52,7 +52,7 @@ save_interval = 5000
 eval_iters = 600
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = False # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
 wandb_project = out_dir
